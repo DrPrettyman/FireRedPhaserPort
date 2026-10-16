@@ -15,6 +15,8 @@ import type { FieldTask } from '../world/elevator';
 import { SPECIALS, type SpecialEnv } from './specials';
 import { testEvent } from '../dev/testHooks';
 import { random } from '../util/random';
+import { FieldEffectActiveListContains, FieldEffectStart, gFieldEffectArguments } from '../world/fieldEffectScripts';
+import { SetEscapeWarp } from '../world/fieldMoves';
 
 export interface ScriptsData {
   code: Instruction[];
@@ -222,6 +224,8 @@ export class ScriptEngine {
   /** sQuestLogInput / sQuestLogInputIsDpad: the key that dismissed a script's last message, replayed as field input. */
   private registeredInput?: Button;
   private registeredInputIsDpad = false;
+  /** ScriptContext_Enable was called for a script a field effect stopped (`dofieldeffect` + `waitstate`). */
+  private enableRequested = false;
 
   constructor(
     private data: ScriptsData,
@@ -283,6 +287,11 @@ export class ScriptEngine {
     // Approximation: the GBA does this in ProcessPlayerFieldInput before any interaction, not per script.
     this.state.setVar('VAR_TEXT_COLOR', this.defines.require('NPC_TEXT_COLOR_DEFAULT'));
     return true;
+  }
+
+  /** ScriptContext_Enable: a field effect lets the script it stopped with `waitstate` run on. */
+  scriptContextEnable(): void {
+    this.enableRequested = true;
   }
 
   /** RunScriptImmediately: for map scripts that must finish synchronously (no waits). */
@@ -892,6 +901,58 @@ export class ScriptEngine {
       const r = this.callSpecial(a[1]);
       this.state.setVar(a[0], typeof r === 'number' ? r : 0);
     },
+
+    // ------------------------------------------------ field effects and field moves (W-fieldmove)
+    /**
+     * ScrCmd_dofieldeffect: FieldEffectStart runs the effect's field effect script. A following `waitstate`
+     * waits for the effect's ScriptContext_Enable; if the effect isn't ported (it took itself off the active
+     * list again) the script runs on as before.
+     */
+    dofieldeffect(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      const fldeff = this.fieldEffectName(a[0]);
+      this.enableRequested = false;
+      FieldEffectStart(fldeff);
+      if (FieldEffectActiveListContains(fldeff) || this.enableRequested) {
+        this.waitState = () => {
+          if (!this.enableRequested) return false;
+          this.enableRequested = false;
+          return true;
+        };
+      }
+    },
+    /** ScrCmd_waitfieldeffect: WaitForFieldEffectFinish */
+    waitfieldeffect(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      const fldeff = this.fieldEffectName(a[0]);
+      ctx.wait = () => !FieldEffectActiveListContains(fldeff);
+    },
+    /** ScrCmd_setfieldeffectargument: gFieldEffectArguments[n] = (s16)VarGet(value) */
+    setfieldeffectargument(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      const v = this.defines.get(a[1]) !== undefined ? this.state.value(a[1]) : (this.host.resolveLocalId(a[1]) ?? 0);
+      gFieldEffectArguments[Number(a[0])] = (v << 16) >> 16;
+    },
+    /** ScrCmd_checkpartymove: VAR_RESULT = the first non-egg party mon that knows the move (VAR_0x8004 = its species), else PARTY_SIZE. */
+    checkpartymove(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      const move = this.state.value(a[0]);
+      this.state.setVar('VAR_RESULT', this.defines.require('PARTY_SIZE'));
+      for (const [i, mon] of this.state.party.entries()) {
+        if (!mon.species) break;
+        if (!mon.isEgg && mon.moves.includes(move)) {
+          this.state.setVar('VAR_RESULT', i);
+          this.state.setVar('VAR_0x8004', mon.species);
+          break;
+        }
+      }
+    },
+    /** ScrCmd_buffermovename */
+    buffermovename(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      this.state.stringVars[this.stringVar(a[0])] = this.charmap.encodePlain(this.state.pokemon.moves[this.state.value(a[1])]?.name ?? '$');
+    },
+    /** ScrCmd_setescapewarp: `MAP, warpId, x, y` or `MAP, x, y` */
+    setescapewarp(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      const { warpId, x, y } = this.warpArgs(a);
+      SetEscapeWarp(a[0], warpId, x, y);
+    },
+
     fadescreen(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
       ctx.wait = this.host.fadeScreen(this.state.value(a[0]));
     },
@@ -1105,6 +1166,14 @@ export class ScriptEngine {
     playmoncry() {},
     waitmoncry() {},
   };
+
+  /** A `dofieldeffect` / `waitfieldeffect` argument (FLDEFF_* or a var holding one) as its FLDEFF_* name. */
+  private fieldEffectName(token: string): string {
+    if (token.startsWith('FLDEFF_')) return token;
+    const id = this.state.value(token);
+    const name = Object.keys(this.data.defines).find((k) => k.startsWith('FLDEFF_') && this.data.defines[k] === id);
+    return name ?? token;
+  }
 
   private doWarp(ctx: ScriptContext, a: string[]): void {
     const { warpId, x, y } = this.warpArgs(a);

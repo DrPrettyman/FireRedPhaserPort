@@ -34,9 +34,10 @@ export class ScreenFade {
   constructor(
     scene: Phaser.Scene,
     private modes: FadeModes,
+    depth = DEPTH_FADE,
   ) {
     const { width, height } = scene.scale;
-    this.rect = scene.add.rectangle(0, 0, width, height, 0x000000, 1).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH_FADE);
+    this.rect = scene.add.rectangle(0, 0, width, height, 0x000000, 1).setOrigin(0, 0).setScrollFactor(0).setDepth(depth);
     this.rect.setAlpha(0);
   }
 
@@ -57,6 +58,30 @@ export class ScreenFade {
     this.active = true;
     this.update();
     return true;
+  }
+
+  /**
+   * BeginNormalPaletteFade(…, delay, startY, targetY, color) toward any colour (0xRRGGBB): the blend
+   * coefficient goes from startY to targetY (of 16). Used by Sweet Scent (to red and back).
+   */
+  beginBlend(startY: number, targetY: number, color: number, delay: number): boolean {
+    if (this.active) return false;
+    this.rect.setFillStyle(color);
+    this.y = startY;
+    this.targetY = targetY;
+    this.objToggle = false;
+    this.finishing = -1;
+    this.delay = delay;
+    this.delayCounter = delay;
+    this.active = true;
+    this.update();
+    return true;
+  }
+
+  /** Drop the overlay at once (the palettes are reloaded). */
+  clear(): void {
+    this.active = false;
+    this.rect.setAlpha(0);
   }
 
   /** Whether the fade colour is white (FADE_*_WHITE, palette_bg_faded_fill_white). */

@@ -1,8 +1,12 @@
 // party_menu.c: the party menu, from the field (start menu, using and giving items) and in battle
 // (switching, choosing a mon for an item, Oak's first-battle narration).
 //
-// Not ported because their screens or systems don't exist yet: the item-use animation (pokemon_special_anim.c), mail, field moves (they report
-// "can't use here"), link/multi battles, the Union Room, minigames and the Pokédude/Teachy TV demos.
+// Field moves: CursorCB_FieldMove runs the SetUpFieldMove_* function world/fieldMoves.ts registered for the
+// move (registerFieldMoveSetUp) and hands over to the field through gFieldCallback2 / gPostMenuFieldCallback;
+// Soft-Boiled / Milk Drink (fldeff_softboiled.c) stay in this menu.
+//
+// Not ported because their screens or systems don't exist yet: the item-use animation (pokemon_special_anim.c), mail,
+// link/multi battles, the Union Room, minigames and the Pokédude/Teachy TV demos.
 
 import { K } from '../battle/constants';
 import { g, pokemon, state } from '../battle/env';
@@ -153,7 +157,10 @@ import {
   text,
 } from './common';
 import { menusData } from './data';
-import { CB2_ReturnToField, CB2_ReturnToFieldContinueScriptPlayMapMusic, CB2_ReturnToFieldWithOpenMenu } from './fieldCallbacks';
+import { CB2_ReturnToField, CB2_ReturnToFieldContinueScriptPlayMapMusic, CB2_ReturnToFieldWithOpenMenu, gFieldCallback2, type FieldCallbackHost } from './fieldCallbacks';
+import { gFieldEffectArguments } from '../world/fieldEffectScripts';
+import { avatarField, GetXYCoordsOneStepInFrontOfPlayer, PLAYER_AVATAR_FLAG, TestPlayerAvatarFlags } from '../world/playerAvatar';
+import { GetMapName, GetMapSectionOfMap } from '../world/regionMap';
 import { CB2_BagMenuFromBattle, CB2_SetUpReshowBattleScreenAfterMenu, GoToBagMenu } from './itemMenu';
 import { SpecialVar } from './itemMenuState';
 import { CheckIfItemIsTMHMOrEvolutionStone } from './itemUse';
@@ -1151,7 +1158,7 @@ function HandleChooseMonSelection(taskId: number, slotPtr: SlotPtr): void {
   }
   switch (gPartyMenu.action) {
     case K.PARTY_ACTION_SOFTBOILED:
-      if (IsSelectedMonNotEgg(slotPtr.get())) console.warn('[party_menu] Softboiled / Milk Drink are not implemented');
+      if (IsSelectedMonNotEgg(slotPtr.get())) Task_TryUseSoftboiledOnPartyMon(taskId);
       break;
     case K.PARTY_ACTION_USE_ITEM:
       if (IsSelectedMonNotEgg(slotPtr.get())) {
@@ -2752,34 +2759,240 @@ function CursorCB_Trade1(taskId: number): void {
 /** Spin Trade: not implemented in the game either (PARTY_MENU_TYPE_SPIN_TRADE is never used) */
 function CursorCB_Trade2(_taskId: number): void {}
 
+/**
+ * sFieldMoveCursorCallbacks[fieldMove].fieldMoveFunc, by FIELD_MOVE_* name: a SetUpFieldMove_* function
+ * returns TRUE when the move can be used here, after setting gFieldCallback2 / gPostMenuFieldCallback
+ * (Soft-Boiled sets nothing: it stays in the menu). The field moves register theirs
+ * (world/fieldMoves.ts registerFieldMoves); one that isn't registered can't be used anywhere yet.
+ */
+const sFieldMoveSetUpFuncs = new Map<string, () => boolean>([
+  ['FIELD_MOVE_MILK_DRINK', SetUpFieldMove_SoftBoiled],
+  ['FIELD_MOVE_SOFT_BOILED', SetUpFieldMove_SoftBoiled],
+]);
+
+/** Plug a SetUpFieldMove_* function into sFieldMoveCursorCallbacks. */
+export function registerFieldMoveSetUp(fieldMove: string, fn: () => boolean): void {
+  sFieldMoveSetUpFuncs.set(fieldMove, fn);
+}
+
+function fieldMoveFunc(fieldMove: number): () => boolean {
+  for (const [name, fn] of sFieldMoveSetUpFuncs) if (K[name] === fieldMove) return fn;
+  return () => {
+    console.warn(`[party_menu] field move ${fieldMove} is not implemented`);
+    return false;
+  };
+}
+
+/** gPostMenuFieldCallback: what FieldCallback_PrepareFadeInFromMenu calls once the field has faded in. */
+let gPostMenuFieldCallback: (() => void) | null = null;
+
+export function setPostMenuFieldCallback(fn: (() => void) | null): void {
+  gPostMenuFieldCallback = fn;
+}
+
 function CursorCB_FieldMove(taskId: number): void {
   const fieldMove = internal().actions[Menu_GetCursorPos()] - CURSOR_OPTION_FIELD_MOVES;
   PlaySE(K.SE_SELECT);
   PartyMenuRemoveWindow(0);
   PartyMenuRemoveWindow(1);
-  // All field moves before WATERFALL are HMs.
-  if (fieldMove <= K.FIELD_MOVE_WATERFALL && state.getFlag(K.FLAG_BADGE01_GET + fieldMove) !== true) {
+  if (MenuHelpers_IsLinkActive()) {
+    // (InUnionRoom: no Union Room)
+    if (fieldMove === K.FIELD_MOVE_MILK_DRINK || fieldMove === K.FIELD_MOVE_SOFT_BOILED) DisplayPartyMenuStdMessage(K.PARTY_MSG_CANT_USE_HERE);
+    else DisplayPartyMenuStdMessage(fieldMoveFailMsg(fieldMove));
+    gTasks[taskId].func = Task_CancelAfterAorBPress;
+  } else if (fieldMove <= K.FIELD_MOVE_WATERFALL && state.getFlag(K.FLAG_BADGE01_GET + fieldMove) !== true) {
+    // All field moves before WATERFALL are HMs.
     DisplayPartyMenuMessage(text('gText_CantUseUntilNewBadge'), true);
     gTasks[taskId].func = Task_ReturnToChooseMonAfterText;
-    return;
+  } else if (fieldMoveFunc(fieldMove)()) {
+    switch (fieldMove) {
+      case K.FIELD_MOVE_MILK_DRINK:
+      case K.FIELD_MOVE_SOFT_BOILED:
+        ChooseMonForSoftboiled(taskId);
+        break;
+      case K.FIELD_MOVE_TELEPORT:
+        gStringVar1.set(GetMapName(GetMapSectionOfMap(state.lastHealLocation?.map)));
+        DisplayFieldMoveExitAreaMessage(taskId, ExpandToStringVar4(text('gText_ReturnToHealingSpot')));
+        internal().data[0] = fieldMove;
+        break;
+      case K.FIELD_MOVE_DIG:
+        gStringVar1.set(GetMapName(GetMapSectionOfMap(state.escapeWarp?.mapId)));
+        DisplayFieldMoveExitAreaMessage(taskId, ExpandToStringVar4(text('gText_EscapeFromHereAndReturnTo')));
+        internal().data[0] = fieldMove;
+        break;
+      case K.FIELD_MOVE_FLY:
+        // gPartyMenu.exitCallback = CB2_OpenFlyMap: the fly map isn't ported, so nothing registers SetUpFieldMove_Fly yet.
+        Task_ClosePartyMenu(taskId);
+        break;
+      default:
+        gPartyMenu.exitCallback = CB2_ReturnToField;
+        // (SetUsedFieldMoveQuestLogEvent: no quest log)
+        Task_ClosePartyMenu(taskId);
+        break;
+    }
+  } else {
+    // Can't use the field move
+    switch (fieldMove) {
+      case K.FIELD_MOVE_SURF:
+        DisplayCantUseSurfMessage();
+        break;
+      case K.FIELD_MOVE_FLASH:
+        DisplayCantUseFlashMessage();
+        break;
+      default:
+        DisplayPartyMenuStdMessage(fieldMoveFailMsg(fieldMove));
+        break;
+    }
+    gTasks[taskId].func = Task_CancelAfterAorBPress;
   }
-  // sFieldMoveCursorCallbacks[fieldMove].fieldMoveFunc(): the field effects behind field moves
-  // aren't implemented, so every field move reports that it can't be used here.
-  console.warn(`[party_menu] field move ${fieldMove} is not implemented`);
-  switch (fieldMove) {
-    case K.FIELD_MOVE_FLASH:
-      // DisplayCantUseFlashMessage
-      DisplayPartyMenuStdMessage(state.getFlag('FLAG_SYS_FLASH_ACTIVE') ? K.PARTY_MSG_ALREADY_IN_USE : K.PARTY_MSG_CANT_USE_HERE);
+}
+
+/** DisplayFieldMoveExitAreaMessage: gStringVar4 */
+function DisplayFieldMoveExitAreaMessage(taskId: number, str: number[]): void {
+  DisplayPartyMenuMessage(str, true);
+  gTasks[taskId].func = Task_FieldMoveExitAreaYesNo;
+}
+
+function Task_FieldMoveExitAreaYesNo(taskId: number): void {
+  if (!IsPartyMenuTextPrinterActive()) {
+    PartyMenuDisplayYesNoMenu();
+    gTasks[taskId].func = Task_HandleFieldMoveExitAreaYesNoInput;
+  }
+}
+
+function Task_HandleFieldMoveExitAreaYesNoInput(taskId: number): void {
+  switch (Menu_ProcessInputNoWrapClearOnChoose()) {
+    case 0: // Yes
+      gPartyMenu.exitCallback = CB2_ReturnToField;
+      Task_ClosePartyMenu(taskId);
       break;
-    default:
-      DisplayPartyMenuStdMessage(fieldMoveFailMsg(fieldMove));
+    case MENU_B_PRESSED:
+      PlaySE(K.SE_SELECT);
+    // fallthrough
+    case 1: // No
+      gFieldCallback2.fn = undefined;
+      gPostMenuFieldCallback = null;
+      Task_ReturnToChooseMonAfterText(taskId);
       break;
   }
-  gTasks[taskId].func = Task_CancelAfterAorBPress;
+}
+
+/**
+ * FieldCallback_PrepareFadeInFromMenu (gFieldCallback2) + Task_FieldMoveWaitForFade: fade the field in,
+ * then gFieldEffectArguments[0] = the mon's species and gPostMenuFieldCallback. The field holds its
+ * controls until then; the callback's field effect locks them itself.
+ */
+export function FieldCallback_PrepareFadeInFromMenu(field: FieldCallbackHost): () => boolean {
+  const faded = field.fadeInFromBlack();
+  return () => {
+    if (!faded()) return false; // IsWeatherNotFadingIn
+    gFieldEffectArguments[0] = GetFieldMoveMonSpecies();
+    const callback = gPostMenuFieldCallback;
+    gPostMenuFieldCallback = null;
+    callback?.();
+    return true;
+  };
+}
+
+function GetFieldMoveMonSpecies(): number {
+  return state.party[gPartyMenu.slotId]?.species ?? 0;
 }
 
 function Task_CancelAfterAorBPress(taskId: number): void {
   if (gMain.newKeys & A_BUTTON || gMain.newKeys & B_BUTTON) CursorCB_Cancel1(taskId);
+}
+
+function DisplayCantUseFlashMessage(): void {
+  if (state.getFlag('FLAG_SYS_FLASH_ACTIVE')) DisplayPartyMenuStdMessage(K.PARTY_MSG_ALREADY_IN_USE);
+  else DisplayPartyMenuStdMessage(K.PARTY_MSG_CANT_USE_HERE);
+}
+
+function DisplayCantUseSurfMessage(): void {
+  if (TestPlayerAvatarFlags(PLAYER_AVATAR_FLAG.SURFING)) {
+    DisplayPartyMenuStdMessage(K.PARTY_MSG_ALREADY_SURFING);
+  } else {
+    const { x, y } = GetXYCoordsOneStepInFrontOfPlayer();
+    const f = avatarField();
+    const mapId = f.mapId();
+    if (f.behaviors.is(f.behaviorAt(x, y), 'FAST_WATER')) DisplayPartyMenuStdMessage(K.PARTY_MSG_CURRENT_TOO_FAST);
+    else if (mapId === 'MAP_ROUTE17' || mapId === 'MAP_ROUTE18') DisplayPartyMenuStdMessage(K.PARTY_MSG_ENJOY_CYCLING);
+    else DisplayPartyMenuStdMessage(K.PARTY_MSG_CANT_SURF_HERE);
+  }
+}
+
+// ------------------------------------------------------------------ fldeff_softboiled.c
+
+/** SetUpFieldMove_SoftBoiled: the user needs more than a fifth of its max HP. */
+function SetUpFieldMove_SoftBoiled(): boolean {
+  const mon = P(GetCursorSelectionMonId());
+  return mon.hp > Math.floor(mon.maxHP / 5);
+}
+
+function ChooseMonForSoftboiled(taskId: number): void {
+  gPartyMenu.action = K.PARTY_ACTION_SOFTBOILED;
+  gPartyMenu.slotId2 = gPartyMenu.slotId;
+  AnimatePartySlot(GetCursorSelectionMonId(), 1);
+  DisplayPartyMenuStdMessage(K.PARTY_MSG_USE_ON_WHICH_MON);
+  gTasks[taskId].func = Task_HandleChooseMonInput;
+}
+
+function Task_TryUseSoftboiledOnPartyMon(taskId: number): void {
+  const userPartyId = gPartyMenu.slotId;
+  const recipientPartyId = gPartyMenu.slotId2;
+  if (recipientPartyId > K.PARTY_SIZE) {
+    gPartyMenu.action = K.PARTY_ACTION_CHOOSE_MON;
+    DisplayPartyMenuStdMessage(K.PARTY_MSG_CHOOSE_MON);
+    gTasks[taskId].func = Task_HandleChooseMonInput;
+    return;
+  }
+  const recipient = P(recipientPartyId);
+  const curHp = recipient.hp;
+  if (curHp === 0 || userPartyId === recipientPartyId || recipient.maxHP === curHp) {
+    CantUseSoftboiledOnMon(taskId);
+  } else {
+    PlaySE(K.SE_USE_ITEM);
+    PartyMenuModifyHP(taskId, userPartyId, -1, Math.floor(P(userPartyId).maxHP / 5), Task_SoftboiledRestoreHealth);
+  }
+}
+
+function Task_SoftboiledRestoreHealth(taskId: number): void {
+  PlaySE(K.SE_USE_ITEM);
+  PartyMenuModifyHP(taskId, gPartyMenu.slotId2, 1, Math.floor(P(gPartyMenu.slotId).maxHP / 5), Task_Softboiled_DisplayHPRestoredMessage);
+}
+
+/** fldeff_softboiled.c's (static) Task_DisplayHPRestoredMessage */
+function Task_Softboiled_DisplayHPRestoredMessage(taskId: number): void {
+  gStringVar1.set(GetMonNickname(P(gPartyMenu.slotId2)));
+  DisplayPartyMenuMessage(ExpandToStringVar4(text('gText_PkmnHPRestoredByVar2')), false);
+  ScheduleBgCopyTilemapToVram(2);
+  gTasks[taskId].func = Task_FinishSoftboiled;
+}
+
+function Task_FinishSoftboiled(taskId: number): void {
+  if (!IsPartyMenuTextPrinterActive()) {
+    gPartyMenu.action = K.PARTY_ACTION_CHOOSE_MON;
+    AnimatePartySlot(gPartyMenu.slotId, 0);
+    gPartyMenu.slotId = gPartyMenu.slotId2;
+    AnimatePartySlot(gPartyMenu.slotId2, 1);
+    ClearStdWindowAndFrameToTransparent(6, false);
+    ClearWindowTilemap(6);
+    DisplayPartyMenuStdMessage(K.PARTY_MSG_CHOOSE_MON);
+    gTasks[taskId].func = Task_HandleChooseMonInput;
+  }
+}
+
+function Task_ChooseNewMonForSoftboiled(taskId: number): void {
+  if (!IsPartyMenuTextPrinterActive()) {
+    DisplayPartyMenuStdMessage(K.PARTY_MSG_USE_ON_WHICH_MON);
+    gTasks[taskId].func = Task_HandleChooseMonInput;
+  }
+}
+
+function CantUseSoftboiledOnMon(taskId: number): void {
+  PlaySE(K.SE_SELECT);
+  DisplayPartyMenuMessage(text('gText_CantBeUsedOnPkmn'), false);
+  ScheduleBgCopyTilemapToVram(2);
+  gTasks[taskId].func = Task_ChooseNewMonForSoftboiled;
 }
 
 export function CB2_ShowPartyMenuForItemUse(): void {

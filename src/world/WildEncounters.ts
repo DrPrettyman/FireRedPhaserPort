@@ -30,7 +30,7 @@ export interface WildBattleHost {
 /**
  * wild_encounter.c: the step encounter check (TryStandardWildEncounter), its cooldown and rate
  * modifiers, the repel counter, and wild mon generation. Fields are sWildEncounterData (EWRAM).
- * Not ported: the quest log/Union Room checks. Rock Smash, fishing and Sweet Scent encounters come with those field moves.
+ * Not ported: the quest log/Union Room checks, fishing.
  */
 export class WildEncounters {
   private rngState = 0;
@@ -90,6 +90,46 @@ export class WildEncounters {
       if (steps === 0) return true;
     }
     return false;
+  }
+
+  /** RockSmashWildEncounter's check (the special sets VAR_RESULT): true when a battle starts. */
+  rockSmashWildEncounter(): boolean {
+    const header = this.currentHeader();
+    const info = header?.rock_smash_mons;
+    if (!info) return false;
+    if (!this.doWildEncounterRateTest(info.encounterRate, true)) return false;
+    if (this.tryGenerateWildMon(info, WildArea.ROCKS, WILD_CHECK_REPEL)) {
+      this.startWildBattle();
+      return true;
+    }
+    return false;
+  }
+
+  /** SweetScentWildEncounter: a battle on the land or water tile the player stands on, no rate test. */
+  sweetScentWildEncounter(tile: TileInfo): boolean {
+    const header = this.currentHeader();
+    if (!header) return false;
+    const { TILE_ENCOUNTER_LAND, TILE_ENCOUNTER_WATER } = this.data.tileEncounter;
+    let info: WildPokemonInfo | undefined;
+    let area: WildArea;
+    if (tile.encounterType === TILE_ENCOUNTER_LAND) {
+      info = header.land_mons;
+      area = WildArea.LAND;
+    } else if (tile.encounterType === TILE_ENCOUNTER_WATER) {
+      info = header.water_mons;
+      area = WildArea.WATER;
+    } else {
+      return false;
+    }
+    const roamer = tryStartRoamerEncounter(this.state);
+    if (roamer) {
+      this.host.startRoamerBattle(roamer);
+      return true;
+    }
+    if (!info) return false;
+    this.tryGenerateWildMon(info, area, 0);
+    this.startWildBattle();
+    return true;
   }
 
   // ------------------------------------------------------------------ encounter check

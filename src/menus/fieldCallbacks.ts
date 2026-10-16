@@ -34,3 +34,9 @@ export interface FieldCallbackHost {
  * field's controls until it returns true.
  */
 export const gFieldCallback: { fn?: (field: FieldCallbackHost) => () => boolean } = {};
+
+/**
+ * gFieldCallback2 (RunFieldCallback): like gFieldCallback, and when set it runs instead of it. The party
+ * menu's field moves set FieldCallback_PrepareFadeInFromMenu here.
+ */
+export const gFieldCallback2: { fn?: (field: FieldCallbackHost) => () => boolean } = {};

@@ -47,6 +47,13 @@ export class TilesetPair {
       : (this.secondary.encounters[metatile - NUM_METATILES_IN_PRIMARY] ?? 0);
   }
 
+  /** METATILE_ATTRIBUTE_TERRAIN (TILE_TERRAIN_*) */
+  terrain(metatile: number): number {
+    return metatile < NUM_METATILES_IN_PRIMARY
+      ? (this.primary.terrains?.[metatile] ?? 0)
+      : (this.secondary.terrains?.[metatile - NUM_METATILES_IN_PRIMARY] ?? 0);
+  }
+
   /** METATILE_ATTRIBUTE_LAYER_TYPE (METATILE_LAYER_TYPE_*) */
   layerType(metatile: number): number {
     return metatile < NUM_METATILES_IN_PRIMARY

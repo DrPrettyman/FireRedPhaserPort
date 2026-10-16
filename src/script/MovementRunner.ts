@@ -49,6 +49,8 @@ export class MovementRunner {
   done = false;
   private wait = 0;
   private keepFacing = false;
+  /** An action that runs frame by frame (cut_tree, rock_smash_break) until it returns true. */
+  private custom?: () => boolean;
 
   constructor(
     readonly obj: ObjectEvent,
@@ -60,6 +62,10 @@ export class MovementRunner {
 
   tick(): void {
     if (this.done) return;
+    if (this.custom) {
+      if (!this.custom()) return;
+      this.custom = undefined;
+    }
     if (this.obj.isMoving) return;
     if (this.wait > 0) {
       this.wait--;
@@ -125,6 +131,12 @@ export class MovementRunner {
       case 'set_visible':
         obj.setVisible(true);
         return false;
+      case 'cut_tree': // MovementAction_CutTree_Step0..2 (sAnim_TreeCut)
+        this.custom = removeObstacle(obj, 6);
+        return true;
+      case 'rock_smash_break': // MovementAction_RockSmashBreak_Step0..2 (sAnim_RockBreak)
+        this.custom = removeObstacle(obj, 8);
+        return true;
       case 'reveal_trainer':
         // MovementAction_RevealTrainer only acts on tree/mountain-disguised trainers, which FRLG doesn't use
         return false;
@@ -134,6 +146,24 @@ export class MovementRunner {
         return false;
     }
   }
+}
+
+/**
+ * ANIM_REMOVE_OBSTACLE (frames 0-3, `frameDuration` each, then the anim ends), then SetMovementDelay(32)
+ * while the object blinks (invisible ^= TRUE every frame), then it stays invisible.
+ */
+function removeObstacle(obj: ObjectEvent, frameDuration: number): () => boolean {
+  let t = 0;
+  const animFrames = 4 * frameDuration;
+  return () => {
+    if (t < animFrames) {
+      obj.sprite.setFrame(Math.floor(t / frameDuration));
+    } else if (t <= animFrames + 32) {
+      obj.setVisible(t === animFrames + 32 ? false : !obj.sprite.visible);
+    }
+    t++;
+    return t > animFrames + 32;
+  };
 }
 
 function suffixDir(op: string): Direction | undefined {

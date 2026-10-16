@@ -9,6 +9,7 @@ import { isPoisoned } from '../world/stepCounters';
 import { directionId, type ScriptHost } from './ScriptEngine';
 import { ForcePlayerOntoBike, GetPlayerAvatarBike } from '../world/bike';
 import { ForcePlayerToStartSurfing, GetPlayerFacingDirection, SeafoamIslandsB4F_CurrentDumpsPlayerOnLand } from '../world/playerAvatar';
+import { RockSmashWildEncounter } from '../world/fieldMoves';
 
 export interface SpecialEnv {
   state: GameState;
@@ -53,6 +54,14 @@ export const SPECIALS: Record<string, Special> = {
   /** GetPlayerFacingDirection: DIR_* */
   GetPlayerFacingDirection({ state }) {
     return directionId(GetPlayerFacingDirection(), state.defines);
+  },
+
+  /**
+   * RockSmashWildEncounter (wild_encounter.c): VAR_RESULT = whether a battle started. The battle's return
+   * (FieldCB_ReturnToFieldNoScriptCheckMusic) ends the script that waits for it (ScriptContext_Init).
+   */
+  RockSmashWildEncounter({ endScript }) {
+    if (RockSmashWildEncounter()) endScript();
   },
 
   DisableMsgBoxWalkaway({ disableMsgBoxWalkaway }) {

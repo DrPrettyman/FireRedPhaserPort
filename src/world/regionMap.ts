@@ -26,3 +26,15 @@ export function GetMapName(mapsec: number, fill = 0): number[] {
   dst.push(EOS);
   return dst;
 }
+
+/** Region map sections of maps whose headers the field has loaded (Overworld_GetMapHeaderByGroupAndId(...)->regionMapSectionId). */
+const mapSections = new Map<string, number>();
+
+export function cacheMapSection(mapId: string, mapsec: number): void {
+  mapSections.set(mapId, mapsec);
+}
+
+/** A cached map's region map section (MAPSEC_NONE if its header hasn't been loaded). */
+export function GetMapSectionOfMap(mapId: string | undefined): number {
+  return (mapId !== undefined ? mapSections.get(mapId) : undefined) ?? K.MAPSEC_NONE;
+}

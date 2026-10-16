@@ -24,6 +24,8 @@ export interface TileInfo {
   behavior: number;
   /** METATILE_ATTRIBUTE_ENCOUNTER_TYPE (TILE_ENCOUNTER_*) */
   encounterType: number;
+  /** METATILE_ATTRIBUTE_TERRAIN (TILE_TERRAIN_*) */
+  terrain: number;
 }
 
 /**
@@ -98,6 +100,7 @@ export class World {
       elevation: block >> MAPGRID_ELEVATION_SHIFT,
       behavior: pair.behavior(metatile),
       encounterType: pair.encounterType(metatile),
+      terrain: pair.terrain(metatile),
     };
   }
 

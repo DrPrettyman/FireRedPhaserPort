@@ -70,6 +70,8 @@ export interface MapData {
   battleScene: string | null;
   allowCycling: boolean;
   allowRunning: boolean;
+  /** allowEscaping: Dig and the Escape Rope work here (CanUseEscapeRopeOnCurrMap) */
+  allowEscaping: boolean;
   showMapName: boolean;
   /** floorNum (map_name_popup.c): 0 none, negative basement, 127 rooftop */
   floorNumber: number;
@@ -85,6 +87,8 @@ export interface TilesetAttributes {
   behaviors: number[];
   layers: number[];
   encounters: number[];
+  /** METATILE_ATTRIBUTE_TERRAIN (TILE_TERRAIN_*) */
+  terrains: number[];
 }
 
 /** struct WildPokemonInfo: encounter rate and per-slot [minLevel, maxLevel, SPECIES_*] */

@@ -9,6 +9,14 @@ import { Bag } from './Bag';
  * Flags and vars are keyed by their numeric ids (as on the GBA), resolved from decomp constant
  * names through Defines, so aliases like `.equ SIGN_LADY_READY, VAR_TEMP_2` just work.
  */
+/** struct WarpData: a MAP_* id, a warp id (-1: use x/y) and map-local x/y. */
+export interface WarpData {
+  mapId: string;
+  warpId: number;
+  x: number;
+  y: number;
+}
+
 export class GameState {
   playerName = 'PLAYER'; // until the naming screen exists
   rivalName = 'RIVAL';
@@ -26,6 +34,8 @@ export class GameState {
    * was entered from). Set on entering a map by a warp whose counterpart is dynamic, or by `setdynamicwarp`.
    */
   dynamicWarp?: { mapId: string; warpId: number; x: number; y: number };
+  /** gSaveBlock1Ptr->escapeWarp: where Dig and the Escape Rope lead (UpdateEscapeWarp, `setescapewarp`). */
+  escapeWarp?: WarpData;
   /** gSaveBlock1Ptr->lastHealLocation (set by `setrespawn`): where a white-out sends you. */
   lastHealLocation?: { map: string; x: number; y: number };
   /** gSaveBlock1Ptr->trainerRematches, by local id: set by the VS Seeker (not implemented yet). */

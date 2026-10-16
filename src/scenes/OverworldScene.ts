@@ -46,7 +46,9 @@ import { ShopMenu, type ShopHost } from '../ui/ShopMenu';
 import { MenuWindow } from '../ui/MenuWindow';
 import { MapNamePopup } from '../ui/MapNamePopup';
 import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
-import { gFieldCallback } from '../menus/fieldCallbacks';
+import { gFieldCallback, gFieldCallback2, type FieldCallbackHost } from '../menus/fieldCallbacks';
+import { activeFieldEffects, setFieldEffectScriptHost, setFieldEffectScripts } from '../world/fieldEffectScripts';
+import { fieldMoveGfxSymbols, prepareFieldMoveMenu, registerFieldMoves, setFieldMoveHost, UpdateEscapeWarp, type FieldMoveHost } from '../world/fieldMoves';
 import { stringWidth } from '../text/stringWidth';
 import { MultichoiceGridMenu, MultichoiceMenu } from '../ui/MultichoiceMenu';
 import type { ShopFieldView } from '../menus/shop';
@@ -88,6 +90,8 @@ const FRAME_MS = 1000 / 60;
 const PLAYER_GFX = 'OBJ_EVENT_GFX_RED_NORMAL';
 /** The camera centres on the middle of the player's tile, 8 px above its feet (ignoring jump lift). */
 const CAMERA_FOLLOW_OFFSET_Y = TILE / 2;
+/** Sweet Scent's red tint: over the map and its objects (all OAM priorities), under the player and the windows. */
+const DEPTH_SWEET_SCENT = 1_500_000;
 
 export interface OverworldStart {
   map: string;
@@ -293,6 +297,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       ),
     );
     setPlayerAvatarHost(this.createAvatarHost());
+    // Field moves: field_effect.c's script table, the moves' field side and their graphics
+    setFieldEffectScripts(this.assets.fieldEffectScripts);
+    setFieldEffectScriptHost({ isPhaserEffectActive: (fldeff) => this.fieldEffects.isActive(fldeff) });
+    setFieldMoveHost(this.createFieldMoveHost());
+    registerFieldMoves();
+    await loadGfx(fieldMoveGfxSymbols());
     this.cameras.main.startFollow(this.player.anchor, true, 1, 1, 0, CAMERA_FOLLOW_OFFSET_Y);
 
     testHooks.applyTestOptions(this.state);
@@ -325,7 +335,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       message: this.messageBox.visible ? this.messageBox.text : undefined,
       playerVisible: this.player.visible,
       doorAnimating: this.doors.running,
-      fieldEffects: this.fieldEffects.liveEffects(),
+      fieldEffects: [...this.fieldEffects.liveEffects(), ...activeFieldEffects()],
       playerEffects: this.fieldEffects.liveEffects(this.player),
       mapNamePopup: this.mapNamePopup?.text,
       mapNamePopupHeight: this.mapNamePopup?.visibleHeight ?? 0,
@@ -439,7 +449,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.trainerApproach?.tick();
     if (this.trainerApproach?.done) this.trainerApproach = undefined;
     this.scripts.tick();
-    this.fieldTasks = this.fieldTasks.filter((t) => !t.tick());
+    // (a task may create another, which must survive this frame's filtering)
+    const tasks = this.fieldTasks;
+    this.fieldTasks = [];
+    this.fieldTasks = [...tasks.filter((t) => !t.tick()), ...this.fieldTasks];
     this.messageBox.tick();
     this.screenFade.tick();
     this.monPic?.tick();
@@ -861,6 +874,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }
     // A warp into a map whose matching warp is dynamic remembers where it came from (SetDynamicWarp)
     const destData = await this.assets.loadMap(name);
+    UpdateEscapeWarp(this.mapType(this.world.current.data), this.mapType(destData), w.x, w.y);
     if (destData.warpEvents[destIndex]?.dest_map === 'MAP_DYNAMIC') {
       const cur = this.world.current;
       this.state.dynamicWarp = { mapId: cur.data.id, warpId: cur.data.warpEvents.indexOf(w), x: this.player.tileX - cur.originX, y: this.player.tileY - cur.originY };
@@ -1019,18 +1033,29 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     // DoWarp's WarpFadeOutScreen, then Task_Teleport2Warp waits for it (WaitWarpFadeOutScreen)
     const white = this.warpFadeOutScreen(from, data);
     await this.waitFrames(() => !this.screenFade.active);
-    await this.doChangeMap(from, data, white);
-    const dest = warpDestCoords(data, warpId, x, y);
-    await this.enterMap(name, dest.x, dest.y, undefined, true);
-    this.showMapNameOnWarpArrival(from);
+    const isExit = await this.loadWarpedMap(name, warpId, x, y, white);
     // FieldCB_DefaultWarpExit → SetUpWarpExitTask: a door (MetatileBehavior_IsWarpDoor_2) gets Task_ExitDoor;
     // otherwise ExitWarpFadeInScreen(FALSE) and a task that waits for the fade.
-    const isExit = MapTransitionIsExit(this.mapType(from), this.mapType(data));
     const arrival = this.world.tileAt(this.player.tileX, this.player.tileY);
     if (this.behaviors.isDoor(arrival.behavior)) this.exitDoor(isExit);
     else this.warpFadeInScreen(isExit);
     await this.waitFrames(() => !this.screenFade.active);
     this.busy = false;
+  }
+
+  /**
+   * CB2_LoadMap from the faded-out screen (`white`): the map transition, the new map and its name popup.
+   * Returns MapTransitionIsExit, for the fade in that the warp's field callback does.
+   */
+  private async loadWarpedMap(name: string, warpId: number, x: number, y: number, white: boolean): Promise<boolean> {
+    this.busy = true;
+    const from = this.world.current.data;
+    const data = await this.assets.loadMap(name);
+    await this.doChangeMap(from, data, white);
+    const dest = warpDestCoords(data, warpId, x, y);
+    await this.enterMap(name, dest.x, dest.y, undefined, true);
+    this.showMapNameOnWarpArrival(from);
+    return MapTransitionIsExit(this.mapType(from), this.mapType(data));
   }
 
   /**
@@ -1287,13 +1312,18 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const d = this.defines;
     this.screenFade.begin(d.require('FADE_TO_BLACK'));
     let launched = false;
+    // The party menu's Teleport / Dig prompts name maps whose headers it reads synchronously.
+    let ready = menu !== 'party';
+    if (!ready) void prepareFieldMoveMenu().then(() => (ready = true));
     this.overlay = {
       tick: () => {
-        if (launched || this.screenFade.active) return false;
+        if (launched || this.screenFade.active || !ready) return false;
         launched = true;
         this.runFieldMenu({ menu }, (openStartMenu) => {
-          const fieldCallback = gFieldCallback.fn;
+          // RunFieldCallback: gFieldCallback2 (a field move's FieldCallback_PrepareFadeInFromMenu) before gFieldCallback
+          const fieldCallback = gFieldCallback2.fn ?? gFieldCallback.fn;
           gFieldCallback.fn = undefined;
+          gFieldCallback2.fn = undefined;
           if (fieldCallback) {
             // gFieldCallback (e.g. item_use.c's FieldCB_FadeInFromBlack for the Bicycle) fades in itself.
             const tick = fieldCallback({
@@ -1301,7 +1331,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
                 this.screenFade.begin(d.require('FADE_FROM_BLACK'));
                 return () => !this.screenFade.active;
               },
-            });
+            } satisfies FieldCallbackHost);
             this.overlay = { tick };
             return;
           }
@@ -2016,6 +2046,90 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       partyKnowsSurf: () => {
         const surf = this.defines.require('MOVE_SURF');
         return this.state.party.some((m) => m.moves.includes(surf));
+      },
+    };
+  }
+
+  // ------------------------------------------------------------------ field moves
+
+  /** What the field moves (world/fieldMoves.ts, world/fieldMoveShowMon.ts) read and do on the field. */
+  private createFieldMoveHost(): FieldMoveHost {
+    const d = this.defines;
+    let sweetScent: ScreenFade | undefined;
+    let lastWarpIsExit = false;
+    return {
+      scene: this,
+      mapType: () => this.mapType(this.world.current.data),
+      allowEscaping: () => !!this.world.current.data.allowEscaping,
+      mapId: () => this.world.current.data.id,
+      playerLocal: () => this.playerLocal(),
+      tileAt: (x, y) => this.world.tileAt(x, y),
+      setMetatileIdAt: (x, y, metatile) => {
+        const chunk = this.world.chunkAt(x, y);
+        chunk?.setBlock(x - chunk.originX, y - chunk.originY, metatile);
+      },
+      localToWorld: (x, y) => ({ x: this.world.current.originX + x, y: this.world.current.originY + y }),
+      localIdOf: (obj) => this.npcs.find((n) => n.brain.obj === obj)?.localId,
+      setupScript: (label) => this.startFieldScript(label),
+      scriptContextEnable: () => this.scripts.scriptContextEnable(),
+      rockSmashWildEncounter: () => this.wild.rockSmashWildEncounter(),
+      sweetScentWildEncounter: () => {
+        const { x, y } = this.player.current; // PlayerGetDestCoords
+        return this.wild.sweetScentWildEncounter(this.world.tileAt(x, y));
+      },
+      // Over the field but under the player, whose palette the fade leaves out (see docs/DEVIATIONS.md).
+      sweetScentFade: (from, to) => {
+        sweetScent ??= new ScreenFade(this, { FADE_FROM_BLACK: 0, FADE_TO_BLACK: 1, FADE_FROM_WHITE: 2, FADE_TO_WHITE: 3 }, DEPTH_SWEET_SCENT);
+        this.player.fixedPriority = true;
+        this.player.sprite.setDepth(DEPTH_SWEET_SCENT + 1);
+        sweetScent.beginBlend(from, to, 0xff0000, 4);
+        return () => {
+          sweetScent!.tick();
+          return !sweetScent!.active;
+        };
+      },
+      clearSweetScentFade: () => {
+        sweetScent?.clear();
+        this.player.fixedPriority = false;
+      },
+      gbaScreenGfxSymbols: () => fieldGbaScreenGfxSymbols(this.fieldGbaSource()),
+      startGbaScreen: () => this.gbaScreen.start(this.fieldGbaSource()),
+      stopGbaScreen: () => this.gbaScreen.stop(),
+      cameraTop: () => this.field.cameraTop,
+      warpFadeOutScreen: (mapId) => {
+        let started = false;
+        const name = this.assets.mapNameForId(mapId);
+        if (name) {
+          void this.assets.loadMap(name).then((to) => {
+            this.warpFadeOutScreen(this.world.current.data, to);
+            started = true;
+          });
+        } else {
+          this.screenFade.begin(d.require('FADE_TO_BLACK'));
+          started = true;
+        }
+        return () => started && !this.screenFade.active;
+      },
+      warpIntoMap: (mapId, x, y, fieldCallback) => {
+        const name = this.assets.mapNameForId(mapId);
+        if (!name) {
+          console.warn('[warp] unknown map', mapId);
+          return;
+        }
+        void this.loadWarpedMap(name, -1, x, y, this.screenFade.white).then((isExit) => {
+          lastWarpIsExit = isExit;
+          fieldCallback(); // gFieldCallback, instead of FieldCB_DefaultWarpExit
+          this.busy = false;
+        });
+      },
+      warpFadeInScreen: () => {
+        this.warpFadeInScreen(lastWarpIsExit);
+        return () => !this.screenFade.active;
+      },
+      loadMapSection: async (mapId) => {
+        const name = this.assets.mapNameForId(mapId);
+        if (!name) return d.require('MAPSEC_NONE');
+        return d.get((await this.assets.loadMap(name)).regionMapSection ?? '') ?? d.require('MAPSEC_NONE');
       },
     };
   }

@@ -29,6 +29,7 @@ ATLAS_COLS = 32  # 32x32 metatiles of 16px -> 512x512 atlas
 
 # src/fieldmap.c sMetatileAttrMasks
 ATTR_BEHAVIOR_MASK = 0x000001FF
+ATTR_TERRAIN_SHIFT, ATTR_TERRAIN_MASK = 9, 0x1F
 ATTR_ENCOUNTER_SHIFT, ATTR_ENCOUNTER_MASK = 24, 0x7
 ATTR_LAYER_SHIFT, ATTR_LAYER_MASK = 29, 0x3
 LAYER_NORMAL, LAYER_COVERED, LAYER_SPLIT = 0, 1, 2
@@ -111,12 +112,13 @@ def depends_on_secondary(entries):
 
 def metatile_attrs(ts):
     """Per-metatile attributes for one tileset (independent of which tileset it is paired with)."""
-    out = {"behaviors": [], "layers": [], "encounters": []}
+    out = {"behaviors": [], "layers": [], "encounters": [], "terrains": []}
     for i in range(len(ts.metatiles)):
         attr = ts.attrs[i] if i < len(ts.attrs) else 0
         out["behaviors"].append(attr & ATTR_BEHAVIOR_MASK)
         out["layers"].append((attr >> ATTR_LAYER_SHIFT) & ATTR_LAYER_MASK)
         out["encounters"].append((attr >> ATTR_ENCOUNTER_SHIFT) & ATTR_ENCOUNTER_MASK)
+        out["terrains"].append((attr >> ATTR_TERRAIN_SHIFT) & ATTR_TERRAIN_MASK)
     return out
 
 
@@ -243,6 +245,7 @@ def extract_maps(decomp, out, ts_folders):
             "battleScene": m.get("battle_scene"),
             "allowCycling": m.get("allow_cycling"),
             "allowRunning": m.get("allow_running"),
+            "allowEscaping": m.get("allow_escaping"),
             "showMapName": m.get("show_map_name"),
             "floorNumber": m.get("floor_number", 0),
             "connections": m.get("connections") or [],
@@ -489,6 +492,28 @@ def extract_field_effects(decomp, out):
     strip.save(fe / "emoticons.png", optimize=True)
     (fe / "emoticons.json").write_text(json.dumps({"frameWidth": 16, "frameHeight": 16, "anims": anims}))
     print(f"  emoticons: {len(frames)} frames, {len(anims)} anims")
+    extract_field_effect_scripts(decomp, fe)
+
+
+def extract_field_effect_scripts(decomp, fe):
+    """data/field_effect_scripts.s: gFieldEffectScriptPointers (FLDEFF_* order) and each script's commands
+    (asm/macros/field_effect_script.inc: loadtiles, loadfadedpal, loadpal, callnative, end and the combined
+    loadgfx_callnative / loadtiles_callnative / loadfadedpal_callnative) as [name, ...symbol args]."""
+    src = (decomp / "data/field_effect_scripts.s").read_text()
+    pointers = re.findall(r"\.4byte\s+(\w+)\s*@\s*(FLDEFF_\w+)", src)
+    scripts = {}
+    for label, body in re.findall(r"^(gFldEffScript_\w+)::\n(.*?)(?=^\w+::|\Z)", src, re.S | re.M):
+        cmds = []
+        for line in body.splitlines():
+            line = line.split("@")[0].strip()
+            if not line:
+                continue
+            op, _, args = line.partition(" ")
+            cmds.append([op] + [a.strip() for a in args.split(",") if a.strip()])
+        scripts[label] = cmds
+    table = {fldeff: scripts[label] for label, fldeff in pointers}
+    (fe / "scripts.json").write_text(json.dumps(table, separators=(",", ":")))
+    print(f"  {len(table)} field effect scripts")
 
 
 # ---------------------------------------------------------------- text: charmap, fonts, windows

@@ -40,6 +40,8 @@ export class Assets {
   wildEncounters!: WildEncounterData;
   doors!: DoorData;
   fieldEffectObjects!: FieldEffectObjects;
+  /** gFieldEffectScriptPointers by FLDEFF_* name (data/field_effect_scripts.s) */
+  fieldEffectScripts: Record<string, string[][]> = {};
 
   private maps = new Map<string, Promise<MapData>>();
 
@@ -62,6 +64,7 @@ export class Assets {
     ]);
     this.doors = await fetchJson<DoorData>(`${GEN}/doors.json`);
     this.fieldEffectObjects = await fetchJson<FieldEffectObjects>(`${GEN}/field_effects/objects.json`);
+    this.fieldEffectScripts = await fetchJson<Record<string, string[][]>>(`${GEN}/field_effects/scripts.json`);
     await loadGfx(FieldDoors.gfxSymbols(this.doors));
     this.wildEncounters = wildEncounters;
     this.species = species;

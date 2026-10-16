@@ -162,6 +162,8 @@ export class ObjectEvent {
   priority: number;
   /** Sprite y-sort key within its priority; lower draws in front. */
   subpriority = 0;
+  /** fixedPriority: ObjectEventUpdateSubpriority leaves the sprite's depth alone (field move warps, Sweet Scent). */
+  fixedPriority = false;
   /**
    * currentCoords: the tile the GBA has the object on, for elevation and ground effects. Same as
    * tileX/tileY except during a jump, which shifts it a tile at the start and (a 2-tile ledge jump)
@@ -469,6 +471,7 @@ export class ObjectEvent {
    * runs this for every object every frame, since the camera moving changes the rows.
    */
   updateSubpriority(): void {
+    if (this.fixedPriority) return;
     const y = (this.feetY - this.field.cameraTop + 8) & 0xff;
     this.subpriority = ELEVATION_TO_SUBPRIORITY[this.previousElevation] + ((16 - (y >> 4)) << 1) + 1;
     this.sprite.setDepth(objectDepth(this.priority, this.subpriority, this.topY - this.field.cameraTop));
