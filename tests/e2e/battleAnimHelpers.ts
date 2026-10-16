@@ -51,18 +51,28 @@ export async function useMoveSlot(game: Game, from: number, slot: number): Promi
 /**
  * Uses up to four moves in turn against a Lv. 100 Snorlax that only splashes (and has the HP to take them),
  * checking each move's anim script runs to its end, and that both battlers are back on screen afterwards.
+ * A move that can miss (SING, DISABLE, THUNDER, ...) plays no anim when it does, and the reseed can't rule that
+ * out (the ticks between it and the roll depend on wall-clock time), so a miss uses the move again.
  */
 export async function expectMovesRun(session: ReturnType<typeof useGame>, moves: string[]): Promise<void> {
   const game = await session.start({ ...ROUTE1, party: [{ species: 'RATTATA', level: 10, moves }] });
   await game.eval((t) => t.startWildBattle({ species: 'SNORLAX', level: 100, moves: ['SPLASH'] }));
   let from = 0;
   for (const [slot, move] of moves.entries()) {
-    const since = await useMoveSlot(game, from, slot);
-    from = slot;
-    expect(await animEvent(game, 'battleAnim', `Move_${move}`, since)).toMatchObject({ ran: true, attacker: 0 });
-    await animEvent(game, 'battleAnimEnd', `Move_${move}`, since);
+    const label = `Move_${move}`;
+    for (let attempt = 0; ; attempt++) {
+      if (attempt === 8) throw new Error(`${move} missed ${attempt} times`);
+      const since = await useMoveSlot(game, from, slot);
+      from = slot;
+      await game.waitForActionMenu(); // the end of the turn
+      const events = await game.events(since);
+      const anim = events.find((e) => e.type === 'battleAnim' && e.label === label);
+      if (!anim) continue; // missed
+      expect(anim).toMatchObject({ ran: true, attacker: 0 });
+      expect(events.some((e) => e.type === 'battleAnimEnd' && e.label === label)).toBe(true);
+      break;
+    }
   }
-  await game.waitForActionMenu();
   const mons = (await game.eval((t) => t.battle()))!.mons;
   expect(mons.map((m) => m.spriteInvisible)).toEqual([false, false]);
 }
