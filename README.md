@@ -102,22 +102,5 @@ animated metatiles are redrawn from the GBA tile data (`world/TilesetVram.ts`).
 
 ## Progress
 
-See [PROGRESS.md](PROGRESS.md) for the detailed checklist and log.
-
-## Roadmap
-
-- [x] Map, tileset and sprite extraction
-- [x] Overworld rendering with connections and border
-- [x] Player movement: walk, run, turn, ledges, collision and elevation
-- [x] Warps: doors, mats/arrow warps, stairs, ladders
-- [x] NPCs with basic movement types
-- [x] Text engine: the decomp's fonts, GBA-style printer, message box
-- [~] Script interpreter for `data/maps/*/scripts.inc`, `data/scripts/*.inc` and `data/event_scripts.s` (msgbox, flags/vars, movement, give items)
-- [x] Signs, coord triggers, map scripts (on load / on frame)
-- [x] Door and tile animations, field effects (grass rustle, shadows, reflections)
-- [ ] Save data model: party, bag, flags, vars, PC
-- [ ] Wild encounters (`src/data/wild_encounters.json`)
-- [ ] Battle engine: species, moves and types data, then the damage formula, battle scripts and AI
-- [~] Menus: start (shell), YES/NO; still to do: bag, party, summary, Pokédex, options
-- [ ] Audio: convert `sound/` (MIDI and samples) to web-playable formats
-- [ ] Title screen, intro, Oak's speech, naming
+[STATUS.md](STATUS.md) has the checklist and what's next. [docs/](docs/) has the developer notes, the list of
+deviations from the GBA, and the change log.
