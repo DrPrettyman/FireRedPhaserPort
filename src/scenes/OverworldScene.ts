@@ -1555,6 +1555,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   openMultichoice(req: MultichoiceRequest): { tick(): boolean; result: number } {
     const d = this.defines;
+    testEvent('multichoice', { mcId: req.mcId });
     const cursor = this.charmap.encode(this.assets.strings.gText_SelectorArrow2);
     const frameType = this.state.optionsWindowFrameType + 1;
     if (req.columns !== undefined) {
