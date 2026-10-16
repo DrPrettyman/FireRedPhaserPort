@@ -71,7 +71,9 @@ A test fails if the page throws or logs `console.error`. When a test fails, the 
 5. Anything that lasts only a few ticks (a movement action, a jump, the moment an anim ends) must be watched
    in the page, not polled from Node: under load, a poll can arrive after it's over. Start an in-page watcher
    (`game.eval(async (t) => { await t.until(...); ... })`) before it can happen and await it afterwards; do
-   hold + watch + release in one eval; reseed right before a roll with `reseedAfterAnims` (battleAnimHelpers.ts).
+   hold + watch + release in one eval; reseed right before a roll with `reseedAfterAnims` (battleAnimHelpers.ts),
+   which uses `t.seedWhen(pred, n)` to seed inside the exact tick (an awaited `t.seed()` lands wherever the
+   frame's batch of ticks ends).
    Several tests here failed only when four e2e runs shared the machine.
 
 Runs are close to deterministic, not exactly: the RNG is seeded, but the number of logic ticks between

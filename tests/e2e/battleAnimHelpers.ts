@@ -74,13 +74,8 @@ export async function expectMovesRun(session: ReturnType<typeof useGame>, moves:
  */
 export function reseedAfterAnims(game: Game, label: string, count: number, since: number): Promise<void> {
   return game.eval(async (t, l, n, s) => {
-    for (let i = 0; i < 20000; i++) {
-      if (t.events(s).filter((e) => e.type === 'battleAnimEnd' && e.label === l).length >= n) {
-        t.seed(1);
-        return;
-      }
-      await t.waitFrames(1);
-    }
-    throw new Error(`reseedAfterAnims: ${n} ${l} never ended`);
+    // seedWhen seeds inside the tick the condition first holds, so the reseed lands on an exact tick.
+    const ok = await t.seedWhen(() => t.events(s).filter((e) => e.type === 'battleAnimEnd' && e.label === l).length >= n, 1);
+    if (!ok) throw new Error(`reseedAfterAnims: ${n} ${l} never ended`);
   }, label, count, since);
 }

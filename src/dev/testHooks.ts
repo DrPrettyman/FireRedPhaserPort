@@ -563,6 +563,27 @@ function createApi(game: Phaser.Game) {
 
     // --- setup
     seed: (n: number) => seedRng(n),
+    /**
+     * Seeds the RNG with `n` at the start of the first tick where `pred` holds, inside that tick (an awaited
+     * `seed()` after `until()` lands wherever the frame's batch of ticks ends). Resolves false if `maxFrames`
+     * pass first.
+     */
+    seedWhen: (pred: () => unknown, n: number, maxFrames = 20000) =>
+      new Promise<boolean>((resolve) => {
+        const deadline = pad.frame + maxFrames;
+        pad.drive(() => {
+          if (pred()) {
+            seedRng(n);
+            resolve(true);
+            return undefined;
+          }
+          if (pad.frame >= deadline) {
+            resolve(false);
+            return undefined;
+          }
+          return [];
+        });
+      }),
     /** Replace the party (CreateMon with the player as OT). */
     setParty: (specs: MonSpec[]) => {
       requireState().party = specs.map(createMon);

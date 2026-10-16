@@ -38,9 +38,13 @@ test('walking into something bumps on the spot', async () => {
   await game.waitIdle();
   // Mom stands at (8, 4): an object in the way bumps the same as a wall (PlayerNotOnBikeCollide).
   await game.eval((t) => t.face('up'));
-  await game.eval((t) => t.hold('UP'));
-  const bump = await game.eval((t) => t.until(() => t.field()?.avatar.action === 'WALK_IN_PLACE_SLOW_UP', 60));
-  await game.eval((t) => t.release('UP'));
+  // Hold, watch and release in one eval, so a busy machine can't miss the action or overshoot.
+  const bump = await game.eval(async (t) => {
+    t.hold('UP');
+    const r = await t.until(() => t.field()?.avatar.action === 'WALK_IN_PLACE_SLOW_UP', 60);
+    t.release();
+    return r;
+  });
   expect(bump).toBe(true);
   await game.waitIdle();
   expect(await game.eval((t) => t.field()!)).toMatchObject({ x: 8, y: 5, facing: 'up' });
@@ -52,10 +56,13 @@ test('B runs once the running shoes are on (FLAG_SYS_B_DASH)', async () => {
   await game.waitIdle();
   await game.eval((t) => t.state!.setFlag('FLAG_SYS_B_DASH', true));
   await game.eval((t) => t.face('up'));
-  await game.eval((t) => t.hold('B'));
-  await game.eval((t) => t.hold('UP'));
-  const ran = await game.eval((t) => t.until(() => t.field()?.avatar.action === 'PLAYER_RUN_UP' && t.field()?.avatar.flags.includes('DASH'), 60));
-  await game.eval((t) => t.release());
+  // Hold, watch and release in one eval, so a busy machine can't miss the action or overshoot.
+  const ran = await game.eval(async (t) => {
+    t.hold('B'); t.hold('UP');
+    const r = await t.until(() => t.field()?.avatar.action === 'PLAYER_RUN_UP' && t.field()?.avatar.flags.includes('DASH'), 60);
+    t.release();
+    return r;
+  });
   expect(ran).toBe(true);
 });
 
@@ -65,9 +72,13 @@ test('a ledge jump carries the player two tiles', async () => {
   await repel(game);
   await game.waitIdle();
   await game.eval((t) => t.face('down'));
-  await game.eval((t) => t.hold('DOWN'));
-  const jumped = await game.eval((t) => t.until(() => t.field()?.avatar.action === 'JUMP_2_DOWN', 60));
-  await game.eval((t) => t.release());
+  // Hold, watch and release in one eval, so a busy machine can't miss the action or overshoot.
+  const jumped = await game.eval(async (t) => {
+    t.hold('DOWN');
+    const r = await t.until(() => t.field()?.avatar.action === 'JUMP_2_DOWN', 60);
+    t.release();
+    return r;
+  });
   expect(jumped).toBe(true);
   await game.waitIdle();
   expect(await game.eval((t) => t.field()!)).toMatchObject({ x: 3, y: 6 });
@@ -79,9 +90,13 @@ test('ice slides the player until something stops them', async () => {
   await repel(game);
   await game.waitIdle();
   await game.eval((t) => t.face('left'));
-  await game.eval((t) => t.hold('LEFT'));
-  const slid = await game.eval((t) => t.until(() => t.field()?.avatar.action === 'WALK_FAST_LEFT' && t.field()?.avatar.flags.includes('FORCED'), 60));
-  await game.eval((t) => t.release());
+  // Hold, watch and release in one eval, so a busy machine can't miss the action or overshoot.
+  const slid = await game.eval(async (t) => {
+    t.hold('LEFT');
+    const r = await t.until(() => t.field()?.avatar.action === 'WALK_FAST_LEFT' && t.field()?.avatar.flags.includes('FORCED'), 60);
+    t.release();
+    return r;
+  });
   expect(slid).toBe(true);
   // ForcedMovement_Slip keeps going without input until the rock
   await game.waitIdle();
@@ -96,9 +111,13 @@ test('a spinner tile spins the player on to the next stop tile', async () => {
   await repel(game);
   await game.waitIdle();
   await game.eval((t) => t.face('down'));
-  await game.eval((t) => t.hold('DOWN'));
-  const spun = await game.eval((t) => t.until(() => t.field()?.avatar.action === 'SPIN_RIGHT', 60));
-  await game.eval((t) => t.release());
+  // Hold, watch and release in one eval, so a busy machine can't miss the action or overshoot.
+  const spun = await game.eval(async (t) => {
+    t.hold('DOWN');
+    const r = await t.until(() => t.field()?.avatar.action === 'SPIN_RIGHT', 60);
+    t.release();
+    return r;
+  });
   expect(spun).toBe(true);
   await game.waitIdle();
   expect(await game.eval((t) => t.field()!)).toMatchObject({ x: 13, y: 20 });
@@ -134,12 +153,16 @@ test('the Bicycle from the bag gets the player on and off the bike', async () =>
 
   // On the bike a step is RIDE_WATER_CURRENT: MOVE_SPEED_FAST_2, 6 frames a tile (BikeTransition_MoveDirection)
   await game.eval((t) => t.face('left'));
-  const start = await game.eval((t) => t.frame());
-  await game.eval((t) => t.hold('LEFT'));
-  const rode = await game.eval((t) => t.until(() => t.field()?.avatar.action === 'RIDE_WATER_CURRENT_LEFT', 60));
-  await game.eval((t) => t.until(() => t.field()!.x <= 12, 120));
-  const frames = (await game.eval((t) => t.frame())) - start;
-  await game.eval((t) => t.release());
+  // One eval: split into several, the time between them would count as frames on a busy machine.
+  const { rode, frames } = await game.eval(async (t) => {
+    const start = t.frame();
+    t.hold('LEFT');
+    const rode = await t.until(() => t.field()?.avatar.action === 'RIDE_WATER_CURRENT_LEFT', 60);
+    await t.until(() => t.field()!.x <= 12, 120);
+    const frames = t.frame() - start;
+    t.release();
+    return { rode, frames };
+  });
   expect(rode).toBe(true);
   expect(frames).toBeLessThan(4 * 16); // four tiles, faster than walking them
 
@@ -258,9 +281,13 @@ test('with Strength in use, walking into a boulder pushes it, and it can fall th
 
   await game.eval((t) => t.state!.setFlag('FLAG_SYS_USE_STRENGTH', true));
   await game.waitIdle();
-  await game.eval((t) => t.hold('LEFT'));
-  const pushed = await game.eval((t) => t.until(() => t.field()?.avatar.action === 'WALK_IN_PLACE_NORMAL_LEFT', 60));
-  await game.eval((t) => t.release());
+  // Hold, watch and release in one eval, so a busy machine can't miss the action or overshoot.
+  const pushed = await game.eval(async (t) => {
+    t.hold('LEFT');
+    const r = await t.until(() => t.field()?.avatar.action === 'WALK_IN_PLACE_NORMAL_LEFT', 60);
+    t.release();
+    return r;
+  });
   expect(pushed).toBe(true);
   await game.eval((t) => t.until(() => !t.objects().some((o) => o.moving), 120));
   await game.waitIdle();

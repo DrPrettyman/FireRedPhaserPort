@@ -1273,3 +1273,13 @@ end to end.
   `[][16]` arrays, the wallpaper palettes), the pokemon_storage_system_*.c anim tables in extract_anims.py, and
   include/pokemon_storage_system_internal.h's constants. Rerun `npm run extract`.
 - Tests: tests/e2e/pcStorage.test.ts (17 scenarios, incl. the bedroom PC).
+
+### E2e: exact-tick reseed, one-eval holds (merging `pc-storage`)
+
+- Doom Desire's test could still miss its roll, even on an idle machine: `reseedAfterAnims` reseeded from a promise
+  continuation, which runs after the frame's whole batch of logic ticks, so the reseed landed a variable number
+  of ticks after the anim. New dev hook `t.seedWhen(pred, n)` seeds inside the first tick `pred` holds (through
+  the virtual pad's per-tick drivers); `reseedAfterAnims` uses it.
+- playerAvatar.test.ts: the bike ride and the hold / watch / release sequences (bump, run, ledge, ice, spinner,
+  boulder push) are each one eval now. The bike test failed under load (the gaps between evals counted as frames).
+- Passed three loaded runs of playerAvatar, strength, surf and battleAnims.3e3a together.
