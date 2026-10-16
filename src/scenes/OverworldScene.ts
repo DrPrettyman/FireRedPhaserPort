@@ -108,6 +108,12 @@ import { GetPlayerSpeed } from '../world/bike';
 import { movementActionName } from '../entities/movementActions';
 import type { FieldMenuStart, NamingScreenRequest } from './FieldMenuScene';
 import { EnterHallOfFame } from '../menus/hallOfFame';
+import { CB2_Credits, CREDITS_MAPS, creditsEnv, creditsGfxSymbols, DoCredits } from '../menus/credits';
+import { configureMenuEnv } from '../menus/host';
+import { setTextStrings } from '../battle/env';
+import { initGbaText } from '../gba/window';
+import { InitStandardTextBoxWindows, InitTextBoxGfxAndPrinters } from '../gba/menu';
+import { TEXT_SPEED } from '../text/TextPrinter';
 import { HALL_OF_FAME_RECORD_GFX, setHallOfFameRecordHost } from '../world/hallOfFameRecord';
 import type { WarpData } from '../state/GameState';
 
@@ -488,7 +494,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     // OverworldBasic's UpdateTilesetAnimations, and VBlank's transfer of what it queued. CB2_Overworld
     // removes the VBlank callback while a palette fade runs, so no frames are copied then (and on the GBA
     // layer, VBlankCB_Field does the transfer until a battle transition replaces it).
-    UpdateTilesetAnimations();
+    if (!this.creditsCamera) UpdateTilesetAnimations(); // the credits run them every other frame themselves
     if (!this.screenFade.active && !this.gbaScreen.active) TransferTilesetAnimsBuffer();
     this.buttons.sample();
     // FieldGetPlayerInput: QuestLogOverrideJoyVars replays the key that closed the last script's message.
@@ -1647,6 +1653,84 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         return menu?.tick() ?? false;
       },
     };
+  }
+
+  /**
+   * DoCredits (special): menus/credits.ts on the field's GBA layer, from the field as it is (Indigo Plateau). The
+   * credits' maps, graphics and text are loaded first (a few frames). It never returns to the field: the credits
+   * end in SoftReset, which here restarts the boot flow (BootScene).
+   */
+  doCredits(): void {
+    this.busy = true;
+    this.clearNpcs(); // the credits' maps replace the field's
+    let started = false;
+    void this.prepareCredits().then(() => {
+      this.creditsCamera = { x: Math.round(this.cameras.main.worldView.x), y: Math.round(this.cameras.main.worldView.y) };
+      this.gbaScreen.start(this.creditsGbaSource());
+      InitStandardTextBoxWindows(); // the field's windows (InitOverworldBgs)
+      InitTextBoxGfxAndPrinters();
+      DoCredits();
+      started = true;
+    });
+    let running = true;
+    this.overlay = {
+      tick: () => {
+        if (started && running) running = CB2_Credits();
+        return false;
+      },
+    };
+  }
+
+  /** The camera while the credits run (world px of the screen's top left); undefined otherwise. */
+  private creditsCamera?: { x: number; y: number };
+
+  /** What the credits load: their maps and tilesets, their graphics, the GBA layer's text. */
+  private async prepareCredits(): Promise<void> {
+    const maps = await Promise.all(CREDITS_MAPS.map((id) => this.assets.loadMap(this.assets.mapNameForId(id)!)));
+    const syms = new Set(creditsGfxSymbols());
+    for (const data of maps) {
+      await this.assets.loadTilesetTextures(this, data.tilesetPair);
+      const t = this.assets.tilesetSymbols(data.tilesetPair);
+      for (const sym of fieldGbaScreenGfxSymbols({ primary: { name: '', symbols: t.primary }, secondary: { name: '', symbols: t.secondary } })) syms.add(sym);
+    }
+    for (const sym of fieldGbaScreenGfxSymbols(this.fieldGbaSource())) syms.add(sym);
+    const frame = `sUserFrame_Type${this.state.optionsWindowFrameType + 1}`;
+    for (const sym of ['gMenuMessageWindow_Gfx', 'gStdTextWindow_Gfx', 'gTextWindowPalettes', `${frame}_Gfx`, `${frame}_Pal`]) syms.add(sym);
+    await loadGfx(syms);
+    setTextStrings(this.assets.strings);
+    configureMenuEnv(this.state);
+    initGbaText(this.fonts, this.buttons, TEXT_SPEED[this.state.textSpeed].scroll);
+    Object.assign(creditsEnv, {
+      loadMap: (mapId: string, x: number, y: number) => {
+        let done = false;
+        void this.world.load(this.assets.mapNameForId(mapId)!).then(() => {
+          const anims = this.assets.tilesetAnimInfo(this.world.current.data.tilesetPair);
+          InitTilesetAnimations(anims.primary, anims.secondary);
+          // gSaveBlock1Ptr->pos = (x, y): the camera frames that tile where it frames the player
+          this.creditsCamera = { x: x * 16 - 112, y: y * 16 - 72 };
+          this.gbaScreen.reloadField(this.creditsGbaSource());
+          done = true;
+        });
+        return () => done;
+      },
+      moveCamera: (dx: number, dy: number) => {
+        this.creditsCamera!.x += dx;
+        this.creditsCamera!.y += dy;
+      },
+      updateTilesetAnimations: () => UpdateTilesetAnimations(),
+      bareScreen: () => this.gbaScreen.startBare(),
+      softReset: () => {
+        this.gbaScreen.stop();
+        this.creditsCamera = undefined;
+        this.scene.start('Boot', { softReset: true });
+      },
+      playerGender: () => this.playerGender(),
+    } satisfies Partial<typeof creditsEnv>);
+  }
+
+  /** The current map on the GBA layer for the credits: their camera, and no objects (ResetSpriteData). */
+  private creditsGbaSource(): FieldGbaSource {
+    return { ...this.fieldGbaSource(), camera: () => ({ ...this.creditsCamera! }), sprites: () => [], flashLevel: 0 };
   }
 
   /**

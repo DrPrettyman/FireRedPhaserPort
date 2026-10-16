@@ -13,7 +13,8 @@ export class BootScene extends Phaser.Scene {
     super('Boot');
   }
 
-  async create(): Promise<void> {
+  /** `softReset`: SoftReset(RESET_ALL) from the credits (menus/credits.ts): the boot flow again, ignoring dev starts. */
+  async create(data?: { softReset?: boolean }): Promise<void> {
     const assets = new Assets();
     try {
       await assets.init();
@@ -26,7 +27,7 @@ export class BootScene extends Phaser.Scene {
     }
     this.registry.set('assets', assets);
     const save = LoadGameSave(); // sets gSaveFileStatus, which the save dialog checks too
-    const dev = startFromUrl();
+    const dev = data?.softReset ? undefined : startFromUrl();
     // No title screen yet: boot into the main menu (CB2_InitMainMenu), which with an empty slot goes on to the new
     // game at once (Task_SetWin0BldRegsNoSaveFileCheck → NEW GAME), so skip it then. Dev starts skip it too.
     if (dev || gSave.fileStatus === SAVE_STATUS_EMPTY) this.scene.start('Overworld', dev ?? NEW_GAME_START);

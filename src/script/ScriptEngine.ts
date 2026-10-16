@@ -99,6 +99,8 @@ export interface ScriptHost {
   enterHallOfFame(): void;
   /** HallOfFamePCBeginFade: the Hall of Fame PC, then the PC menu again (its choice in `result`). */
   openHallOfFamePc(): { tick(): boolean; result: number };
+  /** DoCredits (credits.c): the credits on the field's GBA layer; they end in a reset, never back to the script. */
+  doCredits(): void;
   /** SpawnCameraObject / RemoveCameraObject (field_specials.c) */
   spawnCameraObject(): unknown;
   removeCameraObject(): void;

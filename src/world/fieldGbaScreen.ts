@@ -182,7 +182,28 @@ export class FieldGbaScreen {
     FreeAllSpritePalettes();
     ResetPaletteFade();
     ScanlineEffect_Clear();
+    // The field's own sprite palettes: the probes stand in for them.
+    this.probeSlots = PROBE_PAL_TAGS.map((tag, i) => {
+      const ramp = Array.from({ length: 16 }, (_, j) => {
+        const v = i * 16 + j;
+        return v | (v << 5) | (v << 10);
+      });
+      return LoadSpritePalette({ data: ramp, tag });
+    });
+    this.loadField(source);
+  }
 
+  /**
+   * Another map on the running GBA layer, keeping its tasks, sprites and OBJ palettes (credits.c's map scenes:
+   * MapLdr_Credits): InitOverworldBgs, InitOverworldGraphicsRegisters, the map's tilesets, palettes and view.
+   */
+  reloadField(source: FieldGbaSource): void {
+    this.running = true;
+    this.loadField(source);
+  }
+
+  private loadField(source: FieldGbaSource): void {
+    this.source = source;
     // InitOverworldBgs
     ResetBgsAndClearDma3BusyFlags(false);
     InitBgsFromTemplates(0, sOverworldBgTemplates);
@@ -208,14 +229,6 @@ export class FieldGbaScreen {
     InitCurrentFlashLevelScanlineEffect(source.flashLevel ?? 0); // the field's flash circle, still running
 
     this.loadMapTilesetPalettes();
-    // The field's own sprite palettes: the probes stand in for them.
-    this.probeSlots = PROBE_PAL_TAGS.map((tag, i) => {
-      const ramp = Array.from({ length: 16 }, (_, j) => {
-        const v = i * 16 + j;
-        return v | (v << 5) | (v << 10);
-      });
-      return LoadSpritePalette({ data: ramp, tag });
-    });
     this.copyMapTilesetsToVram();
     this.drawWholeMapView();
     this.fieldUpdateBgTilemapScroll();

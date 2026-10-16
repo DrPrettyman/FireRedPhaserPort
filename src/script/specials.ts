@@ -180,6 +180,12 @@ export const SPECIALS: Record<string, Special> = {
     return 0;
   },
 
+  /** DoCredits (credits.c): SetMainCallback2(CB2_Credits), which ends in SoftReset, so the `waitstate` never ends. */
+  DoCredits({ host, setWaitState }) {
+    host.doCredits();
+    setWaitState(() => false);
+  },
+
   /** SpawnCameraObject (field_specials.c): the camera stays where the player stands while scripts move them. */
   SpawnCameraObject({ host }) {
     host.spawnCameraObject();

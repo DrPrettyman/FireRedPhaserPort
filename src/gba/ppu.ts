@@ -1,5 +1,6 @@
 // A software GBA PPU for mode 0: four text BGs (with BG mosaic), OBJ (normal and affine), WIN0/WIN1/OBJ
-// window and colour special effects (alpha blend, brighten, darken). OBJ mosaic is not implemented.
+// window and colour special effects (alpha blend, brighten, darken). Modes 1 and 2 draw BG2 (and BG3 in mode 2)
+// as rotation/scaling BGs, without mosaic (the credits' Pokémon scenes). OBJ mosaic is not implemented.
 // The HBlank callback, if any, runs before each line is drawn (REG_VCOUNT = that line), like the
 // HBlank DMA model in hblankRegs.
 
@@ -103,6 +104,29 @@ function bgPixel(x: number, line: number, cnt: number, hofs: number, vofs: numbe
   if (!idx) return -1;
   return pltt[((entry >> 12) << 4) + idx];
 }
+
+/**
+ * Colour of a rotation/scaling BG (8bpp tiles, one-byte map entries) at screen x: (refX, refY) is the line's
+ * reference point (BGxX/Y advanced by BGxPB/PD per line), (pa, pc) the step per pixel, all .8 fixed point.
+ */
+function affineBgPixel(x: number, cnt: number, refX: number, refY: number, pa: number, pc: number): number {
+  const charBase = ((cnt >> 2) & 3) * 0x4000;
+  const screenBase = ((cnt >> 8) & 0x1f) * 0x800;
+  const size = 128 << ((cnt >> 14) & 3);
+  let tx = (refX + x * pa) >> 8;
+  let ty = (refY + x * pc) >> 8;
+  if (cnt & 0x2000) {
+    tx &= size - 1;
+    ty &= size - 1;
+  } else if (tx < 0 || ty < 0 || tx >= size || ty >= size) return -1;
+  const tile = vram[(screenBase + (ty >> 3) * (size >> 3) + (tx >> 3)) & 0xffff];
+  const idx = vram[(charBase + tile * 64 + (ty & 7) * 8 + (tx & 7)) & 0xffff];
+  return idx ? pltt[idx] : -1;
+}
+
+/** A signed 16-bit register / the 28-bit signed BGxX/Y reference point (two halves). */
+const s16 = (v: number) => (v << 16) >> 16;
+const ref28 = (lo: number, hi: number) => ((lo | (hi << 16)) << 4) >> 4;
 
 function renderObjLine(line: number, dispcnt: number): void {
   objColor.fill(-1);
@@ -221,8 +245,21 @@ export function renderFrame(out: Uint32Array): void {
     const cnt = [0, 1, 2, 3].map((b) => reg(REG_OFFSET_BG0CNT + b * 2, line));
     const hofs = [0, 1, 2, 3].map((b) => reg(REG_OFFSET_BG0HOFS + b * 4, line) & 0x1ff);
     const vofs = [0, 1, 2, 3].map((b) => reg(REG_OFFSET_BG0VOFS + b * 4, line) & 0x1ff);
-    // BGs in draw order: priority, then index
-    const order = [0, 1, 2, 3].filter((b) => dispcnt & (0x100 << b)).sort((a, b) => (cnt[a] & 3) - (cnt[b] & 3) || a - b);
+    // BGs in draw order: priority, then index. Mode 1: BG0-1 text, BG2 affine; mode 2: BG2-3 affine.
+    const mode = dispcnt & 7;
+    const affine = (b: number) => (mode === 1 && b === 2) || (mode === 2 && b >= 2);
+    const shown = (b: number) => mode === 0 || (mode === 1 && b <= 2) || (mode === 2 && b >= 2);
+    const isAffine = [false, false, affine(2), affine(3)];
+    const order = [0, 1, 2, 3].filter((b) => dispcnt & (0x100 << b) && shown(b)).sort((a, b) => (cnt[a] & 3) - (cnt[b] & 3) || a - b);
+    // Rotation/scaling BGs' parameters (BG2 at 0x20, BG3 at 0x30): this line's reference point, the per-pixel step
+    const aff = [2, 3].map((b) => {
+      const base = 0x20 + (b - 2) * 0x10;
+      if (!affine(b) || base + 0xe >= regs.length * 2) return { refX: 0, refY: 0, pa: 0, pc: 0 };
+      const r = (o: number) => regs[(base + o) >> 1];
+      const pb = s16(r(2));
+      const pd = s16(r(6));
+      return { refX: ref28(r(8), r(10)) + line * pb, refY: ref28(r(12), r(14)) + line * pd, pa: s16(r(0)), pc: s16(r(4)) };
+    });
     const winOn = dispcnt & 0xe000;
     const win0h = reg(REG_OFFSET_WIN0H, line);
     const win0v = reg(REG_OFFSET_WIN0V, line);
@@ -255,7 +292,10 @@ export function renderFrame(out: Uint32Array): void {
       }
       for (const b of order) {
         if (!(mask & (1 << b))) bgColor[b] = -1;
-        else if (cnt[b] & 0x40) bgColor[b] = bgPixel(x - (x % mosaicH), mosaicLine, cnt[b], hofs[b], vofs[b]);
+        else if (isAffine[b]) {
+          const a = aff[b - 2];
+          bgColor[b] = affineBgPixel(x, cnt[b], a.refX, a.refY, a.pa, a.pc);
+        } else if (cnt[b] & 0x40) bgColor[b] = bgPixel(x - (x % mosaicH), mosaicLine, cnt[b], hofs[b], vofs[b]);
         else bgColor[b] = bgPixel(x, line, cnt[b], hofs[b], vofs[b]);
       }
       // Find the top two layers.
