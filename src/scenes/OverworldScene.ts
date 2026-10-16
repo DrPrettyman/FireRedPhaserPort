@@ -31,6 +31,12 @@ import type { BgEventData } from '../data/types';
 import { WildEncounters } from '../world/WildEncounters';
 import { World } from '../world/World';
 import { StartMenu } from '../ui/StartMenu';
+import { SAVECB_RETURN_CANCEL, SAVECB_RETURN_CONTINUE, SaveDialog } from '../ui/SaveDialog';
+import { ClearContinueGameWarpStatus, gSave, UseContinueGameWarp } from '../state/save';
+import { fromSaveData, type SaveData } from '../state/saveData';
+import { PlayTimeCounter_Reset, PlayTimeCounter_Start, PlayTimeCounter_Update } from '../state/playTime';
+import type { PlayerLocation } from '../state/GameState';
+import { GetMapName } from '../world/regionMap';
 import { YesNoMenu } from '../ui/YesNoMenu';
 import { MonPicBox } from '../ui/MonPicBox';
 import { MoneyBox } from '../ui/MoneyBox';
@@ -102,6 +108,8 @@ export interface OverworldStart {
   facing?: Direction;
   /** Dev: start from a story preset instead of a new game. */
   preset?: StartPreset;
+  /** CONTINUE from the main menu: the save to load (CB2_ContinueSavedGame); map/x/y are unused then. */
+  continueGame?: SaveData;
 }
 
 /** struct FieldInput: the parts ProcessPlayerFieldInput uses. */
@@ -221,6 +229,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   async create(start: OverworldStart): Promise<void> {
+    if (start.continueGame) fromSaveData(start.continueGame, this.state); // LoadSerializedGame & co. (load_save.c)
     const kb = this.input.keyboard!;
     this.buttons = new Input(this);
 
@@ -310,11 +319,19 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     await loadGfx(fieldMoveGfxSymbols());
     this.cameras.main.startFollow(this.player.anchor, true, 1, 1, 0, CAMERA_FOLLOW_OFFSET_Y);
 
-    testHooks.applyTestOptions(this.state);
-    if (start.preset) await applyStartPreset(this.state, start.preset, this.assets.scripts.healLocations);
-    ResetInitialPlayerAvatarState();
-    await this.enterMap(start.map, start.x, start.y, start.facing ?? 'down', true);
-    this.showMapNameOnWarpArrival(undefined); // CB2_NewGame loads the map like a warp
+    if (start.continueGame) {
+      await this.continueSavedGame(start);
+    } else {
+      // CB2_NewGame: NewGameInitData's gDifferentSaveFile and PlayTimeCounter_Reset, then PlayTimeCounter_Start
+      gSave.differentSaveFile = true;
+      PlayTimeCounter_Reset(this.state.playTime);
+      PlayTimeCounter_Start(this.state.playTime);
+      testHooks.applyTestOptions(this.state);
+      if (start.preset) await applyStartPreset(this.state, start.preset, this.assets.scripts.healLocations);
+      ResetInitialPlayerAvatarState();
+      await this.enterMap(start.map, start.x, start.y, start.facing ?? 'down', true);
+      this.showMapNameOnWarpArrival(undefined); // CB2_NewGame loads the map like a warp
+    }
     this.busy = false;
     testEvent('ready');
   }
@@ -431,6 +448,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   private tick(): void {
     this.tickField();
+    PlayTimeCounter_Update(this.state.playTime); // AgbMain, once per frame
     this.flash.vblank(); // VBlankCB_Field's ScanlineEffect_InitHBlankDmaTransfer
     this.gbaScreen.frame(); // the GBA layer's half of the frame, when it's in use
   }
@@ -1101,7 +1119,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * `facing`: the direction to face on arrival, or undefined for the one GetInitialPlayerAvatarState
    * picks (by the arrival tile: south out of doors, north off a mat, ...).
    */
-  private async enterMap(name: string, x: number, y: number, facing: Direction | undefined, warped: boolean): Promise<void> {
+  private async enterMap(name: string, x: number, y: number, facing: Direction | undefined, warped: boolean, continued?: PlayerLocation): Promise<void> {
     this.warping = false;
     this.mapNamePopup?.destroy(); // the map load's ResetTasks
     this.mapNamePopup = undefined;
@@ -1117,7 +1135,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.updateFieldCamera(); // the warp resets the camera onto the player
     this.player.updateSubpriority();
     this.arrivalFacing = facing;
-    await this.onMapLoaded(warped);
+    await this.onMapLoaded(warped, continued);
   }
 
   /**
@@ -1154,8 +1172,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     };
   }
 
-  /** Map entry sequence: templates reloaded, temps cleared, ON_TRANSITION, ON_LOAD, objects spawned, ON_WARP_INTO. */
-  private async onMapLoaded(warped: boolean): Promise<void> {
+  /**
+   * Map entry sequence: templates reloaded, temps cleared, ON_TRANSITION, ON_LOAD, objects spawned, ON_WARP_INTO.
+   * `continued` (CONTINUE: CB2_ContinueSavedGame's InitMapFromSavedGame) runs only ON_LOAD, keeps the saved temps
+   * and flash level, and puts the player back as saved.
+   */
+  private async onMapLoaded(warped: boolean, continued?: PlayerLocation): Promise<void> {
     const cur = this.world.current;
     const name = cur.name;
     await this.preloadMapSprites();
@@ -1164,32 +1186,81 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.state.currentMapId = cur.data.id;
     this.state.currentMapSection = this.mapSection();
     testEvent('map', { map: name });
-    this.state.clearTemps();
-    this.wild.resetEncounterRateModifiers(); // RestartWildEncounterImmunitySteps
-    mapResetTrainerRematches(this.state);
-    // LoadMapFromWarp / LoadMapFromCameraTransition
-    updateLocationHistoryForRoamer(this.state);
-    if (warped) roamerMoveToOtherLocationSet(this.state);
-    else roamerMove(this.state);
-    if (warped && IsMapTypeOutdoors(cur.data.mapType)) this.state.setFlag('FLAG_SYS_FLASH_ACTIVE', false);
-    SetDefaultFlashLevel(this.state, cur.data.cave);
-    const transition = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_TRANSITION');
-    if (transition) this.scripts.runImmediately(transition);
+    if (!continued) {
+      this.state.clearTemps();
+      this.wild.resetEncounterRateModifiers(); // RestartWildEncounterImmunitySteps
+      mapResetTrainerRematches(this.state);
+      // LoadMapFromWarp / LoadMapFromCameraTransition
+      updateLocationHistoryForRoamer(this.state);
+      if (warped) roamerMoveToOtherLocationSet(this.state);
+      else roamerMove(this.state);
+      if (warped && IsMapTypeOutdoors(cur.data.mapType)) this.state.setFlag('FLAG_SYS_FLASH_ACTIVE', false);
+      SetDefaultFlashLevel(this.state, cur.data.cave);
+      const transition = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_TRANSITION');
+      if (transition) this.scripts.runImmediately(transition);
+    }
     const load = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_LOAD');
     if (load) this.scripts.runImmediately(load);
     await this.preloadMapSprites(); // again, now the map scripts have set any VAR_OBJ_GFX_ID_*
-    if (warped) {
-      this.clearNpcs(); // ResetObjectEvents
-      this.initPlayerAvatarOnWarp();
+    if (warped || continued) this.clearNpcs(); // ResetObjectEvents
+    if (warped) this.initPlayerAvatarOnWarp();
+    if (continued) {
+      // The saved player object (LoadObjectEvents) and SpawnObjectEventsOnReturnToField: its graphics give the state
+      const F = PLAYER_AVATAR_FLAG;
+      const flags = continued.avatarFlags;
+      const state = flags & F.MACH_BIKE ? F.MACH_BIKE : flags & F.ACRO_BIKE ? F.ACRO_BIKE : flags & F.SURFING ? F.SURFING : F.ON_FOOT;
+      InitPlayerAvatar(continued.facing, this.playerGender(), state);
     }
     this.syncNpcsWithLoadedMaps();
     if (warped) {
       const table = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_WARP_INTO_MAP_TABLE');
       const script = table && this.scripts.mapScriptTable(table);
       if (script) this.scripts.runImmediately(script);
-      // LoadMapInStepsLocal's InitCurrentFlashLevelScanlineEffect (a connection keeps the running effect)
-      this.flash.initCurrentFlashLevelScanlineEffect(Overworld_GetFlashLevel(this.state));
     }
+    // LoadMapInStepsLocal's (ReturnToFieldLocal's) InitCurrentFlashLevelScanlineEffect (a connection keeps the running effect)
+    if (warped || continued) this.flash.initCurrentFlashLevelScanlineEffect(Overworld_GetFlashLevel(this.state));
+  }
+
+  /**
+   * CB2_ContinueSavedGame, once the main menu's CONTINUE has loaded the save into the state: ResetMenuAndMonGlobals'
+   * gDifferentSaveFile, Overworld_ResetStateOnContinue and PlayTimeCounter_Start, then either the continue-game
+   * warp (UseContinueGameWarp: WarpIntoMap + CB2_LoadMap, FieldCB_DefaultWarpExit) or the saved map and position
+   * (InitMapFromSavedGame, CB2_ReturnToField's ResumeMap and return-to-field scripts, FieldCB_ShowMapNameOnContinue).
+   */
+  private async continueSavedGame(start: OverworldStart): Promise<void> {
+    const s = this.state;
+    gSave.differentSaveFile = false;
+    // A save always has a location (the save dialog stores it); `start` is only a fallback.
+    const loc = s.location ?? { mapId: '', x: start.x, y: start.y, facing: start.facing ?? 'down', avatarFlags: PLAYER_AVATAR_FLAG.ON_FOOT };
+    // LoadSaveblockMapHeader, then Overworld_ResetStateOnContinue (ChooseAmbientCrySpecies: no audio)
+    s.currentMapId = loc.mapId;
+    s.setFlag('FLAG_SYS_SAFARI_MODE', false);
+    s.setVar('VAR_MAP_SCENE_FUCHSIA_CITY_SAFARI_ZONE_ENTRANCE', 0);
+    updateLocationHistoryForRoamer(s);
+    roamerMoveToOtherLocationSet(s);
+    PlayTimeCounter_Start(s.playTime);
+    // gExitStairsMovementDisabled = TRUE: the port has no Task_ExitStairs
+    if (UseContinueGameWarp(s) && s.continueGameWarp) {
+      ClearContinueGameWarpStatus(s);
+      const w = s.continueGameWarp;
+      const name = this.assets.mapNameForId(w.mapId) ?? start.map;
+      const dest = warpDestCoords(await this.assets.loadMap(name), w.warpId, w.x, w.y);
+      ResetInitialPlayerAvatarState();
+      await this.enterMap(name, dest.x, dest.y, undefined, true);
+      this.showMapNameOnWarpArrival(undefined);
+      // FieldCB_DefaultWarpExit → SetUpWarpExitTask(FALSE)
+      if (this.behaviors.isDoor(this.world.tileAt(this.player.tileX, this.player.tileY).behavior)) this.exitDoor(false);
+      else this.warpFadeInScreen(false);
+    } else {
+      const name = this.assets.mapNameForId(loc.mapId) ?? start.map;
+      await this.enterMap(name, loc.x, loc.y, loc.facing, false, loc);
+      this.resumeMap(); // ResumeMap's RunOnResumeMapScript, ReloadObjectsAndRunReturnToFieldMapScript
+      // FieldCB_ShowMapNameOnContinue, then FieldCB_WarpExitFadeFromBlack → SetUpWarpExitTask(TRUE): FadeInFromBlack
+      if (this.world.current.data.showMapName) this.showMapNamePopup();
+      this.warpFadeInScreen(false);
+    }
+    // Task_ExitNonDoor: the controls stay locked until the fade is done
+    if (!this.overlay) this.overlay = { tick: () => !this.screenFade.active };
   }
 
   /** A loaded map's templates; a neighbour that was never current starts from its header. */
@@ -1327,7 +1398,35 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         if (r === 'POKEMON') this.openFieldMenu('party');
         else if (r === 'BAG') this.openFieldMenu('bag');
         else if (r === 'RETIRE') this.startFieldScript('SafariZone_EventScript_RetirePrompt'); // SafariZoneRetirePrompt
+        else if (r === 'SAVE') this.openSaveDialog();
         else if (r !== 'close') this.showNotice(`${r} isn't implemented yet.`);
+        return true;
+      },
+    };
+  }
+
+  /**
+   * StartMenuSaveCallback → StartCB_Save1 / StartCB_Save2: the save dialog (ui/SaveDialog.ts). NO goes back to the
+   * start menu (DrawStartMenuInOneGo); after saving (or a save error) the message box is cleared and the field resumes.
+   */
+  private openSaveDialog(): void {
+    const dialog = new SaveDialog({
+      scene: this,
+      fonts: this.fonts,
+      input: this.buttons,
+      charmap: this.charmap,
+      strings: this.assets.strings,
+      state: this.state,
+      messageBox: this.messageBox,
+      mapName: () => GetMapName(this.defines.require(this.mapSection())), // GetMapNameGeneric
+      storeLocationForSave: () => this.storeLocationForSave(),
+    });
+    this.overlay = {
+      tick: () => {
+        const r = dialog.tick();
+        if (r === SAVECB_RETURN_CONTINUE) return false;
+        if (r === SAVECB_RETURN_CANCEL) this.openStartMenu();
+        else this.messageBox.hide(); // ClearDialogWindowAndFrameToTransparent
         return true;
       },
     };

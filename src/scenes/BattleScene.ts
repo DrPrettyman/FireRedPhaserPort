@@ -135,7 +135,7 @@ export class BattleScene extends GbaHostScene implements BattleUi {
 
   async create(start: BattleStart): Promise<void> {
     this.start = start;
-    this.initHost(TEXTURE);
+    this.initHost(TEXTURE, start.state.playTime);
     const assets: Assets = this.registry.get('assets');
 
     const data = await sharedBattleData();

@@ -3,6 +3,7 @@ import { BootScene } from './scenes/BootScene';
 import { OverworldScene } from './scenes/OverworldScene';
 import { BattleScene } from './scenes/BattleScene';
 import { FieldMenuScene } from './scenes/FieldMenuScene';
+import { MainMenuScene } from './scenes/MainMenuScene';
 import { testHooks } from './dev/testHooks';
 
 // GBA native resolution; scaled up with nearest-neighbour filtering.
@@ -18,7 +19,7 @@ const game = new Phaser.Game({
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [BootScene, OverworldScene, BattleScene, FieldMenuScene],
+  scene: [BootScene, MainMenuScene, OverworldScene, BattleScene, FieldMenuScene],
 });
 
 // Handy for poking at state from the devtools console during development; `__test` drives the e2e tests.

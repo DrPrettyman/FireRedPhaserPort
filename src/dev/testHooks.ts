@@ -23,6 +23,9 @@ import { DELTA, type Direction } from '../world/direction';
 import { tilesetVram } from '../world/TilesetVram';
 import { SetPlayerAvatarTransitionFlags } from '../world/playerAvatar';
 import type { FieldListMenuProbe } from '../ui/FieldListMenu';
+import { mainMenuProbe } from '../menus/mainMenu';
+import { saveDialogProbe } from '../ui/SaveDialog';
+import { startMenuProbe } from '../ui/StartMenu';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -439,7 +442,13 @@ function createApi(game: Phaser.Game) {
     // --- probes
     scenes: () => game.scene.getScenes(true).map((s) => s.scene.key),
     /** The GBA-layer screen running (gMain.callback2's name, e.g. BattleMainCB2, CB2_NamingScreen), if any. */
-    gbaScreen: () => (game.scene.isActive('Battle') || game.scene.isActive('FieldMenu') ? gMain.callback2?.name : undefined),
+    gbaScreen: () => (game.scene.isActive('Battle') || game.scene.isActive('FieldMenu') || game.scene.isActive('MainMenu') ? gMain.callback2?.name : undefined),
+    /** The main menu while it takes input: menu type (0 NEW GAME only, 1 CONTINUE / NEW GAME), cursor, fading. */
+    mainMenu: () => (game.scene.isActive('MainMenu') ? mainMenuProbe() : undefined),
+    /** The field start menu while it's open: its items and cursor. */
+    startMenu: () => startMenuProbe(),
+    /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up. */
+    saveDialog: () => saveDialogProbe(),
     field,
     idle,
     /** The current map's objects: local id, graphics and map-local position. */

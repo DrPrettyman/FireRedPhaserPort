@@ -299,6 +299,15 @@ export function readSave(storage = defaultStorage()): SaveData | undefined {
   }
 }
 
+/** Whether the slot holds anything at all, readable or not (save.c's empty-slot check). */
+export function saveSlotUsed(storage = defaultStorage()): boolean {
+  try {
+    return !!storage?.getItem(SAVE_STORAGE_KEY);
+  } catch {
+    return false;
+  }
+}
+
 /** Whether the slot holds a readable save (main_menu.c's HAS_SAVED_GAME check). */
 export function hasSave(storage = defaultStorage()): boolean {
   return readSave(storage) !== undefined;

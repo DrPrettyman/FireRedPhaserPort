@@ -23,6 +23,13 @@ const LABELS: Record<StartMenuItem, string> = {
 
 /** Remembered across openings, like sStartMenuCursorPos. */
 let lastCursor = 0;
+/** The open menu, for the e2e tests' probe. */
+let openMenu: StartMenu | undefined;
+
+/** Dev: the open start menu's items and cursor. */
+export function startMenuProbe(): { items: StartMenuItem[]; cursor: number } | undefined {
+  return openMenu && { items: [...openMenu.items], cursor: lastCursor };
+}
 
 /**
  * The field start menu (start_menu.c): SetUpStartMenu_NormalField / _SafariZone item order, a std-framed
@@ -72,6 +79,7 @@ export class StartMenu {
       rowHeight: 15,
       wrap: true,
     }, lastCursor);
+    openMenu = this;
   }
 
   /** Returns the chosen item, 'close' when dismissed, or undefined while open. */
@@ -95,6 +103,7 @@ export class StartMenu {
 
   /** CloseStartMenu + DestroySafariZoneStatsWindow */
   private destroy(): void {
+    if (openMenu === this) openMenu = undefined;
     this.win.destroy();
     this.safariStats?.destroy();
   }

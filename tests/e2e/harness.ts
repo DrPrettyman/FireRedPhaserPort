@@ -160,6 +160,13 @@ export interface StartOptions {
   textSpeed?: 'slow' | 'mid' | 'fast';
   /** Replace the party once the field is up. */
   party?: MonSpec[];
+  /** Keep the save slot (localStorage) from before; by default every load starts with it empty. */
+  keepSave?: boolean;
+  /**
+   * Boot to the main menu (a save exists and no map/start preset is given): wait for it to take input
+   * instead of for the field.
+   */
+  mainMenu?: boolean;
 }
 
 export interface WaitOptions {
@@ -206,11 +213,21 @@ export class Game {
     q.set('textSpeed', opts.textSpeed ?? 'fast');
     this.errors = [];
     this.log = [];
+    if (!opts.keepSave) await this.clearSave();
     await this.cdp.send('Page.navigate', { url: `${this.baseUrl}/?${q}` });
     await this.waitFor(() => typeof (window as any).__test !== 'undefined', { what: 'test hooks', timeout: 60_000, raw: true });
+    if (opts.mainMenu) {
+      await this.waitFor((t) => t.mainMenu() && !t.mainMenu()!.fading, { what: 'the main menu', timeout: 60_000 });
+      return this;
+    }
     await this.waitFor((t) => t.events().some((e) => e.type === 'ready'), { what: 'the field to load', timeout: 60_000 });
     if (opts.party) await this.eval((t, party) => t.setParty(party), opts.party);
     return this;
+  }
+
+  /** Empty the game's localStorage (the save slot) before the next load. */
+  async clearSave(): Promise<void> {
+    await this.cdp.send('Storage.clearDataForOrigin', { origin: new URL(this.baseUrl).origin, storageTypes: 'local_storage' });
   }
 
   /** Run `fn(__test, ...args)` in the page and return its (JSON) result. */

@@ -9,6 +9,7 @@ import { CallCallbacks, gMain, ReadKeys } from '../gba/main';
 import { renderFrame } from '../gba/ppu';
 import { Input } from '../input/Input';
 import { logicSpeed } from '../dev/testHooks';
+import { PlayTimeCounter_Update, type PlayTime } from '../state/playTime';
 
 const FRAME_MS = 1000 / 60;
 
@@ -21,9 +22,12 @@ export abstract class GbaHostScene extends Phaser.Scene {
   private canvas!: Phaser.Textures.CanvasTexture;
   private image!: ImageData;
   private pixels!: Uint32Array;
+  /** gSaveBlock2Ptr's play time, which AgbMain's PlayTimeCounter_Update counts on every screen. */
+  private playTime?: PlayTime;
 
   /** Create the input and the canvas the PPU draws into (call from create()). */
-  protected initHost(textureKey: string): void {
+  protected initHost(textureKey: string, playTime?: PlayTime): void {
+    this.playTime = playTime;
     this.running = false;
     this.accumulator = 0;
     this.buttons = new Input(this);
@@ -52,6 +56,7 @@ export abstract class GbaHostScene extends Phaser.Scene {
       this.buttons.sample();
       ReadKeys(this.buttons, this.lEqualsA);
       CallCallbacks();
+      if (this.playTime) PlayTimeCounter_Update(this.playTime);
       if (!this.running) break;
       gMain.vblankCallback?.();
       ticked = true;
