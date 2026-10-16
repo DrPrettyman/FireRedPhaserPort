@@ -18,7 +18,7 @@ from extract import read_jasc
 
 # Graphics the ported code loads (battle UI, terrain, Pokémon/trainer pics and icons, balls, battle
 # anims, party menu, bag and item icons, summary screen and mon markings, the shop's buy menu, the naming
-# screen, the evolution scene, the field's tilesets and object event pics, which the buy menu's map view draws from VRAM,
+# screen, the PC storage system, the evolution scene, the field's tilesets and object event pics, which the buy menu's map view draws from VRAM,
 # field effect pics, door animation tiles, the cave entrance transition, and the weather fog and palette that
 # Haze and Mist Ball load).
 GFX_PREFIXES = (
@@ -39,6 +39,7 @@ GFX_PREFIXES = (
     "graphics/misc/",
     "graphics/shop_menu/",
     "graphics/naming_screen/",
+    "graphics/pokemon_storage/",
     "graphics/evolution_scene/",
     "graphics/object_events/",
     "graphics/field_effects/",
@@ -50,7 +51,8 @@ GFX_PREFIXES = (
 # Footprints are 1bpp and unused so far.
 SKIP_SUFFIXES = ("footprint.1bpp",)
 
-INCBIN = re.compile(r"(\w+)\s*\[[^\]]*\]\s*=\s*INCBIN_U(?:8|16|32)\(((?:\s*\"[^\"]+\"\s*,?)+)\)")
+# (also `[][16]`-shaped arrays such as the storage system's wallpaper palettes)
+INCBIN = re.compile(r"(\w+)\s*(?:\[[^\]]*\])+\s*=\s*INCBIN_U(?:8|16|32)\(((?:\s*\"[^\"]+\"\s*,?)+)\)")
 # `const u16 gTextWindowPalettes[][16] = { INCBIN_U16("a"), INCBIN_U16("b") };` -> concatenation
 INCBIN_ARRAY = re.compile(r"(\w+)\s*\[[^\]]*\](?:\[[^\]]*\])+\s*=\s*\{((?:\s*INCBIN_U(?:8|16|32)\([^)]*\)\s*,?)+)\s*\}")
 

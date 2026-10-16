@@ -43,6 +43,11 @@ ANIM_FILES = [
     "src/menu_indicators.c",
     "src/pokemon_summary_screen.c",
     "src/mon_markings.c",
+    "src/pokemon_storage_system_data.c",
+    "src/pokemon_storage_system_graphics.c",
+    "src/pokemon_storage_system_menu.c",
+    "src/pokemon_storage_system_misc.c",
+    "src/pokemon_storage_system_tasks.c",
     "src/event_object_movement.c",
 ]
 
