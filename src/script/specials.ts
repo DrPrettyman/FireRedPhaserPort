@@ -135,9 +135,9 @@ export const SPECIALS: Record<string, Special> = {
     warnOnce('PlayerPC', '[special] PlayerPC (item storage) not implemented');
   },
 
-  /** ShowPokemonStorageSystemPC (pokemon_storage_system.c): not ported, back to the PC menu. */
-  ShowPokemonStorageSystemPC({ warnOnce }) {
-    warnOnce('ShowPokemonStorageSystemPC', '[special] Pokémon Storage System not implemented');
+  /** ShowPokemonStorageSystemPC (pokemon_storage_system_menu.c): Task_PCMainMenu, ended by ScriptContext_Enable. */
+  ShowPokemonStorageSystemPC({ host, setWaitState }) {
+    setWaitState(host.openPokemonStoragePc());
   },
 
   /** HallOfFamePCBeginFade (hof_pc.c): the Hall of Fame screen isn't ported (only after the credits). */

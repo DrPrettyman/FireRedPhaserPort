@@ -91,6 +91,8 @@ export interface ScriptHost {
   setCameraPanning(dy: number): void;
   /** CreatePokemartMenu (shop.c): the wait ends when the player leaves the shop menu. */
   openPokemart(items: number[]): Wait;
+  /** ShowPokemonStorageSystemPC: the PC's storage menu and box screens; the wait ends when the player leaves it. */
+  openPokemonStoragePc(): Wait;
   /** SetWarpDestination without warping (setwarp): used by the next WarpIntoMap. */
   setWarpDestination(mapId: string, warpId: number, x: number, y: number): void;
   /** LOCALID_* names are generated per map from map.json `local_id` fields. */

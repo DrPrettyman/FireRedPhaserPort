@@ -231,11 +231,12 @@ function sItemContextTaskFuncs(location: number): TaskFunc | null {
     case K.ITEMMENULOCATION_SHOP:
       return Task_ItemContext_Sell;
     case K.ITEMMENULOCATION_ITEMPC:
-    case K.ITEMMENULOCATION_PCBOX:
       return (taskId) => {
-        console.warn('[bag] the item PC / Pokémon storage give flows are not implemented');
+        console.warn('[bag] the item PC deposit flow is not implemented');
         Task_ReturnToBagFromContextMenu(taskId);
       };
+    case K.ITEMMENULOCATION_PCBOX:
+      return Task_ItemContext_PcBoxGive;
   }
   return null;
 }
@@ -1340,6 +1341,24 @@ function Task_ItemContext_FieldGive(taskId: number): void {
   const itemId = BagGetItemIdByPocketPosition(gBagMenuState.pocket + 1, data[1]);
   if (itemId === K.ITEM_TM_CASE || itemId === K.ITEM_BERRY_POUCH) {
     // GoToTMCase_Give / GoToBerryPouch_Give: those screens aren't implemented
+    console.warn('[bag] the TM case and berry pouch are not implemented');
+    Task_ReturnToBagFromContextMenu(taskId);
+  } else if (gBagMenuState.pocket !== K.POCKET_KEY_ITEMS - 1 && ItemId_GetImportance(itemId) === 0) {
+    Bag_BeginCloseWin0Animation();
+    gTasks[taskId].func = ItemMenu_StartFadeToExitCallback;
+  } else {
+    Task_PrintItemCantBeHeld(taskId);
+  }
+}
+
+/** Task_ItemContext_PcBoxGive: the PC's MOVE ITEMS GIVE; the bag closes with gSpecialVar_ItemId set. */
+function Task_ItemContext_PcBoxGive(taskId: number): void {
+  const data = gTasks[taskId].data;
+  const itemId = BagGetItemIdByPocketPosition(gBagMenuState.pocket + 1, data[1]);
+  if (ItemIsMail(itemId)) {
+    DisplayItemMessageInBag(taskId, K.FONT_NORMAL, text('gText_CantWriteMailHere'), Task_WaitAButtonAndCloseContextMenu);
+  } else if (itemId === K.ITEM_TM_CASE || itemId === K.ITEM_BERRY_POUCH) {
+    // GoToTMCase_PCBox / GoToBerryPouch_PCBox: those screens aren't implemented
     console.warn('[bag] the TM case and berry pouch are not implemented');
     Task_ReturnToBagFromContextMenu(taskId);
   } else if (gBagMenuState.pocket !== K.POCKET_KEY_ITEMS - 1 && ItemId_GetImportance(itemId) === 0) {

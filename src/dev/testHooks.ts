@@ -23,6 +23,7 @@ import { DELTA, type Direction } from '../world/direction';
 import { tilesetVram } from '../world/TilesetVram';
 import { SetPlayerAvatarTransitionFlags } from '../world/playerAvatar';
 import type { FieldListMenuProbe } from '../ui/FieldListMenu';
+import { storageProbe } from '../menus/pokemonStorage';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -470,6 +471,16 @@ function createApi(game: Phaser.Game) {
     message: () => {
       const m = field()?.message;
       return m ? decode(m) : undefined;
+    },
+    /**
+     * The Pokémon Storage System's box screen while it runs (CB2_PokeStorage): its task and state, the cursor
+     * (CURSOR_AREA_*, position, carrying a mon), the party box, the current box, the mon shown on the left,
+     * the bottom message and the open menu's items, decoded.
+     */
+    pcStorage: () => {
+      if (gMain.callback2?.name !== 'CB2_PokeStorage') return undefined;
+      const p = storageProbe();
+      return { ...p, message: decode(p.message), menu: p.menu.map(decode) };
     },
     /** The map name popup while Task_MapNamePopup runs: its text, decoded, and how many px of it are on screen. */
     mapNamePopup: () => {

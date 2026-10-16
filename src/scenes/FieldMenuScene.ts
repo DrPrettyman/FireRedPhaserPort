@@ -16,7 +16,8 @@ import { CB2_ReturnToFieldContinueScriptPlayMapMusic, fieldReturn } from '../men
 import { prepareMenus } from '../menus/host';
 import { CB2_BagMenuFromStartMenu } from '../menus/itemMenu';
 import { setObjectEventGraphicsInfo } from '../menus/objectEventGraphics';
-import { DoNamingScreen, namingScreenGfxSymbols } from '../menus/namingScreen';
+import { DoNamingScreen, NAMING_SCREEN_BOX, namingScreenGfxSymbols } from '../menus/namingScreen';
+import { EnterPokeStorage, pokemonStorageGfxSymbols } from '../menus/pokemonStorage';
 import { CB2_PartyMenuFromStartMenu } from '../menus/partyMenu';
 import { buyMenuGfxSymbols, CB2_GoToSellMenu, CB2_InitBuyMenu, LoadFieldTilesetsForShop, type ShopFieldView } from '../menus/shop';
 import type { PokemonData } from '../pokemon/Pokemon';
@@ -44,7 +45,9 @@ export interface NamingScreenRequest {
 }
 
 export interface FieldMenuStart {
-  menu: 'party' | 'bag' | 'buy' | 'sell' | 'naming';
+  menu: 'party' | 'bag' | 'buy' | 'sell' | 'naming' | 'storage';
+  /** For 'storage': OPTION_WITHDRAW / OPTION_DEPOSIT / OPTION_MOVE_MONS / OPTION_MOVE_ITEMS */
+  storageOption?: number;
   /** For 'buy': what the buy menu's map view reads from the field. */
   shopField?: ShopFieldView;
   /** For 'naming' */
@@ -87,6 +90,11 @@ export class FieldMenuScene extends GbaHostScene {
       await loadGfx(buyMenuGfxSymbols(start.shopField!));
       LoadFieldTilesetsForShop(start.shopField!);
     }
+    if (start.menu === 'storage') {
+      // The box screen draws every mon's icon and pic synchronously; it can also open the naming screen.
+      setObjectEventGraphicsInfo(assets.sprites);
+      await loadGfx([...pokemonStorageGfxSymbols(), ...namingScreenGfxSymbols(NAMING_SCREEN_BOX, 0, 0)]);
+    }
     const naming = start.naming;
     if (naming) {
       setObjectEventGraphicsInfo(assets.sprites);
@@ -102,6 +110,9 @@ export class FieldMenuScene extends GbaHostScene {
         naming.onReturn();
         CB2_ReturnToFieldContinueScriptPlayMapMusic();
       });
+    } else if (start.menu === 'storage') {
+      const option = start.storageOption!;
+      SetMainCallback2(() => EnterPokeStorage(option));
     } else {
       const entry = { party: CB2_PartyMenuFromStartMenu, bag: CB2_BagMenuFromStartMenu, buy: CB2_InitBuyMenu, sell: CB2_GoToSellMenu };
       SetMainCallback2(entry[start.menu as keyof typeof entry]);

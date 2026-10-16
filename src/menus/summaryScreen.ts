@@ -1,10 +1,10 @@
 // pokemon_summary_screen.c: the POKéMON INFO / SKILLS / KNOWN MOVES pages, the move details page
 // (switching moves), and the select-a-move-to-forget mode used when learning moves.
 //
-// Not ported because the systems don't exist yet: box mons (PC storage), the trade screen's view of
-// the partner's party, multi-battle party order (link), Pokémon cries and the help system. The
-// struct Pokemon fields the port doesn't store read as their defaults: markings 0, met game
-// FireRed, no "fateful encounter" flag, English language.
+// Box mons (PSS_MODE_BOX, from the PC) are a box's slots (BoxPokemon | null); the screen shows each through
+// BoxMonToMon. Not ported because the systems don't exist yet: the trade screen's view of the partner's
+// party, multi-battle party order (link), Pokémon cries and the help system. The struct Pokemon fields the
+// port doesn't store read as their defaults: met game FireRed, no "fateful encounter" flag, English language.
 
 import { K } from '../battle/constants';
 import { g, pokemon, state } from '../battle/env';
@@ -128,6 +128,7 @@ import { SpecialVar } from './itemMenuState';
 import { CreateMonMarkingAllCombosSprite } from './monMarkings';
 import { CreateMonPicSprite, CreateMonPicSprite_HandleDeoxys, FreeAndDestroyMonPicSprite } from './picSprites';
 import { CreateMonIcon, DestroyMonIcon, SafeFreeMonIconPalette, SafeLoadMonIconPalette } from './pokemonIcon';
+import { boxMonToMon, type BoxPokemon } from '../state/PokemonStorage';
 
 // ------------------------------------------------------------------ struct PokemonSummaryScreenData
 
@@ -219,7 +220,8 @@ function newSummaryScreenData() {
     selectMoveInputHandlerState: 0,
     switchMonTaskState: 0,
     currentMon: null as unknown as Pokemon,
-    monList: [] as Pokemon[],
+    /** monList.mons, or monList.boxMons when isBoxMon */
+    monList: [] as Pokemon[] | (BoxPokemon | null)[],
     savedCallback: null as unknown as MainCallback,
     markingSprite: null as Sprite | null,
     lastPageFlipDirection: 0,
@@ -385,7 +387,7 @@ const monMetGame = (_mon: Pokemon) => K.VERSION_FIRE_RED;
 /** MON_DATA_MODERN_FATEFUL_ENCOUNTER */
 const monFatefulEncounter = (_mon: Pokemon) => false;
 /** MON_DATA_MARKINGS */
-const monMarkings = (_mon: Pokemon) => 0;
+const monMarkings = (mon: Pokemon) => mon.markings ?? 0;
 
 /** IsMonShiny */
 function IsMonShiny(mon: Pokemon): boolean {
@@ -452,7 +454,7 @@ const GetPlayerTrainerId = () => state.trainerId >>> 0;
 
 // ------------------------------------------------------------------ entry points
 
-export function ShowPokemonSummaryScreen(party: Pokemon[], cursorPos: number, lastIdx: number, savedCallback: MainCallback, mode: number): void {
+export function ShowPokemonSummaryScreen(party: Pokemon[] | (BoxPokemon | null)[], cursorPos: number, lastIdx: number, savedCallback: MainCallback, mode: number): void {
   sMonSummaryScreenPtr = newSummaryScreenData();
   sMonSkillsPrinterXposPtr = newPrinterXpos();
   const s = S();
@@ -482,7 +484,6 @@ export function ShowPokemonSummaryScreen(party: Pokemon[], cursorPos: number, la
       s.curPageIndex = K.PSS_PAGE_INFO;
       s.isBoxMon = true;
       s.lockMovesFlag = false;
-      console.warn('[summary] box mons are not implemented');
       break;
     case K.PSS_MODE_SELECT_MOVE:
     case K.PSS_MODE_FORGET_MOVE:
@@ -2219,10 +2220,17 @@ function IsMultiBattlePartner(): boolean {
   return false;
 }
 
-/** BufferSelectedMonData (box mons need PC storage) */
+/** BufferSelectedMonData: a box mon goes through BoxMonToMon. */
 function BufferSelectedMonData(): void {
+  s_currentMonFromList();
+}
+
+/** `*mon = partyMons[i]` or BoxMonToMon(&boxMons[i], mon) */
+function s_currentMonFromList(): void {
   const s = S();
-  s.currentMon = copyMon(s.monList[GetLastViewedMonIndex()]);
+  const entry = s.monList[GetLastViewedMonIndex()];
+  if (!s.isBoxMon) s.currentMon = copyMon(entry as Pokemon);
+  else s.currentMon = boxMonToMon(pokemon, entry as BoxPokemon);
 }
 
 /** `*mon = partyMons[i]`: the screen works on a copy. */
@@ -2336,7 +2344,7 @@ function Task_HandleInput_SelectMove(_taskId: number): void {
         } else {
           s.isSwappingMoves = false;
           if (sMoveSelectionCursorPos === sMoveSwapCursorPos) return;
-          if (!s.isBoxMon) SwapMonMoveSlots();
+          SwapMonMoveSlots(); // SwapBoxMonMoveSlots for a box mon: the same fields
           UpdateCurrentMonBufferFromPartyOrBox();
           BufferMonMoves();
           s.selectMoveInputHandlerState = 2;
@@ -2383,10 +2391,10 @@ function Task_HandleInput_SelectMove(_taskId: number): void {
   }
 }
 
-/** SwapMonMoveSlots: moves, PP and PP Ups trade places on the party mon itself. */
+/** SwapMonMoveSlots / SwapBoxMonMoveSlots: moves, PP and PP Ups trade places on the mon itself. */
 function SwapMonMoveSlots(): void {
   const s = S();
-  const mon = s.monList[GetLastViewedMonIndex()];
+  const mon = s.monList[GetLastViewedMonIndex()] as BoxPokemon;
   const a = sMoveSelectionCursorPos;
   const b = sMoveSwapCursorPos;
 
@@ -2412,8 +2420,7 @@ function SwapMonMoveSlots(): void {
 }
 
 function UpdateCurrentMonBufferFromPartyOrBox(): void {
-  const s = S();
-  s.currentMon = copyMon(s.monList[GetLastViewedMonIndex()]);
+  s_currentMonFromList();
 }
 
 function PokeSum_CanForgetSelectedMove(): boolean {
@@ -3187,8 +3194,10 @@ function PokeSum_SeekToNextMon(_taskId: number, direction: number): void {
   let scrollResult = -1;
 
   if (s.isBoxMon) {
-    // SeekToNextMonInBox: PC storage isn't ported
-    return;
+    let flags: number;
+    if (s.curPageIndex !== K.PSS_PAGE_INFO) flags = direction === 1 ? 0 : 2;
+    else flags = direction === 1 ? 1 : 3; // Allow Eggs
+    scrollResult = SeekToNextMonInBox(s.monList as (BoxPokemon | null)[], GetLastViewedMonIndex(), s.lastIndex, flags);
   } else {
     // SeekToNextMonInMultiParty is for link multi battles
     scrollResult = SeekToNextMonInSingleParty(direction);
@@ -3201,9 +3210,23 @@ function PokeSum_SeekToNextMon(_taskId: number, direction: number): void {
   s.switchMonTaskState = 0;
 }
 
+/**
+ * SeekToNextMonInBox (pokemon_storage_system.c): the next (flags bit 1: previous) occupied slot after curIndex,
+ * up to maxIndex; eggs are skipped unless flags bit 0 is set. -1 if there is none.
+ */
+function SeekToNextMonInBox(boxMons: (BoxPokemon | null)[], curIndex: number, maxIndex: number, flags: number): number {
+  const adder = flags === 0 || flags === 1 ? 1 : -1;
+  const allowEggs = flags === 1 || flags === 3;
+  for (let i = curIndex + adder; i >= 0 && i <= maxIndex; i += adder) {
+    const mon = boxMons[i];
+    if (mon && mon.species && (allowEggs || !mon.isEgg)) return i;
+  }
+  return -1;
+}
+
 function SeekToNextMonInSingleParty(direction: number): number {
   const s = S();
-  const partyMons = s.monList;
+  const partyMons = s.monList as Pokemon[];
   let seekDelta = 0;
 
   if (s.curPageIndex === 0) {

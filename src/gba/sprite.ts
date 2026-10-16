@@ -207,6 +207,10 @@ let gShouldProcessSpriteCopyRequests = false;
 const gSpriteCopyRequests: { src: Uint8Array; dest: number; size: number }[] = [];
 let gOamLimit = 64;
 let gReservedSpriteTileCount = 0;
+/** gReservedSpriteTileCount = n (tiles at the start of OBJ VRAM that AllocSpriteTiles leaves alone) */
+export function SetReservedSpriteTileCount(n: number): void {
+  gReservedSpriteTileCount = n;
+}
 const gSpriteTileAllocBitmap = new Uint8Array(128);
 export let gSpriteCoordOffsetX = 0;
 export let gSpriteCoordOffsetY = 0;

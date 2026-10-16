@@ -42,6 +42,7 @@ const BOX_MON_FIELDS = [
   'pokeball',
   'isEgg',
   'pokerus',
+  'markings',
 ] as const satisfies readonly (keyof BoxPokemon)[];
 
 /** struct Pokemon's party-only fields. */

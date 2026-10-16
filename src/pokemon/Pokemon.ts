@@ -68,6 +68,8 @@ export interface Pokemon {
   isEgg: boolean;
   /** MON_DATA_POKERUS (strain << 4 | days); absent = never infected. */
   pokerus?: number;
+  /** MON_DATA_MARKINGS (circle, square, triangle, heart bits); absent = none. */
+  markings?: number;
   // Party-only fields
   level: number;
   status: number;
