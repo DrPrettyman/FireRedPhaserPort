@@ -1152,3 +1152,34 @@ end to end.
   check and FldEff_UseFlash; FieldMoveHost gains `cave()` and `useFlash()`. e2e: fieldMoves.test.ts.
 - Extracting in a worktree: set `FIRERED_DECOMP=/path/to/pret/firered` (the default is a path relative to the
   checkout, which a worktree doesn't have).
+
+### Strength, dowildbattle and StartLegendaryBattle (W-strength, batch 2)
+
+- `world/strength.ts` is fldeff_strength.c: SetUpFieldMove_Strength (not surfing, a boulder in front), FieldCB_UseStrength
+  → EventScript_FldEffStrength, FldEff_UseStrength (the banner, GetMonNickname into STR_VAR_1) and
+  ShowMonCB_UseStrength. Registered in fieldMoves.ts's `registerFieldMoves` (one line) and through
+  `registerFieldEffectNatives`; fieldMoves.ts now exports CreateFieldEffectShowMon, ScriptContext_Enable and
+  ScriptContext_SetupScript for other field move modules. EventScript_StrengthBoulder (talking to a boulder) works
+  through the existing script commands.
+- ClearTempFieldEventData (`GameState.clearTemps`, every map load) now also clears FLAG_SYS_WHITE_FLUTE_ACTIVE,
+  _BLACK_FLUTE_ACTIVE, _USE_STRENGTH, _SPECIAL_WILD_BATTLE and _INFORMED_OF_LOCAL_WIRELESS_PLAYER as in the C, so
+  Strength (and the flutes) end with the map.
+- Victory Road's floor switches: `copyobjectxytoperm` (TryOverrideObjectEventTemplateCoords) and
+  `special DrawWholeMapView` (nothing to do: `setmetatile` redraws its cell).
+- `dowildbattle` (ScrCmd_dowildbattle → StartScriptedWildBattle, BATTLE_TYPE_WILD_SCRIPTED behind
+  GetWildBattleTransition) and `special StartLegendaryBattle` (BATTLE_TYPE_LEGENDARY | _LEGENDARY_FRLG behind
+  B_TRANSITION_BLUR; the MUS_VS_* choice is noted, no audio), both ending in CB2_EndScriptedWildBattle (specials.ts
+  `runScriptedWildBattle`): a loss whites out, otherwise ResumeMap's ON_RESUME script runs (FLAG_SYS_SPECIAL_WILD_BATTLE
+  still set: Route 12 / 16 remove Snorlax, Cerulean Cave / Seafoam / Mt. Ember / Power Plant remove a caught
+  legendary) and the script continues after the fade with GetBattleOutcome. Covers Snorlax (Routes 12 and 16),
+  Zapdos, Articuno, Moltres, Mewtwo, the Power Plant's Electrode and Berry Forest's Hypno.
+- Changes outside the new modules: ScriptEngine.ts (`dowildbattle`, `copyobjectxytoperm`), specials.ts
+  (StartLegendaryBattle, DrawWholeMapView, StartScriptedWildBattle), GameState.clearTemps, fieldMoves.ts (exports +
+  the registration line). None in playerAvatar.ts or OverworldScene.ts. No extractor changes.
+- Not done: `setmaplayoutindex` (Seafoam B3F/B4F's "current stopped" layouts once both boulders are down: needs the
+  extractor to export layouts no map uses, and a layout swap at ON_TRANSITION), `seteventmon` (Navel Rock / Birth
+  Island event legendaries).
+- Tests: tests/e2e/strength.test.ts (talk to a boulder, the party menu, Victory Road 2F's switch 1 with
+  copyobjectxytoperm, the flag cleared by a warp, no boulder in front, no badge), tests/e2e/scriptedBattles.test.ts
+  (Route 12 Snorlax won and gone after re-entering, Route 16 Snorlax ran from, no Poké Flute, Zapdos won, Mewtwo
+  caught with a Master Ball, losing to Mewtwo).
