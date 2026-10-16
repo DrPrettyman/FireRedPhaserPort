@@ -87,11 +87,9 @@ this is the next level down. When you add or change a subsystem, update its entr
     in your own module, `registerFieldMoveSetUp('FIELD_MOVE_X', SetUpFieldMove_X)` and
     `registerFieldEffectNatives({ FldEff_UseX })` at boot (as `registerFieldMoves` does), and start with
     `CreateFieldEffectShowMon` for the banner. Script-driven moves (EventScript_StrengthBoulder, EventScript_UseSurf,
-    EventScript_Waterfall) then work from the field too: until FldEff_UseStrength exists, `dofieldeffect
-    FLDEFF_USE_STRENGTH` + `waitstate` just continue. A move in its own module (world/surf.ts) exports a
-    `register*` function that `registerFieldMoves` calls. Fly is special-cased in CursorCB_FieldMove (CB2_OpenFlyMap).
     EventScript_Waterfall) then work from the field too: until a FldEff_UseX exists, `dofieldeffect
-    FLDEFF_USE_X` + `waitstate` just continue. Fly is special-cased in CursorCB_FieldMove (CB2_OpenFlyMap).
+    FLDEFF_USE_X` + `waitstate` just continue. A move in its own module (world/surf.ts, world/strength.ts) is
+    registered from `registerFieldMoves`. Fly is special-cased in CursorCB_FieldMove (CB2_OpenFlyMap).
     Escape warp: `UpdateEscapeWarp` (from OverworldScene.takeWarp) / `SetEscapeWarp`, state.escapeWarp.
     `CreateFieldEffectShowMon`, `ScriptContext_Enable` and `ScriptContext_SetupScript` are exported for that.
   - **Strength:** `world/strength.ts` (fldeff_strength.c). From the party menu SetUpFieldMove_Strength needs a
