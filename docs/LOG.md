@@ -797,3 +797,27 @@ end to end.
   add its own `battleAnims.<file>.test.ts`.
 - BATTLE_ANIMS_PLAN.md "Working in parallel": who owns which files, the cross-file symbols to leave alone, and
   which shared lines (counts, tables) only the merger edits.
+
+### Battle anims 2B: battle_anim_water.c, battle_anim_ice.c, battle_anim_dragon.c
+
+- All three files are ported whole (every sprite callback, task and helper, including ones no script uses:
+  AnimUnusedIceCrystalThrow). New module `dragon.ts`, registered in `ported.ts` along with `registerIceExtraGfx`.
+  Contest-only branches are left out (IsContest() is FALSE in FRLG); each port cites its C function.
+- 22 more scripts run: Aurora Beam, Hydro Cannon, Waterfall, Water Pulse, Water Sport, Water Spout, Blizzard,
+  Hail (and General_Hail), Haze, Ice Ball, Ice Beam, Ice Punch, Icy Wind, Mist Ball, Poison Gas, Powder Snow,
+  Dragon Breath, Dragon Dance, Dragon Rage, Outrage, Overheat. Waiting on other files: Dive (effects_1/3), Secret
+  Power (effects_1/2), Tri Attack (fire/electric/effects), Weather Ball (effects_3/rock).
+- AnimTask_WaterSpoutRain calls AnimTask_HorizontalShake (ground.c, worker A) through `taskFuncByName`, skipped
+  until it's registered (docs/DEVIATIONS.md). AnimWaterPulseRing is exported for effects_2's template.
+- Haze and Mist Ball load the field weather's fog tiles and palette (gWeatherFogHorizontalTiles,
+  gDefaultWeatherSpritePalette): `tools/extract_gfx.py` now also extracts `graphics/weather/` (rerun
+  `npm run extract`).
+- The C's "run backwards until off screen" loops (AnimSwirlingSnowball, AnimMoveParticleBeyondTarget,
+  AnimUnusedIceCrystalThrow) are capped, since a zero velocity would hang the page as it hangs the GBA.
+- No shared-engine changes.
+- Tests: the labels in the water/ice/dragon `FULLY_PORTED` lists; tests/e2e/battleAnims.2b.test.ts runs every
+  move four to a battle, plus Poison Gas (clouds appear and clear), Haze (BG1 fog blends to 9/16, then BLDCNT /
+  BLDALPHA cleared), Hail (hailstones, crystal bursts, then General_Hail at the end of the turn) and Water Spout
+  (≥10 launched droplets, splashes on the foe, both mons visible after).
+- Checked by eye in mid-anim screenshots: Dragon Dance (scanline waver), Haze, Blizzard, Aurora Beam, Overheat,
+  Ice Beam, Water Spout, Hail, Outrage, Dragon Rage.
