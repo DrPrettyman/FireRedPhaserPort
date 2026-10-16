@@ -67,3 +67,86 @@ test('entering the Hall of Fame saves the team and the game, shows each mon, the
   await game.waitFor((t) => t.field()?.map === 'IndigoPlateau_Exterior', { what: 'Indigo Plateau' });
   expect(await game.eval((t) => t.flag('FLAG_DONT_SHOW_MAP_NAME_POPUP'))).toBe(true);
 });
+
+/** Viridian City's Pokémon Center: the PC is above (11, 2). */
+const PC = { start: 'after-rival', map: 'ViridianCity_PokemonCenter_1F', x: 11, y: 2, party: PARTY } as const;
+
+/** Write Hall of Fame records (oldest first) and the GAME_STAT_ENTERED_HOF count that goes with them; set FLAG_SYS_GAME_CLEAR. */
+const setRecords = (game: Game, teams: [string, number][][]) =>
+  game.eval((t, ts) => {
+    const s = t.state!;
+    const team = (mons: [string, number][]) => {
+      const out = mons.map(([sp, lvl]) => {
+        const species = t.define(`SPECIES_${sp}`);
+        return { tid: s.trainerId, personality: 0, species, lvl, nick: [...s.pokemon.speciesName(species)] };
+      });
+      while (out.length < 6) out.push({ tid: 0, personality: 0, species: 0, lvl: 0, nick: [] });
+      return out;
+    };
+    if (ts.length) localStorage.setItem('firered-phaser:hall-of-fame', JSON.stringify({ version: 1, teams: ts.map(team) }));
+    s.setGameStat(t.define('GAME_STAT_ENTERED_HOF'), ts.length);
+    s.setFlag('FLAG_SYS_GAME_CLEAR', true);
+  }, teams);
+
+/** Turn on the PC and pick HALL OF FAME (the 4th entry once the game is clear). */
+async function openHallOfFamePc(game: Game): Promise<void> {
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await game.mashUntil((t) => /Which PC/.test(t.message() ?? ''), { what: 'the PC menu' });
+  await game.eval((t) => t.waitFrames(60)); // the message prints, then CreatePCMenu
+  await game.pressTimes('DOWN', 3);
+  await game.press('A');
+}
+
+/** Wait (in the page) for the PC screen to show team `team`'s mon `slot`; returns the event. */
+const waitPcMon = (game: Game, since: number, team: number, slot: number) =>
+  game.eval(
+    async (t, s, tm, sl) => {
+      const find = () => t.events(s).find((e) => e.type === 'hallOfFamePcMon' && e.team === tm && e.slot === sl);
+      await t.until(() => find() && t.hallOfFame()?.task === 'Task_HofPC_HandleInput', 3600);
+      return find();
+    },
+    since,
+    team,
+    slot,
+  );
+
+test('the Hall of Fame PC shows the saved teams, newest first, then the PC menu again', async () => {
+  const game = await session.start(PC);
+  await setRecords(game, [
+    [['VENUSAUR', 60]],
+    [['MEWTWO', 70], ['PIKACHU', 42], ['NIDORAN_M', 12], ['CHARIZARD', 50]],
+  ]);
+  const since = await game.mark();
+  await openHallOfFamePc(game);
+  // HALL OF FAME No. 2: the newer team, its first mon
+  const first = await waitPcMon(game, since, 1, 0);
+  expect(first).toMatchObject({ page: 2, species: await game.eval((t) => t.define('SPECIES_MEWTWO')) });
+  await game.press('DOWN');
+  expect(await waitPcMon(game, since, 1, 1)).toMatchObject({ species: await game.eval((t) => t.define('SPECIES_PIKACHU')) });
+  // A: the older team (No. 1)
+  await game.press('A');
+  expect(await waitPcMon(game, since, 0, 0)).toMatchObject({ page: 1, species: await game.eval((t) => t.define('SPECIES_VENUSAUR')) });
+  // A on the last team turns the PC screen off: back to the PC menu (ReshowPCMenuAfterHallOfFamePC)
+  await game.press('A');
+  await game.waitForEvent('hallOfFamePcExit', { since });
+  await game.waitFor((t) => !t.field()?.fading && /Which PC/.test(t.message() ?? '') && !t.gbaScreen(), { what: 'the PC menu again' });
+  expect(await game.eval((t) => t.field()?.script)).toBeTruthy();
+  // B closes the PC menu (SCR_MENU_CANCEL → EventScript_TurnOffPC)
+  await game.eval((t) => t.waitFrames(4));
+  await game.press('B');
+  await game.waitIdle();
+  expect(await game.eval((t) => t.message())).toBeUndefined();
+});
+
+test('the Hall of Fame PC without saved records says the data is corrupted', async () => {
+  const game = await session.start(PC);
+  await setRecords(game, []);
+  const since = await game.mark();
+  await openHallOfFamePc(game);
+  await game.waitForEvent('hallOfFamePcCorrupted', { since });
+  await game.eval((t) => t.until(() => t.hallOfFame()?.task === 'Task_HofPC_ExitOnButtonPress', 600));
+  await game.press('A');
+  await game.waitForEvent('hallOfFamePcExit', { since });
+  await game.waitFor((t) => !t.field()?.fading && /Which PC/.test(t.message() ?? '') && !t.gbaScreen(), { what: 'the PC menu again' });
+});
