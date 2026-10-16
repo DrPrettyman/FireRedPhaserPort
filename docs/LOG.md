@@ -911,3 +911,32 @@ end to end.
   `FULLY_PORTED.effects3b` list) takes the second half; `effects3.ts` keeps the first.
 - BATTLE_ANIMS_PLAN.md "Working in parallel": batch 2 assignments (E1, E2, E3a, E3b), workers run only their own
   e2e file, and scratch files get a per-worker prefix.
+
+### Battle anims 3E3b: battle_anim_effects_3.c, second half
+
+- The second half of battle_anim_effects_3.c (AnimTask_PainSplitMovement, C line 2914, to the end) is fully
+  ported into effects3b.ts: every sprite callback, task and helper, including the unused AnimUnusedItemBagSteal.
+  Static affine anims (sDeepInhale, sFacadeSquish, sSmellingSaltsSquish, sSlackOffSquish) come from anims.json;
+  sFacadeBlendColors is a small inline table. AnimRoarNoiseLine and AnimTask_MonToSubstitute stay in effects3.ts.
+- CreateAdditionalMonSpriteForMoveAnim (battle_anim_mons.c) is ported into animMons.ts (Role Play's silhouette,
+  Snatch's runner): a 64x64 affine sprite with its own sheet and palette (tags 55125/55126, local to the C file),
+  the species' front or back pic (preloaded with the battle) and palette, at y + the pic's y offset.
+- 24 more scripts run: Acid Armor, Assist, Barrage, Block, Endeavor, Facade, Foresight, Helping Hand, Howl,
+  Knock Off, Meteor Mash, Odor Sleuth, Recycle, Refresh, Return, Reversal, Role Play, Slack Off, Smelling Salt,
+  Weather Ball, Yawn, General_FocusBand, General_SmokeballEscape, General_SnatchMove. Meteor Mash isn't in
+  `FULLY_PORTED.effects3b`: its trail of stars (gMiniTwinklingStarSpriteTemplate, AnimMiniTwinklingStar) is E3a's
+  half, and AnimMeteorMashStar skips the trail until that callback is registered.
+- Still waiting on other workers' code: Pain Split (AnimPainSplitProjectile), Flatter (AnimTask_CreateSpotlight /
+  RemoveSpotlight), Glare (AnimEyeSparkle, AnimTask_ScaryFace), Teeter Dance (AnimFlyingMusicNotes), Aromatherapy
+  (AnimFlyingParticle, AnimSparklingStars, AnimBlendThinRing).
+- Shared engine: only the new CreateAdditionalMonSpriteForMoveAnim in animMons.ts. Refresh/Aromatherapy's cure
+  bubbles (gCureBubbles*) are registered with registerAnimExtraGfx (registerEffects3bExtraGfx, called from
+  ported.ts). No extractor changes.
+- Verified: typecheck, unit tests (new labels in `FULLY_PORTED.effects3b`), tests/e2e/battleAnims.3e3b.test.ts
+  (every newly ported move; Assist/Slack Off/Refresh with a poisoned attacker and a partner; Recycle after a
+  Pecha Berry; Smoke Ball fleeing; Snatch stealing Swords Dance, with the extra mon sprite made and freed; Role
+  Play's white silhouette; Acid Armor's 32-bit HBlank DMA on BGnHOFS + BGnVOFS and its cleanup; Helping Hand and
+  General_FocusBand launched straight from the action menu, since the hooks have no double battles and Focus
+  Band only holds 10% of the time), and tests/e2e/battleAnims.test.ts. Checked by eye in mid-anim screenshots:
+  Acid Armor, Role Play, Barrage, Foresight, Facade, Refresh, Block, Smelling Salt, Yawn, Meteor Mash,
+  Odor Sleuth.
