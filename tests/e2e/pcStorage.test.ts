@@ -298,4 +298,110 @@ test('box options: jump to a box and change the wallpaper', async () => {
   await leaveBoxes(game);
   await leavePc(game);
 });
-void MOVE_ITEMS;
+
+test('mark a boxed mon', async () => {
+  const game = await session.start(PC);
+  await putInBox(game, 0, 0, 'PIKACHU');
+  await openStorageMenu(game);
+  await enterBoxes(game, MOVE_MONS);
+  await openMonMenu(game);
+  await chooseMenuItem(game, 3); // MARK
+  const mark = await waitStorage(game, 'Task_ShowMarkMenu', 1);
+  expect(mark.message).toMatch(/Mark your POKéMON\./);
+  await game.press('A'); // ● on
+  await game.press('DOWN');
+  await game.press('A'); // ■ on
+  await game.pressTimes('DOWN', 3); // OK
+  await game.screenshot('pc-mark-menu');
+  await game.press('A');
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  expect(await game.eval((t) => t.state!.storage.getBoxedMon(0, 0)!.markings)).toBe(0b0011);
+  await leaveBoxes(game);
+  await leavePc(game);
+});
+
+test('name a box', async () => {
+  const game = await session.start(PC);
+  await openStorageMenu(game);
+  await enterBoxes(game, MOVE_MONS);
+  await boxPress(game, 'UP'); // the box title
+  await game.press('A');
+  await waitStorage(game, 'Task_HandleBoxOptions', 2);
+  await chooseMenuItem(game, 2); // NAME
+  await game.waitFor((t) => t.gbaScreen() === 'CB2_NamingScreen', { what: 'the naming screen' });
+  await game.eval((t) => t.waitFrames(30)); // the screen fades in
+  await game.pressTimes('B', 4); // "BOX1" → ""
+  await game.pressTimes('A', 3); // the cursor starts on "A"
+  await game.press('START'); // jump to OK
+  await game.press('A');
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  expect(await game.eval((t) => t.decode(t.state!.storage.getBoxName(0)!))).toBe('AAA');
+  await game.screenshot('pc-box-renamed');
+  await leaveBoxes(game);
+  await leavePc(game);
+});
+
+test('move several mons at once (SELECT, then hold A)', async () => {
+  const game = await session.start(PC);
+  await putInBox(game, 0, 0, 'ODDISH');
+  await putInBox(game, 0, 1, 'BELLSPROUT');
+  await putInBox(game, 0, 6, 'PARAS');
+  await openStorageMenu(game);
+  await enterBoxes(game, MOVE_MONS);
+  await game.press('SELECT'); // the hand turns into the multiple-move hand
+  await game.eval((t) => t.hold('A'));
+  await game.eval((t) => t.waitFrames(2));
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  await boxPress(game, 'RIGHT');
+  await boxPress(game, 'DOWN');
+  await game.screenshot('pc-multimove-selecting');
+  await game.eval((t) => t.release('A'));
+  await game.eval((t) => t.waitFrames(2));
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  // The 2x2 selection is in the hand: move it down a row and put it down
+  expect([await boxSlot(game, 0, 0), await boxSlot(game, 0, 1), await boxSlot(game, 0, 6)]).toEqual([null, null, null]);
+  await boxPress(game, 'DOWN');
+  await game.press('A');
+  await game.eval((t) => t.waitFrames(2));
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  expect([await boxSlot(game, 0, 6), await boxSlot(game, 0, 7), await boxSlot(game, 0, 12), await boxSlot(game, 0, 13)]).toEqual([
+    'SPECIES_ODDISH',
+    'SPECIES_BELLSPROUT',
+    'SPECIES_PARAS',
+    null,
+  ]);
+  await leaveBoxes(game);
+  await leavePc(game);
+});
+
+test('move items: put a held item in the bag, then give one from the bag', async () => {
+  const game = await session.start(PC);
+  await game.eval((t) => {
+    for (const slot of t.state!.bag.pockets[0]) {
+      slot.itemId = 0;
+      slot.quantity = 0;
+    }
+  });
+  await putInBox(game, 0, 0, 'SNORLAX', 30, 'LEFTOVERS');
+  await openStorageMenu(game);
+  await enterBoxes(game, MOVE_ITEMS);
+  await game.eval((t) => t.waitFrames(20)); // the held item's icon appears
+  expect(await openMonMenu(game)).toEqual(['TAKE', 'BAG', 'INFO', 'CANCEL']);
+  await chooseMenuItem(game, 1); // BAG
+  const placed = await waitStorage(game, 'Task_ItemToBag', 2);
+  expect(placed.message).toMatch(/Placed item in the BAG\./);
+  await game.press('A');
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  expect(await game.eval((t) => [t.state!.storage.getBoxedMon(0, 0)!.heldItem, t.itemCount('LEFTOVERS')])).toEqual([0, 1]);
+  // GIVE: the bag opens on its ITEMS pocket; pick the LEFTOVERS
+  expect(await openMonMenu(game)).toEqual(['GIVE', 'CANCEL']);
+  await chooseMenuItem(game, 0);
+  await game.waitFor((t) => t.gbaScreen() === 'CB2_BagMenuRun', { what: 'the bag' });
+  await game.eval((t) => t.waitFrames(30));
+  await game.press('A');
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  expect(await game.eval((t) => [t.state!.storage.getBoxedMon(0, 0)!.heldItem === t.define('ITEM_LEFTOVERS'), t.itemCount('LEFTOVERS')])).toEqual([true, 0]);
+  await game.screenshot('pc-move-items');
+  await leaveBoxes(game);
+  await leavePc(game);
+});
