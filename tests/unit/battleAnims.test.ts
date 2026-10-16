@@ -126,14 +126,32 @@ const FULLY_PORTED: Record<string, string[]> = {
     'Move_SKULL_BASH', 'Move_SLASH', 'Move_SPORE', 'Move_SUPER_FANG', 'Move_SWIFT', 'Move_TAUNT', 'Move_TWISTER',
   ],
 
-  // battle_anim_effects_2.c
-  effects2: [],
+  // battle_anim_effects_2.c (Air Cutter, Aromatherapy, Glare, Heal Bell, Spit Up and Trick also need effects_1/3)
+  effects2: [
+    'General_GhostGetOut', 'General_MonScared', 'Move_ASTONISH', 'Move_ATTRACT', 'Move_BULK_UP', 'Move_BULLET_SEED',
+    'Move_DISABLE', 'Move_EXTREME_SPEED', 'Move_FAKE_OUT', 'Move_FURY_CUTTER', 'Move_FURY_SWIPES', 'Move_GUILLOTINE',
+    'Move_HIDDEN_POWER', 'Move_HYPER_VOICE', 'Move_KINESIS', 'Move_LOVELY_KISS', 'Move_MINIMIZE', 'Move_MUD_SPORT',
+    'Move_PAY_DAY', 'Move_PERISH_SONG', 'Move_RAZOR_WIND', 'Move_SAFEGUARD', 'Move_SCARY_FACE', 'Move_SKETCH',
+    'Move_SOFT_BOILED', 'Move_SONIC_BOOM', 'Move_SPLASH', 'Move_STRUGGLE', 'Move_SWAGGER', 'Move_SWEET_KISS',
+    'Move_SWORDS_DANCE', 'Move_THRASH', 'Move_TICKLE', 'Move_UPROAR', 'Move_VICE_GRIP', 'Move_WITHDRAW',
+  ],
 
   // battle_anim_effects_3.c, first half (effects3.ts)
-  effects3: [],
+  effects3: [
+    'Move_BATON_PASS', 'Move_DEFENSE_CURL', 'Move_ENCORE', 'Move_FLAIL', 'Move_FOCUS_PUNCH', 'Move_FRUSTRATION',
+    'Move_HYPER_FANG', 'Move_LUSTER_PURGE', 'Move_MEAN_LOOK', 'Move_MEGA_KICK', 'Move_MEGA_PUNCH', 'Move_MIND_READER',
+    'Move_MORNING_SUN', 'Move_POISON_FANG', 'Move_PSYCHO_BOOST', 'Move_RAPID_SPIN', 'Move_SLEEP_TALK',
+    'Move_SMOKESCREEN', 'Move_SPIKES', 'Move_STOCKPILE', 'Move_SWALLOW', 'Move_SWEET_SCENT', 'Move_TORMENT',
+    'Move_TRI_ATTACK', 'Move_WISH', 'General_CastformChange', 'General_DoomDesireHit',
+  ],
 
   // battle_anim_effects_3.c, second half (effects3b.ts)
-  effects3b: [],
+  effects3b: [
+    'Move_BARRAGE', 'Move_ACID_ARMOR', 'Move_REVERSAL', 'Move_FORESIGHT', 'Move_RETURN', 'Move_FACADE',
+    'Move_SMELLING_SALT', 'Move_HELPING_HAND', 'Move_ROLE_PLAY', 'Move_ASSIST', 'Move_RECYCLE', 'Move_YAWN',
+    'Move_KNOCK_OFF', 'Move_ENDEAVOR', 'Move_REFRESH', 'Move_SLACK_OFF', 'Move_WEATHER_BALL', 'Move_ODOR_SLEUTH',
+    'Move_BLOCK', 'Move_HOWL', 'General_SmokeballEscape', 'General_FocusBand', 'General_SnatchMove',
+  ],
 };
 
 describe('battle anim coverage', () => {
