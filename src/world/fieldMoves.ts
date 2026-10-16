@@ -42,6 +42,8 @@ import { cacheMapSection } from './regionMap';
 import type { TileInfo } from './World';
 import { directionalAction } from '../entities/movementActions';
 
+import { SetUpFieldMove_Strength } from './strength'; // fldeff_strength.c (W-strength)
+
 /** What the field moves need from the field (OverworldScene). */
 export interface FieldMoveHost {
   readonly scene: Phaser.Scene;
@@ -193,13 +195,13 @@ function UnlockPlayerFieldControls(): void {
  * controls locked and unlocks them when it ends (ScriptContext_RunScript); here the running script holds the
  * field's input instead, so the field move's own lock goes now.
  */
-function ScriptContext_Enable(): void {
+export function ScriptContext_Enable(): void {
   field().scriptContextEnable();
   UnlockPlayerFieldControls();
 }
 
 /** ScriptContext_SetupScript from a field effect, which hands its controls lock to the script likewise. */
-function ScriptContext_SetupScript(label: string): void {
+export function ScriptContext_SetupScript(label: string): void {
   field().setupScript(label);
   UnlockPlayerFieldControls();
 }
@@ -266,7 +268,7 @@ function StartPlayerAvatarSummonMonForFieldMoveAnim(): () => boolean {
  * the player's pose, FLDEFF_FIELD_MOVE_SHOW_MON_INIT (the banner), then the move's own function
  * (FLDEFF_SET_FUNC_TO_DATA / FLDEFF_CALL_FUNC_IN_DATA). The banner's graphics load during the pose.
  */
-function CreateFieldEffectShowMon(func: () => void): void {
+export function CreateFieldEffectShowMon(func: () => void): void {
   const front = GetXYCoordsOneStepInFrontOfPlayer();
   gPlayerFacingPosition.x = front.x;
   gPlayerFacingPosition.y = front.y;
@@ -1063,6 +1065,8 @@ export function registerFieldMoves(): void {
   registerFieldMoveSetUp('FIELD_MOVE_DIG', SetUpFieldMove_Dig);
   registerFieldMoveSetUp('FIELD_MOVE_TELEPORT', SetUpFieldMove_Teleport);
   registerFieldMoveSetUp('FIELD_MOVE_FLASH', SetUpFieldMove_Flash);
+
+  registerFieldMoveSetUp('FIELD_MOVE_STRENGTH', SetUpFieldMove_Strength); // world/strength.ts
 }
 
 /** Graphics the field moves use outside the banner (preload at boot). */
