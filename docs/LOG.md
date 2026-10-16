@@ -1237,3 +1237,11 @@ end to end.
   copyobjectxytoperm, the flag cleared by a warp, no boulder in front, no badge), tests/e2e/scriptedBattles.test.ts
   (Route 12 Snorlax won and gone after re-entering, Route 16 Snorlax ran from, no Poké Flute, Zapdos won, Mewtwo
   caught with a Master Ball, losing to Mewtwo).
+
+### E2e: in-page watches for short-lived states (merging `save-continue`)
+
+- Under load, three tests polled from Node for things that last a few ticks and missed them: Strength's boulder
+  push (hold and watch were two evals, and the release came late enough for a second push), and Surf's jump onto
+  the water and the Waterfall climb. They now hold/watch/release in one eval, or start an in-page watcher
+  (`watchAction` in surf.test.ts) before the action. tests/README.md "Writing a new scenario" has the rule.
+  Strength, scripted battles, Surf and save/continue passed four loaded runs in a row after the fix.

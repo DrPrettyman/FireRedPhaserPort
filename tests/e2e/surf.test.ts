@@ -49,6 +49,15 @@ async function waitFieldMoveDone(game: Game, what: string) {
   await game.waitFor((t) => t.gbaScreen() === undefined && t.idle() && !t.field()!.fieldEffects.some((e) => /^FLDEFF_(FIELD_MOVE_SHOW_MON|USE_)/.test(e)), { what });
 }
 
+/**
+ * Watches in the page for the player's movement action to be `action` and returns the field probe at that tick
+ * (undefined if it never comes). Start it before the action can happen and await it later: polling from Node
+ * can miss an action that lasts a few ticks when the machine is busy.
+ */
+function watchAction(game: Game, action: string) {
+  return game.eval(async (t, a) => ((await t.until(() => t.field()?.avatar.action === a, 3600)) ? t.field()! : undefined), action);
+}
+
 /** The world pixel centre the blob sits at under a player on world tile (x, y): the sprite's y + 8. */
 const blobAt = (worldX: number, worldY: number) => ({ x: worldX * 16 + 8, y: worldY * 16 + 8 });
 
@@ -59,6 +68,8 @@ test('pressing A at the water with the badge and a mon that knows SURF: the ques
   await game.eval((t) => t.face('down'));
   await game.waitIdle();
   const since = await game.mark();
+  // The jump lasts a few ticks: watch for it in the page from now, so a busy machine can't poll past it.
+  const jump = watchAction(game, 'JUMP_SPECIAL_DOWN');
   await game.press('A');
   expect((await game.waitForEvent('script', { since })).label).toBe('EventScript_UseSurf');
   await game.waitFor((t) => t.message()?.includes('SURF'), { what: '"The water is dyed a deep blue… Would you like to SURF?"' });
@@ -67,8 +78,8 @@ test('pressing A at the water with the badge and a mon that knows SURF: the ques
   expect(await game.waitForEvent('fieldMoveShowMon', { since })).toMatchObject({ species: await game.eval((t) => t.define('SPECIES_LAPRAS')), outdoors: true });
 
   // UseSurfEffect_4: the RIDE graphics, the jump onto the water, and the blob waiting there (BOB_NONE)
-  await game.waitFor((t) => t.field()!.avatar.action === 'JUMP_SPECIAL_DOWN', { what: 'the jump onto the water' });
-  let f = await game.eval((t) => t.field()!);
+  let f = (await jump)!;
+  expect(f, 'the jump onto the water').toBeDefined();
   expect(f.avatar.graphicsId).toBe('OBJ_EVENT_GFX_RED_SURF');
   expect(f.avatar.flags).toContain('SURFING');
   expect(f.surfBlob).toMatchObject({ ...blobAt(f.worldX, f.worldY), bobState: 0 });
@@ -253,12 +264,13 @@ test('Waterfall: a wall of water without it; with the badge and the move, the pl
   // With it: "It's a large waterfall. Would you like to use WATERFALL?" → YES, the banner, then up the falls
   await game.eval((t) => t.state!.setFlag('FLAG_BADGE07_GET', true));
   since = await game.mark();
+  const climb = watchAction(game, 'WALK_SLOWER_UP');
   await game.press('A');
   expect((await game.waitForEvent('script', { since })).label).toBe('EventScript_Waterfall');
   await game.waitFor((t) => t.message()?.includes('WATERFALL?'), { what: 'the question' });
   await game.mashUntil((t) => t.events().some((e) => e.type === 'fieldMoveShowMon'), { what: 'the banner' });
   expect(await game.waitForEvent('fieldMoveShowMon', { since })).toMatchObject({ species: await game.eval((t) => t.define('SPECIES_LAPRAS')) });
-  await game.waitFor((t) => t.field()!.avatar.action === 'WALK_SLOWER_UP', { what: 'the climb' });
+  expect(await climb, 'the climb').toBeDefined();
   await waitFieldMoveDone(game, 'the top of the waterfall');
   const f = await game.eval((t) => t.field()!);
   expect(f).toMatchObject({ x: 17, y: 13 }); // the first tile that isn't MB_WATERFALL

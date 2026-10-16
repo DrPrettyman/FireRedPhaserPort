@@ -40,10 +40,15 @@ async function push(game: Game, dir: 'up' | 'down' | 'left' | 'right') {
   await game.waitIdle();
   const before = await boulder1(game);
   const button = dir.toUpperCase() as 'UP' | 'DOWN' | 'LEFT' | 'RIGHT';
-  await game.eval((t, b) => t.hold(b), button);
   const action = `WALK_IN_PLACE_NORMAL_${button}`;
-  const pushed = await game.eval((t, a) => t.until(() => t.field()?.avatar.action === a, 60), action);
-  await game.eval((t) => t.release());
+  // Hold, watch and release in one eval: split up, a busy machine can let the whole push go by before the watch
+  // starts, or a second push start before the release arrives.
+  const pushed = await game.eval(async (t, b, a) => {
+    t.hold(b);
+    const ok = await t.until(() => t.field()?.avatar.action === a, 60);
+    t.release();
+    return ok;
+  }, button, action);
   expect(pushed).toBe(true);
   await game.eval((t) => t.until(() => !t.objects().some((o) => o.moving), 120));
   await game.waitIdle();
