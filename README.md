@@ -92,6 +92,7 @@ animated metatiles are redrawn from the GBA tile data (`world/TilesetVram.ts`).
 | Battle anims | `battle/anim/*.ts` | battle_anim.c's script engine and the battle_anim_*.c callbacks, registered by C name (`ported.ts`); scripts with unported callbacks finish at once |
 | UI | `ui/MenuWindow.ts`, `Menu.ts`, `YesNoMenu.ts`, `StartMenu.ts`, `MonPicBox.ts`, `ScreenFade.ts` | std-framed windows, cursor menus, `showmonpic` box, `fadescreen` |
 | PC | `menus/pokemonStorage*.ts`, `itemPc.ts`, `ui/StoragePcMenu.ts`, `PlayerPcMenu.ts`, `state/PokemonStorage.ts`, `pcItems.ts` | the Pokémon Storage System (pokemon_storage_system*.c: the box screen on the GBA layer, the PC's storage menu on the field) and the player's item PC (player_pc.c, item_pc.c) |
+| End of the game | `menus/hallOfFame.ts`, `credits.ts`, `world/hallOfFameRecord.ts`, `state/hallOfFame.ts` | hall_of_fame.c (the Hall of Fame screen and PC), FLDEFF_HALL_OF_FAME_RECORD, credits.c on the field's GBA layer, the Hall of Fame records |
 
 ### Testing
 

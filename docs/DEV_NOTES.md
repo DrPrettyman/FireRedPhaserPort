@@ -231,6 +231,34 @@ this is the next level down. When you add or change a subsystem, update its entr
   `SpecialEnv.setupScript` (ScriptContext_SetupScript). Probes: `__test.pcStorage()` (task, state, cursor, box,
   displayed species, bottom message, menu items, the popup's box) and `__test.itemPc()`. Tests:
   tests/e2e/pcStorage.test.ts (Viridian Pokémon Center, the PC above (11, 2)).
+- **Hall of Fame and credits:** the room's script (PokemonLeague_HallOfFame_EventScript_EnterRoom) runs
+  `dofieldeffect FLDEFF_HALL_OF_FAME_RECORD` (`world/hallOfFameRecord.ts`: the machine's Poké Balls and monitor,
+  CreateGlowingPokeballsEffect's states, drawn as FieldEffectSprites from the GBA pics at screen coordinates; the
+  same glow would serve FLDEFF_POKECENTER_HEAL) and `special EnterHallOfFame` → `OverworldScene.enterHallOfFame`:
+  post_battle_event_funcs.c's set-up (`EnterHallOfFame` in `menus/hallOfFame.ts`), `storeLocationForSave`, then
+  FieldMenuScene 'hallOfFame' runs CB2_DoHallOfFameScreen. `hofEnv` is what the screen needs from its host: saving
+  (TrySavingData(SAVE_HALL_OF_FAME)), DoWarp (FieldMenuStart.onExit's `warp`: the field loads Indigo Plateau with
+  `warpFromScreen` instead of returning to the Hall of Fame room) and ReturnFromHallOfFamePC. `special
+  HallOfFamePCBeginFade` (`OverworldScene.openHallOfFamePc`) runs CB2_InitHofPC in FieldMenuScene 'hallOfFamePc'
+  and comes back through ReshowPCMenuAfterHallOfFamePC (the PC menu again, its choice in VAR_RESULT). Both screens
+  preload the pics they show (`hallOfFameGfxSymbols`). `menus/picSprites.ts` now has the trainer half
+  (CreateTrainerPicSprite), `menus/topBarWindow.ts` is menu.c's top bar window. The records are
+  `state/hallOfFame.ts` (see "PC boxes and save data"). Indigo Plateau's script (IndigoPlateau_Exterior_EventScript_
+  Credits, with `special SpawnCameraObject` / `RemoveCameraObject`) ends in `special DoCredits` →
+  `OverworldScene.doCredits`: the credits (`menus/credits.ts`) run on the field's GBA layer, called once per tick
+  from a field overlay (CB2_Credits) before `FieldGbaScreen.frame`. `creditsEnv.loadMap` puts each credits map on the
+  layer (`world.load`, then `FieldGbaScreen.reloadField`, which reloads the BGs, tilesets and palettes but keeps
+  tasks, sprites and OBJ palettes), the credits camera (`creditsCamera`) pans it, and the Pokémon / THE END scenes
+  use `startBare` (the PPU now draws affine BG2 in modes 1 and 2 for the circle). SoftReset removes the Overworld
+  scene and adds a fresh one (a clean GameState), then starts BootScene with `{ softReset: true }` (no dev start),
+  which boots to the main menu. Probes: `__test.hallOfFame()` (task, data), `__test.credits()`; dev hook
+  `__test.creditsSkipToClosing()` jumps the credits to the copyright. Events: hallOfFameSaved (status),
+  hallOfFameMon, hallOfFameWelcome, hallOfFamePlayerInfo, hallOfFameExit, hallOfFamePcMon (team, page, slot,
+  species), hallOfFamePcCorrupted, hallOfFamePcExit, creditsStart, creditsMap, creditsPrint (title), creditsMon,
+  creditsTheEnd, creditsEnd. Tests: tests/e2e/hallOfFame.test.ts (the room's entrance
+  `?map=PokemonLeague_HallOfFame&x=5&y=12`; the Viridian PC for the Hall of Fame PC, records written straight
+  into localStorage). To grab a GBA-layer frame at an exact tick, read the canvas inside a `t.until` predicate
+  (and keep the predicate idempotent: `until` calls it once more after it resolves).
 - **Evolution scene:** `menus/evolutionScene.ts` + `menus/evolutionGraphics.ts` run on whichever GBA host is up
   (BattleScene after TryEvolvePokemon, FieldMenuScene from the party menu) and hand back through
   `gCB2_AfterEvolution` (`setCB2_AfterEvolution`). It draws on the battle BG/window layout, so the field host
@@ -279,9 +307,14 @@ this is the next level down. When you add or change a subsystem, update its entr
   facing, PLAYER_AVATAR_FLAG_ON_FOOT/MACH_BIKE/ACRO_BIKE/SURFING). Not saved, as on the GBA: EWRAM state
   (special vars 0x8000+, special flags, gStringVar*, gEnemyParty, the Safari ball/step counts, which can't be
   saved anyway since the Safari start menu has no SAVE, and the roamer's location). Other optional warps the save
-  keeps: `continueGameWarp` + `specialSaveWarpFlags` (CONTINUE_GAME_WARP), `escapeWarp` (nothing sets it yet).
+  keeps: `continueGameWarp` + `specialSaveWarpFlags` (CONTINUE_GAME_WARP), `escapeWarp`. Game stats
+  (`state.gameStats`, Get/Set/IncrementGameStat; only GAME_STAT_ENTERED_HOF and _FIRST_HOF_PLAY_TIME are counted so
+  far) are in the save since version 2. The Hall of Fame records live apart from the save, like their own flash
+  sectors: `state/hallOfFame.ts` (key `HOF_STORAGE_KEY`, versioned), read into `gHofBuffer` (gDecompressionBuffer)
+  by LoadHallOfFameSave, written by TrySavingData(SAVE_HALL_OF_FAME) (which also counts GAME_STAT_ENTERED_HOF) and
+  erased by SAVE_OVERWRITE_DIFFERENT_FILE.
   When a new GameState field belongs in the save, add it to SaveData, toSaveData and fromSaveData and bump
-  SAVE_VERSION; a new Pokemon field won't compile until it's listed in saveData.ts's field lists. Saving and
+  SAVE_VERSION (and have `upgradeSave` fill it in for older saves, as for version 2's `gameStats`); a new Pokemon field won't compile until it's listed in saveData.ts's field lists. Saving and
   loading from the game: see "Saving and continuing". Tests: tests/unit/pcBoxes.test.ts,
   tests/unit/saveData.test.ts, tests/e2e/pcBoxes.test.ts (Celadon Condominiums roof Eevee at (7,3) with a full
   party; catches on Route 1). `t.battle().message` is the battle's last displayed string.

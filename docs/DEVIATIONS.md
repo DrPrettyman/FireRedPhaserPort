@@ -113,7 +113,19 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     link play); the quest log's QL_AvoidDisplay bit of ignoreBPress is ignored.
   - Elevators: SE_ELEVATOR / SE_DING_DONG are silent; UpdateEscapeWarp isn't kept on warps.
   - Field ListMenu (ui/FieldListMenu.ts): SE_SELECT is silent; the quest log's QL_AvoidDisplay is ignored.
-  - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu.
+  - Hall of Fame (menus/hallOfFame.ts): no audio (MUS_HALL_OF_FAME, the cries, SE_SAVE, SE_APPLAUSE); no Champion
+    Ribbons (mons have no ribbons; REVISION 0 gives no event tickets either); the help system isn't toggled and the
+    quest log isn't saved; a failed save carries on (no DoSaveFailedScreen / gGameContinueCallback).
+    FLDEFF_HALL_OF_FAME_RECORD's SE_BALL is silent. Other game stats than GAME_STAT_ENTERED_HOF and
+    GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted. `special Script_UpdateTrainerFanClubGameClear` is a no-op (the Trainer
+    Fan Club isn't kept).
+  - Credits (menus/credits.ts): no audio (MUS_CREDITS, the cries). A map scene loads asynchronously, so it can start
+    a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
+    GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.
+    SoftReset restarts the boot flow (BootScene: the main menu, or the new game) with a fresh Overworld scene and
+    GameState; other module-level state isn't reset, and there's no title screen or intro yet (it should go there
+    once the title screen exists).
+  - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, Trainer Tower clock, cable club
     monitors, questionnaire/easy chat) start their scripts and hit the unimplemented-special warnings.
   - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link flags.

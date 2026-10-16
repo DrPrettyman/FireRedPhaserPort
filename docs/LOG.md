@@ -1283,3 +1283,40 @@ end to end.
 - playerAvatar.test.ts: the bike ride and the hold / watch / release sequences (bump, run, ledge, ice, spinner,
   boulder push) are each one eval now. The bike test failed under load (the gaps between evals counted as frames).
 - Passed three loaded runs of playerAvatar, strength, surf and battleAnims.3e3a together.
+
+### Hall of Fame, the Hall of Fame PC and the credits (W-hof, batch 3)
+
+- hall_of_fame.c on the GBA layer (`menus/hallOfFame.ts`, FieldMenuScene 'hallOfFame' / 'hallOfFamePc'): the
+  screen (the team's record saved with the game, the mons coming on one by one with their info, the welcome text
+  and confetti, the player's pic and trainer info, A to leave) and the Hall of Fame PC (the saved teams newest
+  first, UP/DOWN through the mons, A to the older team, B out; "corrupted" without records), with the PC screen
+  effect. post_battle_event_funcs.c's EnterHallOfFame (FLAG_SYS_GAME_CLEAR, GAME_STAT_FIRST_HOF_PLAY_TIME, CONTINUE
+  from Pallet Town) and SetWarpsToRollCredits (DoWarp into Indigo Plateau from a GBA screen:
+  `OverworldScene.warpFromScreen`); hof_pc.c's return to the PC menu (its choice ends the script's `waitstate`).
+- FLDEFF_HALL_OF_FAME_RECORD (`world/hallOfFameRecord.ts`): the machine's Poké Balls placed and flashing, the
+  monitor; the shared CreateGlowingPokeballsEffect is there for FLDEFF_POKECENTER_HEAL too.
+- credits.c (`menus/credits.ts`) on the field's GBA layer: the title, the 13 scrolling map scenes in the darkened
+  WIN0 band with the player / rival running on the ground sprite, the Charizard / Venusaur / Blastoise / Pikachu
+  scenes (with the white circle on an affine BG2), the copyright and THE END, then SoftReset: a fresh Overworld
+  scene and BootScene again (`{ softReset: true }`), i.e. the main menu, where CONTINUE starts in Pallet Town and
+  Oak's National Dex scene follows. Indigo Plateau's script needed `special SpawnCameraObject` /
+  `RemoveCameraObject`.
+- State: game stats in GameState and the save (SAVE_VERSION 2; `upgradeSave` reads version 1 saves);
+  `state/hallOfFame.ts` keeps the records under their own localStorage key; TrySavingData handles
+  SAVE_HALL_OF_FAME (GAME_STAT_ENTERED_HOF, records) and SAVE_OVERWRITE_DIFFERENT_FILE (erases them).
+- Shared changes: FieldMenuScene (two menus, `onExit`'s `warp`), OverworldScene (enterHallOfFame,
+  openHallOfFamePc, warpFromScreen, doCredits, spawnCameraObject public, the record effect's host, tile anims off
+  while the credits run), ScriptHost (+4 methods, `fadeScreen` delay), ScriptEngine (`fadescreenspeed`, which
+  was unimplemented), specials (EnterHallOfFame, HallOfFamePCBeginFade, DoCredits, Spawn/RemoveCameraObject,
+  IsNationalPokedexEnabled as a special, Script_UpdateTrainerFanClubGameClear as a no-op), BootScene
+  (`softReset`), FieldGbaScreen (`reloadField`), the PPU (affine BGs in modes 1 and 2), picSprites (trainer pics),
+  `menus/topBarWindow.ts` (menu.c's top bar window, which Oak's speech also uses), testHooks (`hallOfFame()`,
+  `credits()`, `creditsSkipToClosing()`).
+- Extractor: graphics/hall_of_fame/ and graphics/credits/ in extract_gfx.py. Rerun `npm run extract`.
+- Found on the way: `specialvar VAR_RESULT, IsNationalPokedexEnabled` (EventScript_SetDefeatedEliteFourFlagsVars)
+  was an unknown special, so Oak's National Dex scene always got set up; restarting a Phaser scene keeps its
+  instance fields (the GameState among them), so SoftReset replaces the scene instead.
+- Tests: tests/e2e/hallOfFame.test.ts (the whole ending from the room's entrance to CONTINUE in Pallet Town, with
+  the record and save checked and the credits skipped after the Charizard scene; the PC with two teams; the PC
+  without records), tests/unit/save.test.ts (the records, GAME_STAT_ENTERED_HOF, version 1 saves). Full e2e run:
+  two battle anim tests failed under the parallel load (missed rolls) and passed when rerun alone.
