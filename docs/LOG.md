@@ -1314,5 +1314,8 @@ end to end.
   assets.ts, types.ts, GameState.ts (`mapLayoutId`, PlayerLocation.mapLayoutId; no saveData.ts change), extract.py.
 - Fix on the way: playerAvatar.test.ts's current ride started on B4F from a dev start, where both boulders now
   count as down (Route20_OnTransition never ran) and the currents are stopped; it hides them first and warps in.
+  pcBoxes.test.ts's stored-location check now expects `mapLayoutId` in the location.
+- Verified: typecheck, `npm test` (85), full `npm run test:e2e` (221; five battle anim tests failed once while
+  other workers' suites shared the machine and passed on a rerun of those files).
 - Tests: tests/e2e/mainPathLeftovers.test.ts (Silph Co. 5F door + the Card Key ball, Seafoam B4F stopped / running /
   after CONTINUE, B3F, the cable club save prompt NO and YES, Lugia via seteventmon).

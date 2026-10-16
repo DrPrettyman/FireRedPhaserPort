@@ -139,9 +139,10 @@ test('the field stores the player location for a save, and the save slot round-t
     return { written, location: data.location, same: JSON.stringify(back) === JSON.stringify(data), cleared: !sd.hasSave() };
   });
   const onFoot = await game.eval((t) => t.define('PLAYER_AVATAR_FLAG_ON_FOOT'));
+  const layout = await game.eval((t) => t.define('LAYOUT_CELADON_CITY_CONDOMINIUMS_ROOF_ROOM'));
   expect(r).toEqual({
     written: true,
-    location: { mapId: 'MAP_CELADON_CITY_CONDOMINIUMS_ROOF_ROOM', x: 7, y: 4, facing: 'up', avatarFlags: onFoot },
+    location: { mapId: 'MAP_CELADON_CITY_CONDOMINIUMS_ROOF_ROOM', x: 7, y: 4, facing: 'up', avatarFlags: onFoot, mapLayoutId: layout },
     same: true,
     cleared: true,
   });
