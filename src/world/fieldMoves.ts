@@ -21,6 +21,7 @@ import { gFieldCallback2 } from '../menus/fieldCallbacks';
 import type { Direction } from './direction';
 import { FieldEffectActiveListContains, FieldEffectActiveListRemove, FieldEffectStart, gFieldEffectArguments, registerFieldEffectNatives } from './fieldEffectScripts';
 import { loadShowMonGfx, setShowMonHost } from './fieldMoveShowMon';
+import { SetUpFieldMove_Flash as SetUpFieldMove_FlashCheck } from './flash';
 import { objectDepth } from './MapChunk';
 import {
   avatarField,
@@ -48,6 +49,10 @@ export interface FieldMoveHost {
   mapType(): number;
   /** gMapHeader.allowEscaping (CanUseEscapeRopeOnCurrMap) */
   allowEscaping(): boolean;
+  /** gMapHeader.cave (a dark cave that Flash lights) */
+  cave(): boolean;
+  /** FldEff_UseFlash (world/flash.ts, run by OverworldScene.useFlash) */
+  useFlash(): void;
   /** gSaveBlock1Ptr->location: the current map's MAP_* id */
   mapId(): string;
   /** gSaveBlock1Ptr->pos: the player's map-local position */
@@ -388,6 +393,22 @@ function forEachCutTile(fn: (x: number, y: number) => boolean | void): boolean {
 }
 
 /** SetUpFieldMove_Cut: the Ruin Valley braille, a cut tree in front, or grass around the player. */
+// ------------------------------------------------------------------ fldeff_flash.c (party menu side)
+
+/** SetUpFieldMove_Flash (fldeff_flash.c): the check is world/flash.ts's; the darkness lives there too. */
+function SetUpFieldMove_Flash(): boolean {
+  if (!SetUpFieldMove_FlashCheck(state, field().cave())) return false;
+  gFieldCallback2.fn = FieldCallback_PrepareFadeInFromMenu;
+  setPostMenuFieldCallback(FieldCallback_Flash);
+  return true;
+}
+
+/** FieldCallback_Flash: the mon banner, then FldEff_UseFlash. */
+function FieldCallback_Flash(): void {
+  gFieldEffectArguments[0] = GetCursorSelectionMonId();
+  CreateFieldEffectShowMon(() => field().useFlash());
+}
+
 function SetUpFieldMove_Cut(): boolean {
   sScheduleOpenDottedHole = false;
   if (CutMoveRuinValleyCheck()) {
@@ -1041,6 +1062,7 @@ export function registerFieldMoves(): void {
   registerFieldMoveSetUp('FIELD_MOVE_SWEET_SCENT', SetUpFieldMove_SweetScent);
   registerFieldMoveSetUp('FIELD_MOVE_DIG', SetUpFieldMove_Dig);
   registerFieldMoveSetUp('FIELD_MOVE_TELEPORT', SetUpFieldMove_Teleport);
+  registerFieldMoveSetUp('FIELD_MOVE_FLASH', SetUpFieldMove_Flash);
 }
 
 /** Graphics the field moves use outside the banner (preload at boot). */

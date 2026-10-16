@@ -82,13 +82,15 @@ export function getElevatorFloor(state: GameState): void {
   state.setVar('VAR_ELEVATOR_FLOOR', FLOOR_BY_MAP[map] ?? 4);
 }
 
-/** sElevatorScroll: where the Silph Co. floor list (special ListMenu) starts scrolled. */
+/** sElevatorScroll / sElevatorCursorPos: where the Silph Co. floor list (special ListMenu) starts. */
 export let sElevatorScroll = 0;
+export let sElevatorCursorPos = 0;
 
 /** InitElevatorFloorSelectMenuPos: returns sElevatorCursorPos. */
 export function initElevatorFloorSelectMenuPos(state: GameState): number {
   const [scroll, cursor] = MENU_POS_BY_MAP[state.dynamicWarp?.mapId ?? ''] ?? [0, 0];
   sElevatorScroll = scroll;
+  sElevatorCursorPos = cursor;
   return cursor;
 }
 

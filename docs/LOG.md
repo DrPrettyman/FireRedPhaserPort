@@ -1095,3 +1095,60 @@ end to end.
   Rerun `npm run extract`.
 - Tests: tests/e2e/fieldMoves.test.ts (11 scenarios). Deviations (audio, Sweet Scent's overlay, unported natives) in
   docs/DEVIATIONS.md; how to add Surf/Strength/Flash/Fly in docs/DEV_NOTES.md "Field moves".
+### Field ListMenu (Silph Co. elevator) and Flash's darkness (W-list)
+
+- `special ListMenu` / `special ReturnToListMenu` (field_specials.c) in `ui/FieldListMenu.ts`: list_menu.c's
+  ListMenu (scrolling, the cursor's middle-row rule, key repeat) on a field MenuWindow with the user frame, the
+  bouncing scroll arrows (menu_indicators.c, sRedArrowOtherGfx as Phaser images) and the list task (create,
+  input, suspend while the script talks, ReturnToListMenu). Silph Co.'s elevator starts where
+  InitElevatorFloorSelectMenuPos puts it (`sElevatorScroll` / `sElevatorCursorPos`); the Cerulean badge list
+  suspends on a choice; the berry powder list works too (berry powder still reads 0).
+- Flash's darkness (`world/flash.ts`): `gSaveBlock1Ptr->flashLevel` (`GameState.flashLevel`),
+  SetDefaultFlashLevel on every map load (FLAG_SYS_FLASH_ACTIVE cleared on arriving outdoors by a warp),
+  SetFlashScanlineEffectWindowBoundaries' circle kept as a per-line WIN0H table (double-buffered like the
+  scanline effect) and painted as a black overlay under the text windows; InitCurrentFlashLevelScanlineEffect
+  after a warp and on returning from a battle or menu (ResumeMap). Script commands `setflashlevel` and
+  `animateflash` (AnimateFlash / UpdateFlashLevelEffect / Task_WaitForFlashUpdate, including the C's quirk that
+  a shrink ends after one step). `FldEff_UseFlash` / `OverworldScene.useFlash()` for the Flash field move.
+- Battles: GetBattleTransitionTypeByMap returns TRANSITION_TYPE_FLASH while the flash level isn't 0 (Blur / Grid
+  Squares), and the field on the GBA layer keeps the circle on WIN0 through the transition.
+- Extractor: maps carry `cave` (map.json `requires_flash`); scripts.json carries `listMenus`
+  (field_specials.c sListMenuLabels). Rerun `npm run extract`.
+- Not done: the party menu's Flash (SetUpFieldMove_Flash → FieldCallback_Flash → FldEff_UseFlash) waits for
+  W-fieldmove's field move framework; `SetUpFieldMove_Flash` and `useFlash()` are ready for it.
+- Tests: tests/e2e/listMenuFlash.test.ts (elevator scrolling, B, riding to 5F; the badge list; Rock Tunnel dark,
+  lit by Flash, lit on arrival with FLAG_SYS_FLASH_ACTIVE; Blur over the dark field, Clockwise Wipe once lit).
+### PC boxes and the save data model (W-state)
+
+- `state/PokemonStorage.ts`: struct PokemonStorage (14 boxes of 30 BoxPokemon, names, wallpapers, current box) with
+  pokemon_storage_system.c's accessors, ResetPokemonStorageSystem, GetFirstFreeBoxSpot, CountMonsInBox,
+  SeekToNextMonInBox, BoxMonToMon / MonRestorePP. `state.storage` replaces the default-box-name placeholders.
+- GameState: GiveMonToPlayer → SendMonToPC when the party is full (MON_GIVEN_TO_PC, VAR_MON_BOX_ID/POS,
+  VAR_PC_BOX_TO_SEND_MON, FLAG_SHOWN_BOX_WAS_FULL_MESSAGE), IsDestinationBoxFull, ShouldShowBoxWasFullMessage,
+  Get/SetPCBoxToSendMon, IsPlayerPartyAndPokemonStorageFull, CountPartyMons / NonEggMons / AliveNonEggMons*,
+  pcItems, play time (play_time.c, not ticked yet), escape / continue-game warps, `location`. The constructor
+  takes text/strings.json (for gText_Box).
+- `state/saveData.ts`: `toSaveData(state)` / `fromSaveData(data, state)` (versioned JSON, exact round trip) and the
+  localStorage slot (`writeSave` / `readSave` / `hasSave` / `clearSave`). `OverworldScene.storeLocationForSave()`
+  fills `state.location` before a save.
+- Outside state/: Cmd_givecaughtmon sets STR_VAR_1-3 and takes the box-full branch; the naming screen's
+  DisplaySentToPCMessage uses real box names and IsDestinationBoxFull (and GetPCBoxToSendMon for STR_VAR_3, which
+  read VAR_PC_BOX_TO_SEND_MON before); `bufferboxname`; specials ShouldShowBoxWasFullMessage, GetPCBoxToSendMon,
+  ChangeBoxPokemonNickname, CountPartyNonEggMons, CountPartyAliveNonEggMons_IgnoreVar0x8004Slot and a real
+  IsThereRoomInAnyBoxForMorePokemon; IsPlayerPartyAndPokemonStorageFull in the Safari ball action and ball item
+  use; `t.battle().message` probe.
+- No extractor changes (TOTAL_BOXES_COUNT etc. were already in the defines).
+- Deviations: removed the naming screen's "sent to PC" placeholder, ChangeBoxPokemonNickname and "Full party";
+  added PC boxes (no UI), save data (no flash/checksums/encryption; what isn't kept) and play time.
+- Tests: tests/unit/pcBoxes.test.ts, tests/unit/saveData.test.ts, tests/e2e/pcBoxes.test.ts (givemon and catches
+  with a full party, with and without a full current box, a nicknamed catch, the save slot in the browser).
+
+### Batch 1 of MAIN_PATH_PLAN.md merged (PRs #14-#17); Flash from the party menu
+
+- Merged W-avatar (#14), W-state (#15), W-list (#16) and W-fieldmove (#17). Conflicts: OverworldScene's imports
+  and field-task loop (kept the task-survival fix and the flash tick); GameState had `escapeWarp` and `WarpData`
+  from both W-state and W-fieldmove (kept one). The save data now includes `flashLevel` (W-list's field).
+- Flash from the party menu: `SetUpFieldMove_Flash` / `FieldCallback_Flash` in world/fieldMoves.ts, on W-list's
+  check and FldEff_UseFlash; FieldMoveHost gains `cave()` and `useFlash()`. e2e: fieldMoves.test.ts.
+- Extracting in a worktree: set `FIRERED_DECOMP=/path/to/pret/firered` (the default is a path relative to the
+  checkout, which a worktree doesn't have).

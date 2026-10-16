@@ -262,3 +262,22 @@ test('An HM without its badge is refused: "This can\'t be used until a new BADGE
   expect((await game.eval((t, since) => t.events(since), since)).some((e) => e.type === 'fieldMoveShowMon')).toBe(false);
   expect((await objectAt(game, 19, 24))?.graphicsId).toBe('OBJ_EVENT_GFX_CUT_TREE');
 });
+
+test('Flash from the party menu lights Rock Tunnel (FieldCallback_Flash → FldEff_UseFlash)', async () => {
+  // Route 10's northern Rock Tunnel entrance at (8, 19); FIELD_MOVE_FLASH needs the Boulder Badge.
+  const game = await session.start({ start: 'after-rival', map: 'Route10', x: 8, y: 20, party: [{ species: 'PIKACHU', level: 30, moves: ['FLASH', 'THUNDER_SHOCK'] }] });
+  await game.eval((t) => t.state!.setFlag('FLAG_BADGE01_GET', true));
+  await repel(game);
+  const mark = await game.mark();
+  await game.walk('up');
+  await game.waitForEvent('map', { since: mark, what: 'Rock Tunnel' });
+  await game.waitIdle();
+  expect((await game.eval((t) => t.field()!.flash)).level).toBe(4);
+  const since = await game.mark();
+  await useFieldMove(game); // FLASH
+  expect(await game.waitForEvent('fieldMoveShowMon', { since })).toMatchObject({ outdoors: false });
+  expect((await game.waitForEvent('script', { since })).label).toBe('EventScript_FldEffFlash');
+  await waitFieldFree(game, 'Flash to light the cave');
+  expect(await game.eval((t) => t.flag('FLAG_SYS_FLASH_ACTIVE'))).toBe(true);
+  expect(await game.eval((t) => t.field()!.flash)).toEqual({ level: 0, dark: 0 });
+});

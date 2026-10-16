@@ -7,6 +7,7 @@ import { animateElevator, getElevatorFloor, initElevatorFloorSelectMenuPos } fro
 import { initRoamer } from '../world/roamer';
 import { isPoisoned } from '../world/stepCounters';
 import { directionId, type ScriptHost } from './ScriptEngine';
+import { ListMenu, ReturnToListMenu } from '../ui/FieldListMenu';
 import { ForcePlayerOntoBike, GetPlayerAvatarBike } from '../world/bike';
 import { ForcePlayerToStartSurfing, GetPlayerFacingDirection, SeafoamIslandsB4F_CurrentDumpsPlayerOnLand } from '../world/playerAvatar';
 import { RockSmashWildEncounter } from '../world/fieldMoves';
@@ -158,9 +159,58 @@ export const SPECIALS: Record<string, Special> = {
     state.safariZoneStepCounter = 0;
   },
 
-  /** IsThereRoomInAnyBoxForMorePokemon: PC boxes aren't ported, so they never fill up. */
-  IsThereRoomInAnyBoxForMorePokemon() {
-    return 1;
+  /** IsThereRoomInAnyBoxForMorePokemon (field_specials.c) */
+  IsThereRoomInAnyBoxForMorePokemon({ state }) {
+    return state.isThereRoomInAnyBoxForMorePokemon() ? 1 : 0;
+  },
+
+  /** ShouldShowBoxWasFullMessage (field_specials.c): EventScript_TransferredToPC's box-full branch. */
+  ShouldShowBoxWasFullMessage({ state }) {
+    return state.shouldShowBoxWasFullMessage() ? 1 : 0;
+  },
+
+  /** GetPCBoxToSendMon (field_specials.c): the box SendMonToPC started from. */
+  GetPCBoxToSendMon({ state }) {
+    return state.getPCBoxToSendMon();
+  },
+
+  /** CountPartyNonEggMons (pokemon_storage_system_menu.c) */
+  CountPartyNonEggMons({ state }) {
+    return state.countPartyNonEggMons();
+  },
+
+  /** CountPartyAliveNonEggMons_IgnoreVar0x8004Slot (pokemon_storage_system_menu.c) */
+  CountPartyAliveNonEggMons_IgnoreVar0x8004Slot({ state }) {
+    return state.countPartyAliveNonEggMonsIgnoreVar0x8004Slot();
+  },
+
+  /**
+   * ChangeBoxPokemonNickname (field_specials.c): the naming screen for the mon SendMonToPC just stored
+   * (gSpecialVar_MonBoxId/Pos), writing into gStringVar2; ChangeBoxPokemonNickname_CB stores it (SetBoxMonNickAt).
+   */
+  ChangeBoxPokemonNickname({ state, host, setWaitState }) {
+    const boxId = state.getVar('VAR_MON_BOX_ID');
+    const pos = state.getVar('VAR_MON_BOX_POS');
+    const mon = state.storage.getBoxedMon(boxId, pos);
+    if (!mon) return;
+    const d = state.defines;
+    state.stringVars[2] = [...mon.nickname];
+    state.stringVars[1] = [...mon.nickname];
+    const dest = [...mon.nickname, d.require('EOS')];
+    setWaitState(
+      host.doNamingScreen({
+        templateNum: d.require('NAMING_SCREEN_NICKNAME'),
+        dest,
+        monSpecies: mon.species,
+        monGender: state.pokemon.genderFromPersonality(mon.species, mon.personality), // GetBoxMonGender
+        monPersonality: mon.personality,
+        onReturn: () => {
+          const name = dest.slice(0, dest.indexOf(d.require('EOS')));
+          state.stringVars[1] = name;
+          state.storage.setBoxMonNickAt(boxId, pos, name);
+        },
+      }),
+    );
   },
 
   /** InitRoamer (roamer.c) */
@@ -176,6 +226,18 @@ export const SPECIALS: Record<string, Special> = {
   /** InitElevatorFloorSelectMenuPos: the floor select menu's starting cursor */
   InitElevatorFloorSelectMenuPos({ state }) {
     return initElevatorFloorSelectMenuPos(state);
+  },
+
+  /** ListMenu (field_specials.c): a scrolling list; VAR_RESULT = the item's index or SCR_MENU_CANCEL. */
+  ListMenu({ state, host, setWaitState }) {
+    const wait = ListMenu(state, host.listMenuHost());
+    if (wait) setWaitState(wait);
+  },
+
+  /** ReturnToListMenu: back to a list that stayed up while the script talked (the Cerulean badge list). */
+  ReturnToListMenu({ setWaitState }) {
+    const wait = ReturnToListMenu();
+    if (wait) setWaitState(wait);
   },
 
   /** DrawElevatorCurrentFloorWindow: "Now on:" and the floor gSpecialVar_0x8005 names */

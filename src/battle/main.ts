@@ -898,8 +898,7 @@ function handleTurnActionSelectionState(): void {
               break;
             }
             case K.B_ACTION_SAFARI_BALL:
-              if (g.playerParty.filter((m) => m).length >= K.PARTY_SIZE) {
-                // IsPlayerPartyAndPokemonStorageFull (no PC storage yet, so a full party counts as full)
+              if (state.isPlayerPartyAndPokemonStorageFull()) {
                 g.selectionBattleScripts[ab] = bs('BattleScript_PrintFullBox');
                 mc[ab] = STATE_SELECTION_SCRIPT;
                 bst.selectionScriptFinished[ab] = 0;

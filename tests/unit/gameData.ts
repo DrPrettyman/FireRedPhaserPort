@@ -30,6 +30,7 @@ interface GameData {
   moves: MoveInfo[];
   items: ItemInfo[];
   tables: PokemonTables;
+  strings: Record<string, string>;
 }
 
 let data: GameData | undefined;
@@ -43,6 +44,7 @@ function gameData(): GameData {
     moves: readGen('pokemon/moves.json'),
     items: readGen('pokemon/items.json'),
     tables: readGen('pokemon/tables.json'),
+    strings: readGen('text/strings.json'),
   };
   return data;
 }
@@ -62,7 +64,7 @@ export function newGame(): TestGame {
   const defines = new Defines(gd.defines);
   const charmap = new Charmap(gd.charmap);
   const pokemon = new PokemonData(readPokemonConstants(defines), gd.species, gd.moves, gd.items, gd.tables, charmap);
-  const state = new GameState(defines, gd.constants.newGameFlags, pokemon);
+  const state = new GameState(defines, gd.constants.newGameFlags, pokemon, gd.strings);
   return { defines, d: (name) => defines.require(name), charmap, pokemon, state };
 }
 

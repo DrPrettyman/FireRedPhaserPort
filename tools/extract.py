@@ -248,6 +248,8 @@ def extract_maps(decomp, out, ts_folders):
             "allowEscaping": m.get("allow_escaping"),
             "showMapName": m.get("show_map_name"),
             "floorNumber": m.get("floor_number", 0),
+            # gMapHeader.cave: the map is dark until Flash is used (SetDefaultFlashLevel)
+            "cave": bool(m.get("requires_flash", False)),
             "connections": m.get("connections") or [],
             "objectEvents": m.get("object_events") or [],
             "warpEvents": m.get("warp_events") or [],
@@ -900,11 +902,20 @@ def extract_scripts(decomp, out):
         multichoices += [None] * (idx + 1 - len(multichoices))
         multichoices[idx] = mc_lists[lst]
 
+    # field_specials.c sListMenuLabels: LISTMENU_* -> the string symbols of special ListMenu's items.
+    fs = (decomp / "src/field_specials.c").read_text()
+    table = re.search(r"sListMenuLabels\[\]\[\d+\]\s*=\s*\{(.*?)\n\};", fs, re.S).group(1)
+    list_menus = []
+    for lm, body in re.findall(r"\[(LISTMENU_\w+)\]\s*=\s*(?://[^\n]*)?\s*\{(.*?)\}", table, re.S):
+        idx = defines[lm]
+        list_menus += [None] * (idx + 1 - len(list_menus))
+        list_menus[idx] = re.findall(r"\w+", body)
+
     sd = out / "scripts"
     sd.mkdir(parents=True, exist_ok=True)
     (sd / "scripts.json").write_text(
         json.dumps(
-            {"code": code, "labels": labels, "defines": defines, "stdScripts": std, "rematches": rematches, "healLocations": heal_locations, "whiteOut": white_out, "multichoices": multichoices},
+            {"code": code, "labels": labels, "defines": defines, "stdScripts": std, "rematches": rematches, "healLocations": heal_locations, "whiteOut": white_out, "multichoices": multichoices, "listMenus": list_menus},
             ensure_ascii=False,
             separators=(",", ":"),
         )
