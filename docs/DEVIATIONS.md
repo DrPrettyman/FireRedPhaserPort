@@ -8,8 +8,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
 
 - **Placeholders (not in the decomp):**
   - Naming screen: the help context, SeedRngAndSetTrainerId after naming the player and the REVISION >= 0xA
-    bad-word check aren't ported. The "sent to PC" message (caught mon, full party) uses the default box names
-    and never takes the box-full branch. `ChangeBoxPokemonNickname` isn't ported (no PC boxes).
+    bad-word check aren't ported.
   - Pokémon Center heal: the healing machine (`dofieldeffect FLDEFF_POKECENTER_HEAL`) and the nurse's bow
     (`nurse_joy_bow`) are skipped; the heal itself happens.
   - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
@@ -29,8 +28,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     Pokédude/Teachy TV demos are not ported.
   - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Bag uses that need overworld systems
     (rods, Escape Rope, Itemfinder, VS Seeker, Town Map, Fame Checker, Teachy TV, mail, TM case, berry pouch,
-    registered SELECT items) log "not implemented" and return to the bag. Berry powder reads as 0; PC
-    storage is never full for Poké Balls; the item PC / Pokémon storage give flows aren't ported.
+    registered SELECT items) log "not implemented" and return to the bag. Berry powder reads as 0; the
+    item PC / Pokémon storage give flows aren't ported.
   - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
     overworld's ScreenFade.
   - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;
@@ -59,7 +58,20 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     start EventScript_VsSeekerChargingDone, whose specials aren't ported; only the (unported) VS Seeker starts one.
   - Safari Zone: the entrance's SE/fanfare are silent.
   - The money box and Safari stats window are Phaser MenuWindows (the field isn't on the GBA layer).
-  - Full party: `givemon` returns MON_CANT_GIVE instead of sending the mon to the PC (`SendMonToPC`).
+  - PC boxes (state/PokemonStorage.ts): the data side only; the storage system UI (deposit, withdraw, move,
+    box switching, renaming, wallpapers) isn't ported, so the boxes can only be filled, not looked at. The item
+    PC's slots exist but NewGameInitPCItems's Potion isn't put there (player_pc.c isn't ported).
+  - Save data (state/saveData.ts): one JSON save in browser localStorage instead of the flash's two 14-sector
+    save slots, so there are no sector checksums, no alternating slots / save counter, no backup of the previous
+    save and no encryption of money, coins and bag quantities (gSaveBlock2Ptr->encryptionKey). The save holds
+    what the port keeps; left out because the port doesn't keep them: the current map's object events and object
+    templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail, the daycare mons,
+    Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, the fame
+    checker, Trainer Tower and minigame records, the enigma berry, mystery gift, easy chat, link records and
+    the sound and region map zoom options. The player's position is stored only when the field writes it before
+    a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
+  - Play time (state/playTime.ts): play_time.c is ported but nothing calls PlayTimeCounter_Start/Update yet
+    (main.c updates it every frame), so the play time stays 0:00.
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
     link play); the quest log's QL_AvoidDisplay bit of ignoreBPress is ignored.
   - Elevators: SE_ELEVATOR / SE_DING_DONG are silent; UpdateEscapeWarp isn't kept on warps.

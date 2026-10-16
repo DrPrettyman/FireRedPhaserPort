@@ -147,6 +147,35 @@ this is the next level down. When you add or change a subsystem, update its entr
   in the page with `await new Function('p', 'return import(p)')('/src/gba/hw.ts')` (a bare `import()` in the
   function gets rewritten by Vitest); see battleAnims.2d.test.ts's `hblankLines`.
 
+## Game state
+
+- **PC boxes and save data:** `state/PokemonStorage.ts` is struct PokemonStorage (`state.storage`: 14 boxes of 30
+  `BoxPokemon | null`, encoded box names, wallpapers, the current box) with pokemon_storage_system.c's accessors
+  (GetBoxedMonPtr = `getBoxedMon`, GetBoxMonDataAt, SetBoxMonAt (copies), BoxMonAtToMon, GetBoxNamePtr,
+  SeekToNextMonInBox, ...). A BoxPokemon is a Pokemon without `level/status/hp/maxHP/stats`; `boxMonFromMon` /
+  `boxMonToMon` convert (BoxMonToMon recalculates stats and fully heals, as on the GBA). GameState has
+  GiveMonToPlayer / SendMonToPC (`giveMon` returns MON_GIVEN_TO_PC when the party is full and sets
+  VAR_MON_BOX_ID/POS and VAR_PC_BOX_TO_SEND_MON), IsDestinationBoxFull, ShouldShowBoxWasFullMessage,
+  Get/SetPCBoxToSendMon and the CountParty* functions; the specials and `bufferboxname` call them. The box-full
+  messages come from Cmd_givecaughtmon (battle), DisplaySentToPCMessage (naming screen) and
+  EventScript_TransferredToPC (scripts).
+  `state/saveData.ts` is the save file: `toSaveData(state)` gives a plain JSON object (`version: SAVE_VERSION`)
+  with what gSaveBlock1/2 and the boxes hold that the port keeps, and `fromSaveData(data, state)` loads one into a
+  fresh GameState (it throws on another version). Saving and loading the result round-trips exactly. The slot is
+  browser localStorage (`writeSave` / `readSave` / `hasSave` / `clearSave`, key `SAVE_STORAGE_KEY`). Before
+  saving, call `OverworldScene.storeLocationForSave()`: it fills `state.location` (MAP_* id, map-local x/y,
+  facing, PLAYER_AVATAR_FLAG_ON_FOOT/MACH_BIKE/ACRO_BIKE/SURFING). Not saved, as on the GBA: EWRAM state
+  (special vars 0x8000+, special flags, gStringVar*, gEnemyParty, the Safari ball/step counts, which can't be
+  saved anyway since the Safari start menu has no SAVE, and the roamer's location). Other optional warps the save
+  keeps: `continueGameWarp` + `specialSaveWarpFlags` (CONTINUE_GAME_WARP), `escapeWarp` (nothing sets it yet).
+  When a new GameState field belongs in the save, add it to SaveData, toSaveData and fromSaveData and bump
+  SAVE_VERSION; a new Pokemon field won't compile until it's listed in saveData.ts's field lists. Play time
+  (`state.playTime`, state/playTime.ts) is ported but not ticked yet: whoever builds the save info window needs
+  PlayTimeCounter_Start on entering the field (CB2_NewGame / CB2_ContinueSavedGame) and PlayTimeCounter_Update
+  once per frame on every screen. Tests: tests/unit/pcBoxes.test.ts, tests/unit/saveData.test.ts,
+  tests/e2e/pcBoxes.test.ts (Celadon Condominiums roof Eevee at (7,3) with a full party; catches on Route 1).
+  `t.battle().message` is the battle's last displayed string.
+
 ## Testing and debugging
 
 - **Tests:** `npm test` (unit) and `npm run test:e2e` (headless playthroughs, ~20 s); how to write them is in

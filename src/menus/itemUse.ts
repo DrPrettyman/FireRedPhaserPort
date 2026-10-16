@@ -252,9 +252,9 @@ function Task_UsedBlackWhiteFlute(taskId: number): void {
   }
 }
 
-/** IsPlayerPartyAndPokemonStorageFull: PC storage doesn't exist yet, so it's never full. */
+/** IsPlayerPartyAndPokemonStorageFull (pokemon.c) */
 function IsPlayerPartyAndPokemonStorageFull(): boolean {
-  return false;
+  return state.isPlayerPartyAndPokemonStorageFull();
 }
 
 function BattleUseFunc_PokeBallEtc(taskId: number): void {
