@@ -1,7 +1,7 @@
 // item_use.c: what Use does for each item, from the bag (tasks' data[3] == 0) and in battle. The
 // functions are looked up by the names in the item table (fieldUseFunc / battleUseFunc). Uses that
-// need overworld systems that don't exist yet (rods, Escape Rope, Itemfinder, VS Seeker, Town
-// Map, Fame Checker, Teachy TV, mail, TM case, berry pouch) aren't in the tables; the bag logs them.
+// need overworld systems that don't exist yet (rods, Escape Rope, Itemfinder, VS Seeker, Fame
+// Checker, Teachy TV, mail, TM case, berry pouch) aren't in the tables; the bag logs them.
 
 import { K } from '../battle/constants';
 import { g, state } from '../battle/env';
@@ -31,6 +31,7 @@ import { GetOnOffBike, IsBikingDisallowedByPlayer } from '../world/bike';
 import { avatarField, ClearPlayerHeldMovement, PLAYER_AVATAR_FLAG } from '../world/playerAvatar';
 import {
   Bag_BeginCloseWin0Animation,
+  CB2_BagMenuFromStartMenu,
   DisplayItemMessageInBag,
   ItemMenu_SetExitCallback,
   ItemMenu_StartFadeToExitCallback,
@@ -39,6 +40,7 @@ import {
   Task_ReturnToBagFromContextMenu,
 } from './itemMenu';
 import { SpecialVar } from './itemMenuState';
+import { InitRegionMapWithExitCB, REGIONMAP_TYPE_NORMAL } from './regionMap';
 import {
   CB2_ShowPartyMenuForItemUse,
   EnterPartyFromItemMenuInBattle,
@@ -138,6 +140,20 @@ function FieldUseFunc_Bike(taskId: number): void {
 function ItemUseOnFieldCB_Bicycle(_taskId: number): void {
   GetOnOffBike(PLAYER_AVATAR_FLAG.MACH_BIKE | PLAYER_AVATAR_FLAG.ACRO_BIKE);
   ClearPlayerHeldMovement(); // ClearPlayerHeldMovementAndUnfreezeObjectEvents
+}
+
+/**
+ * FieldUseFunc_TownMap: from the bag, the region map, which returns to the bag. (Its registered-item branch,
+ * Task_UseTownMapFromField, waits for SELECT on the field, which the port doesn't have yet.)
+ */
+function FieldUseFunc_TownMap(taskId: number): void {
+  ItemMenu_SetExitCallback(UseTownMapFromBag);
+  ItemMenu_StartFadeToExitCallback(taskId);
+}
+
+/** UseTownMapFromBag */
+function UseTownMapFromBag(): void {
+  InitRegionMapWithExitCB(REGIONMAP_TYPE_NORMAL, CB2_BagMenuFromStartMenu);
 }
 
 function FieldUseFunc_CoinCase(taskId: number): void {
@@ -405,6 +421,7 @@ function FieldUseFunc_OakStopsYou(taskId: number): void {
 /** Field use functions by name (ItemId_GetFieldFunc) */
 export const FIELD_USE_FUNCS: Record<string, TaskFunc> = {
   FieldUseFunc_Bike,
+  FieldUseFunc_TownMap,
   FieldUseFunc_CoinCase,
   FieldUseFunc_PowderJar,
   FieldUseFunc_PokeFlute,

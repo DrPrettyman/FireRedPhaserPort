@@ -186,6 +186,8 @@ export class ObjectEvent {
   disableJumpLandingGroundEffect = false;
   hasShadow = false;
   hasReflection = false;
+  /** objectEvent->inanimate set at run time (Fly's jump onto the bird): the sprite keeps its frame. */
+  inanimate = false;
   inShallowFlowingWater = false;
   inSandPile = false;
   inShortGrass = false;
@@ -565,13 +567,13 @@ export class ObjectEvent {
   }
 
   private showFacing(): void {
-    if (this.info.inanimate) return;
+    if (this.info.inanimate || this.inanimate) return;
     this.sprite.setFrame(FACE_FRAME[this.facing]);
     this.sprite.setFlipX(this.facing === 'right');
   }
 
   private showStepFrame(m: Movement): void {
-    if (this.info.inanimate) return;
+    if (this.info.inanimate || this.inanimate) return;
     const dir = this.facing;
     const t = m.elapsed / m.spec.frames;
     let frame: number;

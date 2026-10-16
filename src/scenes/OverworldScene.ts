@@ -59,7 +59,7 @@ import { MapNamePopup } from '../ui/MapNamePopup';
 import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
 import { gFieldCallback, gFieldCallback2, type FieldCallbackHost } from '../menus/fieldCallbacks';
 import { activeFieldEffects, setFieldEffectScriptHost, setFieldEffectScripts } from '../world/fieldEffectScripts';
-import { fieldMoveGfxSymbols, prepareFieldMoveMenu, registerFieldMoves, setFieldMoveHost, UpdateEscapeWarp, type FieldMoveHost } from '../world/fieldMoves';
+import { fieldMoveGfxSymbols, prepareFieldMoveMenu, prepareRegionMap, registerFieldMoves, setFieldMoveHost, UpdateEscapeWarp, type FieldMoveHost } from '../world/fieldMoves';
 import {
   BOB_MON_ONLY,
   DestroyPlayerSurfBlob,
@@ -1461,9 +1461,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const d = this.defines;
     this.screenFade.begin(d.require('FADE_TO_BLACK'));
     let launched = false;
-    // The party menu's Teleport / Dig prompts name maps whose headers it reads synchronously.
-    let ready = menu !== 'party';
-    if (!ready) void prepareFieldMoveMenu().then(() => (ready = true));
+    // The party menu's Teleport / Dig prompts name maps whose headers it reads synchronously, and the fly map
+    // and the Town Map read the player's location.
+    let ready = false;
+    void prepareFieldMoveMenu().then(() => (ready = true));
     this.overlay = {
       tick: () => {
         if (launched || this.screenFade.active || !ready) return false;
@@ -1773,6 +1774,18 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.runFieldMenu({ menu: 'naming', naming: req }, () => {
       fadeIn = this.fadeScreen(this.defines.require('FADE_FROM_BLACK'));
     });
+    return () => fadeIn?.() ?? false;
+  }
+
+  /** ShowTownMap: the wall map (FieldMenuScene 'townMap') from the black field, then fade back in. */
+  showTownMap(): Wait {
+    let fadeIn: Wait | undefined;
+    this.messageBox.hide();
+    void prepareRegionMap().then(() =>
+      this.runFieldMenu({ menu: 'townMap' }, () => {
+        fadeIn = this.fadeScreen(this.defines.require('FADE_FROM_BLACK'));
+      }),
+    );
     return () => fadeIn?.() ?? false;
   }
 
@@ -2365,6 +2378,18 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         if (!name) return d.require('MAPSEC_NONE');
         return d.get((await this.assets.loadMap(name)).regionMapSection ?? '') ?? d.require('MAPSEC_NONE');
       },
+      loadMapHeader: async (mapId) => {
+        const name = this.assets.mapNameForId(mapId);
+        if (!name) return undefined;
+        const m = await this.assets.loadMap(name);
+        return { mapsec: d.get(m.regionMapSection ?? '') ?? d.require('MAPSEC_NONE'), mapType: this.mapType(m), width: m.width, height: m.height };
+      },
+      healLocation: (id) => this.assets.scripts.healLocations[id - 1],
+      camera: () => {
+        const view = this.cameras.main.worldView;
+        return { x: Math.round(view.x), y: Math.round(view.y) };
+      },
+      createFieldEffectSprite: (fldEff, template, x, y, subpriority, callback) => this.fieldEffects.createSprite(fldEff, template, x, y, subpriority, callback),
     };
   }
 

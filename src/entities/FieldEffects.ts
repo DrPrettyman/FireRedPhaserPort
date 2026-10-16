@@ -76,6 +76,11 @@ export class FieldEffectSprite {
   hFlip = false;
   vFlip = false;
   scaleX = 1;
+  /** The rest of an OAM matrix (world/fly.ts' bird): y scale, rotation (radians, clockwise) and the
+   *  ST_OAM_AFFINE_DOUBLE box as a crop of the frame [x, y, width, height]. */
+  scaleY = 1;
+  rotation = 0;
+  crop?: [number, number, number, number];
   data = [0, 0, 0, 0, 0, 0, 0, 0];
   inUse = true;
   /** The object this effect follows, standing in for its localId/mapNum/mapGroup in data. */
@@ -206,7 +211,10 @@ export class FieldEffectSprite {
     s.setPosition(this.x + this.x2, this.y + this.y2);
     if (s.frame.name !== String(this.image) && typeof this.image === 'number') s.setFrame(this.image);
     s.setFlip(this.hFlip, this.vFlip);
-    s.setScale(this.scaleX, 1);
+    s.setScale(this.scaleX, this.scaleY);
+    s.setRotation(this.rotation);
+    if (this.crop) s.setCrop(...this.crop);
+    else if (s.isCropped) s.setCrop();
     s.setVisible(!this.invisible);
     s.setDepth(objectDepth(this.priority, this.subpriority, this.y + this.y2 - this.height / 2 - cameraTop));
   }

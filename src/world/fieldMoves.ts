@@ -39,6 +39,9 @@ import {
   SetPlayerAvatarTransitionFlags,
 } from './playerAvatar';
 import { cacheMapSection } from './regionMap';
+import { setRegionMapField, type RegionMapWarp } from '../menus/regionMap';
+import type { FieldEffectSprite } from '../entities/FieldEffects';
+import { registerFly } from './fly';
 import { registerSurfAndWaterfall } from './surf';
 import type { TileInfo } from './World';
 import { directionalAction } from '../entities/movementActions';
@@ -99,6 +102,14 @@ export interface FieldMoveHost {
   warpFadeInScreen(): () => boolean;
   /** A map header's regionMapSectionId (MAPSEC_*), loading the header if needed. */
   loadMapSection(mapId: string): Promise<number>;
+  /** A map header's region map section, map type and layout size (Overworld_GetMapHeaderByGroupAndId). */
+  loadMapHeader(mapId: string): Promise<{ mapsec: number; mapType: number; width: number; height: number } | undefined>;
+  /** GetHealLocation(HEAL_LOCATION_*) */
+  healLocation(id: number): { map: string; x: number; y: number } | undefined;
+  /** The camera's top-left corner in world pixels (screen coordinates + this = world). */
+  camera(): { x: number; y: number };
+  /** CreateSpriteAtEnd with a gFieldEffectObjectTemplate_* (field_effects/objects.json), world pixels. */
+  createFieldEffectSprite(fldEff: string, template: string, x: number, y: number, subpriority: number, callback: (s: FieldEffectSprite) => void): FieldEffectSprite;
 }
 
 let host: FieldMoveHost | undefined;
@@ -116,6 +127,9 @@ function field(): FieldMoveHost {
   if (!host) throw new Error('[field moves] no field host');
   return host;
 }
+
+/** The field host, for field moves ported in their own modules (world/fly.ts). */
+export const fieldMoveHost = field;
 
 // ------------------------------------------------------------------ overworld.c helpers
 
@@ -148,6 +162,8 @@ function Overworld_ResetStateAfterTeleport(): void {
   state.setVar('VAR_QL_ENTRANCE', 0);
 }
 const Overworld_ResetStateAfterDigEscRope = Overworld_ResetStateAfterTeleport;
+/** Overworld_ResetStateAfterFly (the same in FRLG) */
+export const Overworld_ResetStateAfterFly = Overworld_ResetStateAfterTeleport;
 
 /**
  * UpdateEscapeWarp (SetupWarp): leaving an outdoor map (but Viridian Forest) for one that isn't, remember
@@ -165,11 +181,38 @@ export function SetEscapeWarp(mapId: string, warpId: number, x: number, y: numbe
   state.escapeWarp = { mapId, warpId, x, y };
 }
 
-/** Load the map headers the party menu's Teleport / Dig prompts name (the C reads them synchronously). */
+/**
+ * Load the map headers the party menu's Teleport / Dig prompts name and the region map (the fly map and the
+ * Town Map) reads (the C reads them synchronously), and hand the region map the player's location.
+ */
 export async function prepareFieldMoveMenu(): Promise<void> {
   const h = field();
   const maps = [state.lastHealLocation?.map, state.escapeWarp?.mapId].filter((m): m is string => !!m);
   await Promise.all(maps.map(async (m) => cacheMapSection(m, await h.loadMapSection(m))));
+  await prepareRegionMap();
+}
+
+/** setRegionMapField: gMapHeader, gSaveBlock1Ptr->location / pos and the escape / dynamic warps' headers. */
+export async function prepareRegionMap(): Promise<void> {
+  const h = field();
+  const mapId = h.mapId();
+  const warp = async (w: { mapId: string; x: number; y: number } | undefined): Promise<RegionMapWarp | undefined> => {
+    const header = w && (await h.loadMapHeader(w.mapId));
+    return w && header ? { mapsec: header.mapsec, width: header.width, height: header.height, x: w.x, y: w.y } : undefined;
+  };
+  const [current, escapeWarp, dynamicWarp] = await Promise.all([h.loadMapHeader(mapId), warp(state.escapeWarp), warp(state.dynamicWarp)]);
+  const pos = h.playerLocal();
+  setRegionMapField({
+    mapId,
+    mapType: h.mapType(),
+    mapsec: current?.mapsec ?? K.MAPSEC_NONE,
+    width: current?.width ?? 0,
+    height: current?.height ?? 0,
+    x: pos.x,
+    y: pos.y,
+    escapeWarp,
+    dynamicWarp,
+  });
 }
 
 // ------------------------------------------------------------------ controls
@@ -1073,6 +1116,7 @@ export function registerFieldMoves(): void {
   registerFieldMoveSetUp('FIELD_MOVE_FLASH', SetUpFieldMove_Flash);
   registerSurfAndWaterfall(); // world/surf.ts
   registerFieldMoveSetUp('FIELD_MOVE_STRENGTH', SetUpFieldMove_Strength); // world/strength.ts
+  registerFly(); // world/fly.ts
 }
 
 /** Graphics the field moves use outside the banner (preload at boot). */

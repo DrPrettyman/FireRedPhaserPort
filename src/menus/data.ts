@@ -29,6 +29,8 @@ export interface MenusData {
   menuInfoIcons: [number, number, number][];
   /** sKeyboardChars (naming_screen.c): raw `__()` rows (no EOS), 4 per KEYBOARD_* page */
   namingKeyboardChars: string[][];
+  /** region_map.c's tables (menus/regionMap.ts RegionMapData) */
+  regionMap: import('./regionMap').RegionMapData;
 }
 
 export let menusData: MenusData;

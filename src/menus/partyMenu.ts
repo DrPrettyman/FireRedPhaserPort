@@ -159,6 +159,7 @@ import {
 } from './common';
 import { menusData } from './data';
 import { CB2_ReturnToField, CB2_ReturnToFieldContinueScriptPlayMapMusic, CB2_ReturnToFieldWithOpenMenu, gFieldCallback2, type FieldCallbackHost } from './fieldCallbacks';
+import { CB2_OpenFlyMap } from './regionMap';
 import { gFieldEffectArguments } from '../world/fieldEffectScripts';
 import { avatarField, GetXYCoordsOneStepInFrontOfPlayer, PLAYER_AVATAR_FLAG, TestPlayerAvatarFlags } from '../world/playerAvatar';
 import { GetMapName, GetMapSectionOfMap } from '../world/regionMap';
@@ -2824,7 +2825,7 @@ function CursorCB_FieldMove(taskId: number): void {
         internal().data[0] = fieldMove;
         break;
       case K.FIELD_MOVE_FLY:
-        // gPartyMenu.exitCallback = CB2_OpenFlyMap: the fly map isn't ported, so nothing registers SetUpFieldMove_Fly yet.
+        gPartyMenu.exitCallback = CB2_OpenFlyMap; // menus/regionMap.ts
         Task_ClosePartyMenu(taskId);
         break;
       default:
@@ -4225,4 +4226,9 @@ export function ChooseMonForDaycare(): void {
 
 export function ChoosePartyMonByMenuType(menuType: number): void {
   InitPartyMenu(menuType, K.PARTY_LAYOUT_SINGLE, K.PARTY_ACTION_CHOOSE_AND_CLOSE, false, K.PARTY_MSG_CHOOSE_MON, Task_HandleChooseMonInput, CB2_ReturnToField);
+}
+
+/** CB2_ReturnToPartyMenuFromFlyMap: the fly map closed without a destination. */
+export function CB2_ReturnToPartyMenuFromFlyMap(): void {
+  InitPartyMenu(K.PARTY_MENU_TYPE_FIELD, K.PARTY_LAYOUT_SINGLE, K.PARTY_ACTION_CHOOSE_MON, true, K.PARTY_MSG_CHOOSE_MON, Task_HandleChooseMonInput, CB2_ReturnToFieldWithOpenMenu);
 }

@@ -373,6 +373,11 @@ export const SPECIALS: Record<string, Special> = {
     );
   },
 
+  /** ShowTownMap (field_specials.c): the wall map, back through CB2_ReturnToFieldContinueScriptPlayMapMusic. */
+  ShowTownMap({ host, setWaitState }) {
+    setWaitState(host.showTownMap());
+  },
+
   /** GetPartyMonSpecies: MON_DATA_SPECIES_OR_EGG of party slot VAR_0x8004. */
   GetPartyMonSpecies({ state }) {
     const mon = state.party[state.getVar('VAR_0x8004')];

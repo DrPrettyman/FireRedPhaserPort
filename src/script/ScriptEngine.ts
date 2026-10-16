@@ -114,6 +114,8 @@ export interface ScriptHost {
    * the wait ends once the field has faded back in.
    */
   doNamingScreen(req: NamingScreenRequest): Wait;
+  /** ShowTownMap: the wall map (menus/regionMap.ts, REGIONMAP_TYPE_WALL) from a black field, like doNamingScreen. */
+  showTownMap(): Wait;
   /** StartTrainerBattle: `done` ends when the battle is over (screen still black), with the outcome. */
   startTrainerBattle(battle: TrainerBattle): TrainerBattleRun;
   /** A non-trainer battle against `enemyParty` (gEnemyParty) behind a B_TRANSITION_*, e.g. StartOldManTutorialBattle. */
