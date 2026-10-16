@@ -911,3 +911,28 @@ end to end.
   `FULLY_PORTED.effects3b` list) takes the second half; `effects3.ts` keeps the first.
 - BATTLE_ANIMS_PLAN.md "Working in parallel": batch 2 assignments (E1, E2, E3a, E3b), workers run only their own
   e2e file, and scratch files get a per-worker prefix.
+
+### Battle anims 3E2: battle_anim_effects_2.c
+
+- Ported the whole file into `src/battle/anim/effects2.ts`: 41 sprite callbacks (the unused templates' ones too:
+  AnimCirclingFinger, AnimBouncingMusicNote, AnimVibrateBattlerBack, AnimMovingClamp, AnimVoidLines) and 23 tasks.
+  AnimWaterPulseRing, also in this C file, stays in water.ts. AnimParticleBurst is exported (effects_3's templates
+  use it by name). SetSpriteNextToMonHead (effects_1, worker E1) is looked up on `./effects1` at call time, so
+  the file builds before E1's PR lands; only the unused sBouncingMusicNoteSpriteTemplate needs it. Swap in a
+  plain import once both are merged. Q_8_8_mul / Q_8_8_inv (math_util.c) are local helpers for Air Cutter.
+- 36 more scripts run (264 → 300): Astonish, Attract, Bulk Up, Bullet Seed, Disable, Extreme Speed, Fake Out,
+  Fury Cutter, Fury Swipes, Guillotine, Hidden Power, Hyper Voice, Kinesis, Lovely Kiss, Minimize, Mud Sport,
+  Pay Day, Perish Song, Razor Wind, Safeguard, Scary Face, Sketch, Soft-Boiled, Sonic Boom, Splash, Struggle,
+  Swagger, Sweet Kiss, Swords Dance, Thrash, Tickle, Uproar, Vice Grip, Withdraw, General_GhostGetOut,
+  General_MonScared. Still waiting on effects_1/3: Air Cutter (AnimAirCutterSlice), Aromatherapy, Glare
+  (AnimTask_GlareEyeDots), Heal Bell (AnimSparklingStars), Spit Up (AnimTask_SpitUpDeformMon), Trick (AnimTrickBag).
+- No shared-engine changes; `registerEffects2ExtraGfx` (Attract hearts BG, Scary Face BG, the music note
+  palettes) is registered in `ported.ts`.
+- Trap found on the way: DestroySprite resets the sprite, data included (ResetSprite in the C; a new `data`
+  array here), so code that checks `sprite.data` again after destroying must re-read it rather than use a cached
+  `const d = sprite.data`. AnimPerishSongMusicNote_Step2 relies on this to not destroy twice (it would have
+  underflowed the visual task count and hung Perish Song).
+- Verified: typecheck, unit tests (36 labels in `FULLY_PORTED.effects2`), tests/e2e/battleAnims.3e2.test.ts (one
+  move per new callback / task; Chansey vs Tauros for Attract and Soft-Boiled; Guillotine from a level-100 user;
+  Sketch's HBlank BGnHOFS lines and their cleanup), and mid-anim screenshots of Fake Out, Scary Face, Attract,
+  Hidden Power, Perish Song, Sketch, Soft-Boiled, Pay Day and Extreme Speed.
