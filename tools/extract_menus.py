@@ -10,6 +10,7 @@
 - mapsecNames: sMapNames (generated from data/region_map/region_map_sections.json), indexed mapsec - KANTO_MAPSEC_START
 - menuInfoIcons: sMenuInfoIcons (list_menu.c) as [width, height, tile offset]
 - namingKeyboardChars: sKeyboardChars (naming_screen.c) by KEYBOARD_* page, four raw `__()` rows each
+- regionMap: region_map.c's tables (see region_map_data)
 """
 
 import json
@@ -76,6 +77,75 @@ def naming_keyboard_chars(decomp):
     return by_index(designated_entries(c_array_body(text, "sKeyboardChars")), ids, lambda v: re.findall(r'__\("((?:\\.|[^"\\])*)"\)', v))
 
 
+def region_map_data(decomp, defines):
+    """region_map.c's data: sRegionMapSections_* (data/region_map/region_map_layout_*.h) as [layer][y][x]
+    mapsecs per REGIONMAP_*, sMapSectionTopLeftCorners / sMapSectionDimensions (region_map_sections.json),
+    sSeviiMapsecs, sMapFlyDestinations ([MAP_* id, HEAL_LOCATION_* number]), sDungeonInfo ([mapsec, desc
+    string label]) and map_preview_screen.c's sMapPreviewScreenData ([mapsec, flag, tiles, tilemap, palette
+    symbols]), all indexed as in the C (mapsec tables by mapsec - KANTO_MAPSEC_START); mapNums: MAP_NUM() of
+    every MAP_* id (data/maps/map_groups.json), which the player position overrides compare."""
+    src = decomp / "src"
+    rm_c = (src / "region_map.c").read_text()
+
+    def mapsecs(text):
+        return [defines[t] for t in re.findall(r"MAPSEC_\w+", text)]
+
+    layouts = []
+    for name, sym in (("kanto", "Kanto"), ("sevii_123", "Sevii123"), ("sevii_45", "Sevii45"), ("sevii_67", "Sevii67")):
+        h = (src / f"data/region_map/region_map_layout_{name}.h").read_text()
+        flat = mapsecs(c_array_body(h, f"sRegionMapSections_{sym}"))
+        width, height = 22, 15  # MAP_WIDTH, MAP_HEIGHT
+        assert len(flat) == 2 * width * height, name
+        layouts.append([[flat[(layer * height + y) * width : (layer * height + y + 1) * width] for y in range(height)] for layer in range(2)])
+
+    start = defines["KANTO_MAPSEC_START"]
+    count = defines["MAPSEC_NONE"] - start
+    corners, dims = [None] * count, [None] * count
+    for m in json.loads((src / "data/region_map/region_map_sections.json").read_text())["map_sections"]:
+        if m["id"] not in defines or defines[m["id"]] < start:
+            continue
+        if "x" in m:
+            corners[defines[m["id"]] - start] = [m["x"], m["y"]]
+        if "width" in m:
+            dims[defines[m["id"]] - start] = [m["width"], m["height"]]
+
+    sevii = [mapsecs(row) for row in re.findall(r"=\s*\{([^{}]*)\}", c_array_body(rm_c, "sSeviiMapsecs"))]
+
+    heal_ids = {h["id"]: i + 1 for i, h in enumerate(json.loads((src / "data/heal_locations.json").read_text())["heal_locations"])}
+    heal_ids["HEAL_LOCATION_NONE"] = 0
+
+    def fly_dest(v):
+        m = re.fullmatch(r"\{\s*MAP\((\w+)\)\s*,\s*(\w+)\s*\}", v)
+        return [m.group(1), heal_ids[m.group(2)]]
+
+    fly = by_index(designated_entries(c_array_body(rm_c, "sMapFlyDestinations")), defines, fly_dest)
+    dungeon_info = [[defines[i], d] for i, d in re.findall(r"\.id\s*=\s*(MAPSEC_\w+),\s*\.name\s*=\s*\w+,\s*\.desc\s*=\s*(\w+)", c_array_body(rm_c, "sDungeonInfo"))]
+
+    mps = (src / "map_preview_screen.c").read_text()
+    previews = [
+        [defines[sec], flag, tiles, tilemap, pal]
+        for sec, flag, tiles, tilemap, pal in re.findall(
+            r"\.mapsec\s*=\s*(\w+),\s*\.type\s*=\s*\w+,\s*\.flagId\s*=\s*(\w+),\s*\.tilesptr\s*=\s*(\w+),\s*\.tilemapptr\s*=\s*(\w+),\s*\.palptr\s*=\s*(\w+)",
+            c_array_body(mps, "sMapPreviewScreenData"),
+        )
+    ]
+    map_nums = {}
+    groups = json.loads((decomp / "data/maps/map_groups.json").read_text())
+    for group in groups["group_order"]:
+        for num, folder in enumerate(groups[group]):
+            map_nums[json.loads((decomp / "data/maps" / folder / "map.json").read_text())["id"]] = num
+    return {
+        "mapNums": map_nums,
+        "layouts": layouts,
+        "topLeftCorners": corners,
+        "dimensions": dims,
+        "seviiMapsecs": sevii,
+        "flyDestinations": fly,
+        "dungeonInfo": dungeon_info,
+        "mapPreviews": previews,
+    }
+
+
 def extract_menus(decomp, out):
     defines = parse_defines(decomp)
     src = decomp / "src"
@@ -136,6 +206,7 @@ def extract_menus(decomp, out):
         "tmhmLearnsets": tmhm_learnsets,
         "evolutions": evolutions,
         "namingKeyboardChars": naming_keyboard_chars(decomp),
+        "regionMap": region_map_data(decomp, defines),
     }
     (out / "menus.json").write_text(json.dumps(data, separators=(",", ":")))
     print(f"  {len([s for s in mon_icons if s])} mon icons, {len([s for s in item_icons if s])} item icons, "
