@@ -24,9 +24,12 @@ async function openSaveDialog(game: Game): Promise<void> {
 /** Wait for the dialog's YES/NO menu (once its question has printed) and answer it. */
 async function answer(game: Game, yes: boolean): Promise<void> {
   await game.mashUntil((t) => t.saveDialog()?.yesNo, { button: 'B', what: 'the YES/NO menu' });
-  if (!yes) await game.press('DOWN');
+  await game.press(yes ? 'UP' : 'DOWN'); // the cursor doesn't wrap
   await game.press('A');
 }
+
+/** Wait until the main menu takes input (faded in). */
+const mainMenuReady = (game: Game) => game.waitFor((t) => t.mainMenu() && !t.mainMenu()!.fading && t.mainMenu(), { what: 'the main menu' });
 
 /** The save slot's contents (parsed), straight from localStorage. */
 const savedGame = (game: Game) => game.eval(() => JSON.parse(localStorage.getItem('firered-phaser:save') ?? 'null'));
@@ -100,8 +103,7 @@ test('CONTINUE after a reload: same map, position, facing, party, bag, flags and
   const before = await progress(game);
 
   await game.load({ keepSave: true, mainMenu: true });
-  await game.screenshot('main-menu');
-  expect(await game.eval((t) => t.mainMenu())).toMatchObject({ menuType: 1, cursorPos: 0 });
+  expect(await mainMenuReady(game)).toMatchObject({ menuType: 1, cursorPos: 0 });
   await game.press('A');
   await game.waitForEvent('ready', { timeout: 60_000 });
   await game.waitIdle();
@@ -117,5 +119,95 @@ test('CONTINUE after a reload: same map, position, facing, party, bag, flags and
   const savedTime = (await savedGame(game)).playTime;
   expect(secs(savedTime)).toBeGreaterThan(0);
   expect(secs(after.playTime)).toBeGreaterThanOrEqual(secs(savedTime));
-  await game.screenshot('continued');
+});
+
+test('the play time counts every frame, in the field and on GBA screens, and the save stats show it', async () => {
+  const game = await session.start(LAB);
+  await game.waitIdle();
+  const clock = () => game.eval((t) => ({ frame: t.frame(), time: { ...t.state!.playTime } }));
+  const vblanks = (p: { hours: number; minutes: number; seconds: number; vblanks: number }) => ((p.hours * 60 + p.minutes) * 60 + p.seconds) * 60 + p.vblanks;
+  const a = await clock();
+  // Into the bag (FieldMenuScene, a GBA screen) and back
+  await game.press('START');
+  const menu = await game.waitFor((t) => t.startMenu(), { what: 'the start menu' });
+  await game.pressTimes('DOWN', (menu.items.indexOf('BAG') - menu.cursor + menu.items.length) % menu.items.length);
+  await game.press('A');
+  await game.waitFor((t) => t.gbaScreen(), { what: 'the bag' });
+  await game.eval((t) => t.waitFrames(60));
+  await game.press('B');
+  await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the field' });
+  const b = await clock();
+  expect(b.frame - a.frame).toBeGreaterThan(60);
+  expect(vblanks(b.time) - vblanks(a.time)).toBe(b.frame - a.frame);
+
+  // The save info window and the main menu show hours:minutes
+  await game.eval((t) => Object.assign(t.state!.playTime, { hours: 12, minutes: 34, seconds: 0, vblanks: 0 }));
+  await openSaveDialog(game);
+  const stats = (await game.eval((t) => t.saveDialog()!.stats)).map((s) => s.trim());
+  expect(stats).toContain('PALLET TOWN');
+  expect(stats).toContain('PLAYER');
+  expect(stats).toContain('12:34');
+  await game.screenshot('save-info-window');
+  await answer(game, true);
+  await game.waitFor((t) => /saved the game/.test(t.message() ?? ''), { what: 'the saved message' });
+  await game.waitIdle();
+  await game.load({ keepSave: true, mainMenu: true });
+  const mainMenu = await mainMenuReady(game);
+  expect(mainMenu.stats.map((s) => s.trim())).toEqual(['PLAYER', '12:34', '0']);
+  await game.screenshot('main-menu');
+});
+
+test('boot: no save goes to the new game, a dev preset skips the main menu, NEW GAME over a save warns before saving', async () => {
+  const game = await session.start();
+  expect((await game.events()).some((e) => e.type === 'mainMenu')).toBe(false);
+  expect(await game.eval((t) => t.field()!.map)).toBe('PalletTown_PlayersHouse_2F');
+  await openSaveDialog(game);
+  await answer(game, true);
+  await game.waitFor((t) => /saved the game/.test(t.message() ?? ''), { what: 'the saved message' });
+  await game.waitIdle();
+  const saved = await savedGame(game);
+
+  // ?start= ignores the save
+  await game.load({ start: 'after-rival', keepSave: true });
+  expect((await game.events()).some((e) => e.type === 'mainMenu')).toBe(false);
+  expect(await game.eval((t) => t.field()!.map)).toBe('PalletTown_ProfessorOaksLab');
+
+  // B on the main menu goes to the title screen, which isn't ported: the main menu comes back
+  await game.load({ keepSave: true, mainMenu: true });
+  await mainMenuReady(game);
+  await game.press('B');
+  await game.waitFor((t) => t.mainMenu()?.fading, { what: 'the fade out' });
+  expect(await mainMenuReady(game)).toMatchObject({ menuType: 1, cursorPos: 0 });
+
+  // NEW GAME
+  await game.press('DOWN');
+  expect((await game.eval((t) => t.mainMenu()))!.cursorPos).toBe(1);
+  const since = await game.mark();
+  await game.press('A');
+  await game.waitForEvent('ready', { since, timeout: 60_000 });
+  expect(await game.eval((t) => t.field()!.map)).toBe('PalletTown_PlayersHouse_2F');
+
+  // Saving the new game: the other file's warning, NO by default
+  await openSaveDialog(game);
+  await game.mashUntil((t) => t.saveDialog()?.yesNo, { button: 'B', what: 'the first YES/NO menu' });
+  await game.press('A');
+  const warning = await game.mashUntil((t) => t.saveDialog()?.yesNo && t.message(), { button: 'B', what: 'the different file warning' });
+  expect(warning).toMatch(/overwrite the other save file\?/);
+  await game.press('A'); // NO
+  await game.waitFor((t) => t.startMenu(), { what: 'the start menu' });
+  expect(await savedGame(game)).toEqual(saved);
+  await game.press('B');
+  await game.waitIdle();
+});
+
+test('a save that can no longer be read: "The save file has been deleted...", then the new game', async () => {
+  const game = await session.start(LAB);
+  await game.eval(() => localStorage.setItem('firered-phaser:save', '{"version":0}'));
+  await game.load({ keepSave: true, mainMenu: true });
+  await game.waitFor((t) => t.gbaScreen() === 'CB2_MainMenu', { what: 'the main menu' });
+  await game.eval((t) => t.waitFrames(150));
+  await game.screenshot('save-file-deleted');
+  expect(await game.eval((t) => t.mainMenu())).toBeUndefined(); // the message, not the menu
+  await game.mashUntil((t) => t.events().some((e) => e.type === 'ready'), { what: 'the new game' });
+  expect(await game.eval((t) => t.field()!.map)).toBe('PalletTown_PlayersHouse_2F');
 });

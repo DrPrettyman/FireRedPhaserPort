@@ -163,7 +163,7 @@ export interface StartOptions {
   /** Keep the save slot (localStorage) from before; by default every load starts with it empty. */
   keepSave?: boolean;
   /**
-   * Boot to the main menu (a save exists and no map/start preset is given): wait for it to take input
+   * Boot to the main menu (a save exists and no map/start preset is given): wait for its scene to start
    * instead of for the field.
    */
   mainMenu?: boolean;
@@ -217,7 +217,7 @@ export class Game {
     await this.cdp.send('Page.navigate', { url: `${this.baseUrl}/?${q}` });
     await this.waitFor(() => typeof (window as any).__test !== 'undefined', { what: 'test hooks', timeout: 60_000, raw: true });
     if (opts.mainMenu) {
-      await this.waitFor((t) => t.mainMenu() && !t.mainMenu()!.fading, { what: 'the main menu', timeout: 60_000 });
+      await this.waitFor((t) => t.events().some((e) => e.type === 'mainMenu'), { what: 'the main menu', timeout: 60_000 });
       return this;
     }
     await this.waitFor((t) => t.events().some((e) => e.type === 'ready'), { what: 'the field to load', timeout: 60_000 });

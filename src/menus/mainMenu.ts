@@ -431,12 +431,19 @@ function PrintMessageOnWindow4(str: number[]): void {
   MainMenu_DrawWindow(sWindowTemplate[MAIN_MENU_WINDOW_ERROR]);
   AddTextPrinterParameterized3(MAIN_MENU_WINDOW_ERROR, FONT_NORMAL, 0, 2, sTextColor1, 2, str);
   PutWindowTilemap(MAIN_MENU_WINDOW_ERROR);
+  // MainMenu_DrawWindow's tilemap copy is a DMA request that the GBA runs at VBlank, so it takes the window's
+  // tilemap along; the port copies at once, so copy again now.
+  CopyBgTilemapBufferToVram(0);
   CopyWindowToVram(MAIN_MENU_WINDOW_ERROR, COPYWIN_GFX);
   SetGpuReg(REG_OFFSET_WIN0H, WIN_RANGE(19, 221));
   SetGpuReg(REG_OFFSET_WIN0V, WIN_RANGE(115, 157));
 }
 
+/** Dev: the CONTINUE window's values as printed (name, Pokédex, time, badges). */
+let printedStats: number[][] = [];
+
 function PrintContinueStats(): void {
+  printedStats = [];
   PrintPlayerName();
   PrintDexCount();
   PrintPlayTime();
@@ -446,13 +453,16 @@ function PrintContinueStats(): void {
 function PrintPlayerName(): void {
   const sb = mainMenuEnv.saveBlock;
   AddTextPrinterParameterized3(MAIN_MENU_WINDOW_CONTINUE, FONT_NORMAL, 2, 18, sTextColor2, -1, mainMenuEnv.text('gText_Player'));
-  AddTextPrinterParameterized3(MAIN_MENU_WINDOW_CONTINUE, FONT_NORMAL, 62, 18, sTextColor2, -1, mainMenuEnv.encode(sb?.playerName ?? ''));
+  const name = mainMenuEnv.encode(sb?.playerName ?? '');
+  printedStats.push(name);
+  AddTextPrinterParameterized3(MAIN_MENU_WINDOW_CONTINUE, FONT_NORMAL, 62, 18, sTextColor2, -1, name);
 }
 
 function PrintPlayTime(): void {
   const t = mainMenuEnv.saveBlock?.playTime ?? { hours: 0, minutes: 0 };
   AddTextPrinterParameterized3(MAIN_MENU_WINDOW_CONTINUE, FONT_NORMAL, 2, 34, sTextColor2, -1, mainMenuEnv.text('gText_Time'));
   const strbuf = [...ConvertIntToDecimalStringN(t.hours, STR_CONV_MODE_LEFT_ALIGN, 3), mainMenuEnv.define('CHAR_COLON'), ...ConvertIntToDecimalStringN(t.minutes, STR_CONV_MODE_LEADING_ZEROS, 2), EOS];
+  printedStats.push(strbuf);
   AddTextPrinterParameterized3(MAIN_MENU_WINDOW_CONTINUE, FONT_NORMAL, 62, 34, sTextColor2, -1, strbuf);
 }
 
@@ -461,6 +471,7 @@ function PrintDexCount(): void {
   if (!sb?.getFlag(mainMenuEnv.define('FLAG_SYS_POKEDEX_GET'))) return;
   AddTextPrinterParameterized3(MAIN_MENU_WINDOW_CONTINUE, FONT_NORMAL, 2, 50, sTextColor2, -1, mainMenuEnv.text('gText_Pokedex'));
   const strbuf = [...ConvertIntToDecimalStringN(caughtDexCount(sb), STR_CONV_MODE_LEFT_ALIGN, 3), ...mainMenuEnv.text('gTextJPDummy_Hiki')];
+  printedStats.push(strbuf);
   AddTextPrinterParameterized3(MAIN_MENU_WINDOW_CONTINUE, FONT_NORMAL, 62, 50, sTextColor2, -1, strbuf);
 }
 
@@ -469,6 +480,7 @@ function PrintBadgeCount(): void {
   const nbadges = sb ? countBadges(sb) : 0;
   AddTextPrinterParameterized3(MAIN_MENU_WINDOW_CONTINUE, FONT_NORMAL, 2, 66, sTextColor2, -1, mainMenuEnv.text('gText_Badges'));
   const strbuf = [...ConvertIntToDecimalStringN(nbadges, STR_CONV_MODE_LEADING_ZEROS, 1), ...mainMenuEnv.text('gTextJPDummy_Ko')];
+  printedStats.push(strbuf);
   AddTextPrinterParameterized3(MAIN_MENU_WINDOW_CONTINUE, FONT_NORMAL, 62, 66, sTextColor2, -1, strbuf);
 }
 
@@ -504,8 +516,8 @@ function MainMenu_EraseWindow(t: WindowTemplate): void {
 }
 
 /** Dev: the menu's state for the e2e tests (undefined when no main menu task runs). */
-export function mainMenuProbe(): { menuType: number; cursorPos: number; fading: boolean } | undefined {
+export function mainMenuProbe(): { menuType: number; cursorPos: number; fading: boolean; stats: number[][] } | undefined {
   const task = gTasks.find((t) => t.isActive && (t.func === Task_HandleMenuInput || t.func === Task_UpdateVisualSelection));
   if (!task) return undefined;
-  return { menuType: task.data[tMenuType], cursorPos: task.data[tCursorPos], fading: gPaletteFade.active };
+  return { menuType: task.data[tMenuType], cursorPos: task.data[tCursorPos], fading: gPaletteFade.active, stats: printedStats };
 }

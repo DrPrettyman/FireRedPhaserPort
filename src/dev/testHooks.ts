@@ -443,12 +443,18 @@ function createApi(game: Phaser.Game) {
     scenes: () => game.scene.getScenes(true).map((s) => s.scene.key),
     /** The GBA-layer screen running (gMain.callback2's name, e.g. BattleMainCB2, CB2_NamingScreen), if any. */
     gbaScreen: () => (game.scene.isActive('Battle') || game.scene.isActive('FieldMenu') || game.scene.isActive('MainMenu') ? gMain.callback2?.name : undefined),
-    /** The main menu while it takes input: menu type (0 NEW GAME only, 1 CONTINUE / NEW GAME), cursor, fading. */
-    mainMenu: () => (game.scene.isActive('MainMenu') ? mainMenuProbe() : undefined),
+    /** The main menu while it takes input: menu type (0 NEW GAME only, 1 CONTINUE / NEW GAME), cursor, fading, the CONTINUE values. */
+    mainMenu: () => {
+      const p = game.scene.isActive('MainMenu') ? mainMenuProbe() : undefined;
+      return p && { ...p, stats: p.stats.map(decode) };
+    },
     /** The field start menu while it's open: its items and cursor. */
     startMenu: () => startMenuProbe(),
-    /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up. */
-    saveDialog: () => saveDialogProbe(),
+    /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */
+    saveDialog: () => {
+      const p = saveDialogProbe();
+      return p && { ...p, stats: p.stats.map(decode) };
+    },
     field,
     idle,
     /** The current map's objects: local id, graphics and map-local position. */

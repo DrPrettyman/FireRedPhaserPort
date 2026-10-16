@@ -24,7 +24,7 @@ export const SAVECB_RETURN_ERROR = 3;
 let openDialog: SaveDialog | undefined;
 
 /** Dev: whether a save dialog runs, and whether its YES/NO menu and save info window are up. */
-export function saveDialogProbe(): { yesNo: boolean; statsWindow: boolean } | undefined {
+export function saveDialogProbe(): { yesNo: boolean; statsWindow: boolean; stats: number[][] } | undefined {
   return openDialog?.probe;
 }
 
@@ -58,6 +58,8 @@ export class SaveDialog {
   private delay = 0;
   private statsWindow?: MenuWindow;
   private yesNo?: YesNoMenu;
+  /** Dev: the stat strings the save info window shows (location, name, badges, Pokédex, time). */
+  private stats: number[][] = [];
 
   constructor(private host: SaveDialogHost) {
     // StartMenu_PrepareForSave (SaveMapView isn't ported: the port doesn't save the map view)
@@ -247,7 +249,11 @@ export class SaveDialog {
     const win = new MenuWindow(scene, SAVE_STATS_WINDOW, fonts, input, 'std');
     this.statsWindow = win;
     const label = (name: string) => charmap.encode(this.host.strings[name] ?? '?$');
-    const stat = (id: string, color: number) => SaveStatToString(state, charmap, d.require(id), color, () => this.host.mapName());
+    const stat = (id: string, color: number) => {
+      const str = SaveStatToString(state, charmap, d.require(id), color, () => this.host.mapName());
+      this.stats.push(str);
+      return str;
+    };
     const location = stat('SAVE_STAT_LOCATION', 8);
     win.print(location, Math.trunc(((112 - stringWidth(fonts, FONT_NORMAL, location, -1)) >>> 0) / 2) & 0xff, 0, FONT_NORMAL);
     win.print(label('gSaveStatName_Player'), 2, 14, FONT_SMALL);
@@ -266,7 +272,7 @@ export class SaveDialog {
   }
 
   /** Dev: what the dialog shows, for the e2e tests. */
-  get probe(): { yesNo: boolean; statsWindow: boolean } {
-    return { yesNo: this.yesNo !== undefined, statsWindow: this.statsWindow !== undefined };
+  get probe(): { yesNo: boolean; statsWindow: boolean; stats: number[][] } {
+    return { yesNo: this.yesNo !== undefined, statsWindow: this.statsWindow !== undefined, stats: this.stats };
   }
 }
