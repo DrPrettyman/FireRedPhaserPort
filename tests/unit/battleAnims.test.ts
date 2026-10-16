@@ -60,13 +60,16 @@ const FULLY_PORTED: Record<string, string[]> = {
   poison: [],
 
   // battle_anim_water.c
-  water: [],
+  water: ['Move_AURORA_BEAM', 'Move_HYDRO_CANNON', 'Move_WATERFALL', 'Move_WATER_PULSE', 'Move_WATER_SPORT', 'Move_WATER_SPOUT'],
 
   // battle_anim_ice.c
-  ice: [],
+  ice: [
+    'Move_BLIZZARD', 'Move_HAIL', 'Move_HAZE', 'Move_ICE_BALL', 'Move_ICE_BEAM', 'Move_ICE_PUNCH', 'Move_ICY_WIND',
+    'Move_MIST_BALL', 'Move_POISON_GAS', 'Move_POWDER_SNOW', 'General_Hail',
+  ],
 
   // battle_anim_dragon.c
-  dragon: [],
+  dragon: ['Move_DRAGON_BREATH', 'Move_DRAGON_DANCE', 'Move_DRAGON_RAGE', 'Move_OUTRAGE', 'Move_OVERHEAT'],
 
   // battle_anim_fire.c
   fire: [],
