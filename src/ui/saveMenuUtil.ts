@@ -95,7 +95,7 @@ export function SaveStatToString(sb: SaveBlockView, charmap: Charmap, gameStatId
       break;
     }
     case d.require('SAVE_STAT_BADGES'):
-      // nBadges + CHAR_0, then 10 ('こ', the Japanese counter; its Latin glyph is blank)
+      // nBadges + CHAR_0, then 10 ('こ', the Japanese counter, which draws as blank in the Latin fonts)
       dest.push(countBadges(sb) + d.require('CHAR_0'), 10);
       break;
   }

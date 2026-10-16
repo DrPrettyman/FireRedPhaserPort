@@ -78,6 +78,8 @@ test('saving: YES saves, then the next save asks to overwrite; NO goes back to t
 const progress = (game: Game) =>
   game.eval((t) => ({
     field: { map: t.field()!.map, x: t.field()!.x, y: t.field()!.y, facing: t.field()!.facing },
+    // The avatar's state (CONTROLLABLE etc. aren't saved: SpawnObjectEventsOnReturnToField sets them anew)
+    avatar: { state: t.field()!.avatar.flags.filter((f) => ['ON_FOOT', 'MACH_BIKE', 'ACRO_BIKE', 'SURFING'].includes(f)), graphicsId: t.field()!.avatar.graphicsId },
     party: t.party(),
     potions: t.itemCount('POTION'),
     money: t.money(),
@@ -85,10 +87,11 @@ const progress = (game: Game) =>
     playTime: { ...t.state!.playTime },
   }));
 
-test('CONTINUE after a reload: same map, position, facing, party, bag, flags and play time', async () => {
+test('CONTINUE after a reload: same map, position, facing, bike, party, bag, flags and play time', async () => {
   const game = await session.start({ start: 'after-rival', map: 'Route1', x: 12, y: 30 });
   await game.waitIdle();
   await game.walk('up', 2);
+  await game.eval((t) => t.setAvatarState('MACH_BIKE'));
   await game.eval((t) => t.face('left'));
   await game.eval((t) => {
     t.state!.bag.add(t.define('ITEM_POTION'), 3);
@@ -109,6 +112,8 @@ test('CONTINUE after a reload: same map, position, facing, party, bag, flags and
   await game.waitIdle();
   const after = await progress(game);
   expect(after.field).toEqual(before.field);
+  expect(before.avatar.state).toEqual(['MACH_BIKE']);
+  expect(after.avatar).toEqual(before.avatar);
   expect(after.party).toEqual(before.party);
   expect(after.potions).toBe(before.potions);
   expect(after.money).toBe(1234);
@@ -119,6 +124,28 @@ test('CONTINUE after a reload: same map, position, facing, party, bag, flags and
   const savedTime = (await savedGame(game)).playTime;
   expect(secs(savedTime)).toBeGreaterThan(0);
   expect(secs(after.playTime)).toBeGreaterThanOrEqual(secs(savedTime));
+});
+
+test('CONTINUE with the continue-game warp set goes there instead, once', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'Route1', x: 12, y: 30 });
+  await game.waitIdle();
+  // What the Hall of Fame does (SetContinueGameWarpStatus + SetContinueGameWarpToHealLocation)
+  await game.eval((t) => {
+    t.state!.specialSaveWarpFlags |= t.define('CONTINUE_GAME_WARP');
+    t.state!.continueGameWarp = { mapId: 'MAP_VIRIDIAN_CITY_POKEMON_CENTER_1F', warpId: -1, x: 7, y: 4 };
+  });
+  await openSaveDialog(game);
+  await answer(game, true);
+  await game.waitFor((t) => /saved the game/.test(t.message() ?? ''), { what: 'the saved message' });
+  await game.waitIdle();
+
+  await game.load({ keepSave: true, mainMenu: true });
+  await mainMenuReady(game);
+  await game.press('A');
+  await game.waitForEvent('ready', { timeout: 60_000 });
+  await game.waitIdle();
+  expect(await game.eval((t) => ({ map: t.field()!.map, x: t.field()!.x, y: t.field()!.y }))).toEqual({ map: 'ViridianCity_PokemonCenter_1F', x: 7, y: 4 });
+  expect(await game.eval((t) => t.state!.specialSaveWarpFlags & t.define('CONTINUE_GAME_WARP'))).toBe(0);
 });
 
 test('the play time counts every frame, in the field and on GBA screens, and the save stats show it', async () => {
