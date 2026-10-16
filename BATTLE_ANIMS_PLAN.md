@@ -131,7 +131,6 @@ into two or three PRs by move.
 
 - `CreateAdditionalMonSpriteForMoveAnim` (battle_anim_mons.c) isn't ported.
 - `General_SafariReaction`: done in step 1. Remove it from docs/DEVIATIONS.md when it lands.
-- `StartMarowakBattle` (battle_setup.c) isn't ported, so General_SilphScoped only runs from a test hook.
 - Castform's form change (needs the per-form front pics; Castform has no `front.png`).
 - Open question: with the BG dimmed (Thunder Shock, String Shot), faint diagonal lines show at the healthbox
   corners. Compare against the real game (mGBA screenshot) and fix it or record it as matching the GBA.

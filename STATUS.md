@@ -38,6 +38,9 @@ Other open work:
 - Bag items that need field systems: bike, rods (fishing), Escape Rope, Itemfinder, VS Seeker, Town Map, Fame
   Checker, Teachy TV. Rock Smash and Sweet Scent encounters come with their field moves.
 - Daycare and egg hatching; the item PC (PlayerPC) and Hall of Fame PC.
+- `dowildbattle` (StartScriptedWildBattle + CB2_EndScriptedWildBattle) and `special StartLegendaryBattle`: Snorlax,
+  the legendary birds, Mewtwo. `setwildbattle` and the field side (`host.startScriptedBattle` +
+  `host.wildBattleTransition`) are in place from the Marowak battle.
 - More e2e scenarios (see the checklist's Tests section).
 
 Loose ends:
@@ -146,6 +149,9 @@ Loose ends:
   Stench/Illuminate, repel + EventScript_RepelWoreOff, Altering Cave, Tanoby/Unown), StartWildBattle (standard,
   Pokémon Tower ghosts with the ghost pic, roamers, Safari Zone), CB2_EndWildBattle / CB2_EndSafariBattle.
   Not yet: Rock Smash, fishing, Sweet Scent (they come with those field moves)
+- [~] Scripted wild battles: `setwildbattle` and Pokémon Tower 6F's ghost Marowak (StartMarowakBattle /
+  CB2_EndMarowakBattle, the Silph Scope unveil). Not yet: `dowildbattle` (StartScriptedWildBattle: Snorlax, the
+  legendaries) and StartLegendaryBattle
 - [x] Roamers (roamer.c): InitRoamer, location sets + history, encounters, HP/status kept between battles
 - [x] Safari Zone: safari_zone.c (Enter/ExitSafariMode, 600-step counter, retire, out-of-balls endings),
   battle_controller_safari.c, the Safari healthbox text, start menu RETIRE + stats window, entrance money box

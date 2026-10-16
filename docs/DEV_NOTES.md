@@ -60,6 +60,12 @@ this is the next level down. When you add or change a subsystem, update its entr
   DoSafariBattle + CB2_EndSafariBattle. To skip the dice in tests:
   `s.startWildBattle(s.state.pokemon.createMonWithNature(species, level, 32, nature, {...}))` on the Overworld scene.
   `state.currentMapId` is the MAP_* id (`currentMap` is the folder name).
+- **Scripted battles:** specials that start a battle (StartOldManTutorialBattle, StartMarowakBattle in
+  `script/specials.ts`) call `host.startScriptedBattle(flags, enemyParty, transition)` and block the script with
+  `setWaitState` until the field has faded back in (their CB2_End* sets VAR_RESULT; a loss calls `endScript()` +
+  `host.whiteOut()`). `setwildbattle` leaves gEnemyParty in `state.enemyParty`; `host.wildBattleTransition(mon)` is
+  GetWildBattleTransition. Every battle start (OverworldScene.runBattle) does Task_BattleStart's
+  RestartWildEncounterImmunitySteps. Tests: tests/e2e/pokemonTower.test.ts (walk onto the 6F trigger at 11,15).
 - **Step counters:** `world/stepCounters.ts` (happiness, VS Seeker, field poison, egg cycles), called from
   `OverworldScene.tryStartStepCountScript`; `world/roamer.ts` is roamer.c with its EWRAM statics as module state
   (`roamerLocation()` for tests). Field code may call battle-engine pokemon.c functions (AdjustFriendship): the
