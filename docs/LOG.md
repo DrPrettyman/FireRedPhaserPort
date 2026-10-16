@@ -1432,3 +1432,21 @@ end to end.
 - Tests: titleScreen.test.ts gains two Oak's speech scenarios (GIRL with both names typed in the naming screen →
   PlayersHouse_2F with the names and the female avatar; BOY, NO → rename, a preset rival name); charmap.test.ts
   covers decodePlain.
+
+### Batch 3 merged (#22-#27)
+
+- Merged in order: the plan (#22), main-path leftovers (#24), the title screen (#23), Oak's speech (#26, retargeted
+  to master and merged as master + its own diff since the squashed title-screen head), the Hall of Fame (#27), Fly
+  (#25). Full suite after the last merge: typecheck, 91 unit tests, 239 e2e tests in 32 files.
+- Conflicts resolved: both #26 and #27 added affine BGs to `gba/ppu.ts` (kept #26's, which reads the registers per
+  line); the two top bar window modules became `gba/topBarWindow.ts`; the two soft resets became BootScene's
+  `softReset`, which now replaces the Overworld scene instance (Phaser reuses a stopped scene with its fields; the
+  clear save data screen's reset kept the old field state before) and boots to the title screen.
+- Flaky tests fixed on the way (tests/README.md rule 6 added):
+  - titleScreen.test.ts watched the intro's few-frame scenes from Node; the title screen now reports a
+    `titleScene` event per SetTitleScreenScene, and the A that skips the intro is pressed in the page.
+  - pcBoxes / mainPathLeftovers (Lugia) / scriptedBattles (Mewtwo) answered "Give a nickname...?" with one B after
+    30 frames, which could land mid-text (only speeding it up) and leave the YES/NO to the A mashing: they mash B.
+  - battleAnimHelpers `expectMovesRun`: a move that can miss (SING, DISABLE, THUNDER, WILL_O_WISP, ...) played no
+    anim when the roll missed; a miss now uses the move again, reseeding with another seed each time (the same seed
+    rolled the same miss).

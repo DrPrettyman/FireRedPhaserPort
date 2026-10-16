@@ -10,40 +10,35 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
 
 ## Where things stand
 
+- **Boot:** title screen → main menu (CONTINUE / NEW GAME) → Oak's speech (gender, player and rival names).
 - **Playable:** new game in Player's House 2F → Pallet Town → Oak's trigger → lab intro → choose a starter
   (picture box, YES/NO, nickname prompt → naming screen) → rival picks → the rival battle → rival leaves. Mom heals
   the party. Route 1 clerk Potion.
 - **Story checked headless:** the Viridian Mart parcel scene, Oak's parcel → Pokédex scene, the Viridian old man's
-  catching tutorial, Viridian Forest trainers, Brock.
+  catching tutorial, Viridian Forest trainers, Brock; the ending (Hall of Fame room → Hall of Fame → credits →
+  reset → CONTINUE in Pallet Town).
 
 ## Next up
 
-Main-path blockers, roughly in the order a playthrough hits them. [MAIN_PATH_PLAN.md](MAIN_PATH_PLAN.md) splits
-them into workstreams and batches:
+Batches 1-3 of [MAIN_PATH_PLAN.md](MAIN_PATH_PLAN.md) are in: PC storage (boxes, storage screens, item PC, Hall of
+Fame PC), save/load (SAVE, main menu, CONTINUE, scripted save prompts), every field move including Fly and the Town
+Map, `special ListMenu`, Snorlax and the legendaries, card key doors, Seafoam's currents (`setmaplayoutindex`),
+`seteventmon`, the title screen, Oak's speech, the Hall of Fame and the credits.
 
-1. ~~**PC storage**~~: done (batches 1-2): boxes, sending to the PC, the storage screens, the item PC. The Hall
-   of Fame PC is still a stub.
-2. ~~**Save/load**~~: done (batches 1-2): SAVE from the start menu, the main menu, CONTINUE, play time. Not yet:
-   `special Field_AskSaveTheGame` (scripted save prompts), and the title screen in front of the main menu.
-3. **Field moves:** everything but Fly works (Cut, Flash, Surf, Strength, Waterfall, Rock Smash, Sweet Scent, Dig,
-   Teleport, Soft-Boiled / Milk Drink). Fly and the Town Map (region_map.c) are batch 3 of MAIN_PATH_PLAN.md.
-4. ~~`special ListMenu`~~: done (batch 1); Silph Co.'s elevator works.
-5. **Also done in batch 2:** Snorlax (Poké Flute), the legendary birds and Mewtwo (`dowildbattle`,
-   StartLegendaryBattle). Next blockers after Fly: Silph Co.'s card key doors, Seafoam's currents
-   (`setmaplayoutindex`).
+No known main-path blockers are left. Next: find the unknown ones, e.g. headless story checks gym by gym (the
+ones above stop at Brock) and a check that each story script's commands and specials are implemented (unknown ones
+log once). Biggest missing pieces a player notices: the Pokédex screen, the bike / fishing rods / Escape Rope / VS
+Seeker, audio (SE, cries and BGM are no-ops; see DEVIATIONS for what waits on them).
 
 Other open work:
 
-- Audio: extraction and playback (SE, cries and BGM are no-ops; see DEVIATIONS for what waits on them).
-- Title screen, intro, Oak's speech (the naming screen is ready for it; see DEV_NOTES "Naming screen").
-- Start menu screens: Pokédex, options, TM case, berry pouch; the start menu help window.
+- The intro movie (intro.c) before the title screen.
+- Start menu screens: options, TM case, berry pouch; the start menu help window.
 - Map preview screens (map_preview_screen.c): TryDoMapTransition already knows where they'd run.
-- Bag items that need field systems: bike, rods (fishing), Escape Rope, Itemfinder, VS Seeker, Town Map, Fame
-  Checker, Teachy TV. Rock Smash and Sweet Scent encounters come with their field moves.
-- Daycare and egg hatching; the item PC (PlayerPC) and Hall of Fame PC.
-- `dowildbattle` (StartScriptedWildBattle + CB2_EndScriptedWildBattle) and `special StartLegendaryBattle`: Snorlax,
-  the legendary birds, Mewtwo. `setwildbattle` and the field side (`host.startScriptedBattle` +
-  `host.wildBattleTransition`) are in place from the Marowak battle.
+- Other bag items that need field systems: Itemfinder, Fame Checker, Teachy TV; registered items (SELECT).
+- Daycare and egg hatching.
+- Link play (the cable club's link specials are stand-ins that never find a partner), the event tickets for Navel
+  Rock / Birth Island, `special ShakeScreen`.
 - More e2e scenarios (see the checklist's Tests section).
 
 Loose ends:
@@ -132,8 +127,8 @@ Loose ends:
 - [~] Interactions (GetInteractionScript): bg events with the elevation check, hidden items, metatile scripts (PCs,
   bookshelves, TVs, Poké Mart/Center signs, ...), walk-into signs (TrySetUpWalkIntoSignpostScript) and walking
   away from them, the signpost message frame, and closing a script's last message with a direction/L/R/START/SELECT
-  (replayed as field input). PC: CreatePCMenu + AnimatePcTurnOn/Off; the item PC, Pokémon Storage System and Hall
-  of Fame PC aren't ported. Not yet: GetInteractedWaterScript (Surf/Waterfall)
+  (replayed as field input). PC: CreatePCMenu + AnimatePcTurnOn/Off, the item PC, Pokémon Storage System and Hall
+  of Fame PC; GetInteractedWaterScript (Surf/Waterfall)
 - [~] Start menu shell: items by flags, wrap-around cursor, remembered position, B/START close. POKéMON and BAG open the real screens; the other entries (except EXIT) show a "not implemented" notice
 - [ ] Start menu help/description window
 - [x] Tile animations (tileset_anims.c): General water/sand/flowers, Celadon fountain, Silph Co. fountain, Mt. Ember
@@ -146,7 +141,13 @@ Loose ends:
   `dofieldeffect` in general
 - [x] Map name popup (map_name_popup.c): on warps into maps with show_map_name, on connections into another
   region map section (reshown if still up), floor numbers / ROOFTOP, dismissed when field input starts something
-- [x] Save/load: SAVE dialog, main menu + CONTINUE, play time, one localStorage slot (state/saveData.ts); no title screen yet
+- [x] Save/load: SAVE dialog, main menu + CONTINUE, play time, one localStorage slot (state/saveData.ts), game stats,
+  Hall of Fame records (their own key), `special Field_AskSaveTheGame`
+- [x] Region map (region_map.c): the Town Map from the bag, the wall maps (`special ShowTownMap`), the fly map; Fly
+  (FldEff_UseFly / FlyOut / FlyIn) to the heal locations of visited towns
+- [x] Hall of Fame (hall_of_fame.c): EnterHallOfFame, FLDEFF_HALL_OF_FAME_RECORD, the Hall of Fame PC; the credits
+  (credits.c) and SoftReset (BootScene's `softReset`)
+- [x] `setmaplayoutindex` (layouts no map uses are extracted), `seteventmon`, Silph Co.'s card key doors
 - [x] Party menu (party_menu.c) and bag (item_menu.c, bag.c, item_use.c) on the GBA layer, from the field and in battle; list menus, scroll arrows, mon/item icons, std/dialog frames, YES/NO, money box
 - [x] Summary screen (pokemon_summary_screen.c): INFO / SKILLS / KNOWN MOVES pages, move details, switching moves, choosing a move to forget (field and battle)
 - [ ] Pokédex, options, TM case, berry pouch
@@ -154,9 +155,9 @@ Loose ends:
   Stench/Illuminate, repel + EventScript_RepelWoreOff, Altering Cave, Tanoby/Unown), StartWildBattle (standard,
   Pokémon Tower ghosts with the ghost pic, roamers, Safari Zone), CB2_EndWildBattle / CB2_EndSafariBattle.
   Not yet: Rock Smash, fishing, Sweet Scent (they come with those field moves)
-- [~] Scripted wild battles: `setwildbattle` and Pokémon Tower 6F's ghost Marowak (StartMarowakBattle /
-  CB2_EndMarowakBattle, the Silph Scope unveil). Not yet: `dowildbattle` (StartScriptedWildBattle: Snorlax, the
-  legendaries) and StartLegendaryBattle
+- [x] Scripted wild battles: `setwildbattle`, Pokémon Tower 6F's ghost Marowak (StartMarowakBattle /
+  CB2_EndMarowakBattle, the Silph Scope unveil), `dowildbattle` (StartScriptedWildBattle: Snorlax, the legendaries)
+  and StartLegendaryBattle
 - [x] Roamers (roamer.c): InitRoamer, location sets + history, encounters, HP/status kept between battles
 - [x] Safari Zone: safari_zone.c (Enter/ExitSafariMode, 600-step counter, retire, out-of-balls endings),
   battle_controller_safari.c, the Safari healthbox text, start menu RETIRE + stats window, entrance money box
@@ -186,7 +187,7 @@ Loose ends:
 - [ ] Audio playback
 - [x] Naming screen (naming_screen.c): every template (player, rival, PC box, nickname, caught mon); opened by
   ChangePokemonNickname from scripts and by the battle's nickname prompt after a catch
-- [ ] Title screen / intro / Oak's speech (the player and rival naming templates are ready for it)
+- [x] Title screen (title_screen.c, clear save data screen) and Oak's speech (oak_speech.c); intro.c isn't ported
 
 ### Tests (tests/README.md)
 - [x] Unit tests (Vitest, Node): random.c, CreateMon/CalculateMonStats/levels/movesets/natures/gender/PP, Bag,
