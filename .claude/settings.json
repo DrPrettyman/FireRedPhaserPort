@@ -12,6 +12,10 @@
     "deny": [
       "Bash(git push --force:*)",
       "Bash(git push -f:*)"
-    ]
+    ],
+    "attribution": {
+      "commits": false,
+      "pullRequests": false
+    }
   }
 }
