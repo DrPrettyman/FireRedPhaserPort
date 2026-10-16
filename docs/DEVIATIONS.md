@@ -35,8 +35,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     overworld's ScreenFade.
   - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;
     HP-as-text (SwapHpBarsWithHpText) and link/multi battles aren't implemented.
-  - Battle transitions: no SE_MUGSHOT, and the battle music doesn't start with the transition. Flash isn't ported,
-    so GetBattleTransitionTypeByMap never picks TRANSITION_TYPE_FLASH (Blur / Grid squares in dark caves).
+  - Battle transitions: no SE_MUGSHOT, and the battle music doesn't start with the transition.
+  - Flash (world/flash.ts): the party menu's Flash (SetUpFieldMove_Flash / FieldCallback_Flash and the mon
+    banner) isn't wired yet (waits for the field move framework); FldEff_UseFlash's SE_M_REFLECT is silent.
   - Map preview screens (Mt. Moon, Rock Tunnel, Viridian Forest...) aren't ported: warps into those sections fade
     to black like the GBA and go straight to the map, without the banner (or the flash that follows it).
   - Wild encounters: GAME_STAT_* counters aren't kept.
@@ -63,6 +64,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
     link play); the quest log's QL_AvoidDisplay bit of ignoreBPress is ignored.
   - Elevators: SE_ELEVATOR / SE_DING_DONG are silent; UpdateEscapeWarp isn't kept on warps.
+  - Field ListMenu (ui/FieldListMenu.ts): SE_SELECT is silent; the quest log's QL_AvoidDisplay is ignored.
   - PC: PlayerPC (item storage), ShowPokemonStorageSystemPC and HallOfFamePCBeginFade log "not implemented" and go
     straight back to the PC menu. Facing water does nothing (GetInteractedWaterScript waits for Surf).
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, Trainer Tower clock, cable club
@@ -85,6 +87,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     entry L of its table, so per-line effects are one line earlier than on hardware (consistently so).
   - The barn door wipe's windows are black Phaser rectangles under the screen fade (WININ 0 shows the backdrop,
     which the field forces to black).
+  - Flash's darkness on the field is a black Phaser overlay painted outside each line's WIN0H span (the circle
+    table is the GBA's, double-buffered the same way), under the text windows; weather palettes don't reach it
+    (it's the black backdrop anyway).
+  - Field ListMenu: scrolling reprints the shown rows instead of ScrollWindow + printing the new ones (same
+    pixels); its key repeat counts from when the list opened, not from when the keys went down; the scroll arrows
+    are Phaser images drawn from sRedArrowOtherGfx (frame and bounce as menu_indicators.c's).
   - Tile animations: the GBA only has the current map's tilesets in VRAM and draws connected maps with them; here
     each map keeps its own atlases, so a neighbour with a different secondary tileset only animates it while it's
     the current map. BG3 under NORMAL-layer metatiles shows the backdrop colour instead of DrawMetatile's

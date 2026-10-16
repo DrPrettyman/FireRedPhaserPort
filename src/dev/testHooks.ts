@@ -189,6 +189,8 @@ export interface FieldProbe {
   mapNamePopupHeight: number;
   /** gSaveBlock1Ptr->flashLevel, and the share of the screen Flash's darkness covers (0..1). */
   flash: { level: number; dark: number };
+  /** While the field is on the GBA layer (battle transitions): the share of its last frame that is black. */
+  gbaScreenBlack: number | undefined;
   /** special ListMenu's list while it's open (ui/FieldListMenu.ts). */
   listMenu: FieldListMenuProbe | undefined;
   /** gPlayerAvatar and the player's held movement (world/playerAvatar.ts). */

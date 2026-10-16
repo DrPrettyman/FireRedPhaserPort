@@ -1073,3 +1073,27 @@ end to end.
   and arrived after turn 2's accuracy roll. `reseedAfterAnims()` (tests/e2e/battleAnimHelpers.ts) waits and
   reseeds inside the page; started before the anims play, it lands within a frame of the last one ending. Bounce
   and Doom Desire use it. Passed twice in a row with the anim and avatar files running four at a time.
+
+### Field ListMenu (Silph Co. elevator) and Flash's darkness (W-list)
+
+- `special ListMenu` / `special ReturnToListMenu` (field_specials.c) in `ui/FieldListMenu.ts`: list_menu.c's
+  ListMenu (scrolling, the cursor's middle-row rule, key repeat) on a field MenuWindow with the user frame, the
+  bouncing scroll arrows (menu_indicators.c, sRedArrowOtherGfx as Phaser images) and the list task (create,
+  input, suspend while the script talks, ReturnToListMenu). Silph Co.'s elevator starts where
+  InitElevatorFloorSelectMenuPos puts it (`sElevatorScroll` / `sElevatorCursorPos`); the Cerulean badge list
+  suspends on a choice; the berry powder list works too (berry powder still reads 0).
+- Flash's darkness (`world/flash.ts`): `gSaveBlock1Ptr->flashLevel` (`GameState.flashLevel`),
+  SetDefaultFlashLevel on every map load (FLAG_SYS_FLASH_ACTIVE cleared on arriving outdoors by a warp),
+  SetFlashScanlineEffectWindowBoundaries' circle kept as a per-line WIN0H table (double-buffered like the
+  scanline effect) and painted as a black overlay under the text windows; InitCurrentFlashLevelScanlineEffect
+  after a warp and on returning from a battle or menu (ResumeMap). Script commands `setflashlevel` and
+  `animateflash` (AnimateFlash / UpdateFlashLevelEffect / Task_WaitForFlashUpdate, including the C's quirk that
+  a shrink ends after one step). `FldEff_UseFlash` / `OverworldScene.useFlash()` for the Flash field move.
+- Battles: GetBattleTransitionTypeByMap returns TRANSITION_TYPE_FLASH while the flash level isn't 0 (Blur / Grid
+  Squares), and the field on the GBA layer keeps the circle on WIN0 through the transition.
+- Extractor: maps carry `cave` (map.json `requires_flash`); scripts.json carries `listMenus`
+  (field_specials.c sListMenuLabels). Rerun `npm run extract`.
+- Not done: the party menu's Flash (SetUpFieldMove_Flash → FieldCallback_Flash → FldEff_UseFlash) waits for
+  W-fieldmove's field move framework; `SetUpFieldMove_Flash` and `useFlash()` are ready for it.
+- Tests: tests/e2e/listMenuFlash.test.ts (elevator scrolling, B, riding to 5F; the badge list; Rock Tunnel dark,
+  lit by Flash, lit on arrival with FLAG_SYS_FLASH_ACTIVE; Blur over the dark field, Clockwise Wipe once lit).

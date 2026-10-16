@@ -335,6 +335,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       mapNamePopup: this.mapNamePopup?.text,
       mapNamePopupHeight: this.mapNamePopup?.visibleHeight ?? 0,
       flash: { level: this.state.flashLevel, dark: this.flash.darkFraction() },
+      gbaScreenBlack: this.gbaScreen.active ? this.gbaScreen.blackFraction() : undefined,
       listMenu: fieldListMenuProbe(),
       avatar: {
         flags: Object.keys(this.assets.scripts.defines)
