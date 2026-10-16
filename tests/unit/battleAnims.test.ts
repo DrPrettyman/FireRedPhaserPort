@@ -69,13 +69,16 @@ const FULLY_PORTED: Record<string, string[]> = {
   dragon: [],
 
   // battle_anim_fire.c
-  fire: [],
+  fire: ['Move_BLAST_BURN', 'Move_FIRE_BLAST', 'Move_FIRE_PUNCH', 'Move_FLAME_WHEEL', 'Move_SACRED_FIRE', 'Move_WILL_O_WISP'],
 
-  // battle_anim_electric.c
-  electric: [],
+  // battle_anim_electric.c (Thunder also needs fire's AnimTask_ShakeTargetInPattern)
+  electric: [
+    'Move_CHARGE', 'Move_SHOCK_WAVE', 'Move_SPARK', 'Move_THUNDER', 'Move_THUNDERBOLT', 'Move_THUNDER_PUNCH',
+    'Move_VOLT_TACKLE', 'Move_ZAP_CANNON',
+  ],
 
   // battle_anim_flying.c
-  flying: [],
+  flying: ['Move_AEROBLAST', 'Move_BOUNCE', 'Move_DRILL_PECK', 'Move_FEATHER_DANCE', 'Move_FLY', 'Move_WHIRLWIND'],
 
   // battle_anim_ghost.c
   ghost: [],
