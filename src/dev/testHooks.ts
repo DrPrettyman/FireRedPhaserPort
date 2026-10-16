@@ -27,6 +27,8 @@ import type { FieldListMenuProbe } from '../ui/FieldListMenu';
 import { storageProbe } from '../menus/pokemonStorage';
 import { itemPcProbe } from '../menus/itemPc';
 import { mainMenuProbe } from '../menus/mainMenu';
+import { titleScreenProbe } from '../menus/titleScreen';
+import { clearSaveDataProbe } from '../menus/clearSaveDataScreen';
 import { saveDialogProbe } from '../ui/SaveDialog';
 import { startMenuProbe } from '../ui/StartMenu';
 
@@ -456,6 +458,10 @@ function createApi(game: Phaser.Game) {
       const p = game.scene.isActive('MainMenu') ? mainMenuProbe() : undefined;
       return p && { ...p, stats: p.stats.map(decode) };
     },
+    /** The title screen while its main task runs: the scene (INIT .. CRY), its state, the restart timer, whether PRESS START shows, the flames alive. */
+    titleScreen: () => (game.scene.isActive('MainMenu') ? titleScreenProbe() : undefined),
+    /** The clear save data screen (B+SELECT+UP on the title screen) while it runs: whether its YES/NO takes input. */
+    clearSaveData: () => (game.scene.isActive('MainMenu') ? clearSaveDataProbe() : undefined),
     /** The field start menu while it's open: its items and cursor. */
     startMenu: () => startMenuProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */

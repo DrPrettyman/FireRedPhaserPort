@@ -615,6 +615,12 @@ export function ResetAllBgsCoordinatesAndBgCntRegs(): void {
   }
 }
 
+/** ResetBgPositions (new_menu_helpers.c) */
+export function ResetBgPositions(): void {
+  for (let bg = 0; bg < 4; bg++) ChangeBgX(bg, 0, 0);
+  for (let bg = 0; bg < 4; bg++) ChangeBgY(bg, 0, 0);
+}
+
 /** AdjustQuantityAccordingToDPadInput: `quantity[index]` is the s16 being edited. */
 export function AdjustQuantityAccordingToDPadInput(quantity: Int16Array, index: number, qmax: number): boolean {
   const valBefore = quantity[index];

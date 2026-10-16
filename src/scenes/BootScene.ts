@@ -8,30 +8,69 @@ import type { OverworldStart } from './OverworldScene';
 /** New game warp target (src/new_game.c: SetWarpDestination(..PLAYERS_HOUSE_2F, -1, 6, 6)). */
 const NEW_GAME_START: OverworldStart = { map: 'PalletTown_PlayersHouse_2F', x: 6, y: 6 };
 
+export interface BootStart {
+  /** DoSoftReset: boot again (to the title screen), ignoring the URL's dev starts. */
+  softReset?: boolean;
+}
+
+/**
+ * Boot: load the extracted data, then the title screen (title_screen.c; the copyright screen and intro.c's
+ * Game Freak / Nidorino movie before it aren't ported). Dev starts (`?start=`, `?map=`) go straight into the
+ * field; `?skipIntro` (dev, used by the e2e harness) boots like the port did before the title screen existed:
+ * into the main menu when the save slot holds something, else straight into the new game.
+ */
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');
   }
 
-  async create(): Promise<void> {
-    const assets = new Assets();
-    try {
-      await assets.init();
-    } catch (err) {
-      console.error(err);
-      this.add
-        .text(8, 8, 'Assets missing.\nRun: npm run extract', { fontFamily: 'monospace', fontSize: '10px', color: '#f88' })
-        .setResolution(4);
-      return;
+  async create(data?: BootStart): Promise<void> {
+    let assets: Assets | undefined = this.registry.get('assets');
+    if (!assets) {
+      assets = new Assets();
+      try {
+        await assets.init();
+      } catch (err) {
+        console.error(err);
+        this.add
+          .text(8, 8, 'Assets missing.\nRun: npm run extract', { fontFamily: 'monospace', fontSize: '10px', color: '#f88' })
+          .setResolution(4);
+        return;
+      }
+      this.registry.set('assets', assets);
     }
-    this.registry.set('assets', assets);
-    const save = LoadGameSave(); // sets gSaveFileStatus, which the save dialog checks too
-    const dev = startFromUrl();
-    // No title screen yet: boot into the main menu (CB2_InitMainMenu), which with an empty slot goes on to the new
-    // game at once (Task_SetWin0BldRegsNoSaveFileCheck → NEW GAME), so skip it then. Dev starts skip it too.
-    if (dev || gSave.fileStatus === SAVE_STATUS_EMPTY) this.scene.start('Overworld', dev ?? NEW_GAME_START);
-    else this.scene.start('MainMenu', { saveFileStatus: gSave.fileStatus, save, newGame: NEW_GAME_START } satisfies MainMenuStart);
+    LoadGameSave(); // sets gSaveFileStatus, which the save dialog checks too (the title screen loads it again)
+    const dev = data?.softReset ? undefined : startFromUrl();
+    if (dev) {
+      this.scene.start('Overworld', dev);
+    } else if (skipIntro()) {
+      // The main menu with an empty slot goes on to the new game at once (Task_SetWin0BldRegsNoSaveFileCheck →
+      // NEW GAME), so skip it then.
+      if (gSave.fileStatus === SAVE_STATUS_EMPTY) this.scene.start('Overworld', NEW_GAME_START);
+      else this.scene.start('MainMenu', { entry: 'mainMenu', newGame: NEW_GAME_START } satisfies MainMenuStart);
+    } else {
+      this.scene.start('MainMenu', { entry: 'title', newGame: NEW_GAME_START } satisfies MainMenuStart);
+    }
   }
+}
+
+/**
+ * DoSoftReset (the clear save data screen, the end of the credits): stop every scene and boot again, which shows
+ * the title screen (with ?skipIntro: the main menu or the new game). The extracted data stays loaded; everything
+ * else starts fresh, as the overworld builds a new GameState when it starts. Call it from a scene's own code
+ * (a GBA host should stopHost() first, as MainMenuScene's clear save data screen does).
+ */
+export function softReset(from: Phaser.Scene): void {
+  for (const s of from.scene.manager.getScenes(false)) {
+    if (s === from || s.scene.key === 'Boot') continue;
+    if (s.scene.isActive() || s.scene.isSleeping() || s.scene.isPaused() || s.scene.isVisible()) s.scene.stop();
+  }
+  from.scene.start('Boot', { softReset: true } satisfies BootStart);
+}
+
+/** `?skipIntro` (dev builds only): no title screen. */
+function skipIntro(): boolean {
+  return import.meta.env.DEV && new URLSearchParams(location.search).has('skipIntro');
 }
 
 /**

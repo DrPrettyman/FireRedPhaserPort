@@ -392,6 +392,20 @@ export function MultiplyInvertedPaletteRGBComponents(i: number, r: number, g: nu
   gPlttBufferFaded[i] = (red | (green << 5) | (blue << 10)) & 0xffff;
 }
 
+const sRoundedDownGrayscaleMap = [0, 0, 0, 0, 0, 5, 5, 5, 5, 5, 11, 11, 11, 11, 11, 16, 16, 16, 16, 16, 21, 21, 21, 21, 21, 27, 27, 27, 27, 27, 31, 31];
+
+/** TintPalette_GrayScale2: `count` colours of `palette` from `offset` on, in place, to rounded-down greys. */
+export function TintPalette_GrayScale2(palette: Uint16Array, offset: number, count: number): void {
+  for (let i = 0; i < count; i++) {
+    const c = palette[offset + i];
+    // Q_8_8(0.3), Q_8_8(0.59), Q_8_8(0.1133)
+    let gray = (r5(c) * 76 + g5(c) * 151 + b5(c) * 29) >> 8;
+    if (gray > 31) gray = 31;
+    gray = sRoundedDownGrayscaleMap[gray];
+    palette[offset + i] = gray | (gray << 5) | (gray << 10);
+  }
+}
+
 // BlendPalettesGradually
 const tCoeff = 0, tCoeffTarget = 1, tCoeffDelta = 2, tDelay = 3, tDelayTimer = 4, tColor = 7, tId = 8;
 
@@ -440,3 +454,8 @@ const taskBlendPalettesGradually: TaskFunc = (taskId) => {
     }
   }
 };
+
+/** DestroyBlendPalettesGraduallyTask */
+export function DestroyBlendPalettesGraduallyTask(): void {
+  for (let i = 0; i < NUM_TASKS; i++) if (gTasks[i].isActive && gTasks[i].func === taskBlendPalettesGradually) DestroyTask(i);
+}
