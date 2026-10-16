@@ -57,8 +57,10 @@ others may only add small hooks.
 - **W-surf: Surf + Waterfall** (after W-fieldmove and W-avatar). SetUpFieldMove_Surf/Waterfall,
   FldEff_UseSurf/UseWaterfall, the surf blob (field_effect_helpers.c), GetInteractedWaterScript (surf.inc),
   mounting and dismounting, wild encounters on water.
-- **W-strength: Strength** (after W-fieldmove and W-avatar). fldeff_strength.c and the boulder scripts on top of
-  W-avatar's boulder pushing.
+- **W-strength: Strength + scripted wild battles** (after W-fieldmove and W-avatar). fldeff_strength.c and the
+  boulder scripts on top of W-avatar's boulder pushing. Strength alone was small, so batch 2 added `dowildbattle`
+  and `special StartLegendaryBattle` (Snorlax with the Poké Flute, which blocks the main path, the legendary
+  birds, Mewtwo) from the "later" list below.
 - **W-fly: Fly + Town Map** (after W-fieldmove). region_map.c's fly map (and the Town Map item, which is the same
   screen), FlyOut/FlyIn. Big and self-contained.
 
@@ -96,5 +98,4 @@ re-added.
 
 ## Not in this plan (later main-path blockers)
 
-`dowildbattle` / StartLegendaryBattle (Snorlax, the legendary birds, Mewtwo), Silph Co.'s card key doors, the
-Pokédex screen, title screen / intro / Oak's speech, audio.
+Silph Co.'s card key doors, `setmaplayoutindex` (Seafoam's stopped currents), the Pokédex screen, title screen / intro / Oak's speech, audio.

@@ -71,7 +71,7 @@ export class FieldMenuScene extends GbaHostScene {
 
   async create(start: FieldMenuStart): Promise<void> {
     this.start = start;
-    this.initHost(TEXTURE);
+    this.initHost(TEXTURE, start.state.playTime);
     const assets: Assets = this.registry.get('assets');
     // Item effects, anim tables and battle strings come with the battle data.
     const data = await sharedBattleData();

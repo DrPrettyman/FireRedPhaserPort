@@ -2,6 +2,7 @@ import { moveName } from '../battle/message';
 import { adjustFriendship } from '../battle/pokemonBattle';
 import { ItemIdToBattleMoveId } from '../menus/partyMenu';
 import type { GameState } from '../state/GameState';
+import type { Pokemon } from '../pokemon/Pokemon';
 import { DELTA } from '../world/direction';
 import { animateElevator, getElevatorFloor, initElevatorFloorSelectMenuPos } from '../world/elevator';
 import { initRoamer } from '../world/roamer';
@@ -66,6 +67,9 @@ export const SPECIALS: Record<string, Special> = {
   RockSmashWildEncounter({ endScript }) {
     if (RockSmashWildEncounter()) endScript();
   },
+
+  /** DrawWholeMapView (field_camera.c): `setmetatile` already redraws its cell (MapChunk.setBlock). */
+  DrawWholeMapView() {},
 
   DisableMsgBoxWalkaway({ disableMsgBoxWalkaway }) {
     disableMsgBoxWalkaway();
@@ -438,11 +442,74 @@ export const SPECIALS: Record<string, Special> = {
     });
   },
 
+  /**
+   * StartLegendaryBattle (battle_setup.c): Mewtwo, the legendary birds (and Deoxys, Lugia, Ho-Oh) against the
+   * `setwildbattle` mon, always behind B_TRANSITION_BLUR, then CB2_EndScriptedWildBattle; the script waits
+   * with `waitstate` and reads the outcome with GetBattleOutcome.
+   */
+  StartLegendaryBattle(env) {
+    const { state, setWaitState, warnOnce } = env;
+    const d = state.defines;
+    const enemy = state.enemyParty[0];
+    if (!enemy) {
+      warnOnce('StartLegendaryBattle', '[special] StartLegendaryBattle without a `setwildbattle` mon');
+      return;
+    }
+    // CreateBattleStartTask(transition, song): the song is MUS_VS_MEWTWO, MUS_VS_DEOXYS, MUS_VS_LEGEND
+    // (the birds, Ho-Oh, Lugia) or MUS_RS_VS_TRAINER, but there's no audio; the transition is always BLUR.
+    const flags = d.require('BATTLE_TYPE_LEGENDARY') | d.require('BATTLE_TYPE_LEGENDARY_FRLG');
+    setWaitState(runScriptedWildBattle(env, flags, [enemy], d.require('B_TRANSITION_BLUR')));
+  },
+
   /** BufferMonNickname: nickname of party slot VAR_0x8004 into STR_VAR_1. */
   BufferMonNickname({ state }) {
     state.stringVars[0] = [...(state.party[state.getVar('VAR_0x8004')]?.nickname ?? [])];
   },
 };
+
+/**
+ * StartScriptedWildBattle (battle_setup.c), for ScrCmd_dowildbattle: a BATTLE_TYPE_WILD_SCRIPTED battle against
+ * the `setwildbattle` mon behind GetWildBattleTransition (Snorlax, Route 12 / 16; the Power Plant's Electrode;
+ * Berry Forest's Hypno). Returns the wait for the script, which dowildbattle stops (ScriptContext_Stop) until
+ * CB2_EndScriptedWildBattle is done; undefined (the script runs on) without a mon.
+ */
+export function StartScriptedWildBattle(env: SpecialEnv): (() => boolean) | undefined {
+  const { state, host, warnOnce } = env;
+  const enemy = state.enemyParty[0];
+  if (!enemy) {
+    warnOnce('dowildbattle', '[script] dowildbattle without a `setwildbattle` mon');
+    return undefined;
+  }
+  // CreateBattleStartTask(GetWildBattleTransition(), 0): the map's music (no audio)
+  return runScriptedWildBattle(env, state.defines.require('BATTLE_TYPE_WILD_SCRIPTED'), [enemy], host.wildBattleTransition(enemy));
+}
+
+/**
+ * The battle of StartScriptedWildBattle / StartLegendaryBattle (and StartSouthernIslandBattle /
+ * StartGroudonKyogreBattle / StartRegiBattle, which nothing in FireRed calls), then CB2_EndScriptedWildBattle:
+ * a loss whites out (CB2_WhiteOut never comes back to the script); otherwise
+ * CB2_ReturnToFieldContinueScriptPlayMapMusic, whose ResumeMap runs the map's ON_RESUME script first (with
+ * FLAG_SYS_SPECIAL_WILD_BATTLE still set, so Route 12 / 16 and the legendaries' maps remove the mon), and the
+ * script continues once the field has faded back in. gBattleOutcome stays for GetBattleOutcome.
+ */
+function runScriptedWildBattle(env: SpecialEnv, battleTypeFlags: number, enemyParty: Pokemon[], transition: number): () => boolean {
+  const { host, endScript } = env;
+  // LockPlayerFieldControls: the waiting script holds the field's input.
+  // IncrementGameStat(GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES): game stats aren't tracked yet
+  const run = host.startScriptedBattle(battleTypeFlags, enemyParty, transition);
+  let fadeIn: (() => boolean) | undefined;
+  return () => {
+    if (fadeIn) return fadeIn();
+    if (!run.done()) return false;
+    if (!run.playerWon()) {
+      endScript();
+      host.whiteOut();
+      return true;
+    }
+    fadeIn = run.returnToField();
+    return false;
+  };
+}
 
 /**
  * PcTurnOnUpdateMetatileId / AnimatePcTurnOff: the PC is in front of the player (or diagonally above,

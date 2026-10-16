@@ -167,6 +167,7 @@ import { SpecialVar } from './itemMenuState';
 import { CheckIfItemIsTMHMOrEvolutionStone } from './itemUse';
 import { BeginEvolutionScene, setCB2_AfterEvolution } from './evolutionScene';
 import { CreateMonIcon, LoadMonIconPalettes, SetPartyHPBarSprite, SpriteCB_MonIcon, UpdateMonIconFrame } from './pokemonIcon';
+import { testEvent } from '../dev/testHooks';
 
 const PARTY_PAL_SELECTED = 1 << 0;
 const PARTY_PAL_FAINTED = 1 << 1;
@@ -1918,6 +1919,7 @@ function PartyMenuRemoveWindow(which: number): void {
 }
 
 export function DisplayPartyMenuStdMessage(stringId: number): void {
+  testEvent('partyMenuMessage', { msgId: stringId });
   const w = internal().windowId;
   if (w[1] !== K.WINDOW_NONE) PartyMenuRemoveWindow(1);
   if (stringId !== K.PARTY_MSG_NONE) {

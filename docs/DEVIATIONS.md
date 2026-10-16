@@ -24,13 +24,13 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Summary screen: no trade-screen view or multi-battle party order; the struct Pokemon fields the port doesn't
     store read as defaults (met game FireRed, no fateful-encounter flag, English).
   - Party menu: mail, the move relearner, Union Room, minigames, Pokédude/Teachy TV demos are not ported. Of
-    the field moves, Surf, Waterfall, Strength and Fly aren't registered yet (they say they can't be used here;
-    Surf's message is the real one), and no field move records a quest log event.
+    the field moves, Fly isn't registered yet (it says it can't be used here), and no field move records a quest
+    log event.
   - Field moves (world/fieldMoves.ts, world/fieldMoveShowMon.ts): no audio (the cry in the banner, SE_M_CUT,
     SE_M_ROCK_THROW, SE_M_SWEET_SCENT, the warp sounds) and no GAME_STAT_USED_CUT / _ROCK_SMASH. The field
     effect scripts' palette commands (loadfadedpal, ...) do nothing: the field's sprites are Phaser textures. A
     `callnative` that isn't ported warns once and the effect ends at once (FLDEFF_POKECENTER_HEAL, the emote
-    icons from scripts, FLDEFF_USE_STRENGTH / _SURF / _WATERFALL until those field moves come). Sweet Scent's
+    icons from scripts). Sweet Scent's
     red fade is an overlay under the player instead of a fade of every other palette, so the player is also drawn
     over the map's top layer meanwhile, and the field is its normal colour during the battle transition that
     follows. The show-mon banner's graphics load while the player's pose plays, so a very slow load would hold the
@@ -48,15 +48,25 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Map preview screens (Mt. Moon, Rock Tunnel, Viridian Forest...) aren't ported: warps into those sections fade
     to black like the GBA and go straight to the map, without the banner (or the flash that follows it).
   - Wild encounters: GAME_STAT_* counters aren't kept.
+  - Scripted wild battles (`dowildbattle`, StartLegendaryBattle): no battle music (MUS_VS_MEWTWO / _VS_LEGEND /
+    ...), no GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES. Not ported: `setmaplayoutindex` (Seafoam Islands B3F/B4F
+    keep their current layout after both boulders have been pushed down; the boulders still fall and the flags
+    are set), `seteventmon` (Navel Rock's Lugia / Ho-Oh and Birth Island's Deoxys, which also need the event
+    tickets).
   - Player avatar (world/playerAvatar.ts, world/bike.ts): no audio (bump, ledge, spinner, bike bell, Strength
     and fall sounds; Cycling Road and surf music). Not ported: the warp arrow sprite on arrow mats
     (HandleWarpArrowSpriteHideShow), DoStairWarp's 12-frame delay when a stair warp takes the player off the
-    bike, fishing (rods), the teleport spin, the quest log's recordings, and the help context. The surf blob
-    (FLDEFF_SURF_BLOB, field_effect_helpers.c) comes with the Surf field move, so until then a surfing player
-    shows the RED_SURF sprite alone. Movement scripts (applymovement) still run through MovementRunner rather
-    than the player's held-movement actions, so `lock` waits for a scripted step to end by `isMoving`.
-    MetatileAtCoordsIsWaterTile / IsPlayerFacingSurfableFishableWater need the TILE_TERRAIN attribute, which
-    the extractor doesn't keep yet (for Surf and the rods).
+    bike, fishing (rods), the teleport spin, the quest log's recordings, and the help context. Movement scripts
+    (applymovement) still run through MovementRunner rather than the player's held-movement actions, so `lock`
+    waits for a scripted step to end by `isMoving`.
+  - Surf and Waterfall (world/surf.ts): no audio (MUS_SURF and Overworld_ClearSavedMusic; the banner's cry as
+    above), no HELPCONTEXT_SURFING, no quest log (`goto_if_questlog` never branches). FldEff_UseSurf takes the
+    field controls lock at once: the C holds FieldCallback_PrepareFadeInFromMenu's (or the script's) lock until
+    the task takes it, which the port's hand-offs don't. Like CreateFieldEffectShowMon, the banner waits for its
+    graphics to load (UseSurfEffect_3, waterfall_1). The surf blob is the player's only `fieldEffectSpriteId`
+    user, so it lives in surf.ts rather than on the ObjectEvent, and the player's sprite y2 it sets is applied
+    to the Phaser sprite directly (ObjectEvent's depth ignores that 1 px). After a battle or field menu the blob
+    is made again (the GBA rebuilds every sprite), so its animation restarts.
   - Object animations follow the step's progress (first half step frame, second half standing) instead of
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
@@ -85,14 +95,25 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     checker, Trainer Tower and minigame records, the enigma berry, mystery gift, easy chat, link records and
     the sound and region map zoom options. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
-  - Play time (state/playTime.ts): play_time.c is ported but nothing calls PlayTimeCounter_Start/Update yet
-    (main.c updates it every frame), so the play time stays 0:00.
+  - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): there is no copyright screen, intro or title
+    screen yet, so the game boots into the main menu when the save slot holds something, and straight into the
+    new game otherwise (as the main menu itself does with an empty slot). B on the main menu (back to the title
+    screen) brings the main menu back; NEW GAME skips Oak's speech. Dev starts (`?start=`, `?map=`) skip the main
+    menu. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
+    before CONTINUE, no SE_SELECT. SAVE_STATUS_ERROR ("the previous save file will be loaded") can't happen: one
+    slot, no backup; an unreadable slot is SAVE_STATUS_INVALID ("The save file has been deleted...").
+  - Save dialog (ui/SaveDialog.ts): SE_SAVE / SE_BOO / SE_SELECT are silent; no help context, no
+    GAME_STAT_SAVED_GAME, no quest log data. A failed write shows the save error message without
+    DoSaveFailedScreen. SaveMapView isn't ported: the map view isn't saved, so CONTINUE rebuilds the map from its
+    header and ON_LOAD script (metatiles a script changed later aren't restored). `special Field_AskSaveTheGame`
+    (EventScript_AskSaveGame: cable club, Seven Island) isn't wired to the dialog yet.
+  - CONTINUE (OverworldScene.continueSavedGame): the map's objects spawn from its templates (object events aren't
+    saved, see Save data); gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
     link play); the quest log's QL_AvoidDisplay bit of ignoreBPress is ignored.
   - Elevators: SE_ELEVATOR / SE_DING_DONG are silent; UpdateEscapeWarp isn't kept on warps.
   - Field ListMenu (ui/FieldListMenu.ts): SE_SELECT is silent; the quest log's QL_AvoidDisplay is ignored.
-  - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu. Facing water does
-    nothing (GetInteractedWaterScript waits for Surf).
+  - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, Trainer Tower clock, cable club
     monitors, questionnaire/easy chat) start their scripts and hit the unimplemented-special warnings.
   - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link flags.

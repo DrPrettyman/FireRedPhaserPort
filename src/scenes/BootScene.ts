@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { Assets } from '../data/assets';
 import { presetFromUrl, presetStart } from '../dev/startPresets';
+import { gSave, LoadGameSave, SAVE_STATUS_EMPTY } from '../state/save';
+import type { MainMenuStart } from './MainMenuScene';
 import type { OverworldStart } from './OverworldScene';
 
 /** New game warp target (src/new_game.c: SetWarpDestination(..PLAYERS_HOUSE_2F, -1, 6, 6)). */
@@ -23,7 +25,12 @@ export class BootScene extends Phaser.Scene {
       return;
     }
     this.registry.set('assets', assets);
-    this.scene.start('Overworld', startFromUrl() ?? NEW_GAME_START);
+    const save = LoadGameSave(); // sets gSaveFileStatus, which the save dialog checks too
+    const dev = startFromUrl();
+    // No title screen yet: boot into the main menu (CB2_InitMainMenu), which with an empty slot goes on to the new
+    // game at once (Task_SetWin0BldRegsNoSaveFileCheck → NEW GAME), so skip it then. Dev starts skip it too.
+    if (dev || gSave.fileStatus === SAVE_STATUS_EMPTY) this.scene.start('Overworld', dev ?? NEW_GAME_START);
+    else this.scene.start('MainMenu', { saveFileStatus: gSave.fileStatus, save, newGame: NEW_GAME_START } satisfies MainMenuStart);
   }
 }
 

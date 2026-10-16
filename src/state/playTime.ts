@@ -1,5 +1,6 @@
-// play_time.c: gSaveBlock2Ptr->playTime*, counted in VBlanks while running. Nothing calls
-// PlayTimeCounter_Update every frame yet (main.c does on the GBA); see docs/DEV_NOTES.md "PC boxes and save data".
+// play_time.c: gSaveBlock2Ptr->playTime*, counted in VBlanks while running. AgbMain's PlayTimeCounter_Update runs
+// once per frame on every screen: OverworldScene.tick and GbaHostScene's loop call it. The field starts the counter
+// (CB2_NewGame / CB2_ContinueSavedGame); see docs/DEV_NOTES.md "Saving and continuing".
 
 /** gSaveBlock2Ptr->playTimeHours / Minutes / Seconds / VBlanks */
 export interface PlayTime {

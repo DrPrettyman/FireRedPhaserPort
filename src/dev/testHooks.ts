@@ -22,9 +22,13 @@ import { seedRng } from '../util/random';
 import { DELTA, type Direction } from '../world/direction';
 import { tilesetVram } from '../world/TilesetVram';
 import { SetPlayerAvatarTransitionFlags } from '../world/playerAvatar';
+import { DestroyPlayerSurfBlob } from '../world/surf';
 import type { FieldListMenuProbe } from '../ui/FieldListMenu';
 import { storageProbe } from '../menus/pokemonStorage';
 import { itemPcProbe } from '../menus/itemPc';
+import { mainMenuProbe } from '../menus/mainMenu';
+import { saveDialogProbe } from '../ui/SaveDialog';
+import { startMenuProbe } from '../ui/StartMenu';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -195,6 +199,11 @@ export interface FieldProbe {
   gbaScreenBlack: number | undefined;
   /** special ListMenu's list while it's open (ui/FieldListMenu.ts). */
   listMenu: FieldListMenuProbe | undefined;
+  /**
+   * The player's surf blob (world/surf.ts) while it's alive: its centre in world pixels, anim (0 down, 1 up,
+   * 2 left, 3 right), BOB_* state, and the player sprite's y2 it sets.
+   */
+  surfBlob: { x: number; y: number; anim: number; bobState: number; invisible: boolean; playerY2: number } | undefined;
   /** gPlayerAvatar and the player's held movement (world/playerAvatar.ts). */
   avatar: {
     /** PLAYER_AVATAR_FLAG_* set, without the prefix (ON_FOOT, MACH_BIKE, SURFING, FORCED, ...). */
@@ -441,7 +450,19 @@ function createApi(game: Phaser.Game) {
     // --- probes
     scenes: () => game.scene.getScenes(true).map((s) => s.scene.key),
     /** The GBA-layer screen running (gMain.callback2's name, e.g. BattleMainCB2, CB2_NamingScreen), if any. */
-    gbaScreen: () => (game.scene.isActive('Battle') || game.scene.isActive('FieldMenu') ? gMain.callback2?.name : undefined),
+    gbaScreen: () => (game.scene.isActive('Battle') || game.scene.isActive('FieldMenu') || game.scene.isActive('MainMenu') ? gMain.callback2?.name : undefined),
+    /** The main menu while it takes input: menu type (0 NEW GAME only, 1 CONTINUE / NEW GAME), cursor, fading, the CONTINUE values. */
+    mainMenu: () => {
+      const p = game.scene.isActive('MainMenu') ? mainMenuProbe() : undefined;
+      return p && { ...p, stats: p.stats.map(decode) };
+    },
+    /** The field start menu while it's open: its items and cursor. */
+    startMenu: () => startMenuProbe(),
+    /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */
+    saveDialog: () => {
+      const p = saveDialogProbe();
+      return p && { ...p, stats: p.stats.map(decode) };
+    },
     field,
     idle,
     /** The current map's objects: local id, graphics and map-local position. */
@@ -449,8 +470,12 @@ function createApi(game: Phaser.Game) {
     /**
      * Put the player in an avatar state the way the game does it (SetPlayerAvatarTransitionFlags with
      * PLAYER_AVATAR_FLAG_<state>): 'MACH_BIKE' gets on the bike, 'SURFING' onto a surfing mon, 'ON_FOOT' off.
+     * (The game never leaves the surf blob behind that way, so it goes too.)
      */
-    setAvatarState: (state: 'ON_FOOT' | 'MACH_BIKE' | 'SURFING') => SetPlayerAvatarTransitionFlags(define(`PLAYER_AVATAR_FLAG_${state}`)),
+    setAvatarState: (state: 'ON_FOOT' | 'MACH_BIKE' | 'SURFING') => {
+      if (state !== 'SURFING') DestroyPlayerSurfBlob();
+      SetPlayerAvatarTransitionFlags(define(`PLAYER_AVATAR_FLAG_${state}`));
+    },
     get state() {
       return state();
     },

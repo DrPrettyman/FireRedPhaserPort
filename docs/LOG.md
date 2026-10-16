@@ -1153,6 +1153,99 @@ end to end.
 - Extracting in a worktree: set `FIRERED_DECOMP=/path/to/pret/firered` (the default is a path relative to the
   checkout, which a worktree doesn't have).
 
+### Save dialog, main menu and CONTINUE (MAIN_PATH_PLAN.md W-save)
+
+- start_menu.c's save dialog (`ui/SaveDialog.ts`): StartMenuSaveCallback → StartCB_Save1/2 and the SaveDialogCB_*
+  chain ("Would you like to save the game?", the overwrite / different game file questions, "SAVING... DON'T TURN
+  OFF THE POWER.", "PLAYER saved the game." with the 60-frame / A-held wait, the save error), with the save info
+  window (PrintSaveStats; save_menu_util.c's SaveStatToString and pokedex.c's Kanto/National counts in
+  `ui/saveMenuUtil.ts`). The start menu's SAVE entry opens it; NO returns to the start menu.
+- save.c on the localStorage slot (`state/save.ts`): LoadGameSave / gSaveFileStatus (EMPTY / OK / INVALID),
+  TrySavingData / gSaveAttemptStatus, gDifferentSaveFile, load_save.c's continue-game warp flag.
+- main_menu.c on the GBA layer (`menus/mainMenu.ts` + `scenes/MainMenuScene.ts`): CONTINUE with the player's
+  name, play time, Pokédex count and badges / NEW GAME, the WIN0 darkening, the "save file has been deleted"
+  message for an unreadable slot. FRLG has no OPTIONS on the main menu; MYSTERY GIFT is left out.
+- CB2_ContinueSavedGame (`OverworldScene.continueSavedGame`): the save loaded into the state, the saved map and
+  position, facing and bike/surf state, ON_LOAD then ResumeMap's scripts, or the continue-game warp if set.
+- Boot (decided in MAIN_PATH_PLAN.md): main menu when the slot holds something, the new game otherwise; dev
+  starts skip it. Logged as a deviation until the title screen exists.
+- Play time: PlayTimeCounter_Start on the new game and CONTINUE, PlayTimeCounter_Update every logic tick in the
+  field and on every GBA-layer screen (GbaHostScene).
+- Shared changes: OverworldScene (OverworldStart.continueGame, the CONTINUE path, onMapLoaded's continue mode, the
+  new game's gDifferentSaveFile/play time, play time per tick, SAVE in the start menu), BootScene (boot flow),
+  main.ts (MainMenuScene), GbaHostScene/BattleScene/FieldMenuScene (play time), YesNoMenu (default NO, input
+  delay option), StartMenu (probe), saveData.ts (`saveSlotUsed`), testHooks (`startMenu`, `saveDialog`,
+  `mainMenu` probes), e2e harness (`keepSave`, `mainMenu`, `clearSave`).
+- Extractor: include/save.h, save_location.h and save_menu_util.h defines (SAVE_STATUS_*, SAVE_NORMAL..,
+  CONTINUE_GAME_WARP, SAVE_STAT_*), and graphics/main_menu/ palettes (sBg_Pal, sTextbox_Pal).
+- Tests: tests/unit/save.test.ts, tests/e2e/saveContinue.test.ts (YES / NO / overwrite, CONTINUE after a reload
+  with map, position, facing, bike, party, bag, flags, money and play time, the continue-game warp, play time
+  per frame in the field and the bag and shown in both windows, the boot flow and NEW GAME's warning, an
+  unreadable save).
+### Surf and Waterfall (W-surf)
+
+- `world/surf.ts`: SetUpFieldMove_Surf / _Waterfall and FieldCallback_Surf / _Waterfall (party_menu.c);
+  FldEff_UseSurf (Task_FldEffUseSurf: the field move pose, the banner, JUMP_SPECIAL onto the water) and
+  FldEff_UseWaterfall (Task_UseWaterfall: the banner, then WALK_SLOWER north until off the waterfall) from
+  field_effect.c; the surf blob (field_effect_helpers.c: FldEff_SurfBlob, UpdateSurfBlobFieldEffect with
+  SynchroniseSurfAnim / SynchroniseSurfPosition / CreateBobbingEffect, SetSurfBlob_*); GetInteractedWaterScript
+  (field_control_avatar.c) so pressing A at the water runs EventScript_UseSurf / EventScript_CurrentTooFast and
+  at a waterfall EventScript_Waterfall / EventScript_CantUseWaterfall; IsPlayerFacingSurfableFishableWater and
+  MetatileAtCoordsIsWaterTile (field_player_avatar.c) on the extracted terrain attribute.
+- The blob comes and goes with the avatar's state: the player avatar's host hooks (QL_GfxTransition_StartSurf on
+  arriving on water, after a battle or menu, ForcePlayerToStartSurfing; BOB_MON_ONLY when jumping off, then
+  DestroySprite; SetPlayerInvisibility). Wild encounters on water already worked (WildEncounters.ts).
+- Outside world/surf.ts: `registerSurfAndWaterfall()` in fieldMoves.ts's `registerFieldMoves`, which also exports
+  LockPlayerFieldControls / UnlockPlayerFieldControls / CreateTask / StartPlayerAvatarSummonMonForFieldMoveAnim
+  and a new LoadFieldMoveShowMonGfx; FieldEffects.ts exports FieldEffectSprite and gains `createSprite`;
+  playerAvatar.ts gains the `destroySurfBlob` / `setSurfBlobInvisible` hooks (Task_WaitStopSurfing,
+  SetPlayerInvisibility); OverworldScene: the hooks, `setSurfHost`, GetInteractedWaterScript in `interact`, the
+  `surfBlob` probe; partyMenu.ts reports DisplayPartyMenuStdMessage as a `partyMenuMessage` test event;
+  `__test.setAvatarState` off the water drops the blob.
+- No extractor changes: the surf blob sprite and the terrain attribute were already extracted.
+- Tests: tests/e2e/surf.test.ts (A at the water with/without the badge or a Surf mon, the party menu, refusals
+  with their messages, riding and the bob, getting off, a wild encounter on water, Waterfall at Icefall Cave by A
+  and from the party menu).
+
+### Strength, dowildbattle and StartLegendaryBattle (W-strength, batch 2)
+
+- `world/strength.ts` is fldeff_strength.c: SetUpFieldMove_Strength (not surfing, a boulder in front), FieldCB_UseStrength
+  → EventScript_FldEffStrength, FldEff_UseStrength (the banner, GetMonNickname into STR_VAR_1) and
+  ShowMonCB_UseStrength. Registered in fieldMoves.ts's `registerFieldMoves` (one line) and through
+  `registerFieldEffectNatives`; fieldMoves.ts now exports CreateFieldEffectShowMon, ScriptContext_Enable and
+  ScriptContext_SetupScript for other field move modules. EventScript_StrengthBoulder (talking to a boulder) works
+  through the existing script commands.
+- ClearTempFieldEventData (`GameState.clearTemps`, every map load) now also clears FLAG_SYS_WHITE_FLUTE_ACTIVE,
+  _BLACK_FLUTE_ACTIVE, _USE_STRENGTH, _SPECIAL_WILD_BATTLE and _INFORMED_OF_LOCAL_WIRELESS_PLAYER as in the C, so
+  Strength (and the flutes) end with the map.
+- Victory Road's floor switches: `copyobjectxytoperm` (TryOverrideObjectEventTemplateCoords) and
+  `special DrawWholeMapView` (nothing to do: `setmetatile` redraws its cell).
+- `dowildbattle` (ScrCmd_dowildbattle → StartScriptedWildBattle, BATTLE_TYPE_WILD_SCRIPTED behind
+  GetWildBattleTransition) and `special StartLegendaryBattle` (BATTLE_TYPE_LEGENDARY | _LEGENDARY_FRLG behind
+  B_TRANSITION_BLUR; the MUS_VS_* choice is noted, no audio), both ending in CB2_EndScriptedWildBattle (specials.ts
+  `runScriptedWildBattle`): a loss whites out, otherwise ResumeMap's ON_RESUME script runs (FLAG_SYS_SPECIAL_WILD_BATTLE
+  still set: Route 12 / 16 remove Snorlax, Cerulean Cave / Seafoam / Mt. Ember / Power Plant remove a caught
+  legendary) and the script continues after the fade with GetBattleOutcome. Covers Snorlax (Routes 12 and 16),
+  Zapdos, Articuno, Moltres, Mewtwo, the Power Plant's Electrode and Berry Forest's Hypno.
+- Changes outside the new modules: ScriptEngine.ts (`dowildbattle`, `copyobjectxytoperm`), specials.ts
+  (StartLegendaryBattle, DrawWholeMapView, StartScriptedWildBattle), GameState.clearTemps, fieldMoves.ts (exports +
+  the registration line). None in playerAvatar.ts or OverworldScene.ts. No extractor changes.
+- Not done: `setmaplayoutindex` (Seafoam B3F/B4F's "current stopped" layouts once both boulders are down: needs the
+  extractor to export layouts no map uses, and a layout swap at ON_TRANSITION), `seteventmon` (Navel Rock / Birth
+  Island event legendaries).
+- Tests: tests/e2e/strength.test.ts (talk to a boulder, the party menu, Victory Road 2F's switch 1 with
+  copyobjectxytoperm, the flag cleared by a warp, no boulder in front, no badge), tests/e2e/scriptedBattles.test.ts
+  (Route 12 Snorlax won and gone after re-entering, Route 16 Snorlax ran from, no Poké Flute, Zapdos won, Mewtwo
+  caught with a Master Ball, losing to Mewtwo).
+
+### E2e: in-page watches for short-lived states (merging `save-continue`)
+
+- Under load, three tests polled from Node for things that last a few ticks and missed them: Strength's boulder
+  push (hold and watch were two evals, and the release came late enough for a second push), and Surf's jump onto
+  the water and the Waterfall climb. They now hold/watch/release in one eval, or start an in-page watcher
+  (`watchAction` in surf.test.ts) before the action. tests/README.md "Writing a new scenario" has the rule.
+  Strength, scripted battles, Surf and save/continue passed four loaded runs in a row after the fix.
+
 ### Pokémon Storage System screens and the player's item PC (W-pc)
 
 - The PC's storage menu (`special ShowPokemonStorageSystemPC`, Task_PCMainMenu) as a field overlay

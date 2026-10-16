@@ -350,6 +350,9 @@ export class GameState {
     const [fs, fe] = this.tempFlags;
     for (const f of [...this.flags]) if (f >= fs && f <= fe) this.flags.delete(f);
     for (let v = TEMP_VARS_START; v <= TEMP_VARS_END; v++) this.vars.delete(v);
+    for (const f of ['FLAG_SYS_WHITE_FLUTE_ACTIVE', 'FLAG_SYS_BLACK_FLUTE_ACTIVE', 'FLAG_SYS_USE_STRENGTH', 'FLAG_SYS_SPECIAL_WILD_BATTLE', 'FLAG_SYS_INFORMED_OF_LOCAL_WIRELESS_PLAYER']) {
+      this.setFlag(f, false);
+    }
   }
 }
 

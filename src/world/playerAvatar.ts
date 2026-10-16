@@ -62,11 +62,14 @@ export interface PlayerAvatarHost {
   /** FieldEffectStart(FLDEFF_DUST) at a tile (Task_BumpBoulder's dust). */
   startDust(x: number, y: number, elevation: number, priority: number): void;
   /**
-   * FLDEFF_SURF_BLOB for the surfing player (QL_GfxTransition_StartSurf), and SetSurfBlob_BobState when
-   * getting off. Optional: the surf blob (field_effect_helpers.c) comes with the Surf field move.
+   * The surf blob (world/surf.ts): FLDEFF_SURF_BLOB for the surfing player (QL_GfxTransition_StartSurf),
+   * SetSurfBlob_BobState(BOB_MON_ONLY) when jumping off, DestroySprite once off, and SetPlayerInvisibility's
+   * part. Optional, so a field without Surf still runs.
    */
   startSurfBlob?(): void;
   stopSurfBlob?(): void;
+  destroySurfBlob?(): void;
+  setSurfBlobInvisible?(invisible: boolean): void;
   /** HandleBoulderFallThroughHole + HandleBoulderActivateVictoryRoadSwitch, after a boulder's push. */
   boulderPushed(boulder: ObjectEvent): void;
   /** gPlayerParty: whether a party mon knows MOVE_SURF (PartyHasMonWithSurf) */
@@ -776,9 +779,10 @@ export function IsPlayerSurfingNorth(): boolean {
   return GetPlayerMovementDirection() === 'up' && !!TestPlayerAvatarFlags(F.SURFING);
 }
 
-/** SetPlayerInvisibility (the surf blob follows the player's visibility in FieldEffects) */
+/** SetPlayerInvisibility */
 export function SetPlayerInvisibility(invisible: boolean): void {
   playerObj().setVisible(!invisible);
+  if (TestPlayerAvatarFlags(F.SURFING)) avatarField().setSurfBlobInvisible?.(invisible);
 }
 
 // ------------------------------------------------------------------ boulders
@@ -850,7 +854,7 @@ export function CreateStopSurfingTask(direction: Direction): void {
     gPlayerAvatar.preventStep = false;
     f.unlockPlayerFieldControls();
     f.unfreezeObjectEvents();
-    // DestroySprite(surf blob): done by stopSurfBlob's effect; SetHelpContextForMap: no help system
+    f.destroySurfBlob?.(); // DestroySprite(&gSprites[playerObjEvent->fieldEffectSpriteId]); SetHelpContextForMap: no help system
     return true;
   };
   step();

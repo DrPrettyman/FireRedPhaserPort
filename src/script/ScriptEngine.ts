@@ -14,7 +14,7 @@ import { MovementRunner, towards, type Instruction } from './MovementRunner';
 import type { FieldTask } from '../world/elevator';
 import type { ListMenuHost } from '../ui/FieldListMenu';
 import { SetFlashLevel } from '../world/flash';
-import { SPECIALS, type SpecialEnv } from './specials';
+import { SPECIALS, StartScriptedWildBattle, type SpecialEnv } from './specials';
 import { testEvent } from '../dev/testHooks';
 import { random } from '../util/random';
 import { FieldEffectActiveListContains, FieldEffectStart, gFieldEffectArguments } from '../world/fieldEffectScripts';
@@ -852,6 +852,14 @@ export class ScriptEngine {
     setobjectxyperm(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       this.host.setObjectTemplate(this.localId(a[0]), { x: this.state.value(a[1]), y: this.state.value(a[2]) });
     },
+    /** ScrCmd_copyobjectxytoperm → TryOverrideObjectEventTemplateCoords: the template takes the object's current tile. */
+    copyobjectxytoperm(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      const obj = this.objectArg(a[0]);
+      if (!obj) return;
+      const p = this.host.player;
+      const local = this.host.playerLocal(); // the current map's origin from the player's tile
+      this.host.setObjectTemplate(this.localId(a[0]), { x: obj.current.x - (p.tileX - local.x), y: obj.current.y - (p.tileY - local.y) });
+    },
     setobjectmovementtype(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       this.host.setObjectTemplate(this.localId(a[0]), { movementType: a[1] });
     },
@@ -1130,6 +1138,11 @@ export class ScriptEngine {
       const item = this.state.value(a[2] ?? 'ITEM_NONE');
       if (item) mon.heldItem = item;
       this.state.enemyParty = [mon]; // ZeroEnemyPartyMons
+    },
+    /** ScrCmd_dowildbattle: StartScriptedWildBattle + ScriptContext_Stop until CB2_EndScriptedWildBattle (specials.ts). */
+    dowildbattle(this: ScriptEngine, ctx: ScriptContext) {
+      const w = StartScriptedWildBattle(this.specialEnv);
+      if (w) ctx.wait = w;
     },
     getpartysize(this: ScriptEngine) {
       this.state.setVar('VAR_RESULT', this.state.party.length);

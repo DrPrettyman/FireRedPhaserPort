@@ -39,7 +39,9 @@ test('...', async () => {
 ```
 
 Start options: `map`/`x`/`y`, `start: 'after-rival' | 'evolution'` (+ `starter`; see `src/dev/startPresets.ts`), `party`, `seed` (default 1),
-`speed` (logic ticks per frame, default 8) and `textSpeed` (default fast).
+`speed` (logic ticks per frame, default 8) and `textSpeed` (default fast). Every load starts with an empty save
+slot (localStorage) unless `keepSave: true`; with a save and no `map`/`start`, the game boots to the main menu, so
+pass `mainMenu: true` to wait for it instead of the field (see saveContinue.test.ts).
 
 The game is driven through `window.__test` (`src/dev/testHooks.ts`, dev builds only). In a test,
 `game.eval((t, ...args) => ..., ...args)` runs a function in the page with `t` = `__test`. The function is
@@ -66,6 +68,11 @@ A test fails if the page throws or logs `console.error`. When a test fails, the 
 3. Wait on state and events, not on time. If something has to settle first, wait in ticks
    (`t.waitFrames(n)`, `t.until(() => ...)`), never in milliseconds.
 4. Assert what the player would notice (party, money, bag, map, flags), plus the event the game reported.
+5. Anything that lasts only a few ticks (a movement action, a jump, the moment an anim ends) must be watched
+   in the page, not polled from Node: under load, a poll can arrive after it's over. Start an in-page watcher
+   (`game.eval(async (t) => { await t.until(...); ... })`) before it can happen and await it afterwards; do
+   hold + watch + release in one eval; reseed right before a roll with `reseedAfterAnims` (battleAnimHelpers.ts).
+   Several tests here failed only when four e2e runs shared the machine.
 
 Runs are close to deterministic, not exactly: the RNG is seeded, but the number of logic ticks between
 two harness calls depends on wall-clock time. Write scenarios that hold whatever the dice say.

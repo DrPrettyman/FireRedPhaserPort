@@ -8,15 +8,16 @@ import { MenuWindow } from './MenuWindow';
 const RECT = { left: 21, top: 9, width: 6, height: 4 };
 
 /**
- * DisplayYesNoMenuDefaultYes + Task_YesNoMenu_HandleInput: resolves true for YES,
- * false for NO or B. Input is ignored for the first 5 frames.
+ * DisplayYesNoMenuDefaultYes (or DisplayYesNoMenuDefaultNo with `defaultNo`) + Task_YesNoMenu_HandleInput:
+ * resolves true for YES, false for NO or B. Input is ignored for the first 5 frames (Task_YesNoMenu_HandleInput's
+ * wait; `inputDelay: 0` for callers that run Menu_ProcessInputNoWrapClearOnChoose themselves).
  */
 export class YesNoMenu {
   private win: MenuWindow;
   private menu: Menu;
   result: boolean | undefined;
 
-  constructor(scene: Phaser.Scene, fonts: Fonts, input: Input, text: { yesNo: number[]; cursor: number[] }) {
+  constructor(scene: Phaser.Scene, fonts: Fonts, input: Input, text: { yesNo: number[]; cursor: number[] }, opts: { defaultNo?: boolean; inputDelay?: number } = {}) {
     this.win = new MenuWindow(scene, RECT, fonts, input);
     const font = fonts.get(2);
     const cursorWidth = font.info.maxLetterWidth;
@@ -26,8 +27,8 @@ export class YesNoMenu {
       top: 2,
       rowHeight: font.info.maxLetterHeight + font.info.lineSpacing,
       wrap: false,
-      inputDelay: 5,
-    });
+      inputDelay: opts.inputDelay ?? 5,
+    }, opts.defaultNo ? 1 : 0);
   }
 
   tick(): boolean {
