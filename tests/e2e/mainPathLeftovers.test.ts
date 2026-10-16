@@ -277,9 +277,8 @@ test('seteventmon (CreateEnemyEventMon): Navel Rock\'s Lugia, caught with a Mast
   await game.pressTimes('RIGHT', 2);
   await game.pressTimes('A', 2);
   await game.mashUntil((t) => /nickname/.test(t.battle()?.message ?? ''), { what: '"Give a nickname...?"' });
-  await game.eval((t) => t.waitFrames(30));
-  await game.press('B');
-  await game.mashUntil((t) => t.events().some((e) => e.type === 'battleEnd'), { what: 'the battle to end' });
+  // No nickname: mash B (a single B can land while the question is still printing, and A would then pick YES)
+  await game.mashUntil((t) => t.events().some((e) => e.type === 'battleEnd'), { button: 'B', what: 'the battle to end' });
   const end = await game.waitForEvent('battleEnd', { since });
   expect(await game.eval((t, o) => t.nameOf('B_OUTCOME_', o), end.outcome as number)).toBe('B_OUTCOME_CAUGHT');
   await game.mashUntil((t) => t.idle() && !t.field()!.script && !t.field()!.fading, { what: 'the script to end' });
