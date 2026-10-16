@@ -5,6 +5,7 @@ import type { TextSpeed } from '../text/TextPrinter';
 import { random32 } from '../util/random';
 import type { Direction } from '../world/direction';
 import { Bag, type ItemSlot } from './Bag';
+import type { PlayTime } from './playTime';
 import { boxMonFromMon, boxMonRestorePP, PokemonStorage } from './PokemonStorage';
 
 /**
@@ -71,6 +72,9 @@ export class GameState {
   private vars = new Map<number, number>();
   /** STR_VAR_1..3 contents as encoded bytes (filled by buffer* script commands). */
   stringVars: number[][] = [[], [], []];
+
+  /** gSaveBlock2Ptr->playTime* (play_time.c). */
+  readonly playTime: PlayTime = { hours: 0, minutes: 0, seconds: 0, vblanks: 0 };
 
   /** gSaveBlock2Ptr->playerTrainerId. The GBA rolls it in Oak's intro; until that exists, at state creation. */
   trainerId = random32();
