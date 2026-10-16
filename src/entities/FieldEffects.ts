@@ -63,7 +63,7 @@ const BIKE_TIRE_TRACKS_TRANSITIONS = [
  * animation (AnimateSprite), drawn as a Phaser sprite. Positions are world pixels of the sprite's
  * centre (coordOffsetEnabled sprites' x/y), x2/y2 an offset on top.
  */
-class FieldEffectSprite {
+export class FieldEffectSprite {
   readonly sprite: Phaser.GameObjects.Sprite;
   x: number;
   y: number;
@@ -401,6 +401,11 @@ export class FieldEffects {
     const s = new FieldEffectSprite(this.scene, fldEff, fieldEffectTextureKey(template), t, x, y, subpriority, callback ?? this.callbackFor(t.callback));
     this.sprites.push(s);
     return s;
+  }
+
+  /** CreateSpriteAtEnd for a field effect ported in its own module (world/surf.ts's surf blob). */
+  createSprite(fldEff: string, template: string, x: number, y: number, subpriority: number, callback: (s: FieldEffectSprite) => void): FieldEffectSprite {
+    return this.create(fldEff, template, x, y, subpriority, callback);
   }
 
   /** FieldEffectStart: the effect is on the active list until its sprite stops it. */

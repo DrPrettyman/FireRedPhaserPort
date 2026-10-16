@@ -39,6 +39,7 @@ import {
   SetPlayerAvatarTransitionFlags,
 } from './playerAvatar';
 import { cacheMapSection } from './regionMap';
+import { registerSurfAndWaterfall } from './surf';
 import type { TileInfo } from './World';
 import { directionalAction } from '../entities/movementActions';
 
@@ -175,14 +176,14 @@ export async function prepareFieldMoveMenu(): Promise<void> {
 let sLockFieldControls = false;
 
 /** LockPlayerFieldControls */
-function LockPlayerFieldControls(): void {
+export function LockPlayerFieldControls(): void {
   if (sLockFieldControls) return;
   sLockFieldControls = true;
   avatarField().lockPlayerFieldControls();
 }
 
 /** UnlockPlayerFieldControls */
-function UnlockPlayerFieldControls(): void {
+export function UnlockPlayerFieldControls(): void {
   if (!sLockFieldControls) return;
   sLockFieldControls = false;
   avatarField().unlockPlayerFieldControls();
@@ -205,7 +206,7 @@ function ScriptContext_SetupScript(label: string): void {
 }
 
 /** CreateTask on the field: `tick` runs once a frame until it returns true. */
-function CreateTask(tick: () => boolean): void {
+export function CreateTask(tick: () => boolean): void {
   avatarField().createTask(tick);
 }
 
@@ -239,7 +240,7 @@ const FIELD_MOVE_POSE: [number, number][] = [
  * StartPlayerAvatarSummonMonForFieldMoveAnim + MOVEMENT_ACTION_START_ANIM_IN_DIRECTION: the field move
  * graphics and their one animation. Returns ObjectEventCheckHeldMovementStatus for it (true once ended).
  */
-function StartPlayerAvatarSummonMonForFieldMoveAnim(): () => boolean {
+export function StartPlayerAvatarSummonMonForFieldMoveAnim(): () => boolean {
   const player = playerObj();
   const gfxId = GetPlayerAvatarGraphicsIdByStateId(K.PLAYER_AVATAR_GFX_FIELD_MOVE);
   const info = avatarField().spriteInfo(gfxId);
@@ -259,6 +260,11 @@ function StartPlayerAvatarSummonMonForFieldMoveAnim(): () => boolean {
     }
     return frame > total;
   };
+}
+
+/** The banner's graphics (fieldMoveShowMon.ts), for a field move that starts FLDEFF_FIELD_MOVE_SHOW_MON_INIT itself. */
+export function LoadFieldMoveShowMonGfx(): Promise<void> {
+  return loadShowMonGfx(field().gbaScreenGfxSymbols());
 }
 
 /**
@@ -1063,6 +1069,7 @@ export function registerFieldMoves(): void {
   registerFieldMoveSetUp('FIELD_MOVE_DIG', SetUpFieldMove_Dig);
   registerFieldMoveSetUp('FIELD_MOVE_TELEPORT', SetUpFieldMove_Teleport);
   registerFieldMoveSetUp('FIELD_MOVE_FLASH', SetUpFieldMove_Flash);
+  registerSurfAndWaterfall(); // world/surf.ts
 }
 
 /** Graphics the field moves use outside the banner (preload at boot). */
