@@ -733,11 +733,13 @@ end to end.
 
 ### Progress docs split (user request)
 
-- PROGRESS.md had grown to 1,100+ lines (checklist, developer guide, deviations and the full log in one file). It's
-  now status and backlog only: the checklist, "Where things stand" and a "Next up" list (main-path blockers in
-  order, other open work, loose ends). The rest moved to `docs/`: DEV_NOTES.md ("Where to resume", regrouped by
+- PROGRESS.md had grown to 1,100+ lines (checklist, developer guide, deviations and the full log in one file).
+  STATUS.md replaces it with status and backlog only: the checklist, "Where things stand" and a "Next up" list
+  (main-path blockers in order, other open work, loose ends). The rest moved to `docs/`: DEV_NOTES.md ("Where to resume", regrouped by
   area: field, GBA screens and menus, battle, testing), DEVIATIONS.md (known deviations + deliberate QOL changes,
   unchanged apart from two QOL sub-bullets that were really deviations) and LOG.md (this log). Checked that every
   old line landed somewhere except the bullets folded into "Next up".
-- `.gitattributes`: `docs/*.md merge=union` too. CLAUDE.md says what goes where. README's stale roadmap removed
-  (PROGRESS.md is the one checklist).
+- PROGRESS.md stays, unchanged, until branches started before the split have merged (they still edit it); CLAUDE.md
+  says not to add to it and to carry merged changes over. Delete it once nothing open touches it.
+- `.gitattributes`: STATUS.md and `docs/*.md` use merge=union too. CLAUDE.md says what goes where. README's stale
+  roadmap removed (STATUS.md is the one checklist).

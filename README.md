@@ -102,5 +102,5 @@ animated metatiles are redrawn from the GBA tile data (`world/TilesetVram.ts`).
 
 ## Progress
 
-[PROGRESS.md](PROGRESS.md) has the checklist and what's next. [docs/](docs/) has the developer notes, the list of
+[STATUS.md](STATUS.md) has the checklist and what's next. [docs/](docs/) has the developer notes, the list of
 deviations from the GBA, and the change log.
