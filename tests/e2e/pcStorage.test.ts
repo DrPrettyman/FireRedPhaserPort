@@ -405,3 +405,92 @@ test('move items: put a held item in the bag, then give one from the bag', async
   await leaveBoxes(game);
   await leavePc(game);
 });
+
+// ------------------------------------------------------------------ the player's PC (item storage)
+
+/** PC items as [item id, quantity]. */
+const pcItems = (game: Game) => game.eval((t) => t.state!.pcItems.filter((s) => s.itemId).map((s) => [s.itemId, s.quantity] as [number, number]));
+const itemId = (game: Game, name: string) => game.eval((t, n) => t.define(`ITEM_${n}`), name);
+
+/** Turn on the PC, pick PLAYER's PC and stop once its "What would you like to do?" shows. */
+async function openPlayerPc(game: Game): Promise<void> {
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await game.mashUntil((t) => /Which PC should be accessed\?/.test(t.message() ?? ''), { what: 'the PC menu' });
+  await game.eval((t) => t.waitFrames(60)); // the message prints, then the PC menu opens
+  await game.press('DOWN');
+  await game.press('A');
+  await game.mashUntil((t) => /What would you like to do\?/.test(t.message() ?? ''), { what: "the player's PC" });
+}
+
+/** From the top menu: ITEM STORAGE (A once the menu is up), then WITHDRAW ITEM into the item PC's list. */
+async function openItemPcList(game: Game): Promise<void> {
+  await game.mashUntil((t) => /Take out items from the PC\./.test(t.message() ?? ''), { what: 'the item storage menu' });
+  await game.mashUntil((t) => t.itemPc()?.task === 'Task_ItemPcMain', { what: 'the item PC' });
+  await game.eval((t) => t.waitFrames(40)); // the screen turns on
+}
+
+test("the player's PC: withdraw the new game's Potion, then deposit it again", async () => {
+  const game = await session.start(PC);
+  const potion = await itemId(game, 'POTION');
+  expect(await pcItems(game)).toEqual([[potion, 1]]); // NewGameInitPCItems
+  const potions = await game.eval((t) => t.itemCount('POTION'));
+  await openPlayerPc(game);
+  await openItemPcList(game);
+  await game.screenshot('pc-item-pc');
+  await game.press('A'); // POTION
+  await game.waitFor((t) => t.itemPc()?.task === 'Task_ItemPcSubmenuRun', { what: 'the item menu' });
+  await game.press('A'); // WITHDRAW: one of them, so no quantity to choose
+  await game.waitFor((t) => t.itemPc()?.task === 'Task_ItemPcWaitButtonAndFinishWithdrawMultiple', { what: 'the withdraw message' });
+  await game.press('A');
+  await game.waitFor((t) => t.itemPc()?.task === 'Task_ItemPcMain' && t.itemPc()?.nItems === 0, { what: 'the emptied list' });
+  await game.eval((t) => t.waitFrames(4));
+  await game.press('B'); // CANCEL: the screen turns off, back to the item storage menu
+  await game.waitFor((t) => !t.gbaScreen() && /Take out items/.test(t.message() ?? ''), { what: 'the item storage menu' });
+  expect(await pcItems(game)).toEqual([]);
+  expect(await game.eval((t) => t.itemCount('POTION'))).toBe(potions + 1);
+
+  // DEPOSIT ITEM: the bag opens on its ITEMS pocket; the first item is the POTION
+  await game.eval((t) => t.waitFrames(30)); // the field fades in
+  await game.press('DOWN');
+  await game.eval((t) => t.waitFrames(4));
+  expect(await game.message()).toMatch(/Store items in the PC\./);
+  await game.press('A');
+  await game.waitFor((t) => t.gbaScreen() === 'CB2_BagMenuRun', { what: 'the bag' });
+  await game.eval((t) => t.waitFrames(40));
+  await game.press('A');
+  await game.eval((t) => t.waitFrames(10));
+  if (potions + 1 > 1) await game.press('A'); // how many: one
+  await game.eval((t) => t.waitFrames(20));
+  await game.press('A'); // "Deposited ..."
+  await game.eval((t) => t.waitFrames(20));
+  await game.press('B'); // close the bag
+  await game.waitFor((t) => !t.gbaScreen() && /Store items in the PC/.test(t.message() ?? ''), { what: 'the item storage menu again' });
+  expect(await pcItems(game)).toEqual([[potion, 1]]);
+  expect(await game.eval((t) => t.itemCount('POTION'))).toBe(potions);
+  await game.eval((t) => t.waitFrames(30));
+  await game.mashUntil((t) => /What would you like to do\?/.test(t.message() ?? ''), { button: 'B', what: 'the top menu' });
+  await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the field' });
+});
+
+test("the player's PC: give a stored item to a party mon", async () => {
+  const game = await session.start(PC);
+  await game.eval((t) => {
+    t.state!.pcItems[1].itemId = t.define('ITEM_LEFTOVERS');
+    t.state!.pcItems[1].quantity = 1;
+  });
+  await openPlayerPc(game);
+  await openItemPcList(game);
+  await game.press('DOWN'); // LEFTOVERS
+  await game.press('A');
+  await game.waitFor((t) => t.itemPc()?.task === 'Task_ItemPcSubmenuRun', { what: 'the item menu' });
+  await game.press('DOWN'); // GIVE
+  await game.press('A');
+  await game.waitFor((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu', { what: 'the party menu' });
+  await game.eval((t) => t.waitFrames(30));
+  await game.press('A'); // MEWTWO
+  // "MEWTWO was given the LEFTOVERS to hold.", then back to the item PC's list
+  await game.mashUntil((t) => t.itemPc()?.task === 'Task_ItemPcMain', { what: 'the item PC again' });
+  expect(await game.eval((t) => t.state!.party[0].heldItem === t.define('ITEM_LEFTOVERS'))).toBe(true);
+  expect(await pcItems(game)).toEqual([[await itemId(game, 'POTION'), 1]]);
+});

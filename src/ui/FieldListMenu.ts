@@ -33,7 +33,7 @@ const BUTTONS = ['A', 'B', 'START', 'SELECT', 'L', 'R', 'UP', 'DOWN', 'LEFT', 'R
  * ReadKeys' key repeat (gMain.newAndRepeatedKeys) for the field, whose Input only has held and new
  * keys. It counts from when the menu opened rather than from whenever the keys went down.
  */
-class KeyRepeat {
+export class KeyRepeat {
   private held = '';
   private counter = KEY_REPEAT_START_DELAY;
   private repeated = false;

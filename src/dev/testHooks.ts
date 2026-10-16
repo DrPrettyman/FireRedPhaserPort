@@ -24,6 +24,7 @@ import { tilesetVram } from '../world/TilesetVram';
 import { SetPlayerAvatarTransitionFlags } from '../world/playerAvatar';
 import type { FieldListMenuProbe } from '../ui/FieldListMenu';
 import { storageProbe } from '../menus/pokemonStorage';
+import { itemPcProbe } from '../menus/itemPc';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -482,6 +483,8 @@ function createApi(game: Phaser.Game) {
       const p = storageProbe();
       return { ...p, message: decode(p.message), menu: p.menu.map(decode) };
     },
+    /** The item PC's list (WITHDRAW ITEM, item_pc.c) while it runs: its task, scroll/row and item count. */
+    itemPc: () => (gMain.callback2?.name === 'ItemPc_MainCB' ? itemPcProbe() : undefined),
     /** The map name popup while Task_MapNamePopup runs: its text, decoded, and how many px of it are on screen. */
     mapNamePopup: () => {
       const f = field();

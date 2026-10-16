@@ -10,6 +10,7 @@
 
 import { K } from '../battle/constants';
 import { g, pokemon, state } from '../battle/env';
+import { AddPCItem, RemovePCItem } from '../state/pcItems';
 import { btlCtrlOakOldManTestState2Flag, BtlCtrl_OakOldMan_SetState2Flag } from '../battle/controllerOakOldMan';
 import { DrawLevelUpWindowPg1, DrawLevelUpWindowPg2, GetMonLevelUpWindowStats } from '../battle/bsCommands3';
 import { GetHPBarLevel, GetScaledHPFraction } from '../battle/battleInterface';
@@ -3980,14 +3981,16 @@ function DisplayItemMustBeRemovedFirstMessage(taskId: number): void {
   gTasks[taskId].func = Task_UpdateHeldItemSpriteAndClosePartyMenu;
 }
 
+/** RemoveItemToGiveFromBag: the item PC's GIVE (item_pc.c) gives from the PC's items. */
 function RemoveItemToGiveFromBag(item: number): void {
-  // PARTY_ACTION_GIVE_PC_ITEM is unused, never occurs
-  RemoveBagItem(item, 1);
+  if (gPartyMenu.action === K.PARTY_ACTION_GIVE_PC_ITEM) RemovePCItem(state.pcItems, K.ITEM_NONE, item, 1);
+  else RemoveBagItem(item, 1);
 }
 
 /** Returns FALSE if there was no space to return the item (there always should be). */
 function ReturnGiveItemToBagOrPC(item: number): boolean {
-  return AddBagItem(item, 1);
+  if (gPartyMenu.action === K.PARTY_ACTION_GIVE_ITEM) return AddBagItem(item, 1);
+  return AddPCItem(state.pcItems, K.ITEM_NONE, item, 1);
 }
 
 export function InitChooseMonsForBattle(chooseMonsBattleType: number): void {

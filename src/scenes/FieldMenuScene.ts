@@ -12,12 +12,13 @@ import { initBattleMessages } from '../battle/message';
 import { loadGfx } from '../gba/gfx';
 import { gMain, SetMainCallback1, SetMainCallback2, SetVBlankCallback } from '../gba/main';
 import { initGbaText } from '../gba/window';
-import { CB2_ReturnToFieldContinueScriptPlayMapMusic, fieldReturn } from '../menus/fieldCallbacks';
+import { CB2_ReturnToField, CB2_ReturnToFieldContinueScriptPlayMapMusic, fieldReturn } from '../menus/fieldCallbacks';
 import { prepareMenus } from '../menus/host';
-import { CB2_BagMenuFromStartMenu } from '../menus/itemMenu';
+import { CB2_BagMenuFromStartMenu, GoToBagMenu } from '../menus/itemMenu';
 import { setObjectEventGraphicsInfo } from '../menus/objectEventGraphics';
 import { DoNamingScreen, NAMING_SCREEN_BOX, namingScreenGfxSymbols } from '../menus/namingScreen';
 import { EnterPokeStorage, pokemonStorageGfxSymbols } from '../menus/pokemonStorage';
+import { ItemPc_Init, itemPcGfxSymbols } from '../menus/itemPc';
 import { CB2_PartyMenuFromStartMenu } from '../menus/partyMenu';
 import { buyMenuGfxSymbols, CB2_GoToSellMenu, CB2_InitBuyMenu, LoadFieldTilesetsForShop, type ShopFieldView } from '../menus/shop';
 import type { PokemonData } from '../pokemon/Pokemon';
@@ -45,7 +46,7 @@ export interface NamingScreenRequest {
 }
 
 export interface FieldMenuStart {
-  menu: 'party' | 'bag' | 'buy' | 'sell' | 'naming' | 'storage';
+  menu: 'party' | 'bag' | 'buy' | 'sell' | 'naming' | 'storage' | 'itemPc' | 'itemPcDeposit';
   /** For 'storage': OPTION_WITHDRAW / OPTION_DEPOSIT / OPTION_MOVE_MONS / OPTION_MOVE_ITEMS */
   storageOption?: number;
   /** For 'buy': what the buy menu's map view reads from the field. */
@@ -92,9 +93,10 @@ export class FieldMenuScene extends GbaHostScene {
     }
     if (start.menu === 'storage') {
       // The box screen draws every mon's icon and pic synchronously; it can also open the naming screen.
-      setObjectEventGraphicsInfo(assets.sprites);
       await loadGfx([...pokemonStorageGfxSymbols(), ...namingScreenGfxSymbols(NAMING_SCREEN_BOX, 0, 0)]);
     }
+    // The item PC's list (WITHDRAW ITEM) draws the PC's items' icons.
+    if (start.menu === 'itemPc') await loadGfx(itemPcGfxSymbols());
     const naming = start.naming;
     if (naming) {
       setObjectEventGraphicsInfo(assets.sprites);
@@ -110,6 +112,10 @@ export class FieldMenuScene extends GbaHostScene {
         naming.onReturn();
         CB2_ReturnToFieldContinueScriptPlayMapMusic();
       });
+    } else if (start.menu === 'itemPc') {
+      SetMainCallback2(() => ItemPc_Init(0, CB2_ReturnToField)); // Task_WithdrawItem_WaitFadeAndGoToItemStorage
+    } else if (start.menu === 'itemPcDeposit') {
+      SetMainCallback2(() => GoToBagMenu(K.ITEMMENULOCATION_ITEMPC, K.OPEN_BAG_ITEMS, CB2_ReturnToField)); // Task_DepositItem_WaitFadeAndGoToBag
     } else if (start.menu === 'storage') {
       const option = start.storageOption!;
       SetMainCallback2(() => EnterPokeStorage(option));

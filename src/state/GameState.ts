@@ -6,6 +6,7 @@ import { random32 } from '../util/random';
 import type { Direction } from '../world/direction';
 import { Bag, type ItemSlot } from './Bag';
 import type { PlayTime } from './playTime';
+import { NewGameInitPCItems } from './pcItems';
 import { boxMonFromMon, boxMonRestorePP, PokemonStorage } from './PokemonStorage';
 
 /**
@@ -108,10 +109,7 @@ export class GameState {
   /** gPlayerParty: up to PARTY_SIZE mons, no gaps. */
   party: Pokemon[] = [];
   readonly bag: Bag;
-  /**
-   * gSaveBlock1Ptr->pcItems (PC_ITEMS_COUNT slots). The item PC (player_pc.c) isn't ported, so it stays empty:
-   * NewGameInitPCItems's Potion isn't added yet.
-   */
+  /** gSaveBlock1Ptr->pcItems (PC_ITEMS_COUNT slots; state/pcItems.ts), with NewGameInitPCItems's Potion. */
   readonly pcItems: ItemSlot[];
   /** gPokemonStoragePtr: the PC boxes. */
   readonly storage: PokemonStorage;
@@ -153,6 +151,7 @@ export class GameState {
       () => this.setFlag('FLAG_SYS_GOT_BERRY_POUCH'),
     );
     this.pcItems = Array.from({ length: defines.require('PC_ITEMS_COUNT') }, () => ({ itemId: defines.require('ITEM_NONE'), quantity: 0 }));
+    NewGameInitPCItems(this.pcItems, defines.require('ITEM_NONE'), defines.require('ITEM_POTION'));
     // ResetPokemonStorageSystem (NewGameInitData)
     this.storage = new PokemonStorage(
       {

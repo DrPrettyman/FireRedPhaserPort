@@ -5,6 +5,7 @@
 
 import { K } from '../battle/constants';
 import { state } from '../battle/env';
+import { AddPCItem } from '../state/pcItems';
 import { CopyToBgTilemapBufferRect, FillBgTilemapBufferRect_Palette0, InitBgsFromTemplates, ResetBgsAndClearDma3BusyFlags, SetBgTilemapBuffer, ShowBg, type BgTemplate } from '../gba/bg';
 import { gfx, gfx16 } from '../gba/gfx';
 import {
@@ -231,10 +232,7 @@ function sItemContextTaskFuncs(location: number): TaskFunc | null {
     case K.ITEMMENULOCATION_SHOP:
       return Task_ItemContext_Sell;
     case K.ITEMMENULOCATION_ITEMPC:
-      return (taskId) => {
-        console.warn('[bag] the item PC deposit flow is not implemented');
-        Task_ReturnToBagFromContextMenu(taskId);
-      };
+      return Task_ItemContext_Deposit;
     case K.ITEMMENULOCATION_PCBOX:
       return Task_ItemContext_PcBoxGive;
   }
@@ -1348,6 +1346,55 @@ function Task_ItemContext_FieldGive(taskId: number): void {
     gTasks[taskId].func = ItemMenu_StartFadeToExitCallback;
   } else {
     Task_PrintItemCantBeHeld(taskId);
+  }
+}
+
+/** Task_ItemContext_Deposit: the item PC's DEPOSIT ITEM (one at once, or choose how many first). */
+function Task_ItemContext_Deposit(taskId: number): void {
+  const data = gTasks[taskId].data;
+  data[8] = 1;
+  if (data[2] === 1) {
+    Task_TryDoItemDeposit(taskId);
+  } else {
+    InitQuantityToTossOrDeposit(data[1], text('gText_DepositHowManyStrVars1'));
+    gTasks[taskId].func = Task_SelectQuantityToDeposit;
+  }
+}
+
+function Task_SelectQuantityToDeposit(taskId: number): void {
+  const data = gTasks[taskId].data;
+  if (AdjustQuantityAccordingToDPadInput(data, 8, data[2]) === true) {
+    UpdateQuantityToTossOrDeposit(data[8], 3);
+  } else if (JOY_NEW(A_BUTTON)) {
+    PlaySE(K.SE_SELECT);
+    ClearWindowTilemap(GetBagWindow(6));
+    HideBagWindow(6);
+    HideBagWindow(0);
+    ScheduleBgCopyTilemapToVram(0);
+    BagDestroyPocketScrollArrowPair();
+    Task_TryDoItemDeposit(taskId);
+  } else if (JOY_NEW(B_BUTTON)) {
+    PlaySE(K.SE_SELECT);
+    HideBagWindow(6);
+    HideBagWindow(0);
+    PutWindowTilemap(1);
+    ScheduleBgCopyTilemapToVram(0);
+    bag_menu_print_cursor_(data[0], 1);
+    BagDestroyPocketScrollArrowPair();
+    Task_RedrawArrowsAndReturnToBagMenuSelect(taskId);
+  }
+}
+
+function Task_TryDoItemDeposit(taskId: number): void {
+  const data = gTasks[taskId].data;
+  if (AddPCItem(state.pcItems, K.ITEM_NONE, SpecialVar.ItemId, data[8])) {
+    // ItemUse_SetQuestLogEvent(QL_EVENT_DEPOSITED_ITEM_PC, ...): the quest log isn't ported
+    gStringVar1.set(CopyItemName(SpecialVar.ItemId));
+    gStringVar2.set(ConvertIntToDecimalStringN(data[8], STR_CONV_MODE_LEFT_ALIGN, 3));
+    BagPrintTextOnWindow(ShowBagWindow(6, 3), K.FONT_NORMAL, ExpandToStringVar4(text('gText_DepositedStrVar2StrVar1s')), 0, 2, 1, 0, 0, 1);
+    gTasks[taskId].func = Task_WaitAB_RedrawAndReturnToBag;
+  } else {
+    DisplayItemMessageInBag(taskId, K.FONT_NORMAL, text('gText_NoRoomToStoreItems'), Task_WaitAButtonAndCloseContextMenu);
   }
 }
 

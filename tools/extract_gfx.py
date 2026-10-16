@@ -18,7 +18,7 @@ from extract import read_jasc
 
 # Graphics the ported code loads (battle UI, terrain, Pokémon/trainer pics and icons, balls, battle
 # anims, party menu, bag and item icons, summary screen and mon markings, the shop's buy menu, the naming
-# screen, the PC storage system, the evolution scene, the field's tilesets and object event pics, which the buy menu's map view draws from VRAM,
+# screen, the PC storage system and item PC, the evolution scene, the field's tilesets and object event pics, which the buy menu's map view draws from VRAM,
 # field effect pics, door animation tiles, the cave entrance transition, and the weather fog and palette that
 # Haze and Mist Ball load).
 GFX_PREFIXES = (
@@ -40,6 +40,7 @@ GFX_PREFIXES = (
     "graphics/shop_menu/",
     "graphics/naming_screen/",
     "graphics/pokemon_storage/",
+    "graphics/item_pc/",
     "graphics/evolution_scene/",
     "graphics/object_events/",
     "graphics/field_effects/",

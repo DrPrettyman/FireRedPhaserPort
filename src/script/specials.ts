@@ -21,6 +21,8 @@ export interface SpecialEnv {
   showFieldMessage(label: string): () => boolean;
   /** The special left the field (SetMainCallback2), so the script never resumes. */
   endScript(): void;
+  /** ScriptContext_SetupScript: the running script ends and `label` starts in its place. */
+  setupScript(label: string): void;
   warnOnce(key: string, message: string): void;
   /** DisableMsgBoxWalkaway (script.c) */
   disableMsgBoxWalkaway(): void;
@@ -130,9 +132,19 @@ export const SPECIALS: Record<string, Special> = {
     });
   },
 
-  /** PlayerPC (player_pc.c): the item storage menus aren't ported, so it goes straight back to the PC menu. */
-  PlayerPC({ warnOnce }) {
-    warnOnce('PlayerPC', '[special] PlayerPC (item storage) not implemented');
+  /** PlayerPC (player_pc.c): ITEM STORAGE / MAILBOX / TURN OFF, ended by ScriptContext_Enable. */
+  PlayerPC({ host, setWaitState }) {
+    setWaitState(host.openPlayerPc());
+  },
+
+  /** BedroomPC (player_pc.c): the same menus; turning off sets up EventScript_PalletTown_PlayersHouse_2F_ShutDownPC. */
+  BedroomPC({ host, setWaitState, setupScript }) {
+    const menu = host.openPlayerPc();
+    setWaitState(() => {
+      if (!menu()) return false;
+      setupScript('EventScript_PalletTown_PlayersHouse_2F_ShutDownPC'); // Task_PlayerPcTurnOff
+      return true;
+    });
   },
 
   /** ShowPokemonStorageSystemPC (pokemon_storage_system_menu.c): Task_PCMainMenu, ended by ScriptContext_Enable. */
