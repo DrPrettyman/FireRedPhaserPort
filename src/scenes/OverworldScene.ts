@@ -87,6 +87,7 @@ import {
 } from '../world/trainerSee';
 import { mapResetTrainerRematches, shouldEggHatch, updateHappinessStepCounter, updatePoisonStepCounter, updateVsSeekerStepCounter } from '../world/stepCounters';
 import { sharedBattleData, type BattleStart } from './BattleScene';
+import { softReset } from './BootScene';
 import { forcedBattleTransition, logicSpeed, testEvent, testHooks, type FieldProbe } from '../dev/testHooks';
 import {
   GetInitialPlayerAvatarState,
@@ -134,6 +135,8 @@ export interface OverworldStart {
   preset?: StartPreset;
   /** CONTINUE from the main menu: the save to load (CB2_ContinueSavedGame); map/x/y are unused then. */
   continueGame?: SaveData;
+  /** NEW GAME after Oak's speech: the names and gender it put in gSaveBlock1/2 (NewGameInitData keeps them). */
+  newGameProfile?: { playerName: string; rivalName: string; playerGender: 'male' | 'female' };
 }
 
 /** struct FieldInput: the parts ProcessPlayerFieldInput uses. */
@@ -254,6 +257,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   async create(start: OverworldStart): Promise<void> {
     if (start.continueGame) fromSaveData(start.continueGame, this.state); // LoadSerializedGame & co. (load_save.c)
+    if (start.newGameProfile) Object.assign(this.state, start.newGameProfile);
     const kb = this.input.keyboard!;
     this.buttons = new Input(this);
 
@@ -1206,6 +1210,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       y: this.player.tileY - cur.originY,
       facing: this.player.facing,
       avatarFlags: gPlayerAvatar.flags & (F.ON_FOOT | F.MACH_BIKE | F.ACRO_BIKE | F.SURFING),
+      mapLayoutId: this.state.mapLayoutId,
     };
   }
 
@@ -1233,9 +1238,13 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       else roamerMove(this.state);
       if (warped && IsMapTypeOutdoors(cur.data.mapType)) this.state.setFlag('FLAG_SYS_FLASH_ACTIVE', false);
       SetDefaultFlashLevel(this.state, cur.data.cave);
+      this.state.mapLayoutId = this.defines.require(cur.data.layoutId); // LoadCurrentMapData
       const transition = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_TRANSITION');
       if (transition) this.scripts.runImmediately(transition);
+    } else {
+      this.state.mapLayoutId = continued.mapLayoutId ?? this.defines.require(cur.data.layoutId); // LoadSaveblockMapHeader
     }
+    await this.initMapLayout();
     const load = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_LOAD');
     if (load) this.scripts.runImmediately(load);
     await this.preloadMapSprites(); // again, now the map scripts have set any VAR_OBJ_GFX_ID_*
@@ -1256,6 +1265,26 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }
     // LoadMapInStepsLocal's (ReturnToFieldLocal's) InitCurrentFlashLevelScanlineEffect (a connection keeps the running effect)
     if (warped || continued) this.flash.initCurrentFlashLevelScanlineEffect(Overworld_GetFlashLevel(this.state));
+  }
+
+  /**
+   * InitMap's InitMapLayoutData with gMapHeader.mapLayout = GetMapLayout(): when an ON_TRANSITION script's
+   * `setmaplayoutindex` (or the save) names another layout than the header's, the map takes that one's grid.
+   */
+  private async initMapLayout(): Promise<void> {
+    const cur = this.world.current;
+    if (this.state.mapLayoutId === this.defines.require(cur.data.layoutId)) return;
+    const id = Object.entries(this.assets.scripts.defines).find(([k, v]) => k.startsWith('LAYOUT_') && v === this.state.mapLayoutId)?.[0];
+    if (!id) {
+      console.warn('[map] unknown layout', this.state.mapLayoutId);
+      return;
+    }
+    const layout = await this.assets.loadLayout(id);
+    await this.world.setCurrentLayout(layout);
+    if (layout.tilesetPair !== cur.data.tilesetPair) {
+      const anims = this.assets.tilesetAnimInfo(layout.tilesetPair);
+      InitTilesetAnimations(anims.primary, anims.secondary);
+    }
   }
 
   /**
@@ -1447,7 +1476,24 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * start menu (DrawStartMenuInOneGo); after saving (or a save error) the message box is cleared and the field resumes.
    */
   private openSaveDialog(): void {
-    const dialog = new SaveDialog({
+    const dialog = this.createSaveDialog();
+    this.overlay = {
+      tick: () => {
+        const r = dialog.tick();
+        if (r === SAVECB_RETURN_CONTINUE) return false;
+        if (r === SAVECB_RETURN_CANCEL) this.openStartMenu();
+        else this.messageBox.hide(); // ClearDialogWindowAndFrameToTransparent
+        return true;
+      },
+    };
+  }
+
+  /**
+   * Field_AskSaveTheGame's StartMenu_PrepareForSave: the dialog its task50_save_game runs, with the script waiting
+   * (`special Field_AskSaveTheGame` + `waitstate`). Unlike the start menu's, it leaves the message box as it is.
+   */
+  createSaveDialog(): SaveDialog {
+    return new SaveDialog({
       scene: this,
       fonts: this.fonts,
       input: this.buttons,
@@ -1458,15 +1504,6 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       mapName: () => GetMapName(this.defines.require(this.mapSection())), // GetMapNameGeneric
       storeLocationForSave: () => this.storeLocationForSave(),
     });
-    this.overlay = {
-      tick: () => {
-        const r = dialog.tick();
-        if (r === SAVECB_RETURN_CONTINUE) return false;
-        if (r === SAVECB_RETURN_CANCEL) this.openStartMenu();
-        else this.messageBox.hide(); // ClearDialogWindowAndFrameToTransparent
-        return true;
-      },
-    };
   }
 
   /**
@@ -1543,6 +1580,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   openMultichoice(req: MultichoiceRequest): { tick(): boolean; result: number } {
     const d = this.defines;
+    testEvent('multichoice', { mcId: req.mcId });
     const cursor = this.charmap.encode(this.assets.strings.gText_SelectorArrow2);
     const frameType = this.state.optionsWindowFrameType + 1;
     if (req.columns !== undefined) {
@@ -1720,22 +1758,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       updateTilesetAnimations: () => UpdateTilesetAnimations(),
       bareScreen: () => this.gbaScreen.startBare(),
       softReset: () => {
-        // SoftReset clears RAM: this scene goes (with its GameState) and a fresh one replaces it, then the boot
-        // flow runs again. The removal is queued while the scene updates, so wait until it has happened.
         this.gbaScreen.stop();
-        const game = this.game;
-        const Scene = this.constructor as new () => Phaser.Scene;
-        game.scene.remove('Overworld');
-        const reboot = () => {
-          if (game.scene.getScene('Overworld')) {
-            game.events.once(Phaser.Core.Events.POST_STEP, reboot);
-            return;
-          }
-          game.scene.add('Overworld', Scene, false);
-          game.scene.moveAbove('MainMenu', 'Overworld'); // back to its place in the scene list (main.ts), under the battle and menus
-          game.scene.start('Boot', { softReset: true });
-        };
-        game.events.once(Phaser.Core.Events.POST_STEP, reboot);
+        softReset(this);
       },
       playerGender: () => this.playerGender(),
     } satisfies Partial<typeof creditsEnv>);

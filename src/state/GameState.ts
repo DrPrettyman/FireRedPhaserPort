@@ -94,6 +94,12 @@ export class GameState {
     this.setGameStat(statId, Math.min(this.getGameStat(statId) + 1, 0xffffff));
   }
 
+  /**
+   * gSaveBlock1Ptr->mapLayoutId: the current map's layout (LAYOUT_* value). LoadCurrentMapData sets it from the
+   * header on every map load; `setmaplayoutindex` (SetCurrentMapLayout) changes it from ON_TRANSITION.
+   */
+  mapLayoutId = 0;
+
   private flags = new Set<number>();
   private vars = new Map<number, number>();
   /** STR_VAR_1..3 contents as encoded bytes (filled by buffer* script commands). */
@@ -397,6 +403,8 @@ export interface PlayerLocation {
   facing: Direction;
   /** PLAYER_AVATAR_FLAG_ON_FOOT / MACH_BIKE / ACRO_BIKE / SURFING (the state, not the transient flags). */
   avatarFlags: number;
+  /** gSaveBlock1Ptr->mapLayoutId, stored with the location (absent: the header's layout). */
+  mapLayoutId?: number;
 }
 
 /** struct Roamer */

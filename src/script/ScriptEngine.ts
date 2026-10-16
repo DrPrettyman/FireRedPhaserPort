@@ -114,6 +114,8 @@ export interface ScriptHost {
   hideMonPic(): Wait | undefined;
   /** PicboxCancel: remove the picture box at once. */
   cancelMonPic(): void;
+  /** Field_AskSaveTheGame: the SAVE dialog (ui/SaveDialog.ts); `tick()` is RunSaveDialogCB (SAVECB_RETURN_*). */
+  createSaveDialog(): { tick(): number };
   /** CreatePCMenuWindow + CreateMCMenuInputHandlerTask */
   openPcMenu(): { tick(): boolean; result: number };
   /** FadeScreen(mode, delay): returns a wait for IsPaletteNotActive. */
@@ -274,6 +276,8 @@ export class ScriptEngine {
         this.start(label);
       },
       disableMsgBoxWalkaway: () => (this.msgBoxWalkawayDisabled = true),
+      input,
+      hideFieldMessageBox: () => this.messageBox.hide(),
       encodeText: (label) => this.charmap.encodePlain(this.strings[label] ?? ''),
       warnOnce: (key, message) => {
         if (this.warned.has(key)) return;
@@ -881,6 +885,13 @@ export class ScriptEngine {
         this.defines.get(a[2]) ?? 0,
         (this.defines.get(a[3] ?? 'FALSE') ?? 0) !== 0,
       );
+    },
+    /**
+     * ScrCmd_setmaplayoutindex → SetCurrentMapLayout: gSaveBlock1Ptr->mapLayoutId = VarGet(arg). Only ON_TRANSITION
+     * scripts use it; the field then loads that layout (OverworldScene.onMapLoaded, as InitMap follows the script).
+     */
+    setmaplayoutindex(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      this.state.mapLayoutId = this.state.value(a[0]);
     },
     warp(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
       this.doWarp(ctx, a);

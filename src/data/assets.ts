@@ -10,7 +10,7 @@ import { FieldDoors, type DoorData } from '../world/doors';
 import { ATLAS_LAYERS, TilesetPair } from '../world/TilesetPair';
 import { TILESET_ANIM_SYMBOLS, type TilesetAnimInfo } from '../world/tilesetAnims';
 import { tilesetVram, type TilesetPalettes } from '../world/TilesetVram';
-import type { Constants, ItemInfo, MapData, MoveInfo, PokemonTables, SpeciesInfo, SpriteInfo, TilesetIndex, TilesetSymbols, WildEncounterData } from './types';
+import type { Constants, ItemInfo, MapData, MapLayoutData, MoveInfo, PokemonTables, SpeciesInfo, SpriteInfo, TilesetIndex, TilesetSymbols, WildEncounterData } from './types';
 
 const GEN = 'gen';
 
@@ -44,6 +44,7 @@ export class Assets {
   fieldEffectScripts: Record<string, string[][]> = {};
 
   private maps = new Map<string, Promise<MapData>>();
+  private layoutIndex?: Promise<Record<string, string>>;
 
   async init(): Promise<void> {
     const [index, sprites, tilesets, constants, fonts, charmap, strings, scripts, species, moves, items, tables, emoticons, wildEncounters] = await Promise.all([
@@ -94,6 +95,18 @@ export class Assets {
       this.maps.set(name, p);
     }
     return p;
+  }
+
+  /**
+   * gMapLayouts[id - 1] by LAYOUT_* name: a layout a map header uses comes from that map's file
+   * (maps/layouts/index.json says which), any other from its own file.
+   */
+  async loadLayout(id: string): Promise<MapLayoutData> {
+    this.layoutIndex ??= fetchJson<Record<string, string>>(`${GEN}/maps/layouts/index.json`);
+    const mapName = (await this.layoutIndex)[id];
+    if (!mapName) return fetchJson<MapLayoutData>(`${GEN}/maps/layouts/${id}.json`);
+    const { width, height, blocks, borderWidth, borderHeight, border, tilesetPair } = await this.loadMap(mapName);
+    return { id, width, height, blocks, borderWidth, borderHeight, border, tilesetPair };
   }
 
   /** The GBA-native symbols of a pair's primary and secondary tilesets (CopyMapTilesetsToVram's sources). */

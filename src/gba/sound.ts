@@ -42,3 +42,18 @@ export function IsCryPlaying(): boolean {
 export function IsCryPlayingOrClearCrySongs(): boolean {
   return false;
 }
+
+/** PlayBGM: no BGM yet. */
+export function PlayBGM(_songId: number): void {}
+
+/** m4aSongNumStart: no BGM yet. */
+export function m4aSongNumStart(_songId: number): void {}
+
+/** FadeOutBGM / FadeOutMapMusic: no BGM yet. */
+export function FadeOutBGM(_speed: number): void {}
+export function FadeOutMapMusic(_speed: number): void {}
+
+/** IsNotWaitingForBGMStop: TRUE once a BGM fade-out has finished (no BGM yet, so always). */
+export function IsNotWaitingForBGMStop(): boolean {
+  return true;
+}

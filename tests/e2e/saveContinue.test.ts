@@ -1,6 +1,7 @@
 // Saving from the start menu (start_menu.c's save dialog) and continuing from the main menu (main_menu.c's
-// CONTINUE → CB2_ContinueSavedGame), plus the play time counter and the boot flow: a save boots to the main
-// menu, no save (or a dev start preset) boots straight into the field.
+// CONTINUE → CB2_ContinueSavedGame), plus the play time counter and the boot flow without the title screen (the
+// harness's ?skipIntro; titleScreen.test.ts boots through it): a save boots to the main menu, no save (or a dev
+// start preset) boots straight into the field.
 
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
@@ -199,11 +200,12 @@ test('boot: no save goes to the new game, a dev preset skips the main menu, NEW 
   expect((await game.events()).some((e) => e.type === 'mainMenu')).toBe(false);
   expect(await game.eval((t) => t.field()!.map)).toBe('PalletTown_ProfessorOaksLab');
 
-  // B on the main menu goes to the title screen, which isn't ported: the main menu comes back
+  // B on the main menu goes to the title screen; START there brings the main menu back
   await game.load({ keepSave: true, mainMenu: true });
   await mainMenuReady(game);
   await game.press('B');
-  await game.waitFor((t) => t.mainMenu()?.fading, { what: 'the fade out' });
+  await game.waitFor((t) => t.titleScreen()?.scene === 'RUN', { what: 'the title screen' });
+  await game.press('START');
   expect(await mainMenuReady(game)).toMatchObject({ menuType: 1, cursorPos: 0 });
 
   // NEW GAME

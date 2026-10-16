@@ -167,6 +167,11 @@ export interface StartOptions {
    * instead of for the field.
    */
   mainMenu?: boolean;
+  /**
+   * Boot like the game: the title screen first (wait for it instead of for the field). Without it the harness
+   * passes `?skipIntro`, which boots to the main menu (with a save) or the new game.
+   */
+  title?: boolean;
 }
 
 export interface WaitOptions {
@@ -211,11 +216,16 @@ export class Game {
     q.set('seed', String(opts.seed ?? 1));
     q.set('speed', String(opts.speed ?? 8));
     q.set('textSpeed', opts.textSpeed ?? 'fast');
+    if (!opts.title) q.set('skipIntro', '1');
     this.errors = [];
     this.log = [];
     if (!opts.keepSave) await this.clearSave();
     await this.cdp.send('Page.navigate', { url: `${this.baseUrl}/?${q}` });
     await this.waitFor(() => typeof (window as any).__test !== 'undefined', { what: 'test hooks', timeout: 60_000, raw: true });
+    if (opts.title) {
+      await this.waitFor((t) => t.events().some((e) => e.type === 'titleScreen'), { what: 'the title screen', timeout: 60_000 });
+      return this;
+    }
     if (opts.mainMenu) {
       await this.waitFor((t) => t.events().some((e) => e.type === 'mainMenu'), { what: 'the main menu', timeout: 60_000 });
       return this;

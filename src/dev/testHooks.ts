@@ -29,6 +29,9 @@ import { itemPcProbe } from '../menus/itemPc';
 import { hallOfFameProbe } from '../menus/hallOfFame';
 import { creditsProbe, creditsSkipToClosing } from '../menus/credits';
 import { mainMenuProbe } from '../menus/mainMenu';
+import { titleScreenProbe } from '../menus/titleScreen';
+import { clearSaveDataProbe } from '../menus/clearSaveDataScreen';
+import { oakSpeechProbe } from '../menus/oakSpeech';
 import { saveDialogProbe } from '../ui/SaveDialog';
 import { startMenuProbe } from '../ui/StartMenu';
 
@@ -457,6 +460,15 @@ function createApi(game: Phaser.Game) {
     mainMenu: () => {
       const p = game.scene.isActive('MainMenu') ? mainMenuProbe() : undefined;
       return p && { ...p, stats: p.stats.map(decode) };
+    },
+    /** The title screen while its main task runs: the scene (INIT .. CRY), its state, the restart timer, whether PRESS START shows, the flames alive. */
+    titleScreen: () => (game.scene.isActive('MainMenu') ? titleScreenProbe() : undefined),
+    /** The clear save data screen (B+SELECT+UP on the title screen) while it runs: whether its YES/NO takes input. */
+    clearSaveData: () => (game.scene.isActive('MainMenu') ? clearSaveDataProbe() : undefined),
+    /** Oak's speech (NEW GAME) while it runs: the running task's function name, the page / shrink timer, the menu taking input ('gender' | 'names' | 'yesNo'), fading, the Pikachu intro's state, the gender and names so far. */
+    oakSpeech: () => {
+      const p = game.scene.isActive('MainMenu') ? oakSpeechProbe() : undefined;
+      return p && { ...p, playerName: decode(p.playerName), rivalName: decode(p.rivalName) };
     },
     /** The field start menu while it's open: its items and cursor. */
     startMenu: () => startMenuProbe(),

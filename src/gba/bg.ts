@@ -1,6 +1,19 @@
-// bg.c: background control, tilemap buffers and their copies into VRAM (text mode; the affine
-// BG paths are kept to what's needed so far). DMA copies complete immediately.
+// bg.c: background control, tilemap buffers and their copies into VRAM, for text and affine BGs (an affine BG's
+// tilemap buffer is a Uint16Array read as bytes). DMA copies complete immediately.
 
+import { BgAffineSet } from './bios';
+import {
+  REG_OFFSET_BG2PA,
+  REG_OFFSET_BG2PB,
+  REG_OFFSET_BG2PC,
+  REG_OFFSET_BG2PD,
+  REG_OFFSET_BG2X_L,
+  REG_OFFSET_BG2X_H,
+  REG_OFFSET_BG2Y_L,
+  REG_OFFSET_BG2Y_H,
+  REG_OFFSET_BG3X_L,
+  REG_OFFSET_BG3Y_L,
+} from './hw';
 import { BG_CHAR_ADDR, BG_SCREEN_ADDR, GetGpuReg, REG_OFFSET_BG0HOFS, REG_OFFSET_BG0VOFS, REG_OFFSET_BG1HOFS, REG_OFFSET_BG1VOFS, REG_OFFSET_BG2HOFS, REG_OFFSET_BG2VOFS, REG_OFFSET_BG3HOFS, REG_OFFSET_BG3VOFS, SetGpuReg, vram } from './hw';
 
 const DISPCNT_ALL_BG_AND_MODE_BITS = 0x0f00 | 0x7;
@@ -327,6 +340,20 @@ export function GetBgAttribute(bg: number, attributeId: number): number {
 const HOFS = [REG_OFFSET_BG0HOFS, REG_OFFSET_BG1HOFS, REG_OFFSET_BG2HOFS, REG_OFFSET_BG3HOFS];
 const VOFS = [REG_OFFSET_BG0VOFS, REG_OFFSET_BG1VOFS, REG_OFFSET_BG2VOFS, REG_OFFSET_BG3VOFS];
 
+/**
+ * ChangeBgX/Y's register writes: BG0/BG1 (and BG2/BG3 in text mode) scroll by the value's integer part; an affine
+ * BG2 (modes 1, 2) or BG3 (mode 2) gets the whole value as its reference point (BGxX/Y_L and _H).
+ */
+function setBgCoordRegs(bg: number, value: number, ofs: number[], bg2Ref: number, bg3Ref: number): void {
+  const mode = GetBgMode();
+  if (bg < 2 || mode === 0) SetGpuReg(ofs[bg], (value >>> 8) & 0xffff);
+  else if (bg === 2 || mode === 2) {
+    const ref = bg === 2 ? bg2Ref : bg3Ref;
+    SetGpuReg(ref + 2, (value >>> 16) & 0xffff);
+    SetGpuReg(ref, value & 0xffff);
+  }
+}
+
 /** ChangeBgX: `value` is 8.8 fixed point in text mode. */
 export function ChangeBgX(bg: number, value: number, op: number): number {
   if (bg > 3) return -1; // the C's visibility check compares against 0, which never matches
@@ -334,7 +361,7 @@ export function ChangeBgX(bg: number, value: number, op: number): number {
   if (op === BG_COORD_ADD) c2.bg_x = (c2.bg_x + value) >>> 0;
   else if (op === BG_COORD_SUB) c2.bg_x = (c2.bg_x - value) >>> 0;
   else c2.bg_x = value >>> 0;
-  if (GetBgMode() === 0) SetGpuReg(HOFS[bg], (c2.bg_x >>> 8) & 0xffff);
+  setBgCoordRegs(bg, c2.bg_x, HOFS, REG_OFFSET_BG2X_L, REG_OFFSET_BG3X_L);
   return c2.bg_x;
 }
 
@@ -348,12 +375,55 @@ export function ChangeBgY(bg: number, value: number, op: number): number {
   if (op === BG_COORD_ADD) c2.bg_y = (c2.bg_y + value) >>> 0;
   else if (op === BG_COORD_SUB) c2.bg_y = (c2.bg_y - value) >>> 0;
   else c2.bg_y = value >>> 0;
-  if (GetBgMode() === 0) SetGpuReg(VOFS[bg], (c2.bg_y >>> 8) & 0xffff);
+  setBgCoordRegs(bg, c2.bg_y, VOFS, REG_OFFSET_BG2Y_L, REG_OFFSET_BG3Y_L);
   return c2.bg_y;
 }
 
 export function GetBgY(bg: number): number {
   return sGpuBgConfigs2[bg].bg_y;
+}
+
+/** SetBgAffine (SetBgAffineInternal): BgAffineSet into BG2's affine registers (modes 1 and 2 only). */
+export function SetBgAffine(bg: number, srcCenterX: number, srcCenterY: number, dispCenterX: number, dispCenterY: number, scaleX: number, scaleY: number, rotationAngle: number): void {
+  switch (GetBgMode()) {
+    case 1:
+      if (bg !== 2) return;
+      break;
+    case 2:
+      if (bg < 2 || bg > 3) return;
+      break;
+    default:
+      return;
+  }
+  const dest = BgAffineSet({ texX: srcCenterX, texY: srcCenterY, scrX: dispCenterX, scrY: dispCenterY, sx: scaleX, sy: scaleY, alpha: rotationAngle });
+  // (sic) BG2's registers, also for BG3 in mode 2
+  SetGpuReg(REG_OFFSET_BG2PA, dest.pa);
+  SetGpuReg(REG_OFFSET_BG2PB, dest.pb);
+  SetGpuReg(REG_OFFSET_BG2PC, dest.pc);
+  SetGpuReg(REG_OFFSET_BG2PD, dest.pd);
+  SetGpuReg(REG_OFFSET_BG2PA, dest.pa);
+  SetGpuReg(REG_OFFSET_BG2X_L, dest.dx & 0xffff);
+  SetGpuReg(REG_OFFSET_BG2X_H, (dest.dx >> 16) & 0xffff);
+  SetGpuReg(REG_OFFSET_BG2Y_L, dest.dy & 0xffff);
+  SetGpuReg(REG_OFFSET_BG2Y_H, (dest.dy >> 16) & 0xffff);
+}
+
+/** An affine BG's tilemap buffer as bytes (affine tilemap entries are u8; the buffer is kept as a Uint16Array). */
+function affineBytes(tm: Uint16Array): Uint8Array {
+  return new Uint8Array(tm.buffer, tm.byteOffset, tm.byteLength);
+}
+
+/** GetBgMetricAffineMode: 0 = the map size in 0x100-byte units, 1/2 = tiles per row/column. */
+export function GetBgMetricAffineMode(bg: number, whichMetric: number): number {
+  const a = GetBgControlAttribute(bg, BG_CTRL_ATTR_SCREENSIZE);
+  switch (whichMetric) {
+    case 0:
+      return [0x1, 0x4, 0x10, 0x40][a] ?? 0;
+    case 1:
+    case 2:
+      return 0x10 << a;
+  }
+  return 0;
 }
 
 export function SetBgTilemapBuffer(bg: number, tilemap: Uint16Array): void {
@@ -380,13 +450,23 @@ export function CopyToBgTilemapBuffer(bg: number, src: ArrayLike<number>, mode: 
 export function CopyBgTilemapBufferToVram(bg: number): void {
   const tm = sGpuBgConfigs2[bg]?.tilemap;
   if (!tm) return;
-  const size = GetBgType(bg) === 0 ? GetBgMetricTextMode(bg, 0) * 0x800 : 0;
+  const type = GetBgType(bg);
+  const size = type === 0 ? GetBgMetricTextMode(bg, 0) * 0x800 : type === 1 ? GetBgMetricAffineMode(bg, 0) * 0x100 : 0;
   LoadBgVram(bg, tm, size, 0, 2);
 }
 
 export function CopyToBgTilemapBufferRect(bg: number, src: ArrayLike<number>, destX: number, destY: number, width: number, height: number): void {
   const tm = sGpuBgConfigs2[bg]?.tilemap;
-  if (!tm || GetBgType(bg) !== 0) return;
+  if (!tm) return;
+  if (GetBgType(bg) === 1) {
+    // `src` is u8 tilemap entries
+    const bytes = affineBytes(tm);
+    const mode = GetBgMetricAffineMode(bg, 1);
+    let s = 0;
+    for (let y = destY; y < destY + height; y++) for (let x = destX; x < destX + width; x++) bytes[(y * mode + x) % bytes.length] = src[s++] & 0xff;
+    return;
+  }
+  if (GetBgType(bg) !== 0) return;
   let s = 0;
   for (let y = destY; y < destY + height; y++) for (let x = destX; x < destX + width; x++) tm[(y * 0x20 + x) & 0xffff] = src[s++];
 }
@@ -411,7 +491,19 @@ export function CopyRectToBgTilemapBufferRect(
   palette2: number,
 ): void {
   const tm = sGpuBgConfigs2[bg]?.tilemap;
-  if (!tm || GetBgType(bg) !== 0) return;
+  if (!tm) return;
+  if (GetBgType(bg) === 1) {
+    // `src` is u8 tilemap entries; tileOffset is added to each
+    const bytes = affineBytes(tm);
+    const mode = GetBgMetricAffineMode(bg, 1);
+    let s = srcY * srcWidth + srcX;
+    for (let i = destY; i < destY + rectHeight; i++) {
+      for (let j = destX; j < destX + rectWidth; j++) bytes[(mode * i + j) % bytes.length] = (src[s++] + tileOffset) & 0xff;
+      s += srcWidth - rectWidth;
+    }
+    return;
+  }
+  if (GetBgType(bg) !== 0) return;
   const screenSize = GetBgControlAttribute(bg, BG_CTRL_ATTR_SCREENSIZE);
   const screenWidth = GetBgMetricTextMode(bg, 1) * 0x20;
   const screenHeight = GetBgMetricTextMode(bg, 2) * 0x20;
@@ -428,7 +520,14 @@ export function CopyRectToBgTilemapBufferRect(
 
 export function FillBgTilemapBufferRect_Palette0(bg: number, tileNum: number, x: number, y: number, width: number, height: number): void {
   const tm = sGpuBgConfigs2[bg]?.tilemap;
-  if (!tm || GetBgType(bg) !== 0) return;
+  if (!tm) return;
+  if (GetBgType(bg) === 1) {
+    const bytes = affineBytes(tm);
+    const mode = GetBgMetricAffineMode(bg, 1);
+    for (let yy = y; yy < y + height; yy++) for (let xx = x; xx < x + width; xx++) bytes[(yy * mode + xx) % bytes.length] = tileNum & 0xff;
+    return;
+  }
+  if (GetBgType(bg) !== 0) return;
   for (let yy = y; yy < y + height; yy++) for (let xx = x; xx < x + width; xx++) tm[(yy * 0x20 + xx) & 0xffff] = tileNum;
 }
 
@@ -438,7 +537,19 @@ export function FillBgTilemapBufferRect(bg: number, tileNum: number, x: number, 
 
 export function WriteSequenceToBgTilemapBuffer(bg: number, firstTileNum: number, x: number, y: number, width: number, height: number, paletteSlot: number, tileNumDelta: number): void {
   const tm = sGpuBgConfigs2[bg]?.tilemap;
-  if (!tm || GetBgType(bg) !== 0) return;
+  if (!tm) return;
+  if (GetBgType(bg) === 1) {
+    const bytes = affineBytes(tm);
+    const mode = GetBgMetricAffineMode(bg, 1);
+    for (let yy = y; yy < y + height; yy++) {
+      for (let xx = x; xx < x + width; xx++) {
+        bytes[(yy * mode + xx) % bytes.length] = firstTileNum & 0xff;
+        firstTileNum = (firstTileNum & 0xfc00) + ((firstTileNum + tileNumDelta) & 0x3ff);
+      }
+    }
+    return;
+  }
+  if (GetBgType(bg) !== 0) return;
   const attribute = GetBgControlAttribute(bg, BG_CTRL_ATTR_SCREENSIZE);
   const w = GetBgMetricTextMode(bg, 1) * 0x20;
   const h = GetBgMetricTextMode(bg, 2) * 0x20;

@@ -49,10 +49,18 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     to black like the GBA and go straight to the map, without the banner (or the flash that follows it).
   - Wild encounters: GAME_STAT_* counters aren't kept.
   - Scripted wild battles (`dowildbattle`, StartLegendaryBattle): no battle music (MUS_VS_MEWTWO / _VS_LEGEND /
-    ...), no GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES. Not ported: `setmaplayoutindex` (Seafoam Islands B3F/B4F
-    keep their current layout after both boulders have been pushed down; the boulders still fall and the flags
-    are set), `seteventmon` (Navel Rock's Lugia / Ho-Oh and Birth Island's Deoxys, which also need the event
-    tickets).
+    ...), no GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES. `seteventmon` (CreateEnemyEventMon) doesn't set
+    MON_DATA_MODERN_FATEFUL_ENCOUNTER (the port keeps no such field; IsBattlerModernFatefulEncounter is always
+    TRUE, so it makes no difference). Navel Rock and Birth Island need the Mystery Gift event tickets, which can't
+    be had, so only a dev start reaches Lugia, Ho-Oh and Deoxys; Navel Rock's `special ShakeScreen` (and the
+    other ShakeScreen users) isn't ported and warns once.
+  - `setmaplayoutindex` (World.setCurrentLayout): the swapped layout replaces the current map's chunk after
+    ON_TRANSITION rather than being picked before the grid is first built (same result; ON_TRANSITION can't see
+    the grid on the GBA either). gSaveBlock1Ptr->mapLayoutId is saved inside the save's `location`
+    (PlayerLocation.mapLayoutId), not as its own field.
+  - Cable club (cable_club.c): there is no link play. TryBattleLinkup / TryTradeLinkup run as if nothing were on
+    the other end of the cable (Task_LinkupAwaitConnection until B, then LINKUP_FAILED), IsWirelessAdapterConnected
+    and ValidateSavedWonderCard are FALSE, IsBadEggInParty is FALSE (no bad eggs), CloseLink is a no-op.
   - Player avatar (world/playerAvatar.ts, world/bike.ts): no audio (bump, ledge, spinner, bike bell, Strength
     and fall sounds; Cycling Road and surf music). Not ported: the warp arrow sprite on arrow mats
     (HandleWarpArrowSpriteHideShow), DoStairWarp's 12-frame delay when a stair warp takes the player off the
@@ -95,18 +103,31 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     checker, Trainer Tower and minigame records, the enigma berry, mystery gift, easy chat, link records and
     the sound and region map zoom options. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
-  - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): there is no copyright screen, intro or title
-    screen yet, so the game boots into the main menu when the save slot holds something, and straight into the
-    new game otherwise (as the main menu itself does with an empty slot). B on the main menu (back to the title
-    screen) brings the main menu back; NEW GAME skips Oak's speech. Dev starts (`?start=`, `?map=`) skip the main
-    menu. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
+  - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the title screen; the
+    copyright screen and intro.c's Game Freak / Nidorino movie before it aren't ported. Dev starts (`?start=`,
+    `?map=`) skip the title screen and the main menu; dev `?skipIntro` (the e2e harness's default) skips the title
+    screen and Oak's speech: the main menu with a save, the new game without. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
     before CONTINUE, no SE_SELECT. SAVE_STATUS_ERROR ("the previous save file will be loaded") can't happen: one
     slot, no backup; an unreadable slot is SAVE_STATUS_INVALID ("The save file has been deleted...").
+  - Title screen (menus/titleScreen.ts): no MUS_TITLE, no Charizard cry (the cry scene still waits its 90
+    frames), no help system (HELPCONTEXT_TITLE_SCREEN: L/R do nothing). When its 2700-frame timer runs out it goes
+    straight back to the title screen (CB2_InitCopyrightScreenAfterTitleScreen would replay the copyright screen
+    and the intro). StartTimer1 / SeedRngAndSetTrainerId don't seed the RNG from the time spent on the title
+    screen: the port seeds it at load. B+SELECT (REVISION 0's berry fix program, a multiboot program for Ruby and
+    Sapphire's berry clock) does nothing. The clear save data screen (B+SELECT+UP) empties the one localStorage
+    slot (ClearSaveData erases every flash sector, incl. the Hall of Fame) and its soft reset (DoSoftReset) is
+    `softReset` in scenes/BootScene.ts: the scenes restart, the extracted data stays loaded.
+  - Oak's speech (menus/oakSpeech.ts): no BGM (MUS_NEW_GAME_INSTRUCT / _INTRO / _EXIT, MUS_ROUTE24), cry or SEs
+    (the cry waits end at once), no help context (HELPCONTEXT_NEW_GAME). After the naming screen the C loads 48
+    colours past the background palette (out of the tiles after it) into palettes the player / rival pic overwrite
+    anyway; the port loads just the palette. The trainer id is still rolled when the game state is created (see the
+    RNG approximation), not by the naming screen's SeedRngAndSetTrainerId. CB2_NewGame hands only the names and the
+    gender to the field, whose new GameState is NewGameInitData's.
   - Save dialog (ui/SaveDialog.ts): SE_SAVE / SE_BOO / SE_SELECT are silent; no help context, no
     GAME_STAT_SAVED_GAME, no quest log data. A failed write shows the save error message without
     DoSaveFailedScreen. SaveMapView isn't ported: the map view isn't saved, so CONTINUE rebuilds the map from its
     header and ON_LOAD script (metatiles a script changed later aren't restored). `special Field_AskSaveTheGame`
-    (EventScript_AskSaveGame: cable club, Seven Island) isn't wired to the dialog yet.
+    (task50_save_game) doesn't switch to HELPCONTEXT_SAVE.
   - CONTINUE (OverworldScene.continueSavedGame): the map's objects spawn from its templates (object events aren't
     saved, see Save data); gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
@@ -122,14 +143,16 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Credits (menus/credits.ts): no audio (MUS_CREDITS, the cries). A map scene loads asynchronously, so it can start
     a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
     GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.
-    SoftReset restarts the boot flow (BootScene: the main menu, or the new game) with a fresh Overworld scene and
-    GameState; other module-level state isn't reset, and there's no title screen or intro yet (it should go there
-    once the title screen exists).
+    SoftReset (BootScene's `softReset`) restarts the boot flow (the title screen) with a fresh Overworld scene and
+    GameState; other module-level state isn't reset, and intro.c's movie isn't ported.
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, Trainer Tower clock, cable club
     monitors, questionnaire/easy chat) start their scripts and hit the unimplemented-special warnings.
-  - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link flags.
+  - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link
+    flags, CloseLink.
   - Player names are "PLAYER"/"RIVAL" until Oak's intro exists.
+  - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link flags.
+  - Player names are "PLAYER"/"RIVAL" in dev starts and with `?skipIntro` (the e2e harness), which skip Oak's speech.
 - **Approximations:**
   - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical; weather palettes ignored.
   - `showmonpic`: the sprite appears when its PNG has loaded; no cry.

@@ -113,7 +113,7 @@ import { FONT_NORMAL } from '../text/Font';
 import { EOS, GetMonNickname, gStringVar1, speciesName, StringExpandPlaceholders, text } from './common';
 import { CreateMonPicSprite_HandleDeoxys, CreateTrainerPicSprite, FreeAndDestroyMonPicSprite, FreeAndDestroyTrainerPicSprite, ResetAllPicSprites } from './picSprites';
 import { BeginPCScreenEffect_TurnOff, BeginPCScreenEffect_TurnOn, IsPCScreenEffectRunning_TurnOff, IsPCScreenEffectRunning_TurnOn } from './pcScreenEffect';
-import { CreateTopBarWindowLoadPalette, DestroyTopBarWindow, TopBarWindowPrintString, TopBarWindowPrintTwoStrings } from './topBarWindow';
+import { CreateTopBarWindowLoadPalette, DestroyTopBarWindow, TopBarWindowPrintString, TopBarWindowPrintTwoStrings } from '../gba/topBarWindow';
 
 const PARTY_SIZE = 6;
 const HALL_OF_FAME_BG_PAL = RGB(22, 24, 29);
