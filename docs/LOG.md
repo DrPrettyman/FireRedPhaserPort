@@ -797,3 +797,28 @@ end to end.
   add its own `battleAnims.<file>.test.ts`.
 - BATTLE_ANIMS_PLAN.md "Working in parallel": who owns which files, the cross-file symbols to leave alone, and
   which shared lines (counts, tables) only the merger edits.
+
+### Battle anims 2A: battle_anim_fight.c, _rock.c, _ground.c, _bug.c, _poison.c
+
+- All five files are fully ported: every sprite callback, task and helper, including the unused
+  AnimUnusedHumanoidFoot (fight.ts, rock.ts, ground.ts, bug.ts, poison.ts). New: AnimTask_LoadSandstormBackground
+  (BG1 blend, like Surf), AnimTask_Rollout (dirt and rock sizes follow the Rollout counter), the Seismic Toss and
+  Sky Uppercut BG3 scrolls, Dig (a BG1/BG2HOFS scanline effect hides the lines below the hole),
+  AnimTask_HorizontalShake (battlers or terrain), the Fissure BG3 positioning, and the Flying-sand subsprites.
+- 29 more scripts run (168 → 197 of 397): Karate Chop, Stomp, Double Kick, Dizzy Punch, Cross Chop, Superpower,
+  Revenge, Brick Break, Arm Thrust, Sky Uppercut, Seismic Toss, Sandstorm, Rollout, Ancient Power, Rock Smash,
+  Rock Blast, Earthquake, Fissure, Dig, Bonemerang, Magnitude, Leech Life, Spider Web, Megahorn, Tail Glow, Acid,
+  Sludge, Sludge Bomb, General_Sandstorm. Still waiting on other workers' files: Mega Punch, Mega Kick and
+  Focus Punch (AnimTask_IsTargetPlayerSide, effects_3), Thrash, Sky Attack, Heat Wave, Eruption, Imprison,
+  Luster Purge, Blaze Kick, Mud Sport, Meteor Mash, Weather Ball, Rock Tomb.
+- Engine: `gBattleAnimArgs` has 16 slots (state.ts). AnimTask_IsPowerOver99 writes index 15, past the C array's
+  end, and Move_MAGNITUDE's `jumpargeq 15` reads it back; with 8 slots neither branch ran. `ported.ts` registers
+  the rock module's extra gfx (the sandstorm BG).
+- Matches the C's out-of-range read: Sludge and Sludge Bomb call StartSpriteAnim(sprite, 2) on the one-entry
+  sAnims_PoisonProjectile, which on the GBA reads the next tables in ROM (anim 2 = sAnim_SludgeBombHit); the sprite
+  gets a table laid out like that.
+- Tests: the 29 labels in `FULLY_PORTED`; tests/e2e/battleAnims.2a.test.ts runs one move per new callback/task
+  (four to a battle, Rollout through its lock), plus Magnitude (BG3HOFS terrain shake, via arg 15), Dig (hidden
+  after turn 1, both turns' anims, visible after) and Fissure (BG3 crack positioned, then the OHKO).
+- Checked by eye in mid-anim screenshots: Sandstorm, Superpower, Sludge, Seismic Toss, Sky Uppercut, Dig, Rollout,
+  Megahorn, and others.
