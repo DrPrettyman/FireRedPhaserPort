@@ -1179,4 +1179,4 @@ end to end.
 - Extractor: graphics/pokemon_storage/ and graphics/item_pc/ in extract_gfx.py (whose INCBIN pattern now also takes
   `[][16]` arrays, the wallpaper palettes), the pokemon_storage_system_*.c anim tables in extract_anims.py, and
   include/pokemon_storage_system_internal.h's constants. Rerun `npm run extract`.
-- Tests: tests/e2e/pcStorage.test.ts (16 scenarios).
+- Tests: tests/e2e/pcStorage.test.ts (17 scenarios, incl. the bedroom PC).

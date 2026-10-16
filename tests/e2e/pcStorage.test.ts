@@ -550,3 +550,16 @@ test("the player's PC: give a stored item to a party mon", async () => {
   expect(await game.eval((t) => t.state!.party[0].heldItem === t.define('ITEM_LEFTOVERS'))).toBe(true);
   expect(await pcItems(game)).toEqual([[await itemId(game, 'POTION'), 1]]);
 });
+
+test('the bedroom PC turns off through its shut-down script', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown_PlayersHouse_2F', x: 1, y: 2, party: PARTY });
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await game.mashUntil((t) => /What would you like to do\?/.test(t.message() ?? ''), { what: 'the bedroom PC' });
+  await game.eval((t) => t.waitFrames(120)); // the message prints (2 frames a letter), then the menu opens
+  const since = await game.mark();
+  await game.press('B'); // TURN OFF
+  const e = await game.waitForEvent('script', { since });
+  expect(e.label).toBe('EventScript_PalletTown_PlayersHouse_2F_ShutDownPC');
+  await game.waitIdle();
+});
