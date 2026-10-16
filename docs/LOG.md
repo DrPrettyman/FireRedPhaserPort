@@ -798,27 +798,6 @@ end to end.
 - BATTLE_ANIMS_PLAN.md "Working in parallel": who owns which files, the cross-file symbols to leave alone, and
   which shared lines (counts, tables) only the merger edits.
 
-### Battle anims 2D: battle_anim_ghost.c, battle_anim_psychic.c, battle_anim_dark.c
-
-- All three files are fully ported (every sprite callback, task and helper, including the unused
-  AnimMonMoveCircular and AnimUnusedBagSteal): ghost.ts, psychic.ts, dark.ts. Static affine anims
-  (sAffineAnim_MeditateStretchAttacker, sAffineAnim_Teleport, sAffineAnims_QuestionMark) come from anims.json.
-- Scripts now complete (18): Confuse Ray, Curse, Destiny Bond, Grudge, Lick, Nightmare, Night Shade, Shadow Ball,
-  Spite (ghost); Amnesia, Extrasensory, Meditate, Skill Swap, Teleport (psychic); Camouflage, Faint Attack,
-  Fake Tears, Memento (dark).
-- Still waiting on other files: Kinesis (AnimKinesisZapEnergy), Imprison (AnimTask_HorizontalShake), Rock Tomb
-  (AnimRockTomb), Psycho Boost (AnimTask_FadeScreenToWhite), Sky Attack (AnimSkyAttackBird,
-  AnimTask_HorizontalShake), General_SmokeballEscape (AnimSmokeBallEscapeCloud), General_GhostGetOut
-  (AnimSprayWaterDroplet, AnimTask_StretchTargetUp).
-- Engine: `ScanlineEffect_InitWave` (+ TaskFunc_UpdateWavePerFrame, GenerateWave) in src/gba/scanline.ts, used by
-  Spite and AnimTask_GhostGetOut; state 3 now also stops the wave task (sShouldStopWaveTask), as in the C.
-  RelocateBattleBgPal (battle_anim.c) is a local helper in ghost.ts for now, since other workers' files need it
-  too; move it to battleAnim.ts when they land.
-- Verified: typecheck, unit tests (new labels in `FULLY_PORTED`), tests/e2e/battleAnims.2d.test.ts (every newly
-  ported move, plus Spite's wave on BGnHOFS and its cleanup, Teleport ending the battle, Memento's BGnVOFS
-  shadows), and mid-anim screenshots of Curse, Spite, Grudge, Confuse Ray, Destiny Bond, Extrasensory, Amnesia,
-  Teleport and Memento. Memento's attacker stays drawn over its shadow: at 0 HP GetAnimBattlerSpriteId(ANIM_ATTACKER)
-  is SPRITE_NONE, so SetAllBattlersSpritePriority leaves it at priority 2, level with the BG (as on the GBA).
 ### Battle anims 2A: battle_anim_fight.c, _rock.c, _ground.c, _bug.c, _poison.c
 
 - All five files are fully ported: every sprite callback, task and helper, including the unused
@@ -888,3 +867,39 @@ end to end.
   new callback/task four moves to a battle, plus Fly and Bounce (the attacker hidden between turns and back after)
   and Whirlwind (ends the wild battle). Checked by eye in mid-anim screenshots: Fire Blast, Sacred Fire,
   Will-O-Wisp, Thunder, Spark, Charge, Volt Tackle, Shock Wave, Feather Dance, Fly.
+
+### Battle anims 2D: battle_anim_ghost.c, battle_anim_psychic.c, battle_anim_dark.c
+
+- All three files are fully ported (every sprite callback, task and helper, including the unused
+  AnimMonMoveCircular and AnimUnusedBagSteal): ghost.ts, psychic.ts, dark.ts. Static affine anims
+  (sAffineAnim_MeditateStretchAttacker, sAffineAnim_Teleport, sAffineAnims_QuestionMark) come from anims.json.
+- Scripts now complete (18): Confuse Ray, Curse, Destiny Bond, Grudge, Lick, Nightmare, Night Shade, Shadow Ball,
+  Spite (ghost); Amnesia, Extrasensory, Meditate, Skill Swap, Teleport (psychic); Camouflage, Faint Attack,
+  Fake Tears, Memento (dark).
+- Still waiting on other files: Kinesis (AnimKinesisZapEnergy), Imprison (AnimTask_HorizontalShake), Rock Tomb
+  (AnimRockTomb), Psycho Boost (AnimTask_FadeScreenToWhite), Sky Attack (AnimSkyAttackBird,
+  AnimTask_HorizontalShake), General_SmokeballEscape (AnimSmokeBallEscapeCloud), General_GhostGetOut
+  (AnimSprayWaterDroplet, AnimTask_StretchTargetUp).
+- Engine: `ScanlineEffect_InitWave` (+ TaskFunc_UpdateWavePerFrame, GenerateWave) in src/gba/scanline.ts, used by
+  Spite and AnimTask_GhostGetOut; state 3 now also stops the wave task (sShouldStopWaveTask), as in the C.
+  RelocateBattleBgPal (battle_anim.c) is a local helper in ghost.ts for now, since other workers' files need it
+  too; move it to battleAnim.ts when they land.
+- Verified: typecheck, unit tests (new labels in `FULLY_PORTED`), tests/e2e/battleAnims.2d.test.ts (every newly
+  ported move, plus Spite's wave on BGnHOFS and its cleanup, Teleport ending the battle, Memento's BGnVOFS
+  shadows), and mid-anim screenshots of Curse, Spite, Grudge, Confuse Ray, Destiny Bond, Extrasensory, Amnesia,
+  Teleport and Memento. Memento's attacker stays drawn over its shadow: at 0 HP GetAnimBattlerSpriteId(ANIM_ATTACKER)
+  is SPRITE_NONE, so SetAllBattlersSpritePriority leaves it at priority 2, level with the BG (as on the GBA).
+
+### Battle anims batch 1 merged (PRs #6-#9)
+
+- Merged one at a time (A, B, C, D). Conflicts: only `ported.ts`'s extra-gfx calls (kept all). Dropped B's
+  temporary Water Spout deviation once ground's AnimTask_HorizontalShake had landed. `tools/extract_gfx.py` now
+  extracts `graphics/weather/` (Haze, Mist Ball): rerun `npm run extract`.
+- 264 of 397 scripts run (168 before). `FULLY_PORTED.batch1Merge` lists the 59 complete scripts no worker had
+  listed: ones needing two workers' files (Heat Wave, Eruption, Sky Attack, Imprison, Dive, ...) and ones already
+  complete before step 2 but never listed (Agility, Body Slam, ...). Every unfinished script now only waits on
+  battle_anim_effects_1/2/3.c.
+- RelocateBattleBgPal stays local to ghost.ts: the other C callers are all contest-only (IsContest() is FALSE).
+- Testing note: four workers each running the full e2e suite (4 Chromes each) overloaded the machine and caused
+  timeouts. From batch 2, workers run only their own e2e file; the merger runs the battle anim files per PR and
+  the full suite once per batch.

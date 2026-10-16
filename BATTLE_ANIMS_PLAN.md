@@ -116,7 +116,10 @@ Batch 1 (step 2), one worker each: **A** fight, rock, ground, bug, poison · **B
 register it in `ported.ts`) · **C** fire, electric, flying · **D** ghost, psychic, dark. Batch 2 (step 3): one
 worker per effects file, two or three PRs each, one after another (never two workers on the same file).
 
-## Step 2: one PR per type file
+## Step 2: one PR per type file — done
+
+Done in PRs #6-#9 (four workers in parallel): every type file is fully ported, and 264 of 397 scripts
+run. The table below is the starting point, kept for the record.
 
 After step 1, the remaining symbols per file are below. "Touching" is how many unfinished scripts need something
 from the file. "Only this file" is how many of them would be complete after porting just this file.
@@ -145,9 +148,11 @@ symbols scripts need right now, so the file can be marked done in STATUS.md.
 
 | C file | Symbols left | Scripts touching | Only this file |
 |---|---:|---:|---:|
-| `battle_anim_effects_3.c` | 70 | 59 | 44 |
-| `battle_anim_effects_2.c` | 55 | 42 | 28 |
-| `battle_anim_effects_1.c` | 54 | 42 | 34 |
+| `battle_anim_effects_3.c` | 70 | 59 | 53 |
+| `battle_anim_effects_2.c` | 55 | 42 | 36 |
+| `battle_anim_effects_1.c` | 54 | 42 | 35 |
+
+(After step 2. All 133 unfinished scripts now only wait on these three files.)
 
 These are the largest files (5.7k, 3.9k and 5.4k lines) and hold mostly later-game and Gen III moves. Split each
 into two or three PRs by move.
