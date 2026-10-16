@@ -1152,3 +1152,27 @@ end to end.
   check and FldEff_UseFlash; FieldMoveHost gains `cave()` and `useFlash()`. e2e: fieldMoves.test.ts.
 - Extracting in a worktree: set `FIRERED_DECOMP=/path/to/pret/firered` (the default is a path relative to the
   checkout, which a worktree doesn't have).
+### Surf and Waterfall (W-surf)
+
+- `world/surf.ts`: SetUpFieldMove_Surf / _Waterfall and FieldCallback_Surf / _Waterfall (party_menu.c);
+  FldEff_UseSurf (Task_FldEffUseSurf: the field move pose, the banner, JUMP_SPECIAL onto the water) and
+  FldEff_UseWaterfall (Task_UseWaterfall: the banner, then WALK_SLOWER north until off the waterfall) from
+  field_effect.c; the surf blob (field_effect_helpers.c: FldEff_SurfBlob, UpdateSurfBlobFieldEffect with
+  SynchroniseSurfAnim / SynchroniseSurfPosition / CreateBobbingEffect, SetSurfBlob_*); GetInteractedWaterScript
+  (field_control_avatar.c) so pressing A at the water runs EventScript_UseSurf / EventScript_CurrentTooFast and
+  at a waterfall EventScript_Waterfall / EventScript_CantUseWaterfall; IsPlayerFacingSurfableFishableWater and
+  MetatileAtCoordsIsWaterTile (field_player_avatar.c) on the extracted terrain attribute.
+- The blob comes and goes with the avatar's state: the player avatar's host hooks (QL_GfxTransition_StartSurf on
+  arriving on water, after a battle or menu, ForcePlayerToStartSurfing; BOB_MON_ONLY when jumping off, then
+  DestroySprite; SetPlayerInvisibility). Wild encounters on water already worked (WildEncounters.ts).
+- Outside world/surf.ts: `registerSurfAndWaterfall()` in fieldMoves.ts's `registerFieldMoves`, which also exports
+  LockPlayerFieldControls / UnlockPlayerFieldControls / CreateTask / StartPlayerAvatarSummonMonForFieldMoveAnim
+  and a new LoadFieldMoveShowMonGfx; FieldEffects.ts exports FieldEffectSprite and gains `createSprite`;
+  playerAvatar.ts gains the `destroySurfBlob` / `setSurfBlobInvisible` hooks (Task_WaitStopSurfing,
+  SetPlayerInvisibility); OverworldScene: the hooks, `setSurfHost`, GetInteractedWaterScript in `interact`, the
+  `surfBlob` probe; partyMenu.ts reports DisplayPartyMenuStdMessage as a `partyMenuMessage` test event;
+  `__test.setAvatarState` off the water drops the blob.
+- No extractor changes: the surf blob sprite and the terrain attribute were already extracted.
+- Tests: tests/e2e/surf.test.ts (A at the water with/without the badge or a Surf mon, the party menu, refusals
+  with their messages, riding and the bob, getting off, a wild encounter on water, Waterfall at Icefall Cave by A
+  and from the party menu).
