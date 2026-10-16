@@ -54,6 +54,7 @@ import { random } from '../../util/random';
 import { SetHealthboxSpriteInvisible, SetHealthboxSpriteVisible } from '../battleInterface';
 import { K } from '../constants';
 import { g } from '../env';
+import { animTable } from '../gfx';
 import { Cos, gSineTable, Sin } from '../trig';
 import { getBattlerSide } from '../util';
 import {
@@ -105,6 +106,7 @@ import {
 import { animSpriteTemplate, BattleAnimAdjustPanning, IsContest, PlaySE12WithPanning } from './battleAnim';
 import { anim, DestroyAnimSprite, DestroyAnimVisualTask, gBattleAnimArgs } from './state';
 
+const UNIT = 'battle_anim_effects_1.c';
 const isOpponent = (battler: number) => getBattlerSide(battler) !== K.B_SIDE_PLAYER;
 const s16 = (v: number) => (v << 16) >> 16;
 const u8 = (v: number) => v & 0xff;
@@ -222,6 +224,8 @@ function AnimAbsorptionOrb_Step(sprite: Sprite): void {
 /** AnimHyperBeamOrb: an orb waving towards the target, its anim, speed and wave picked at random. */
 const AnimHyperBeamOrb: SpriteCallback = (sprite) => {
   const animNum = random();
+  // sSolarBeamBigOrbAnimTable has 7 anims: for 7 the GBA reads the next table in ROM, sSolarBeamSmallOrbAnimTable
+  if (animNum % 8 >= sprite.anims.length) sprite.anims = [...sprite.anims, ...animTable(UNIT, 'sSolarBeamSmallOrbAnimTable')];
   StartSpriteAnim(sprite, animNum % 8);
   sprite.x = GetBattlerSpriteCoord(anim.attacker, K.BATTLER_COORD_X_2);
   sprite.y = GetBattlerSpriteCoord(anim.attacker, K.BATTLER_COORD_Y_PIC_OFFSET);
