@@ -17,9 +17,10 @@ test.each([
 ])('%s, %s, %s and %s run to the end', (...moves) => expectMovesRun(session, moves));
 
 test('Poison Gas runs to the end', async () => {
-  // Not against the Snorlax: one with Immunity skips the anim. (Speed 1 so the gas is caught mid-flight.)
+  // Not against the Snorlax: one with Immunity skips the anim. A foe slower than Koffing, so the 55% roll comes
+  // straight after the reseed rather than after the foe's anim. (Speed 1 so the gas is caught mid-flight.)
   const game = await session.start({ ...ROUTE1, speed: 1, party: [{ species: 'KOFFING', level: 30, moves: ['POISON_GAS'] }] });
-  await game.eval((t) => t.startWildBattle({ species: 'MAGIKARP', level: 30, moves: ['SPLASH'] }));
+  await game.eval((t) => t.startWildBattle({ species: 'SLOWPOKE', level: 5, moves: ['SPLASH'] }));
   const since = await useFirstMove(game);
   expect(await animEvent(game, 'battleAnim', 'Move_POISON_GAS', since)).toMatchObject({ ran: true, attacker: 0 });
   await game.waitFor((t) => t.gbaSprites().some((s) => s.tileTag === t.define('ANIM_TAG_PURPLE_GAS_CLOUD')), { what: 'the gas clouds' });
