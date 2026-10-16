@@ -21,8 +21,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     last battle's type flags, which the GBA keeps (e.g. a Rare Candy right after a gym leader would draw the
     Leader terrain there). Mons have no language, markings, ribbons or mail, so EvolutionRenameMon always treats
     them as English and Shedinja doesn't clear those fields.
-  - Summary screen: no box mons (PC), trade-screen view or multi-battle party order; the struct Pokemon fields the
-    port doesn't store read as defaults (markings 0, met game FireRed, no fateful-encounter flag, English).
+  - Summary screen: no trade-screen view or multi-battle party order; the struct Pokemon fields the port doesn't
+    store read as defaults (met game FireRed, no fateful-encounter flag, English).
   - Party menu: mail, the move relearner, Union Room, minigames, Pokédude/Teachy TV demos are not ported. Of
     the field moves, Surf, Waterfall, Strength and Fly aren't registered yet (they say they can't be used here;
     Surf's message is the real one), and no field move records a quest log event.
@@ -37,8 +37,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     banner back. Dig/Escape Rope with no escape warp saved (a dev start in a cave) go to the last heal location.
   - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Bag uses that need overworld systems
     (rods, Escape Rope, Itemfinder, VS Seeker, Town Map, Fame Checker, Teachy TV, mail, TM case, berry pouch,
-    registered SELECT items) log "not implemented" and return to the bag. Berry powder reads as 0; the
-    item PC / Pokémon storage give flows aren't ported.
+    registered SELECT items) log "not implemented" and return to the bag. Berry powder reads as 0. The TM case
+    and berry pouch can't be opened to give from (the PC box's GIVE, GoToTMCase_PCBox / GoToBerryPouch_PCBox).
   - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
     overworld's ScreenFade.
   - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;
@@ -67,9 +67,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     start EventScript_VsSeekerChargingDone, whose specials aren't ported; only the (unported) VS Seeker starts one.
   - Safari Zone: the entrance's SE/fanfare are silent.
   - The money box and Safari stats window are Phaser MenuWindows (the field isn't on the GBA layer).
-  - PC boxes (state/PokemonStorage.ts): the data side only; the storage system UI (deposit, withdraw, move,
-    box switching, renaming, wallpapers) isn't ported, so the boxes can only be filled, not looked at. The item
-    PC's slots exist but NewGameInitPCItems's Potion isn't put there (player_pc.c isn't ported).
+  - Pokémon Storage System (menus/pokemonStorage*.ts): silent (SE_PC_LOGIN / SE_PC_OFF and the menu SEs); no
+    quest log events (SetPokeStorageQuestLogEvent) or help context. The PPU has no OBJ mosaic, so the mon shown on
+    the left changes at once instead of un-pixelating (the effect's timing, which the menus wait for, is kept).
+    The screen works on its own six-slot copy of the party (the C keeps empty slots while it runs) and writes it
+    back, compacted, when it hands over to another screen; a mon placed after an empty party slot would move up
+    early if the summary / naming screen / bag opened while the party box still showed the gap.
+    MON_DATA_SANITY_IS_BAD_EGG reads FALSE and mail isn't modelled, so the bad-egg and mail checks never trigger.
+  - Player's PC (ui/PlayerPcMenu.ts, menus/itemPc.ts): the mailbox is always empty (mail isn't modelled); no quest
+    log events (withdrew / deposited / gave from the PC), help contexts or SEs.
   - Save data (state/saveData.ts): one JSON save in browser localStorage instead of the flash's two 14-sector
     save slots, so there are no sector checksums, no alternating slots / save counter, no backup of the previous
     save and no encryption of money, coins and bag quantities (gSaveBlock2Ptr->encryptionKey). The save holds
@@ -85,8 +91,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     link play); the quest log's QL_AvoidDisplay bit of ignoreBPress is ignored.
   - Elevators: SE_ELEVATOR / SE_DING_DONG are silent; UpdateEscapeWarp isn't kept on warps.
   - Field ListMenu (ui/FieldListMenu.ts): SE_SELECT is silent; the quest log's QL_AvoidDisplay is ignored.
-  - PC: PlayerPC (item storage), ShowPokemonStorageSystemPC and HallOfFamePCBeginFade log "not implemented" and go
-    straight back to the PC menu. Facing water does nothing (GetInteractedWaterScript waits for Surf).
+  - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu. Facing water does
+    nothing (GetInteractedWaterScript waits for Surf).
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, Trainer Tower clock, cable club
     monitors, questionnaire/easy chat) start their scripts and hit the unimplemented-special warnings.
   - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link flags.

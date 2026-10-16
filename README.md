@@ -91,6 +91,7 @@ animated metatiles are redrawn from the GBA tile data (`world/TilesetVram.ts`).
 | Battle | `battle/*.ts`, `scenes/BattleScene.ts` | port of battle_main.c, battle scripts/commands, util, AI, controllers, interface/gfx code on the GBA layer; the scene runs the C main/VBlank callbacks |
 | Battle anims | `battle/anim/*.ts` | battle_anim.c's script engine and the battle_anim_*.c callbacks, registered by C name (`ported.ts`); scripts with unported callbacks finish at once |
 | UI | `ui/MenuWindow.ts`, `Menu.ts`, `YesNoMenu.ts`, `StartMenu.ts`, `MonPicBox.ts`, `ScreenFade.ts` | std-framed windows, cursor menus, `showmonpic` box, `fadescreen` |
+| PC | `menus/pokemonStorage*.ts`, `itemPc.ts`, `ui/StoragePcMenu.ts`, `PlayerPcMenu.ts`, `state/PokemonStorage.ts`, `pcItems.ts` | the Pokémon Storage System (pokemon_storage_system*.c: the box screen on the GBA layer, the PC's storage menu on the field) and the player's item PC (player_pc.c, item_pc.c) |
 
 ### Testing
 
