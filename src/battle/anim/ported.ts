@@ -4,24 +4,29 @@
 
 import { AnimSpriteOnMonPos, AnimSpinningSparkle, AnimThrowProjectile, AnimTranslateLinearAndFlicker, AnimTranslateLinearAndFlicker_Flipped, AnimTravelDiagonally, AnimWeatherBallDown, AnimWeatherBallUp, animMonsTasks, TranslateAnimSpriteToTargetMonLocation } from './animMons';
 import { monMovementSpriteCallbacks, monMovementTasks } from './monMovement';
-import { bugSpriteCallbacks, bugTasks } from './bug';
-import { darkSpriteCallbacks, darkTasks, registerDarkExtraGfx } from './dark';
-import { effects1SpriteCallbacks, effects1Tasks } from './effects1';
-import { effects2SpriteCallbacks, effects2Tasks } from './effects2';
-import { effects3SpriteCallbacks, effects3Tasks } from './effects3';
-import { electricSpriteCallbacks, electricTasks } from './electric';
-import { fireSpriteCallbacks, fireTasks } from './fire';
-import { flyingSpriteCallbacks, flyingTasks } from './flying';
-import { ghostSpriteCallbacks, ghostTasks } from './ghost';
-import { groundSpriteCallbacks, groundTasks } from './ground';
-import { poisonSpriteCallbacks, poisonTasks } from './poison';
-import { waterSpriteCallbacks, waterTasks } from './water';
 import { normalSpriteCallbacks, normalTasks } from './normal';
 import { soundTasks } from './soundTasks';
 import { registerSpecialExtraGfx, specialSpriteCallbacks, specialTasks } from './special';
 import { statusEffectsSpriteCallbacks, statusEffectsTasks } from './statusEffects';
 import { registerUtilityExtraGfx, utilityTasks } from './utilityFuncs';
 import { registerSpriteCallbacks, registerTaskFuncs } from './state';
+// The per-move files (battle_anim_effects_1.c ... battle_anim_water.c)
+import { effects1SpriteCallbacks, effects1Tasks } from './effects1';
+import { effects2SpriteCallbacks, effects2Tasks } from './effects2';
+import { effects3SpriteCallbacks, effects3Tasks } from './effects3';
+import { bugSpriteCallbacks, bugTasks } from './bug';
+import { darkSpriteCallbacks, darkTasks, registerDarkExtraGfx } from './dark';
+import { electricSpriteCallbacks, electricTasks } from './electric';
+import { fightSpriteCallbacks, fightTasks } from './fight';
+import { fireSpriteCallbacks, fireTasks } from './fire';
+import { flyingSpriteCallbacks, flyingTasks } from './flying';
+import { ghostSpriteCallbacks, ghostTasks } from './ghost';
+import { groundSpriteCallbacks, groundTasks } from './ground';
+import { iceSpriteCallbacks, iceTasks } from './ice';
+import { poisonSpriteCallbacks, poisonTasks } from './poison';
+import { psychicSpriteCallbacks, psychicTasks } from './psychic';
+import { rockSpriteCallbacks, rockTasks } from './rock';
+import { registerWaterExtraGfx, waterSpriteCallbacks, waterTasks } from './water';
 
 let done = false;
 
@@ -41,23 +46,45 @@ export function registerPortedBattleAnims(): void {
     ...monMovementSpriteCallbacks,
     ...normalSpriteCallbacks,
     ...statusEffectsSpriteCallbacks,
+    ...specialSpriteCallbacks,
     ...effects1SpriteCallbacks,
     ...effects2SpriteCallbacks,
     ...effects3SpriteCallbacks,
-    ...fireSpriteCallbacks,
-    ...waterSpriteCallbacks,
-    ...poisonSpriteCallbacks,
-    ...electricSpriteCallbacks,
-    ...flyingSpriteCallbacks,
-    ...groundSpriteCallbacks,
     ...bugSpriteCallbacks,
     ...darkSpriteCallbacks,
+    ...electricSpriteCallbacks,
+    ...fightSpriteCallbacks,
+    ...fireSpriteCallbacks,
+    ...flyingSpriteCallbacks,
     ...ghostSpriteCallbacks,
-    ...specialSpriteCallbacks,
+    ...groundSpriteCallbacks,
+    ...iceSpriteCallbacks,
+    ...poisonSpriteCallbacks,
+    ...psychicSpriteCallbacks,
+    ...rockSpriteCallbacks,
+    ...waterSpriteCallbacks,
   });
   registerTaskFuncs({ ...animMonsTasks, ...monMovementTasks, ...normalTasks, ...utilityTasks, ...statusEffectsTasks, ...soundTasks, ...specialTasks });
-  registerTaskFuncs({ ...effects1Tasks, ...effects2Tasks, ...effects3Tasks, ...fireTasks, ...waterTasks, ...poisonTasks, ...electricTasks, ...flyingTasks, ...groundTasks, ...bugTasks, ...darkTasks, ...ghostTasks });
+  registerTaskFuncs({
+    ...effects1Tasks,
+    ...effects2Tasks,
+    ...effects3Tasks,
+    ...bugTasks,
+    ...darkTasks,
+    ...electricTasks,
+    ...fightTasks,
+    ...fireTasks,
+    ...flyingTasks,
+    ...ghostTasks,
+    ...groundTasks,
+    ...iceTasks,
+    ...poisonTasks,
+    ...psychicTasks,
+    ...rockTasks,
+    ...waterTasks,
+  });
   registerUtilityExtraGfx();
   registerDarkExtraGfx();
+  registerWaterExtraGfx();
   registerSpecialExtraGfx();
 }

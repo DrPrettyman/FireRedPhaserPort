@@ -1,12 +1,20 @@
 // battle_anim_flying.c: sprite callbacks and tasks, ported as the moves that use them come up.
 
 import { gPlttBufferFaded, OBJ_PLTT_ID, OBJ_PLTT_OFFSET, PLTT_ID } from '../../gba/palette';
-import { IndexOfSpritePaletteTag, type Sprite, type SpriteCallback } from '../../gba/sprite';
+import { IndexOfSpritePaletteTag, StoreSpriteCallbackInData6, type Sprite, type SpriteCallback } from '../../gba/sprite';
 import { gTasks, type TaskFunc } from '../../gba/task';
 import { K } from '../constants';
 import { Cos, Sin } from '../trig';
-import { InitSpritePosToAnimTarget } from './animMons';
-import { DestroyAnimSprite, DestroyAnimVisualTask, gBattleAnimArgs } from './state';
+import {
+  AnimTranslateLinear,
+  GetBattlerSpriteCoord,
+  InitAnimLinearTranslation,
+  InitSpritePosToAnimAttacker,
+  InitSpritePosToAnimTarget,
+  RunStoredCallbackWhenAffineAnimEnds,
+} from './animMons';
+import { anim, DestroyAnimSprite, DestroyAnimVisualTask, gBattleAnimArgs } from './state';
+import { getBattlerSide } from '../util';
 
 /** AnimEllipticalGust: the tornado circling the target */
 const AnimEllipticalGust: SpriteCallback = (sprite) => {
@@ -46,8 +54,28 @@ const AnimTask_AnimateGustTornadoPalette_Step: TaskFunc = (taskId) => {
   if (--d[0] === 0) DestroyAnimVisualTask(taskId);
 };
 
+/** AnimGustToTarget (Wing Attack, Steel Wing): flies to the target once its affine anim ends. Args: x, y, target x, target y, duration. */
+const AnimGustToTarget: SpriteCallback = (sprite) => {
+  InitSpritePosToAnimAttacker(sprite, true);
+  if (getBattlerSide(anim.attacker) !== K.B_SIDE_PLAYER) gBattleAnimArgs[2] = -gBattleAnimArgs[2];
+  const d = sprite.data;
+  d[0] = gBattleAnimArgs[4];
+  d[1] = sprite.x;
+  d[2] = GetBattlerSpriteCoord(anim.target, K.BATTLER_COORD_X_2) + gBattleAnimArgs[2];
+  d[3] = sprite.y;
+  d[4] = GetBattlerSpriteCoord(anim.target, K.BATTLER_COORD_Y_PIC_OFFSET) + gBattleAnimArgs[3];
+  InitAnimLinearTranslation(sprite);
+  sprite.callback = RunStoredCallbackWhenAffineAnimEnds;
+  StoreSpriteCallbackInData6(sprite, AnimGustToTarget_Step);
+};
+
+function AnimGustToTarget_Step(sprite: Sprite): void {
+  if (AnimTranslateLinear(sprite)) DestroyAnimSprite(sprite);
+}
+
 export const flyingSpriteCallbacks: Record<string, SpriteCallback> = {
   AnimEllipticalGust,
+  AnimGustToTarget,
 };
 
 export const flyingTasks: Record<string, TaskFunc> = {

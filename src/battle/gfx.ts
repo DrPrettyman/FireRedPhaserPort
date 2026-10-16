@@ -36,6 +36,7 @@ import {
   StartSpriteAnim,
   StartSpriteAnimIfDifferent,
   TAG_NONE,
+  TILE_SIZE_4BPP,
   type AffineAnimCmd,
   type AnimCmd,
   type Sprite,
@@ -51,11 +52,13 @@ import {
   InitBattlerHealthboxCoords,
   SetHealthboxSpriteInvisible,
   SetHealthboxSpriteVisible,
+  TryAddPokeballIconToHealthbox,
   UpdateHealthboxAttribute,
+  UpdateNickInHealthbox,
 } from './battleInterface';
 import { ui } from './battleUi';
 import { K } from './constants';
-import { bdata, g } from './env';
+import { bdata, g, pokemon } from './env';
 import { bufferBattlePartyCurrentOrderBySide } from './partyOrder';
 import { Sin } from './trig';
 import { getBattlerAtPosition, getBattlerPosition, getBattlerSide } from './util';
@@ -896,6 +899,50 @@ export function BattleLoadSubstituteOrMonSpriteGfx(battlerId: number, loadMonSpr
     BattleLoadOpponentMonSpriteGfx(g.enemyParty[g.battlerPartyIndexes[battlerId]]!, battlerId);
   } else {
     BattleLoadPlayerMonSpriteGfx(g.playerParty[g.battlerPartyIndexes[battlerId]]!, battlerId);
+  }
+}
+
+/**
+ * HandleSpeciesGfxDataChange: swaps battlerAtk's pic and palette. transformType 255 unveils a ghost
+ * (Silph Scope), 0 is Transform (copies battlerDef). Castform's form change (any other value) needs
+ * gBattleStruct->castformPalette, which isn't ported yet.
+ */
+export function HandleSpeciesGfxDataChange(battlerAtk: number, battlerDef: number, transformType: number): void {
+  const spriteId = g.battlerSpriteIds[battlerAtk];
+  const position = getBattlerPosition(battlerAtk);
+  const dest = gMonSpritesGfxPtr!.sprites[position];
+  const paletteOffset = OBJ_PLTT_ID(battlerAtk);
+  const copyPicToVram = () => vram.set(dest.subarray(0, MON_PIC_SIZE), OBJ_VRAM0 + gSprites[spriteId].oam.tileNum * TILE_SIZE_4BPP);
+  if (transformType === 255) {
+    const mon = g.enemyParty[g.battlerPartyIndexes[battlerAtk]]!;
+    const targetSpecies = mon.species;
+    LoadSpecialPokePic(true, targetSpecies, mon.personality, dest);
+    copyPicToVram();
+    LoadPalette(GetMonSpritePalFromSpeciesAndPersonality(targetSpecies, mon.otId, mon.personality), paletteOffset, PLTT_SIZE_4BPP);
+    gSprites[spriteId].y = GetBattlerSpriteDefault_Y(battlerAtk);
+    StartSpriteAnim(gSprites[spriteId], g.battleMonForms[battlerAtk]);
+    mon.nickname = [...pokemon.speciesName(targetSpecies)];
+    UpdateNickInHealthbox(g.healthboxSpriteIds[battlerAtk], mon);
+    TryAddPokeballIconToHealthbox(g.healthboxSpriteIds[battlerAtk], true);
+  } else if (transformType) {
+    throw new Error('[battle] HandleSpeciesGfxDataChange: Castform form change not ported');
+  } else {
+    const defParty = getBattlerSide(battlerDef) === K.B_SIDE_OPPONENT ? g.enemyParty : g.playerParty;
+    const targetSpecies = defParty[g.battlerPartyIndexes[battlerDef]]!.species;
+    const atkSide = getBattlerSide(battlerAtk);
+    const mon = (atkSide === K.B_SIDE_PLAYER ? g.playerParty : g.enemyParty)[g.battlerPartyIndexes[battlerAtk]]!;
+    LoadSpecialPokePic(atkSide !== K.B_SIDE_PLAYER, targetSpecies, g.transformedPersonalities[battlerAtk], dest);
+    copyPicToVram();
+    const pal = GetMonSpritePalFromSpeciesAndPersonality(targetSpecies, mon.otId, mon.personality);
+    LoadPalette(pal, paletteOffset, PLTT_SIZE_4BPP);
+    // gBattleStruct->castformPalette[0] is the decompressed palette: one 16-colour row per form
+    if (targetSpecies === K.SPECIES_CASTFORM) LoadPalette(pal.subarray(g.battleMonForms[battlerDef] * 16), paletteOffset, PLTT_SIZE_4BPP);
+    BlendPalette(paletteOffset, 16, 6, RGB_WHITE);
+    gPlttBufferUnfaded.set(gPlttBufferFaded.subarray(paletteOffset, paletteOffset + 16), paletteOffset);
+    sbd().battlerData[battlerAtk].transformSpecies = targetSpecies;
+    g.battleMonForms[battlerAtk] = g.battleMonForms[battlerDef];
+    gSprites[spriteId].y = GetBattlerSpriteDefault_Y(battlerAtk);
+    StartSpriteAnim(gSprites[spriteId], g.battleMonForms[battlerAtk]);
   }
 }
 

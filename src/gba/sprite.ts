@@ -17,6 +17,9 @@ export const ST_OAM_AFFINE_ERASE = 2;
 export const ST_OAM_AFFINE_DOUBLE = 3;
 export const ST_OAM_AFFINE_ON_MASK = 1;
 export const ST_OAM_AFFINE_DOUBLE_MASK = 2;
+/** matrixNum bits that flip a non-affine sprite */
+export const ST_OAM_HFLIP = 0x08;
+export const ST_OAM_VFLIP = 0x10;
 export const ST_OAM_OBJ_NORMAL = 0;
 export const ST_OAM_OBJ_BLEND = 1;
 export const ST_OAM_OBJ_WINDOW = 2;

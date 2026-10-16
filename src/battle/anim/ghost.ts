@@ -8,8 +8,8 @@ import {
   REG_OFFSET_BLDCNT,
   SetGpuReg,
 } from '../../gba/hw';
-import { type Sprite, type SpriteCallback } from '../../gba/sprite';
-import { type TaskFunc } from '../../gba/task';
+import type { Sprite, SpriteCallback } from '../../gba/sprite';
+import type { TaskFunc } from '../../gba/task';
 import { K } from '../constants';
 import { Sin } from '../trig';
 import { getBattlerSide } from '../util';
@@ -56,5 +56,4 @@ export const ghostSpriteCallbacks: Record<string, SpriteCallback> = {
   AnimGhostStatusSprite,
 };
 
-export const ghostTasks: Record<string, TaskFunc> = {
-};
+export const ghostTasks: Record<string, TaskFunc> = {};

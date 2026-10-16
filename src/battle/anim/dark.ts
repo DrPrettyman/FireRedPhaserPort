@@ -32,7 +32,15 @@ import {
   WINOUT_WINOBJ_OBJ,
 } from '../../gba/hw';
 import { BG_PLTT_ID, BlendPalette, LoadCompressedPalette, PLTT_ID, PLTT_SIZE_4BPP } from '../../gba/palette';
-import { DestroySprite, gSprites, StartSpriteAffineAnim, type Sprite, type SpriteCallback } from '../../gba/sprite';
+import {
+  DestroySprite,
+  gSprites,
+  StartSpriteAffineAnim,
+  StartSpriteAnim,
+  StoreSpriteCallbackInData6,
+  type Sprite,
+  type SpriteCallback,
+} from '../../gba/sprite';
 import { gTasks, type TaskFunc } from '../../gba/task';
 import { K } from '../constants';
 import { g } from '../env';
@@ -48,11 +56,12 @@ import {
   InitBattleAnimBg,
   IsBattlerSpriteVisible,
   IsDoubleBattle,
+  RunStoredCallbackWhenAnimEnds,
   SetAnimBgAttribute,
   SetGreyscaleOrOriginalPalette,
   SPRITE_NONE,
 } from './animMons';
-import { anim, DestroyAnimVisualTask, gBattleAnimArgs, registerAnimExtraGfx } from './state';
+import { anim, DestroyAnimSprite, DestroyAnimVisualTask, gBattleAnimArgs, registerAnimExtraGfx } from './state';
 
 const isOpponent = (battler: number) => getBattlerSide(battler) !== K.B_SIDE_PLAYER;
 
@@ -183,8 +192,18 @@ const GetIsDoomDesireHitTurn: TaskFunc = (taskId) => {
   DestroyAnimVisualTask(taskId);
 };
 
+/** AnimClawSlash (Crush Claw, Metal Claw, Dragon Claw, ...). Args: x, y, anim. */
+const AnimClawSlash: SpriteCallback = (sprite) => {
+  sprite.x += gBattleAnimArgs[0];
+  sprite.y += gBattleAnimArgs[1];
+  StartSpriteAnim(sprite, gBattleAnimArgs[2]);
+  sprite.callback = RunStoredCallbackWhenAnimEnds;
+  StoreSpriteCallbackInData6(sprite, DestroyAnimSprite);
+};
+
 export const darkSpriteCallbacks: Record<string, SpriteCallback> = {
   AnimBite,
+  AnimClawSlash,
 };
 
 export const darkTasks: Record<string, TaskFunc> = {

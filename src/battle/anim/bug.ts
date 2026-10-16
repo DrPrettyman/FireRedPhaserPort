@@ -1,7 +1,7 @@
 // battle_anim_bug.c: sprite callbacks and tasks, ported as the moves that use them come up.
 
 import { StoreSpriteCallbackInData6, type Sprite, type SpriteCallback } from '../../gba/sprite';
-import { type TaskFunc } from '../../gba/task';
+import type { TaskFunc } from '../../gba/task';
 import { K } from '../constants';
 import { Sin } from '../trig';
 import { getBattlerPosition, getBattlerSide } from '../util';
@@ -9,10 +9,12 @@ import {
   AnimTranslateLinear,
   ArcTan2Neg,
   GetBattlerSpriteCoord,
+  InitAnimArcTranslation,
   InitAnimLinearTranslationWithSpeed,
   InitSpritePosToAnimAttacker,
   SetAverageBattlerPositions,
   StartAnimLinearTranslation,
+  TranslateAnimHorizontalArc,
   TrySetSpriteRotScale,
 } from './animMons';
 import { anim, DestroyAnimSprite, gBattleAnimArgs } from './state';
@@ -94,11 +96,42 @@ const AnimTranslateStinger: SpriteCallback = (sprite) => {
   StoreSpriteCallbackInData6(sprite, DestroyAnimSprite);
 };
 
+// AnimMissileArc (Pin Missile, Icicle Spear): arcs to the target, rotated along the arc by looking one
+// step ahead. Args: x, y, target x, target y, duration, arc height.
+const AnimMissileArc: SpriteCallback = (sprite) => {
+  InitSpritePosToAnimAttacker(sprite, true);
+  if (getBattlerSide(anim.attacker) !== K.B_SIDE_PLAYER) gBattleAnimArgs[2] = -gBattleAnimArgs[2];
+  sprite.data[0] = gBattleAnimArgs[4];
+  sprite.data[2] = GetBattlerSpriteCoord(anim.target, K.BATTLER_COORD_X_2) + gBattleAnimArgs[2];
+  sprite.data[4] = GetBattlerSpriteCoord(anim.target, K.BATTLER_COORD_Y_PIC_OFFSET) + gBattleAnimArgs[3];
+  sprite.data[5] = gBattleAnimArgs[5];
+  InitAnimArcTranslation(sprite);
+  sprite.callback = AnimMissileArc_Step;
+  sprite.invisible = true;
+};
+
+function AnimMissileArc_Step(sprite: Sprite): void {
+  sprite.invisible = false;
+  if (TranslateAnimHorizontalArc(sprite)) {
+    DestroyAnimSprite(sprite);
+    return;
+  }
+  const tempData = sprite.data.slice();
+  const x2 = ((sprite.x2 + sprite.x) << 16) >> 16;
+  const y2 = ((sprite.y2 + sprite.y) << 16) >> 16;
+  // The look-ahead step's x2/y2 are what this frame shows; data rewinds so the next frame redoes it.
+  if (!TranslateAnimHorizontalArc(sprite)) {
+    const rotation = (ArcTan2Neg(sprite.x + sprite.x2 - x2, sprite.y + sprite.y2 - y2) + 0xc000) & 0xffff;
+    TrySetSpriteRotScale(sprite, false, 0x100, 0x100, rotation);
+    sprite.data.set(tempData);
+  }
+}
+
 export const bugSpriteCallbacks: Record<string, SpriteCallback> = {
   AnimTranslateWebThread,
   AnimStringWrap,
   AnimTranslateStinger,
+  AnimMissileArc,
 };
 
-export const bugTasks: Record<string, TaskFunc> = {
-};
+export const bugTasks: Record<string, TaskFunc> = {};

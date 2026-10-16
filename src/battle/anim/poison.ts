@@ -1,7 +1,7 @@
 // battle_anim_poison.c: sprite callbacks and tasks, ported as the moves that use them come up.
 
-import { type Sprite, type SpriteCallback } from '../../gba/sprite';
-import { type TaskFunc } from '../../gba/task';
+import type { Sprite, SpriteCallback } from '../../gba/sprite';
+import type { TaskFunc } from '../../gba/task';
 import { K } from '../constants';
 import { Sin } from '../trig';
 import { getBattlerSide } from '../util';
@@ -37,5 +37,4 @@ export const poisonSpriteCallbacks: Record<string, SpriteCallback> = {
   AnimBubbleEffect,
 };
 
-export const poisonTasks: Record<string, TaskFunc> = {
-};
+export const poisonTasks: Record<string, TaskFunc> = {};
