@@ -70,6 +70,29 @@ export class GameState {
   registeredItem = 0;
   /** gSaveBlock1Ptr->flashLevel: 0 = lit, up to gMaxFlashLevel (world/flash.ts) in a dark cave. */
   flashLevel = 0;
+  /**
+   * gSaveBlock1Ptr->gameStats (NUM_GAME_STATS words; the GBA XORs them with the encryption key, the port keeps
+   * them plain). Read and written through GetGameStat / SetGameStat / IncrementGameStat.
+   */
+  gameStats: number[] = new Array<number>(64).fill(0);
+
+  /** GetGameStat (overworld.c): 0 for ids from NUM_USED_GAME_STATS on. */
+  getGameStat(statId: number): number {
+    if (statId >= this.defines.require('NUM_USED_GAME_STATS')) return 0;
+    return this.gameStats[statId] >>> 0;
+  }
+
+  /** SetGameStat */
+  setGameStat(statId: number, value: number): void {
+    if (statId >= this.defines.require('NUM_USED_GAME_STATS')) return;
+    this.gameStats[statId] = value >>> 0;
+  }
+
+  /** IncrementGameStat: capped at 0xFFFFFF. */
+  incrementGameStat(statId: number): void {
+    if (statId >= this.defines.require('NUM_USED_GAME_STATS')) return;
+    this.setGameStat(statId, Math.min(this.getGameStat(statId) + 1, 0xffffff));
+  }
 
   private flags = new Set<number>();
   private vars = new Map<number, number>();

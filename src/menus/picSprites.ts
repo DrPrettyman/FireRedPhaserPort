@@ -1,8 +1,9 @@
 // trainer_pokemon_sprites.c: front/back pic sprites outside battle (summary screen, Hall of Fame,
-// trainer card). Only the Pokémon half is ported; trainer pics warn. ignoreDeoxys has no effect:
-// FireRed's Deoxys pic is its Normal form either way.
+// trainer card). ignoreDeoxys has no effect: FireRed's Deoxys pic is its Normal form either way.
 
-import { animTable, GetMonSpritePalFromSpeciesAndPersonality, GetMonSpritePalStructFromOtIdPersonality, LoadSpecialPokePic } from '../battle/gfx';
+import { bdata } from '../battle/env';
+import { animTable, DecompressPicFromTable, GetMonSpritePalFromSpeciesAndPersonality, GetMonSpritePalStructFromOtIdPersonality, LoadSpecialPokePic } from '../battle/gfx';
+import { gfx16 } from '../gba/gfx';
 import { LoadPalette, OBJ_PLTT_ID, PLTT_SIZE_4BPP } from '../gba/palette';
 import {
   CreateSprite,
@@ -42,8 +43,8 @@ export function ResetAllPicSprites(): boolean {
 }
 
 function CreatePicSprite(species: number, otId: number, personality: number, isFrontPic: boolean, x: number, y: number, paletteSlot: number, paletteTag: number, isTrainer: boolean): number {
-  if (isTrainer) {
-    console.warn('[trainer_pokemon_sprites] trainer pic sprites are not implemented');
+  if (isTrainer && !isFrontPic) {
+    console.warn('[trainer_pokemon_sprites] trainer back pic sprites are not implemented');
     return 0xffff;
   }
   let i = 0;
@@ -51,19 +52,29 @@ function CreatePicSprite(species: number, otId: number, personality: number, isF
   if (i === PICS_COUNT) return 0xffff;
 
   const framePics = new Uint8Array(4 * 0x800);
-  LoadSpecialPokePic(isFrontPic, species, personality, framePics);
+  // DecompressPic: gTrainerFrontPicTable[species] for a trainer (`species` is the TRAINER_PIC_* id)
+  if (isTrainer) DecompressPicFromTable(bdata.anims.trainerFrontPics[species]!.pic, framePics);
+  else LoadSpecialPokePic(isFrontPic, species, personality, framePics);
   const images: SpriteFrameImage[] = [0, 1, 2, 3].map((j) => ({ data: framePics.subarray(0x800 * j, 0x800 * (j + 1)), size: 0x800 }));
   const template: SpriteTemplate = {
     tileTag: TAG_NONE,
     paletteTag: TAG_NONE,
     oam: sOamData_Normal,
-    anims: animTable('data.c', 'gAnims_MonPic'), // AssignSpriteAnimsTable
+    // AssignSpriteAnimsTable: gTrainerFrontAnimsPtrTable[0] for trainers
+    anims: animTable('data.c', isTrainer ? bdata.anims.units['data.c'].tableTables['gTrainerFrontAnimsPtrTable']![0]! : 'gAnims_MonPic'),
     images,
     affineAnims: gDummySpriteAffineAnimTable,
     callback: DummyPicSpriteCallback,
   };
   // LoadPicPaletteByTagOrSlot
-  if (paletteTag === TAG_NONE) {
+  if (isTrainer) {
+    const pal = gfx16(bdata.anims.trainerFrontPalettes[species]!);
+    if (paletteTag === TAG_NONE) LoadPalette(pal, OBJ_PLTT_ID(paletteSlot), PLTT_SIZE_4BPP);
+    else {
+      template.paletteTag = paletteTag;
+      LoadCompressedSpritePalette({ data: pal, tag: species }); // gTrainerFrontPicPaletteTable[species] is tagged with the id
+    }
+  } else if (paletteTag === TAG_NONE) {
     LoadPalette(GetMonSpritePalFromSpeciesAndPersonality(species, otId, personality), OBJ_PLTT_ID(paletteSlot), PLTT_SIZE_4BPP);
   } else {
     const pal = GetMonSpritePalStructFromOtIdPersonality(species, otId, personality);
@@ -95,5 +106,14 @@ export function CreateMonPicSprite_HandleDeoxys(species: number, otId: number, p
 }
 
 export function FreeAndDestroyMonPicSprite(spriteId: number): number {
+  return FreeAndDestroyPicSpriteInternal(spriteId);
+}
+
+/** CreateTrainerPicSprite: `species` is the TRAINER_PIC_* id. */
+export function CreateTrainerPicSprite(species: number, isFrontPic: boolean, x: number, y: number, paletteSlot: number, paletteTag: number): number {
+  return CreatePicSprite(species, 0, 0, isFrontPic, x, y, paletteSlot, paletteTag, true);
+}
+
+export function FreeAndDestroyTrainerPicSprite(spriteId: number): number {
   return FreeAndDestroyPicSpriteInternal(spriteId);
 }

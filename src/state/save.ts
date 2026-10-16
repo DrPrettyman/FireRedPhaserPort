@@ -3,6 +3,7 @@
 // continue-game warp flag (UseContinueGameWarp & co.). These are EWRAM globals on the GBA, so module state here.
 
 import type { GameState } from './GameState';
+import { EraseHallOfFameSave, WriteHallOfFameSave } from './hallOfFame';
 import { readSave, saveSlotUsed, toSaveData, writeSave, type SaveData } from './saveData';
 
 // include/save.h (the port keeps them as plain numbers so this module needs no Defines; tests check them
@@ -12,6 +13,7 @@ export const SAVE_STATUS_OK = 1;
 export const SAVE_STATUS_INVALID = 2;
 export const SAVE_STATUS_ERROR = 0xff;
 export const SAVE_NORMAL = 0;
+export const SAVE_HALL_OF_FAME = 3;
 export const SAVE_OVERWRITE_DIFFERENT_FILE = 4;
 // include/save_location.h
 export const CONTINUE_GAME_WARP = 1 << 0;
@@ -40,13 +42,22 @@ export function LoadGameSave(storage?: Storage): SaveData | undefined {
 }
 
 /**
- * TrySavingData + HandleSavingData: SaveSerializedGame and write the slot. SAVE_OVERWRITE_DIFFERENT_FILE
- * also erases the Hall of Fame sectors on the GBA, which the port doesn't keep. A failed write is
- * SAVE_STATUS_ERROR (DoSaveFailedScreen isn't ported: the caller shows the save error message).
+ * TrySavingData + HandleSavingData: SaveSerializedGame and write the slot. SAVE_HALL_OF_FAME first counts
+ * GAME_STAT_ENTERED_HOF and writes the Hall of Fame records (gHofBuffer, state/hallOfFame.ts);
+ * SAVE_OVERWRITE_DIFFERENT_FILE erases them. A failed write is SAVE_STATUS_ERROR (DoSaveFailedScreen isn't
+ * ported: the caller shows the save error message).
  */
 export function TrySavingData(saveType: number, state: GameState, storage?: Storage): number {
-  void saveType;
-  gSave.attemptStatus = writeSave(toSaveData(state), storage) ? SAVE_STATUS_OK : SAVE_STATUS_ERROR;
+  let ok = true;
+  if (saveType === SAVE_HALL_OF_FAME) {
+    const stat = state.defines.require('GAME_STAT_ENTERED_HOF');
+    if (state.getGameStat(stat) < 999) state.incrementGameStat(stat);
+    ok = WriteHallOfFameSave(storage);
+  } else if (saveType === SAVE_OVERWRITE_DIFFERENT_FILE) {
+    EraseHallOfFameSave(storage);
+  }
+  ok = writeSave(toSaveData(state), storage) && ok;
+  gSave.attemptStatus = ok ? SAVE_STATUS_OK : SAVE_STATUS_ERROR;
   return gSave.attemptStatus;
 }
 
