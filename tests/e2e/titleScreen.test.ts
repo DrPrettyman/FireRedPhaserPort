@@ -26,18 +26,10 @@ const titleEvents = async (game: Game, since = 0) => (await game.events(since)).
 
 test('boot shows the title screen; its intro plays to PRESS START; START with no save starts the new game', async () => {
   const game = await session.start({ title: true });
-  // Watch the intro's scenes in the page: each lasts only a few dozen frames.
-  const scenes = await game.eval(async (t) => {
-    const seen: string[] = [];
-    await t.until(() => {
-      const s = t.titleScreen()?.scene;
-      if (s && seen[seen.length - 1] !== s) seen.push(s);
-      return s === 'RUN';
-    });
-    return seen;
-  });
-  // (INIT lasts one frame and may be over by the time the harness sees the title screen's event)
-  expect(scenes.filter((s) => s !== 'INIT')).toEqual(['FLASHSPRITE', 'FADEIN', 'RUN']);
+  // The intro's scenes each last only a few dozen frames, so read them from the event log (SetTitleScreenScene)
+  await titleRunning(game);
+  const scenes = (await game.events()).filter((e) => e.type === 'titleScene').map((e) => e.scene);
+  expect(scenes).toEqual(['FLASHSPRITE', 'FADEIN', 'RUN']);
   expect(await game.eval((t) => t.scenes())).toEqual(['MainMenu']);
   expect(await game.eval((t) => t.gbaScreen())).toBe('CB2_TitleScreenRun');
 
@@ -59,7 +51,7 @@ test('boot shows the title screen; its intro plays to PRESS START; START with no
 
   const since = await game.mark();
   await game.press('START');
-  await game.waitFor((t) => t.titleScreen()?.scene === 'CRY', { what: 'the cry scene' });
+  await game.waitFor((t) => t.events().some((e) => e.type === 'titleScene' && e.scene === 'CRY'), { what: 'the cry scene' });
   // No save: the main menu goes on to the new game at once
   await game.waitForEvent('mainMenu', { since });
   await game.waitForEvent('ready', { since, timeout: 60_000 });
@@ -70,8 +62,11 @@ test('A during the intro skips to PRESS START; START with a save opens the main 
   let game = await session.start({ start: 'after-rival' });
   await saveNow(game);
   game = await game.load({ title: true, keepSave: true });
-  await game.waitFor((t) => t.titleScreen()?.scene === 'FLASHSPRITE', { what: 'the flash' });
-  await game.press('A');
+  // Press A in the page as soon as the flash starts: from outside, the intro could be over before the press lands
+  await game.eval(async (t) => {
+    await t.until(() => t.titleScreen()?.scene === 'FLASHSPRITE');
+    await t.press('A');
+  });
   const run = await titleRunning(game);
   expect(run.state).toBe(1);
 
