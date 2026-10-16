@@ -797,3 +797,24 @@ end to end.
   add its own `battleAnims.<file>.test.ts`.
 - BATTLE_ANIMS_PLAN.md "Working in parallel": who owns which files, the cross-file symbols to leave alone, and
   which shared lines (counts, tables) only the merger edits.
+
+### Battle anims 2C: battle_anim_fire.c, battle_anim_electric.c, battle_anim_flying.c
+
+- All three files are fully ported (`src/battle/anim/fire.ts`, `electric.ts`, `flying.ts`): every sprite callback,
+  task and helper, including the unused ones (AnimUnusedSmallEmber, AnimUnusedSpinningFist, AnimUnusedCirclingShock,
+  AnimUnusedBubbleThrow, AnimUnusedFeather, AnimUnusedFlashingLight, AnimTask_SetAttackerVisibility).
+  DestroyAnimSpriteAfterTimer (flying.c) was already in animMons.ts.
+- 20 more scripts run (168 → 188 of 397): Fire Punch, Fire Blast, Flame Wheel, Sacred Fire, Will-O-Wisp,
+  Blast Burn, Thunder Punch, Thunderbolt, Thunder, Zap Cannon, Spark, Charge, Volt Tackle, Shock Wave, Aeroblast,
+  Whirlwind, Fly, Drill Peck, Feather Dance, Bounce.
+- Still waiting on other files: Eruption (ground's AnimTask_HorizontalShake), Blaze Kick (fight), Heat Wave (rock),
+  Dive (water), Sky Attack (dark), Tri Attack (effects_3, ice), Glare / Scary Face / Razor Wind / Astonish /
+  General_MonScared (effects_2/3), General_GhostGetOut (ghost, effects_2).
+- Feather Dance's `struct FeatherDanceData` (bitfields overlaid on `sprite->data`) is read into an object and
+  written back each frame (readFeatherData / writeFeatherData); AnimUnusedFeather_Step's memcpy/memset juggling
+  is done on the raw halfwords. Spark and the feathers write `gOamMatrices` directly, as in the C.
+- No shared-engine changes.
+- Tests: the labels in the fire/electric/flying `FULLY_PORTED` lists; tests/e2e/battleAnims.2c.test.ts runs every
+  new callback/task four moves to a battle, plus Fly and Bounce (the attacker hidden between turns and back after)
+  and Whirlwind (ends the wild battle). Checked by eye in mid-anim screenshots: Fire Blast, Sacred Fire,
+  Will-O-Wisp, Thunder, Spark, Charge, Volt Tackle, Shock Wave, Feather Dance, Fly.
