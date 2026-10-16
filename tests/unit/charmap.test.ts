@@ -36,3 +36,15 @@ describe('Charmap.encode (as tools/preproc)', () => {
     expect(t.charmap.encodePlain('RED')).toEqual([0xcc, 0xbf, 0xbe]);
   });
 });
+
+describe('Charmap.decodePlain (names from the naming screen back to text)', () => {
+  test('bytes from charmap.txt decode to their characters, up to EOS', () => {
+    expect(t.charmap.decodePlain([0xbb, 0xee, 0x00, 0xa1, 0xaa, EOS, 0xbb])).toBe('Az 09');
+  });
+
+  test('round-trips every character the naming screen can enter', () => {
+    const name = 'Ab9 .-!?♂♀/,é';
+    expect(t.charmap.decodePlain(t.charmap.encode(name))).toBe(name);
+    for (const s of ['RED', 'GREEN', 'Gary', 'A.B-C']) expect(t.charmap.encodePlain(t.charmap.decodePlain(t.charmap.encode(s)))).toEqual(t.charmap.encodePlain(s));
+  });
+});

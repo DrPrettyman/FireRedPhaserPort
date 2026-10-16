@@ -1315,3 +1315,120 @@ end to end.
   opening on the Sevii map, indoors via the escape warp, a wall map, flying Pallet → Viridian's heal location, an
   unvisited town refused, indoors refused, no Thunder Badge refused). typecheck, `npm test` (85) and the full
   `npm run test:e2e` (222) pass.
+### Hall of Fame, the Hall of Fame PC and the credits (W-hof, batch 3)
+
+- hall_of_fame.c on the GBA layer (`menus/hallOfFame.ts`, FieldMenuScene 'hallOfFame' / 'hallOfFamePc'): the
+  screen (the team's record saved with the game, the mons coming on one by one with their info, the welcome text
+  and confetti, the player's pic and trainer info, A to leave) and the Hall of Fame PC (the saved teams newest
+  first, UP/DOWN through the mons, A to the older team, B out; "corrupted" without records), with the PC screen
+  effect. post_battle_event_funcs.c's EnterHallOfFame (FLAG_SYS_GAME_CLEAR, GAME_STAT_FIRST_HOF_PLAY_TIME, CONTINUE
+  from Pallet Town) and SetWarpsToRollCredits (DoWarp into Indigo Plateau from a GBA screen:
+  `OverworldScene.warpFromScreen`); hof_pc.c's return to the PC menu (its choice ends the script's `waitstate`).
+- FLDEFF_HALL_OF_FAME_RECORD (`world/hallOfFameRecord.ts`): the machine's Poké Balls placed and flashing, the
+  monitor; the shared CreateGlowingPokeballsEffect is there for FLDEFF_POKECENTER_HEAL too.
+- credits.c (`menus/credits.ts`) on the field's GBA layer: the title, the 13 scrolling map scenes in the darkened
+  WIN0 band with the player / rival running on the ground sprite, the Charizard / Venusaur / Blastoise / Pikachu
+  scenes (with the white circle on an affine BG2), the copyright and THE END, then SoftReset: a fresh Overworld
+  scene and BootScene again (`{ softReset: true }`), i.e. the main menu, where CONTINUE starts in Pallet Town and
+  Oak's National Dex scene follows. Indigo Plateau's script needed `special SpawnCameraObject` /
+  `RemoveCameraObject`.
+- State: game stats in GameState and the save (SAVE_VERSION 2; `upgradeSave` reads version 1 saves);
+  `state/hallOfFame.ts` keeps the records under their own localStorage key; TrySavingData handles
+  SAVE_HALL_OF_FAME (GAME_STAT_ENTERED_HOF, records) and SAVE_OVERWRITE_DIFFERENT_FILE (erases them).
+- Shared changes: FieldMenuScene (two menus, `onExit`'s `warp`), OverworldScene (enterHallOfFame,
+  openHallOfFamePc, warpFromScreen, doCredits, spawnCameraObject public, the record effect's host, tile anims off
+  while the credits run), ScriptHost (+4 methods, `fadeScreen` delay), ScriptEngine (`fadescreenspeed`, which
+  was unimplemented), specials (EnterHallOfFame, HallOfFamePCBeginFade, DoCredits, Spawn/RemoveCameraObject,
+  IsNationalPokedexEnabled as a special, Script_UpdateTrainerFanClubGameClear as a no-op), BootScene
+  (`softReset`), FieldGbaScreen (`reloadField`), the PPU (affine BGs in modes 1 and 2), picSprites (trainer pics),
+  `menus/topBarWindow.ts` (menu.c's top bar window, which Oak's speech also uses), testHooks (`hallOfFame()`,
+  `credits()`, `creditsSkipToClosing()`).
+- Extractor: graphics/hall_of_fame/ and graphics/credits/ in extract_gfx.py. Rerun `npm run extract`.
+- Found on the way: `specialvar VAR_RESULT, IsNationalPokedexEnabled` (EventScript_SetDefeatedEliteFourFlagsVars)
+  was an unknown special, so Oak's National Dex scene always got set up; restarting a Phaser scene keeps its
+  instance fields (the GameState among them), so SoftReset replaces the scene instead.
+- Tests: tests/e2e/hallOfFame.test.ts (the whole ending from the room's entrance to CONTINUE in Pallet Town, with
+  the record and save checked and the credits skipped after the Charizard scene; the PC with two teams; the PC
+  without records), tests/unit/save.test.ts (the records, GAME_STAT_ENTERED_HOF, version 1 saves). Full e2e run:
+  two battle anim tests failed under the parallel load (missed rolls) and passed when rerun alone.
+### Title screen and clear save data screen (`title-screen`)
+
+- title_screen.c on the GBA layer (menus/titleScreen.ts): CB2_InitTitleScreen, the flash sweeping up Charizard
+  (a BLDY scanline effect), the grey fade-in, the WIN0 slide that brings in the border and copyright BGs, the white
+  flashes, then the run scene: PRESS START blinking, Task_FlameSpawner's flames, the OBJ-window slash lightening
+  the logo. A/B/START during the intro skip to the run scene; A/START there plays the cry scene and fades to white
+  into the main menu (LoadGameSave again, as SetTitleScreenScene_Cry does); 2700 frames without input restart the
+  title screen (straight back to it: intro.c isn't ported). B+SELECT+UP opens clear_save_data_screen.c
+  (menus/clearSaveDataScreen.ts), whose YES empties the save slot; both answers soft-reset.
+- Boot: BootScene now starts MainMenuScene on the title screen; MainMenuScene hosts the title screen, the clear
+  save data screen and the main menu (B on the main menu goes back to the title screen for real now). Dev
+  `?skipIntro` keeps the old boot (main menu with a save, else the new game); the e2e harness passes it unless a
+  test asks for `title: true`. `softReset(scene)` (scenes/BootScene.ts) is the restart-the-game entry point
+  (DoSoftReset): it stops every scene and boots again, reusing the loaded data.
+- Shared helpers: TintPalette_GrayScale2 and DestroyBlendPalettesGraduallyTask (gba/palette.ts), ResetBgPositions
+  (gba/menu.ts), no-op m4aSongNumStart / FadeOutBGM / FadeOutMapMusic / IsNotWaitingForBGMStop (gba/sound.ts).
+  CB2_InitMainMenu reports the `mainMenu` test event (it used to be the scene's create).
+- Found on the way: SetTitleScreenScene_Restart destroys the blink task by FindTaskIdByFunc after it may have ended
+  itself, i.e. DestroyTask(TASK_NONE), which reads past gTasks on the GBA; the port skips it. The clear save data
+  screen's backdrop is the title logo palette's colour 0 (green), since neither screen reloads gPlttBufferUnfaded[0]
+  (as on the GBA).
+- Extractor: graphics/title_screen/ in extract_gfx.py. Rerun `npm run extract` (or `python3 tools/extract_gfx.py`).
+- Tests: tests/e2e/titleScreen.test.ts (boot → title → intro scenes → PRESS START blinking and flames → START →
+  new game; A skipping the intro, START → main menu with a save, B back to the title, CONTINUE; the 2700-frame
+  restart; the clear save data screen, NO and YES). saveContinue.test.ts's boot test goes through the title screen
+  after B on the main menu.
+### Main-path leftovers: card key doors, setmaplayoutindex, Field_AskSaveTheGame, seteventmon (W-misc, batch 3)
+
+- Silph Co.'s card key doors (data/scripts/silphco_doors.inc) already worked end to end: ON_LOAD's `setmetatile`
+  closes them (collision included), the bg events say "It needs a CARD KEY!" without FLAG_HIDE_SILPH_CO_5F_CARD_KEY,
+  open them with it (`special SetHiddenItemFlag` sets FLAG_SILPH_*_DOOR_*), and ON_LOAD leaves an open door open
+  after a warp. Now covered by e2e tests; no code change.
+- `setmaplayoutindex` (ScrCmd_setmaplayoutindex → SetCurrentMapLayout): `GameState.mapLayoutId`
+  (gSaveBlock1Ptr->mapLayoutId) set from the header before ON_TRANSITION (LoadCurrentMapData), changed by the
+  command, then `OverworldScene.initMapLayout` swaps the current chunk's grid (`World.setCurrentLayout`) before
+  ON_LOAD. Saved with the location (`location.mapLayoutId`) and used by CONTINUE (LoadSaveblockMapHeader).
+  Seafoam Islands B3F/B4F switch to the *_CURRENT_STOPPED layouts once both boulders are down, and the currents
+  (MB_*_CURRENT, world/playerAvatar.ts) stop with them.
+- Extractor: maps get `layoutId`; the 55 layouts no map uses (except the NULL-tileset leftovers) go to
+  `maps/layouts/<LAYOUT_ID>.json` (adds the Building/HoennBuilding tileset pair), `maps/layouts/index.json` maps
+  the used ones to a map file; LAYOUT_* ids (index + 1, as mapjson generates them) in the script defines. Rerun
+  `npm run extract`.
+- `special Field_AskSaveTheGame` (start_menu.c, EventScript_AskSaveGame): the SAVE dialog (ui/SaveDialog.ts) run
+  as the special's wait state (task50_save_game), VAR_RESULT TRUE once saved, FALSE for NO / B / a failed write.
+  The cable club attendants reach it now, so the link specials on that path got stand-ins: TryBattleLinkup /
+  TryTradeLinkup never find a partner (B → LINKUP_FAILED, as on a GBA with nothing plugged in; before, an
+  unported linkup would have left VAR_RESULT = TRUE = LINKUP_SUCCESS and walked the player into the Colosseum),
+  IsWirelessAdapterConnected / ValidateSavedWonderCard / IsBadEggInParty FALSE, CloseLink and
+  HelpSystem_Enable/Disable no-ops.
+- `seteventmon` (`special CreateEnemyEventMon`): Navel Rock's Lugia / Ho-Oh, Birth Island's Deoxys.
+- Shared-file changes: ScriptEngine.ts (`setmaplayoutindex`; SpecialEnv gains `input`, `hideFieldMessageBox`;
+  ScriptHost gains `createSaveDialog`), specials.ts, OverworldScene.ts (onMapLoaded / initMapLayout,
+  storeLocationForSave, createSaveDialog split out of openSaveDialog, a `multichoice` test event), World.ts,
+  assets.ts, types.ts, GameState.ts (`mapLayoutId`, PlayerLocation.mapLayoutId; no saveData.ts change), extract.py.
+- Fix on the way: playerAvatar.test.ts's current ride started on B4F from a dev start, where both boulders now
+  count as down (Route20_OnTransition never ran) and the currents are stopped; it hides them first and warps in.
+  pcBoxes.test.ts's stored-location check now expects `mapLayoutId` in the location.
+- Verified: typecheck, `npm test` (85), full `npm run test:e2e` (221; five battle anim tests failed once while
+  other workers' suites shared the machine and passed on a rerun of those files).
+- Tests: tests/e2e/mainPathLeftovers.test.ts (Silph Co. 5F door + the Card Key ball, Seafoam B4F stopped / running /
+  after CONTINUE, B3F, the cable club save prompt NO and YES, Lugia via seteventmon).
+
+### Oak's speech (`oak-speech`)
+
+- oak_speech.c on the GBA layer (menus/oakSpeech.ts), run by MainMenuScene for NEW GAME: the three controls guide
+  pages (top bar, keypad icons, the button pics), the Pikachu intro (blended page turns), then Oak: Nidoran♀ out of
+  its Poké Ball and back (pokeball.c's CreatePokeballSpriteToReleaseMon / CreateTradePokeballSprite with the ball's
+  open particles and the mon's fade), BOY / GIRL, the player's name (the naming screen; NO renames), the rival's
+  name (NEW NAME → the naming screen, or one of the four presets), "Let's go!" and the player pic turning white and
+  shrinking on the affine BG2, then CB2_NewGame. The names and gender end up in the field's new GameState
+  (OverworldStart `newGameProfile`, via Charmap.decodePlain).
+- GBA layer: affine BGs (PPU modes 1-2, bg.c's affine tilemap paths, SetBgAffine + BgAffineSet, ChangeBgX/Y writing
+  BG2X/Y), menu.c's top bar window (gba/topBarWindow.ts), text.c's text cursor sprite (gba/textCursor.ts),
+  GetStdWindowBaseTileNum, no-op PlayBGM. resetHardware now leaves BG2/BG3 PA = PD = 0x100 (RegisterRamReset).
+- Found on the way: ChangeBgX/Y only wrote BG0/BG1's offsets in bg mode 0; bg.c writes them in mode 1 too (and the
+  affine reference point for BG2). Task_OakSpeech_DestroyPlatformSprites destroys sprite 0 three times (its own
+  task's data[7..9] were never set; a decomp-documented bug), kept.
+- Extractor: graphics/oak_speech/ in extract_gfx.py.
+- Tests: titleScreen.test.ts gains two Oak's speech scenarios (GIRL with both names typed in the naming screen →
+  PlayersHouse_2F with the names and the female avatar; BOY, NO → rename, a preset rival name); charmap.test.ts
+  covers decodePlain.

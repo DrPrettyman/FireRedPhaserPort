@@ -14,8 +14,11 @@ import type { GameState, PlayerLocation, RoamerSave, WarpData } from './GameStat
 import type { PlayTime } from './playTime';
 import type { BoxPokemon } from './PokemonStorage';
 
-/** Bump when SaveData changes shape; fromSaveData refuses other versions. */
-export const SAVE_VERSION = 1;
+/**
+ * Bump when SaveData changes shape; fromSaveData refuses other versions. Older versions that only lack fields
+ * are brought up to date by `upgradeSave` (version 1 had no gameStats).
+ */
+export const SAVE_VERSION = 2;
 
 /** The localStorage key of the one save slot. */
 export const SAVE_STORAGE_KEY = 'firered-phaser:save';
@@ -90,6 +93,8 @@ export interface SaveData {
   registeredItem: number;
   /** gSaveBlock1Ptr->flashLevel (world/flash.ts). */
   flashLevel: number;
+  /** gSaveBlock1Ptr->gameStats (NUM_GAME_STATS, unencrypted); since version 2. */
+  gameStats: number[];
   /** pcItems, trailing empty slots left out. */
   pcItems: ItemSlotSave[];
   /** bagPocket_* in POCKET_* order, trailing empty slots left out. */
@@ -181,6 +186,7 @@ export function toSaveData(state: GameState): SaveData {
     coins: state.coins,
     registeredItem: state.registeredItem,
     flashLevel: state.flashLevel,
+    gameStats: [...state.gameStats],
     pcItems: itemSlotsSave(state.pcItems, none),
     bag: state.bag.pockets.map((p) => itemSlotsSave(p, none)),
     trainerRematchStepCounter: state.trainerRematchStepCounter,
@@ -209,6 +215,7 @@ export function toSaveData(state: GameState): SaveData {
  * isn't in the save keeps its new-game value). Throws on a save of another version.
  */
 export function fromSaveData(data: SaveData, state: GameState): GameState {
+  data = upgradeSave(data);
   if (data?.version !== SAVE_VERSION) throw new Error(`[save] unsupported save version ${String(data?.version)}`);
   const none = state.defines.require('ITEM_NONE');
 
@@ -238,6 +245,7 @@ export function fromSaveData(data: SaveData, state: GameState): GameState {
   state.coins = data.coins;
   state.registeredItem = data.registeredItem;
   state.flashLevel = data.flashLevel;
+  state.gameStats.forEach((_, i) => (state.gameStats[i] = data.gameStats[i] ?? 0));
   loadItemSlots(state.pcItems, data.pcItems, none);
   state.bag.pockets.forEach((pocket, i) => loadItemSlots(pocket, data.bag[i] ?? [], none));
   state.trainerRematchStepCounter = data.trainerRematchStepCounter;
@@ -254,6 +262,12 @@ export function fromSaveData(data: SaveData, state: GameState): GameState {
   st.boxNames.forEach((_, b) => (st.boxNames[b] = [...(data.storage.boxNames[b] ?? [])]));
   st.boxWallpapers.forEach((_, b) => (st.boxWallpapers[b] = data.storage.boxWallpapers[b] ?? 0));
   return state;
+}
+
+/** Bring a save of an older version that only lacks fields up to SAVE_VERSION (other saves are returned as they are). */
+export function upgradeSave(data: SaveData): SaveData {
+  if (data?.version === 1) data = { ...data, version: 2, gameStats: new Array<number>(64).fill(0) };
+  return data;
 }
 
 // ------------------------------------------------------------------ the save slot (browser localStorage)
@@ -288,7 +302,7 @@ export function readSave(storage = defaultStorage()): SaveData | undefined {
   }
   if (!raw) return undefined;
   try {
-    const data = JSON.parse(raw) as SaveData;
+    const data = upgradeSave(JSON.parse(raw) as SaveData);
     if (data?.version !== SAVE_VERSION) {
       console.warn(`[save] ignoring a save of version ${String(data?.version)}`);
       return undefined;

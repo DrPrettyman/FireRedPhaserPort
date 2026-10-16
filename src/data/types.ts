@@ -51,9 +51,24 @@ export interface BgEventData {
   [key: string]: unknown;
 }
 
+/** struct MapLayout: a map grid, its border and tileset pair (maps/layouts/<LAYOUT_ID>.json for one no map uses). */
+export interface MapLayoutData {
+  /** LAYOUT_* */
+  id: string;
+  width: number;
+  height: number;
+  blocks: number[];
+  borderWidth: number;
+  borderHeight: number;
+  border: number[];
+  tilesetPair: string;
+}
+
 export interface MapData {
   id: string;
   name: string;
+  /** gMapHeader.mapLayoutId, as its LAYOUT_* name */
+  layoutId: string;
   width: number;
   height: number;
   /** Map grid values: bits 0-9 metatile, 10-11 collision, 12-15 elevation. */

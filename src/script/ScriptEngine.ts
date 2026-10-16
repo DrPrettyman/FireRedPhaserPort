@@ -95,6 +95,15 @@ export interface ScriptHost {
   openPokemonStoragePc(): Wait;
   /** PlayerPC / BedroomPC: the item storage menus; the wait ends when the player turns the PC off. */
   openPlayerPc(): Wait;
+  /** EnterHallOfFame: the Hall of Fame screen; the field comes back through its warp into Indigo Plateau. */
+  enterHallOfFame(): void;
+  /** HallOfFamePCBeginFade: the Hall of Fame PC, then the PC menu again (its choice in `result`). */
+  openHallOfFamePc(): { tick(): boolean; result: number };
+  /** DoCredits (credits.c): the credits on the field's GBA layer; they end in a reset, never back to the script. */
+  doCredits(): void;
+  /** SpawnCameraObject / RemoveCameraObject (field_specials.c) */
+  spawnCameraObject(): unknown;
+  removeCameraObject(): void;
   /** SetWarpDestination without warping (setwarp): used by the next WarpIntoMap. */
   setWarpDestination(mapId: string, warpId: number, x: number, y: number): void;
   /** LOCALID_* names are generated per map from map.json `local_id` fields. */
@@ -105,10 +114,12 @@ export interface ScriptHost {
   hideMonPic(): Wait | undefined;
   /** PicboxCancel: remove the picture box at once. */
   cancelMonPic(): void;
+  /** Field_AskSaveTheGame: the SAVE dialog (ui/SaveDialog.ts); `tick()` is RunSaveDialogCB (SAVECB_RETURN_*). */
+  createSaveDialog(): { tick(): number };
   /** CreatePCMenuWindow + CreateMCMenuInputHandlerTask */
   openPcMenu(): { tick(): boolean; result: number };
-  /** FadeScreen: returns a wait for IsPaletteNotActive. */
-  fadeScreen(mode: number): Wait;
+  /** FadeScreen(mode, delay): returns a wait for IsPaletteNotActive. */
+  fadeScreen(mode: number, delay?: number): Wait;
   /**
    * DoNamingScreen from a black field, returning through CB2_ReturnToFieldContinueScriptPlayMapMusic:
    * the wait ends once the field has faded back in.
@@ -267,6 +278,8 @@ export class ScriptEngine {
         this.start(label);
       },
       disableMsgBoxWalkaway: () => (this.msgBoxWalkawayDisabled = true),
+      input,
+      hideFieldMessageBox: () => this.messageBox.hide(),
       encodeText: (label) => this.charmap.encodePlain(this.strings[label] ?? ''),
       warnOnce: (key, message) => {
         if (this.warned.has(key)) return;
@@ -875,6 +888,13 @@ export class ScriptEngine {
         (this.defines.get(a[3] ?? 'FALSE') ?? 0) !== 0,
       );
     },
+    /**
+     * ScrCmd_setmaplayoutindex → SetCurrentMapLayout: gSaveBlock1Ptr->mapLayoutId = VarGet(arg). Only ON_TRANSITION
+     * scripts use it; the field then loads that layout (OverworldScene.onMapLoaded, as InitMap follows the script).
+     */
+    setmaplayoutindex(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      this.state.mapLayoutId = this.state.value(a[0]);
+    },
     warp(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
       this.doWarp(ctx, a);
     },
@@ -991,6 +1011,10 @@ export class ScriptEngine {
 
     fadescreen(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
       ctx.wait = this.host.fadeScreen(this.state.value(a[0]));
+    },
+    /** ScrCmd_fadescreenspeed: FadeScreen(mode, speed), waiting for IsPaletteNotActive */
+    fadescreenspeed(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      ctx.wait = this.host.fadeScreen(this.state.value(a[0]), this.state.value(a[1]));
     },
 
     // ------------------------------------------------ money (a non-zero second argument disables the command)

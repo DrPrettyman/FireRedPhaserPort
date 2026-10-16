@@ -57,6 +57,26 @@ export class Charmap {
     return this.encode(s).slice(0, -1);
   }
 
+  private decodeTable?: Map<number, string>;
+
+  /**
+   * Plain runtime text back from bytes (up to EOS): the inverse of encodePlain for single-byte characters (e.g. a
+   * name from the naming screen). Each byte becomes the shortest charmap entry that encodes to it.
+   */
+  decodePlain(bytes: ArrayLike<number>): string {
+    if (!this.decodeTable) {
+      this.decodeTable = new Map();
+      for (const [ch, b] of Object.entries(this.data.chars)) {
+        if (b.length !== 1) continue;
+        const prev = this.decodeTable.get(b[0]);
+        if (prev === undefined || ch.length < prev.length) this.decodeTable.set(b[0], ch);
+      }
+    }
+    let out = '';
+    for (let i = 0; i < bytes.length && bytes[i] !== EOS; i++) out += this.decodeTable.get(bytes[i]) ?? '';
+    return out;
+  }
+
   private encodeToken(tok: string): number[] {
     const named = this.data.names[tok];
     if (named) return named;

@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { Assets } from '../data/assets';
-import type { MapConnection, MapData } from '../data/types';
+import type { MapConnection, MapData, MapLayoutData } from '../data/types';
 import {
   LAYER_DEPTH,
   MAPGRID_COLLISION_MASK,
@@ -54,6 +54,23 @@ export class World {
     this.current = chunk;
     await this.loadConnections();
     return chunk;
+  }
+
+  /**
+   * The current map with another layout (SetCurrentMapLayout before InitMap's InitMapLayoutData): its grid,
+   * border and tilesets replaced, the header (events, connections, layoutId) kept.
+   */
+  async setCurrentLayout(layout: MapLayoutData): Promise<void> {
+    const old = this.current;
+    const { id: _id, ...grid } = layout;
+    const data: MapData = { ...old.data, ...grid };
+    await this.assets.loadTilesetTextures(this.scene, data.tilesetPair);
+    const chunk = new MapChunk(data, old.originX, old.originY);
+    chunk.render(this.scene, this.assets.tilesetPair(data.tilesetPair));
+    old.destroy();
+    this.chunks[this.chunks.indexOf(old)] = chunk;
+    this.current = chunk;
+    this.renderBorder();
   }
 
   /** Make an already-loaded neighbour the current map and stream in its own neighbours. */

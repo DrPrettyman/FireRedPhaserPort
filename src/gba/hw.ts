@@ -32,6 +32,23 @@ export const REG_OFFSET_BG2HOFS = 0x18;
 export const REG_OFFSET_BG2VOFS = 0x1a;
 export const REG_OFFSET_BG3HOFS = 0x1c;
 export const REG_OFFSET_BG3VOFS = 0x1e;
+// BG2/BG3 affine parameters and reference points (bg modes 1 and 2)
+export const REG_OFFSET_BG2PA = 0x20;
+export const REG_OFFSET_BG2PB = 0x22;
+export const REG_OFFSET_BG2PC = 0x24;
+export const REG_OFFSET_BG2PD = 0x26;
+export const REG_OFFSET_BG2X_L = 0x28;
+export const REG_OFFSET_BG2X_H = 0x2a;
+export const REG_OFFSET_BG2Y_L = 0x2c;
+export const REG_OFFSET_BG2Y_H = 0x2e;
+export const REG_OFFSET_BG3PA = 0x30;
+export const REG_OFFSET_BG3PB = 0x32;
+export const REG_OFFSET_BG3PC = 0x34;
+export const REG_OFFSET_BG3PD = 0x36;
+export const REG_OFFSET_BG3X_L = 0x38;
+export const REG_OFFSET_BG3X_H = 0x3a;
+export const REG_OFFSET_BG3Y_L = 0x3c;
+export const REG_OFFSET_BG3Y_H = 0x3e;
 export const REG_OFFSET_WIN0H = 0x40;
 export const REG_OFFSET_WIN1H = 0x42;
 export const REG_OFFSET_WIN0V = 0x44;
@@ -171,6 +188,9 @@ export function resetHardware(): void {
   vram.fill(0);
   pltt.fill(0);
   regs.fill(0);
+  // RegisterRamReset leaves BG2/BG3's affine matrices at the identity (PA = PD = 1.0)
+  regs[REG_OFFSET_BG2PA >> 1] = regs[REG_OFFSET_BG2PD >> 1] = 0x100;
+  regs[REG_OFFSET_BG3PA >> 1] = regs[REG_OFFSET_BG3PD >> 1] = 0x100;
   hblankRegs.clear();
   dma0Dest = -1;
 }

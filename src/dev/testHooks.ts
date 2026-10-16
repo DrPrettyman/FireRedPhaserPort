@@ -26,8 +26,13 @@ import { DestroyPlayerSurfBlob } from '../world/surf';
 import type { FieldListMenuProbe } from '../ui/FieldListMenu';
 import { storageProbe } from '../menus/pokemonStorage';
 import { itemPcProbe } from '../menus/itemPc';
+import { hallOfFameProbe } from '../menus/hallOfFame';
+import { creditsProbe, creditsSkipToClosing } from '../menus/credits';
 import { regionMapProbe } from '../menus/regionMap';
 import { mainMenuProbe } from '../menus/mainMenu';
+import { titleScreenProbe } from '../menus/titleScreen';
+import { clearSaveDataProbe } from '../menus/clearSaveDataScreen';
+import { oakSpeechProbe } from '../menus/oakSpeech';
 import { saveDialogProbe } from '../ui/SaveDialog';
 import { startMenuProbe } from '../ui/StartMenu';
 
@@ -457,6 +462,15 @@ function createApi(game: Phaser.Game) {
       const p = game.scene.isActive('MainMenu') ? mainMenuProbe() : undefined;
       return p && { ...p, stats: p.stats.map(decode) };
     },
+    /** The title screen while its main task runs: the scene (INIT .. CRY), its state, the restart timer, whether PRESS START shows, the flames alive. */
+    titleScreen: () => (game.scene.isActive('MainMenu') ? titleScreenProbe() : undefined),
+    /** The clear save data screen (B+SELECT+UP on the title screen) while it runs: whether its YES/NO takes input. */
+    clearSaveData: () => (game.scene.isActive('MainMenu') ? clearSaveDataProbe() : undefined),
+    /** Oak's speech (NEW GAME) while it runs: the running task's function name, the page / shrink timer, the menu taking input ('gender' | 'names' | 'yesNo'), fading, the Pikachu intro's state, the gender and names so far. */
+    oakSpeech: () => {
+      const p = game.scene.isActive('MainMenu') ? oakSpeechProbe() : undefined;
+      return p && { ...p, playerName: decode(p.playerName), rivalName: decode(p.rivalName) };
+    },
     /** The field start menu while it's open: its items and cursor. */
     startMenu: () => startMenuProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */
@@ -509,6 +523,12 @@ function createApi(game: Phaser.Game) {
       const p = storageProbe();
       return { ...p, message: decode(p.message), menu: p.menu.map(decode) };
     },
+    /** The Hall of Fame screen or PC while one of its tasks runs (menus/hallOfFame.ts): the task, its data, the teams loaded. */
+    hallOfFame: () => hallOfFameProbe(),
+    /** The credits while they run (menus/credits.ts): their scene (CREDITSSCENE_*), script position and map / mon index. */
+    credits: () => creditsProbe(),
+    /** Jump the credits to their closing screens once they're between commands; false if not (try again next tick). */
+    creditsSkipToClosing: () => creditsSkipToClosing(),
     /**
      * The region map while it runs (menus/regionMap.ts: the Town Map, the fly map, the wall maps): its
      * REGIONMAP_TYPE_*, the task, the cursor and player icon cells, what's under the cursor (MAPSEC_*,

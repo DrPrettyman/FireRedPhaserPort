@@ -1,8 +1,8 @@
 // main_menu.c: CONTINUE (with the player's name, play time, Pokédex count and badges) / NEW GAME on the GBA layer,
 // the save error messages, and the darkening outside WIN0 that marks the selected window. FRLG's main menu has no
 // OPTIONS (that's R/S/E); MYSTERY GIFT needs IsMysteryGiftEnabled, which the port doesn't keep, so the menu is
-// always CONTINUE / NEW GAME. A host scene (scenes/MainMenuScene.ts) fills in `mainMenuEnv` and runs
-// CB2_InitMainMenu.
+// always CONTINUE / NEW GAME. A host scene (scenes/MainMenuScene.ts) fills in `mainMenuEnv`; the title screen
+// (menus/titleScreen.ts) runs CB2_InitMainMenu and B here goes back to it.
 
 import { ConvertIntToDecimalStringN, STR_CONV_MODE_LEADING_ZEROS, STR_CONV_MODE_LEFT_ALIGN } from '../battle/stringUtil';
 import {
@@ -82,6 +82,8 @@ import { SAVE_STATUS_EMPTY, SAVE_STATUS_ERROR, SAVE_STATUS_INVALID, SAVE_STATUS_
 import { EOS } from '../text/charmap';
 import { FONT_NORMAL } from '../text/Font';
 import { caughtDexCount, countBadges, type SaveBlockView } from '../ui/saveMenuUtil';
+import { testEvent } from '../dev/testHooks';
+import { CB2_InitTitleScreen } from './titleScreen';
 
 // enum MainMenuType
 const MAIN_MENU_NEWGAME = 0;
@@ -161,6 +163,7 @@ function VBlankCB_MainMenu(): void {
 
 /** CB2_InitMainMenu */
 export function CB2_InitMainMenu(): void {
+  testEvent('mainMenu');
   MainMenuGpuInit(1);
 }
 
@@ -365,10 +368,9 @@ function Task_ExecuteMainMenuSelection(taskId: number): void {
   }
 }
 
-/** Task_ReturnToTileScreen: the title screen isn't ported, so it's as if START were pressed on it at once. */
 function Task_ReturnToTileScreen(taskId: number): void {
   if (gPaletteFade.active) return;
-  SetMainCallback2(CB2_InitMainMenu); // CB2_InitTitleScreen → ... → CB2_InitMainMenu
+  SetMainCallback2(CB2_InitTitleScreen);
   DestroyTask(taskId);
 }
 

@@ -4,6 +4,7 @@ import {
   ClearContinueGameWarpStatus,
   gSave,
   LoadGameSave,
+  SAVE_HALL_OF_FAME,
   SAVE_NORMAL,
   SAVE_OVERWRITE_DIFFERENT_FILE,
   SAVE_STATUS_EMPTY,
@@ -14,7 +15,8 @@ import {
   TrySavingData,
   UseContinueGameWarp,
 } from '../../src/state/save';
-import { SAVE_STORAGE_KEY, toSaveData } from '../../src/state/saveData';
+import { fromSaveData, readSave, SAVE_STORAGE_KEY, SAVE_VERSION, toSaveData } from '../../src/state/saveData';
+import { ClearHofBuffer, emptyHofTeam, gHofBuffer, HOF_STORAGE_KEY, LoadHallOfFameSave } from '../../src/state/hallOfFame';
 import { countBadges, GetKantoPokedexCount, GetNationalPokedexCount, saveDataView, SaveStatToString } from '../../src/ui/saveMenuUtil';
 import { newGame, type TestGame } from './gameData';
 
@@ -45,6 +47,7 @@ test("save.c's constants match the decomp's", () => {
   expect(SAVE_STATUS_ERROR).toBe(t.d('SAVE_STATUS_ERROR'));
   expect(SAVE_NORMAL).toBe(t.d('SAVE_NORMAL'));
   expect(SAVE_OVERWRITE_DIFFERENT_FILE).toBe(t.d('SAVE_OVERWRITE_DIFFERENT_FILE'));
+  expect(SAVE_HALL_OF_FAME).toBe(t.d('SAVE_HALL_OF_FAME'));
   expect(CONTINUE_GAME_WARP).toBe(t.d('CONTINUE_GAME_WARP'));
 });
 
@@ -134,4 +137,66 @@ describe('save stats (save_menu_util.c, pokedex.c)', () => {
       expect(SaveStatToString(view, t.charmap, t.d(id), 2)).toEqual(SaveStatToString(s, t.charmap, t.d(id), 2));
     }
   });
+});
+
+describe('Hall of Fame records (SAVE_HALL_OF_FAME)', () => {
+  const team = (species: number, lvl: number) => {
+    const out = emptyHofTeam();
+    out[0] = { tid: 0x1234abcd, personality: 0xdeadbeef, species, lvl, nick: [0xbb, 0xbc, 0xff] };
+    return out;
+  };
+
+  test('never written: SAVE_STATUS_EMPTY; another version: INVALID', () => {
+    const storage = memoryStorage();
+    expect(LoadHallOfFameSave(storage)).toBe(SAVE_STATUS_EMPTY);
+    storage.setItem(HOF_STORAGE_KEY, '{"version":99,"teams":[]}');
+    expect(LoadHallOfFameSave(storage)).toBe(SAVE_STATUS_INVALID);
+  });
+
+  test('TrySavingData(SAVE_HALL_OF_FAME) writes the records and the game, counting GAME_STAT_ENTERED_HOF', () => {
+    const storage = memoryStorage();
+    const stat = t.d('GAME_STAT_ENTERED_HOF');
+    ClearHofBuffer();
+    gHofBuffer.teams[0] = team(150, 70);
+    gHofBuffer.teams[1] = team(25, 42);
+    expect(TrySavingData(SAVE_HALL_OF_FAME, t.state, storage)).toBe(SAVE_STATUS_OK);
+    expect(t.state.getGameStat(stat)).toBe(1);
+    expect(LoadGameSave(storage)?.gameStats[stat]).toBe(1);
+
+    ClearHofBuffer();
+    expect(LoadHallOfFameSave(storage)).toBe(SAVE_STATUS_OK);
+    expect(gHofBuffer.teams).toHaveLength(50);
+    expect(gHofBuffer.teams[0][0]).toEqual({ tid: 0x1234abcd, personality: 0xdeadbeef, species: 150, lvl: 70, nick: [0xbb, 0xbc, 0xff] });
+    expect(gHofBuffer.teams[1][0].species).toBe(25);
+    expect(gHofBuffer.teams[2][0].species).toBe(0); // the end of the list
+
+    // a normal save leaves them alone; saving over another game's file erases them
+    TrySavingData(SAVE_NORMAL, t.state, storage);
+    expect(LoadHallOfFameSave(storage)).toBe(SAVE_STATUS_OK);
+    TrySavingData(SAVE_OVERWRITE_DIFFERENT_FILE, t.state, storage);
+    expect(LoadHallOfFameSave(storage)).toBe(SAVE_STATUS_EMPTY);
+  });
+
+  test('GAME_STAT_ENTERED_HOF stops at 999', () => {
+    const stat = t.d('GAME_STAT_ENTERED_HOF');
+    t.state.setGameStat(stat, 999);
+    TrySavingData(SAVE_HALL_OF_FAME, t.state, memoryStorage());
+    expect(t.state.getGameStat(stat)).toBe(999);
+  });
+});
+
+test('game stats round-trip, and a version 1 save (no gameStats) still loads', () => {
+  const storage = memoryStorage();
+  t.state.setGameStat(t.d('GAME_STAT_FIRST_HOF_PLAY_TIME'), 0x010203);
+  const data = toSaveData(t.state);
+  expect(data.version).toBe(SAVE_VERSION);
+  const back = fromSaveData(structuredClone(data), newGame().state);
+  expect(back.getGameStat(t.d('GAME_STAT_FIRST_HOF_PLAY_TIME'))).toBe(0x010203);
+
+  const v1 = { ...structuredClone(data), version: 1 } as Partial<typeof data>;
+  delete v1.gameStats;
+  storage.setItem(SAVE_STORAGE_KEY, JSON.stringify(v1));
+  const read = readSave(storage);
+  expect(read?.version).toBe(SAVE_VERSION);
+  expect(fromSaveData(read!, newGame().state).getGameStat(t.d('GAME_STAT_FIRST_HOF_PLAY_TIME'))).toBe(0);
 });
