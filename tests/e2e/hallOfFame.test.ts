@@ -1,7 +1,8 @@
 // The end of the game: walking into the Hall of Fame room runs PokemonLeague_HallOfFame_EventScript_EnterRoom
 // (Oak, FLDEFF_HALL_OF_FAME_RECORD, the post-game flags, `setrespawn`), then `special EnterHallOfFame`: the Hall of
 // Fame screen saves the team and the game, shows the mons, the welcome text with confetti and the player's info,
-// and warps to Indigo Plateau for the credits. The Hall of Fame PC shows the saved teams.
+// and warps to Indigo Plateau, whose script rolls the credits; they end in a reset to the main menu. The Hall of
+// Fame PC shows the saved teams.
 
 import { expect, test } from 'vitest';
 import type { MonSpec } from '../../src/dev/testHooks';
@@ -16,7 +17,7 @@ const PARTY: MonSpec[] = [
 ];
 
 /** The Hall of Fame room's entrance: the script walks the player up 8 tiles to Oak and the machine. */
-const HALL_OF_FAME = { start: 'after-rival', map: 'PokemonLeague_HallOfFame', x: 5, y: 12, party: PARTY } as const;
+const HALL_OF_FAME = { start: 'after-rival', map: 'PokemonLeague_HallOfFame', x: 5, y: 12, party: PARTY, speed: 16 } as const;
 
 const hofRecords = (game: Game) => game.eval(() => JSON.parse(localStorage.getItem('firered-phaser:hall-of-fame') ?? 'null'));
 const savedGame = (game: Game) => game.eval(() => JSON.parse(localStorage.getItem('firered-phaser:save') ?? 'null'));
@@ -37,7 +38,7 @@ async function leaveHallOfFame(game: Game): Promise<void> {
   await game.waitForEvent('hallOfFameExit');
 }
 
-test('entering the Hall of Fame saves the team and the game, shows each mon, then warps to Indigo Plateau', async () => {
+test('the Hall of Fame saves the team and the game, then the credits roll and the game restarts', async () => {
   const game = await session.start(HALL_OF_FAME);
   const since = await game.mark();
   await enterHallOfFame(game);
@@ -66,7 +67,36 @@ test('entering the Hall of Fame saves the team and the game, shows each mon, the
   // SetWarpsToRollCredits
   await game.waitFor((t) => t.field()?.map === 'IndigoPlateau_Exterior', { what: 'Indigo Plateau' });
   expect(await game.eval((t) => t.flag('FLAG_DONT_SHOW_MAP_NAME_POPUP'))).toBe(true);
-});
+
+  // IndigoPlateau_Exterior_EventScript_Credits: the rival and Oak leave, the player runs off, `special DoCredits`
+  await game.waitForEvent('creditsStart', { since, timeout: 120_000 });
+  expect(await game.eval((t) => t.var('VAR_MAP_SCENE_INDIGO_PLATEAU_EXTERIOR'))).toBe(0);
+  expect(await game.eval((t) => t.objects().length)).toBe(0);
+  // The title, then Route 23 with the first names, then the Charizard scene
+  expect((await game.waitForEvent('creditsMap', { since, timeout: 120_000 })).map).toBe('MAP_ROUTE23');
+  expect((await game.waitForEvent('creditsPrint', { since, timeout: 60_000 })).title).toBe('gCreditsString_Director');
+  expect((await game.waitForEvent('creditsMon', { since, timeout: 120_000 })).species).toBe(await game.eval((t) => t.define('SPECIES_CHARIZARD')));
+  // Skip the rest of the names: the copyright, THE END, A, and SoftReset back to the boot flow
+  expect(
+    await game.eval((t) => {
+      let skipped = false;
+      return t.until(() => skipped || (skipped = t.creditsSkipToClosing()), 3600);
+    }),
+  ).toBe(true);
+  await game.waitForEvent('creditsTheEnd', { since, timeout: 60_000 });
+  await game.press('A');
+  await game.waitForEvent('creditsEnd', { since });
+  // The saved game boots to the main menu; CONTINUE starts in Pallet Town (the continue-game warp)
+  await game.waitForEvent('mainMenu', { since, timeout: 60_000 });
+  await game.eval((t) => t.until(() => t.mainMenu() && !t.mainMenu()!.fading, 600));
+  await game.press('A');
+  await game.waitFor((t) => t.field()?.map === 'PalletTown', { what: 'Pallet Town', timeout: 60_000 });
+  expect(await game.eval((t) => ({ x: t.field()!.x, y: t.field()!.y }))).toEqual({ x: 6, y: 8 });
+  // VAR_MAP_SCENE_PALLET_TOWN_OAK = 2 (EventScript_SetReadyTryGiveNationalDexScene): Oak's rating scene starts
+  await game.waitFor((t) => t.events().some((e) => e.type === 'script' && e.label === 'PalletTown_EventScript_OakRatingScene'), { what: "Oak's scene" });
+  expect(await game.eval((t) => t.flag('FLAG_SYS_GAME_CLEAR'))).toBe(true);
+  expect(await game.eval((t) => t.flag('FLAG_DONT_SHOW_MAP_NAME_POPUP'))).toBe(false);
+}, 300_000);
 
 /** Viridian City's Pokémon Center: the PC is above (11, 2). */
 const PC = { start: 'after-rival', map: 'ViridianCity_PokemonCenter_1F', x: 11, y: 2, party: PARTY } as const;

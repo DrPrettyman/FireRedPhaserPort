@@ -27,6 +27,7 @@ import type { FieldListMenuProbe } from '../ui/FieldListMenu';
 import { storageProbe } from '../menus/pokemonStorage';
 import { itemPcProbe } from '../menus/itemPc';
 import { hallOfFameProbe } from '../menus/hallOfFame';
+import { creditsProbe, creditsSkipToClosing } from '../menus/credits';
 import { mainMenuProbe } from '../menus/mainMenu';
 import { saveDialogProbe } from '../ui/SaveDialog';
 import { startMenuProbe } from '../ui/StartMenu';
@@ -511,6 +512,10 @@ function createApi(game: Phaser.Game) {
     },
     /** The Hall of Fame screen or PC while one of its tasks runs (menus/hallOfFame.ts): the task, its data, the teams loaded. */
     hallOfFame: () => hallOfFameProbe(),
+    /** The credits while they run (menus/credits.ts): their scene (CREDITSSCENE_*), script position and map / mon index. */
+    credits: () => creditsProbe(),
+    /** Jump the credits to their closing screens once they're between commands; false if not (try again next tick). */
+    creditsSkipToClosing: () => creditsSkipToClosing(),
     /** The item PC's list (WITHDRAW ITEM, item_pc.c) while it runs: its task, scroll/row and item count. */
     itemPc: () => (gMain.callback2?.name === 'ItemPc_MainCB' ? itemPcProbe() : undefined),
     /** The map name popup while Task_MapNamePopup runs: its text, decoded, and how many px of it are on screen. */

@@ -1720,9 +1720,22 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       updateTilesetAnimations: () => UpdateTilesetAnimations(),
       bareScreen: () => this.gbaScreen.startBare(),
       softReset: () => {
+        // SoftReset clears RAM: this scene goes (with its GameState) and a fresh one replaces it, then the boot
+        // flow runs again. The removal is queued while the scene updates, so wait until it has happened.
         this.gbaScreen.stop();
-        this.creditsCamera = undefined;
-        this.scene.start('Boot', { softReset: true });
+        const game = this.game;
+        const Scene = this.constructor as new () => Phaser.Scene;
+        game.scene.remove('Overworld');
+        const reboot = () => {
+          if (game.scene.getScene('Overworld')) {
+            game.events.once(Phaser.Core.Events.POST_STEP, reboot);
+            return;
+          }
+          game.scene.add('Overworld', Scene, false);
+          game.scene.moveAbove('MainMenu', 'Overworld'); // back to its place in the scene list (main.ts), under the battle and menus
+          game.scene.start('Boot', { softReset: true });
+        };
+        game.events.once(Phaser.Core.Events.POST_STEP, reboot);
       },
       playerGender: () => this.playerGender(),
     } satisfies Partial<typeof creditsEnv>);

@@ -996,3 +996,15 @@ function CameraCB_CreditsPan(): void {
 export function creditsProbe(): { mainseqno: number; scrcmdidx: number; whichMon: number } | undefined {
   return sCreditsMgr ? { mainseqno: sCreditsMgr.mainseqno, scrcmdidx: sCreditsMgr.scrcmdidx, whichMon: sCreditsMgr.whichMon } : undefined;
 }
+
+/**
+ * Dev (tests): jump the credits script to its closing (the copyright, THE END) from wherever it's waiting between
+ * commands, so a test doesn't have to watch all of it. Returns whether it jumped.
+ */
+export function creditsSkipToClosing(): boolean {
+  const m = sCreditsMgr;
+  if (!m || m.mainseqno !== CREDITSSCENE_EXEC_CMD) return false;
+  m.scrcmdidx = sCreditsScript.findIndex(([cmd]) => cmd === CREDITSSCRCMD_THEENDGFX);
+  m.timer = 0;
+  return true;
+}

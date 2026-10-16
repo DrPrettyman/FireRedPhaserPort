@@ -44,6 +44,7 @@ const NO_OP = [
   'UpdatePickStateFromSpecialVar8005',
   'SetUnlockedPokedexFlags', // gcnLinkFlags, only used for GameCube link
   'Script_FadeOutMapMusic', // audio: its waitstate ends at once
+  'Script_UpdateTrainerFanClubGameClear', // the Trainer Fan Club's state isn't kept (EventScript_SetDefeatedEliteFourFlagsVars)
   'InitUnionRoom', // wireless only (and stubbed out from REVISION 0xA): CableClub_OnResume in every Pokémon Center
 ];
 
@@ -184,6 +185,11 @@ export const SPECIALS: Record<string, Special> = {
   DoCredits({ host, setWaitState }) {
     host.doCredits();
     setWaitState(() => false);
+  },
+
+  /** IsNationalPokedexEnabled (pokedex.c), as a `specialvar` (EventScript_SetDefeatedEliteFourFlagsVars). */
+  IsNationalPokedexEnabled({ state }) {
+    return isNationalDexEnabled(state) ? 1 : 0;
   },
 
   /** SpawnCameraObject (field_specials.c): the camera stays where the player stands while scripts move them. */
