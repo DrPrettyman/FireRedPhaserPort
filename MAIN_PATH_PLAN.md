@@ -64,6 +64,26 @@ others may only add small hooks.
 - **W-fly: Fly + Town Map** (after W-fieldmove). region_map.c's fly map (and the Town Map item, which is the same
   screen), FlyOut/FlyIn. Big and self-contained.
 
+Added for batch 3 (2026-10-16), from what batches 1-2 left open:
+
+- **W-fly** (as above). region_map.c: the fly map (CB2_OpenFlyMap from the party menu, SetUpFieldMove_Fly,
+  the visited-town flags, the heal-location warp), the Town Map key item from the bag (same screen, no
+  selection), FldEff_UseFly / FlyOut / FlyIn (the bird and the player's fly animation). Two PRs one after
+  another if needed: the region map screen first, then Fly on top. Owns `world/regionMap.ts` and the Fly code
+  in `partyMenu.ts` / `fieldMoves.ts`.
+- **W-hof: Hall of Fame + Hall of Fame PC + credits.** hall_of_fame.c: `special EnterHallOfFame` from the Hall of
+  Fame room (FLDEFF_HALL_OF_FAME_RECORD, the mon parade, saving the Hall of Fame data and the game), the Hall of
+  Fame PC (hof_pc.c, HallOfFamePCBeginFade) on the same screen; then credits.c (the game ends and restarts)
+  if there's room. Owns the new Hall of Fame / credits modules; shares the save data model (adds Hall of Fame
+  records to it).
+- **W-title: title screen** (title_screen.c) in front of the main menu: boot → title → main menu / new game,
+  replacing the "boot straight into the main menu" deviation. Then oak_speech.c (NEW GAME → Oak's speech →
+  the player and rival naming screens) if there's room. Owns the boot flow in `main.ts` / the main menu's entry.
+- **W-misc: small main-path leftovers.** Silph Co.'s card key doors (check them end to end and fix what's
+  missing), `setmaplayoutindex` (Seafoam B3F/B4F's stopped currents: the extractor exports the layouts no map
+  uses), `special Field_AskSaveTheGame` (scripted save prompts, start_menu.c), and `seteventmon` if there's
+  room. Small changes across `ScriptEngine.ts`, `specials.ts`, the extractor and the save dialog.
+
 ## Batches
 
 Up to four workers at a time.
@@ -72,7 +92,7 @@ Up to four workers at a time.
 |---|---|---|
 | 1 | W-state, W-fieldmove, W-avatar, W-list | No dependencies on each other; they own different files |
 | 2 | W-pc, W-save, W-surf, W-strength | All need batch 1; different files from each other |
-| 3 | W-fly, plus leftovers (item PC, Hall of Fame PC, anything a batch-2 worker didn't finish) | |
+| 3 | W-fly, W-hof, W-title, W-misc | Batch 1-2 leftovers; Fly is the last field move. Different files, except the save model (W-hof adds to it, W-misc's save prompt reuses the dialog) |
 
 Overlap to watch: W-fieldmove and W-avatar both touch `OverworldScene.ts`. W-avatar owns movement and collision;
 W-fieldmove only adds field-effect hooks. If they collide at merge, W-avatar's version wins and the hook is
@@ -98,4 +118,5 @@ re-added.
 
 ## Not in this plan (later main-path blockers)
 
-Silph Co.'s card key doors, `setmaplayoutindex` (Seafoam's stopped currents), the Pokédex screen, title screen / intro / Oak's speech, audio.
+The Pokédex screen, the intro movie (intro.c), audio. (Card key doors, Seafoam's currents, the title screen and
+Oak's speech moved into batch 3.)
