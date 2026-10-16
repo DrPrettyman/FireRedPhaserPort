@@ -41,6 +41,11 @@ export class GameState {
   safariZoneStepCounter = 0;
   /** gBattleOutcome as the last battle left it (GetBattleOutcome). */
   battleOutcome = 0;
+  /**
+   * gEnemyParty as `setwildbattle` (CreateScriptedWildMon) leaves it for the battle special that follows
+   * (StartMarowakBattle). Other battles hand their enemy party to the battle directly.
+   */
+  enemyParty: Pokemon[] = [];
   /** gSaveBlock1Ptr->registeredItem (ITEM_NONE = 0) */
   registeredItem = 0;
 

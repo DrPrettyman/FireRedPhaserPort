@@ -107,6 +107,8 @@ export interface ScriptHost {
   startTrainerBattle(battle: TrainerBattle): TrainerBattleRun;
   /** A non-trainer battle against `enemyParty` (gEnemyParty) behind a B_TRANSITION_*, e.g. StartOldManTutorialBattle. */
   startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number): TrainerBattleRun;
+  /** GetWildBattleTransition against gEnemyParty[0] = `enemy`. */
+  wildBattleTransition(enemy: Pokemon): number;
   /** FieldEffectStart for an effect over `obj` (the emote icons); false if it isn't ported. */
   startFieldEffect(fldEff: string, obj: ObjectEvent): boolean;
   /** EndTrainerApproach: start the approach of the trainer that saw the player; the wait ends with it. */
@@ -242,6 +244,7 @@ export class ScriptEngine {
         if (this.ctx) this.ctx.done = true;
       },
       disableMsgBoxWalkaway: () => (this.msgBoxWalkawayDisabled = true),
+      encodeText: (label) => this.charmap.encodePlain(this.strings[label] ?? ''),
       warnOnce: (key, message) => {
         if (this.warned.has(key)) return;
         this.warned.add(key);
@@ -1014,6 +1017,21 @@ export class ScriptEngine {
       const c = this.state.pokemon.c;
       if (result === c.MON_GIVEN_TO_PARTY || result === c.MON_GIVEN_TO_PC) this.state.setDexFlags(this.state.pokemon.nationalDex(species), true, true);
       this.state.setVar('VAR_RESULT', result);
+    },
+    /**
+     * ScrCmd_setwildbattle → CreateScriptedWildMon (script_pokemon_util.c): gEnemyParty = one mon with random
+     * IVs and personality, OT = player, for the battle special that follows (StartMarowakBattle).
+     */
+    setwildbattle(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      const mon = this.state.pokemon.createMon(this.state.value(a[0]), this.state.value(a[1]), {
+        otId: this.state.trainerId,
+        otName: this.state.playerName,
+        otGender: this.state.playerGender,
+        metLocation: this.host.mapSection(),
+      });
+      const item = this.state.value(a[2] ?? 'ITEM_NONE');
+      if (item) mon.heldItem = item;
+      this.state.enemyParty = [mon]; // ZeroEnemyPartyMons
     },
     getpartysize(this: ScriptEngine) {
       this.state.setVar('VAR_RESULT', this.state.party.length);

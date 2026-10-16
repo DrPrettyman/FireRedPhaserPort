@@ -20,6 +20,8 @@ export interface SpecialEnv {
   warnOnce(key: string, message: string): void;
   /** DisableMsgBoxWalkaway (script.c) */
   disableMsgBoxWalkaway(): void;
+  /** The extracted text `label` (e.g. gText_Ghost), encoded without the terminator. */
+  encodeText(label: string): number[];
 }
 
 /** A gSpecials entry (data/specials.inc). The return value is stored by `specialvar`. */
@@ -294,6 +296,49 @@ export const SPECIALS: Record<string, Special> = {
     setWaitState(() => {
       if (fadeIn) return fadeIn();
       if (run.done()) fadeIn = run.returnToField();
+      return false;
+    });
+  },
+
+  /**
+   * StartMarowakBattle + CB2_EndMarowakBattle (battle_setup.c): Pokémon Tower 6F's ghost. With the Silph Scope
+   * it's a GHOST | GHOST_UNVEILED battle against a Lv30 female Serious Marowak (the intro unveils it with
+   * General_SilphScoped); without, a GHOST battle against the `setwildbattle` mon. Either way it's nicknamed
+   * GHOST. Back on the field VAR_RESULT = FALSE if the player won, TRUE otherwise (ran away: the script
+   * forces the player back from the stairs); losing whites out.
+   */
+  StartMarowakBattle({ state, host, setWaitState, endScript, encodeText, warnOnce }) {
+    const d = state.defines;
+    let battleTypeFlags: number;
+    if (state.bag.has(d.require('ITEM_SILPH_SCOPE'), 1)) {
+      battleTypeFlags = d.require('BATTLE_TYPE_GHOST') | d.require('BATTLE_TYPE_GHOST_UNVEILED');
+      state.enemyParty[0] = state.pokemon.createMonWithGenderNatureLetter(
+        d.require('SPECIES_MAROWAK'), 30, 31, d.require('MON_FEMALE'), d.require('NATURE_SERIOUS'),
+        { otId: state.trainerId, otName: state.playerName, otGender: state.playerGender, metLocation: host.mapSection() },
+      );
+    } else {
+      battleTypeFlags = d.require('BATTLE_TYPE_GHOST');
+    }
+    const enemy = state.enemyParty[0];
+    if (!enemy) {
+      warnOnce('StartMarowakBattle', '[special] StartMarowakBattle without a `setwildbattle` mon');
+      return;
+    }
+    enemy.nickname = encodeText('gText_Ghost');
+    // IncrementGameStat(GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES): game stats aren't tracked yet
+    const run = host.startScriptedBattle(battleTypeFlags, [enemy], host.wildBattleTransition(enemy));
+    let fadeIn: (() => boolean) | undefined;
+    setWaitState(() => {
+      if (fadeIn) return fadeIn();
+      if (!run.done()) return false;
+      if (!run.playerWon()) {
+        endScript();
+        host.whiteOut();
+        return true;
+      }
+      // If result is TRUE player didnt defeat Marowak, force player back from stairs
+      state.setVar('VAR_RESULT', state.battleOutcome === d.require('B_OUTCOME_WON') ? 0 : 1);
+      fadeIn = run.returnToField(); // CB2_ReturnToFieldContinueScriptPlayMapMusic
       return false;
     });
   },

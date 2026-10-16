@@ -1484,7 +1484,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /** GetWildBattleTransition: gEnemyParty[0] against the player's lead mon. */
-  private wildBattleTransition(enemy: Pokemon): number {
+  wildBattleTransition(enemy: Pokemon): number {
     const transitionType = this.battleTransitionTypeByMap();
     const enemyLevel = enemy.level;
     const playerLevel = this.sumOfPlayerPartyLevel(1);
@@ -1540,7 +1540,6 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    */
   private doSafariBattle(enemy: Pokemon): void {
     const d = this.defines;
-    this.wild.resetEncounterRateModifiers();
     const run = this.runBattle({ battleTypeFlags: d.require('BATTLE_TYPE_SAFARI'), trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty: [enemy] }, this.wildBattleTransition(enemy));
     let fadeIn: (() => boolean) | undefined;
     let afterFade: (() => void) | undefined;
@@ -1595,8 +1594,6 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /** The DoStandardWildBattle / StartRoamerBattle / DoGhostBattle part: battle, then CB2_EndWildBattle. */
   private runWildBattle(battleTypeFlags: number, enemy: Pokemon): void {
-    // Task_BattleStart: RestartWildEncounterImmunitySteps once the transition is done
-    this.wild.resetEncounterRateModifiers();
     const run = this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty: [enemy] }, this.wildBattleTransition(enemy));
     let fadeIn: (() => boolean) | undefined;
     this.overlay = {
@@ -1665,6 +1662,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
           // Every palette is black now (FadeScreenBlack); the field stays black behind the battle.
           this.gbaScreen.stop();
           this.screenFade.fill(false);
+          this.wild.resetEncounterRateModifiers(); // RestartWildEncounterImmunitySteps
           this.state.setVar('VAR_POISON_STEP_COUNTER', 0); // ClearPoisonStepCounter
           testEvent('battleStart', { flags: start.battleTypeFlags, trainer: start.trainerBattleOpponent_A });
           this.scene.launch('Battle', start);

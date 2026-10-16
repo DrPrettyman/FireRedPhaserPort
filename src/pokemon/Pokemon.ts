@@ -289,6 +289,25 @@ export class PokemonData {
     return this.createMon(speciesId, level, { ...opts, fixedIV, personality });
   }
 
+  /**
+   * CreateMonWithGenderNatureLetter: rerolls the personality until it has `gender` and `nature`
+   * (OT_ID_PLAYER_ID: opts.otId is the player's). Every caller passes unownLetter 0, so the Unown branch is left out.
+   */
+  createMonWithGenderNatureLetter(
+    speciesId: number,
+    level: number,
+    fixedIV: number,
+    gender: number,
+    nature: number,
+    opts: Omit<CreateMonOptions, 'personality' | 'fixedIV'>,
+  ): Pokemon {
+    let personality: number;
+    do {
+      personality = random32();
+    } while (nature !== (personality >>> 0) % this.c.NUM_NATURES || gender !== this.genderFromPersonality(speciesId, personality));
+    return this.createMon(speciesId, level, { ...opts, fixedIV, personality });
+  }
+
   /** CreateMaleMon: rerolls personality and OT id together until the mon is male. */
   createMaleMon(speciesId: number, level: number, opts: Omit<CreateMonOptions, 'personality' | 'otId' | 'fixedIV'>): Pokemon {
     let otId: number;
