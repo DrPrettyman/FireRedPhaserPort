@@ -1,0 +1,123 @@
+# Deviations from the GBA
+
+Where the port differs from the decomp: by necessity or for now (known deviations), or on purpose (QOL changes).
+
+## Known deviations from the decomp
+
+Things that are placeholders or approximations, so they aren't mistaken for ports. Remove entries as they get done properly.
+
+- **Placeholders (not in the decomp):**
+  - Naming screen: the help context, SeedRngAndSetTrainerId after naming the player and the REVISION >= 0xA
+    bad-word check aren't ported. The "sent to PC" message (caught mon, full party) uses the default box names
+    and never takes the box-full branch. `ChangeBoxPokemonNickname` isn't ported (no PC boxes).
+  - Pokémon Center heal: the healing machine (`dofieldeffect FLDEFF_POKECENTER_HEAL`) and the nurse's bow
+    (`nurse_joy_bow`) are skipped; the heal itself happens.
+  - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
+  - VS Seeker: `state.trainerRematches` is never set, so no trainer is ever ready for a rematch.
+  - Battles: battle anim scripts whose sprite callbacks / tasks aren't ported yet finish at once (296 of 397 move
+    and general anims, e.g. Castform's form change); no audio (PlaySE/cries/BGM are no-ops, so anim SE waits and
+    cry waits end at once).
+  - Field sounds: doors (SE_DOOR / SE_SLIDING_DOOR) and puddle splashes (SE_PUDDLE) are silent.
+  - Evolution scene: no audio, so cries and sound effects count as finished at once (the intro jingle and the SE_EXP
+    wait don't hold the scene up); the help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
+    from the field uses fresh battle globals, so the backdrop follows the map's battle scene (gyms etc.) but not the
+    last battle's type flags, which the GBA keeps (e.g. a Rare Candy right after a gym leader would draw the
+    Leader terrain there). Mons have no language, markings, ribbons or mail, so EvolutionRenameMon always treats
+    them as English and Shedinja doesn't clear those fields.
+  - Summary screen: no box mons (PC), trade-screen view or multi-battle party order; the struct Pokemon fields the
+    port doesn't store read as defaults (markings 0, met game FireRed, no fateful-encounter flag, English).
+  - Party menu: field moves always say they can't be used
+    here (badge checks are real); mail, Softboiled/Milk Drink, the move relearner, Union Room, minigames,
+    Pokédude/Teachy TV demos are not ported.
+  - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Bag uses that need overworld systems
+    (bike, rods, Escape Rope, Itemfinder, VS Seeker, Town Map, Fame Checker, Teachy TV, mail, TM case, berry pouch,
+    registered SELECT items) log "not implemented" and return to the bag. Berry powder reads as 0; PC
+    storage is never full for Poké Balls; the item PC / Pokémon storage give flows aren't ported.
+  - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
+    overworld's ScreenFade.
+  - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;
+    HP-as-text (SwapHpBarsWithHpText) and link/multi battles aren't implemented.
+  - Battle transitions: no SE_MUGSHOT, and the battle music doesn't start with the transition. Flash isn't ported,
+    so GetBattleTransitionTypeByMap never picks TRANSITION_TYPE_FLASH (Blur / Grid squares in dark caves).
+  - Map preview screens (Mt. Moon, Rock Tunnel, Viridian Forest...) aren't ported: warps into those sections fade
+    to black like the GBA and go straight to the map, without the banner (or the flash that follows it).
+  - Wild encounters: no bike rate modifier (no bikes). GAME_STAT_* counters aren't kept.
+  - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
+    GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
+    Selling the TM case / berry pouch logs "not implemented" (those screens don't exist).
+  - Field steps: eggs count down egg cycles, but the daycare (breeding,
+    its mons' steps) and the hatching scene (`special EggHatch`) aren't ported. A finished VS Seeker charge would
+    start EventScript_VsSeekerChargingDone, whose specials aren't ported; only the (unported) VS Seeker starts one.
+  - Safari Zone: the entrance's SE/fanfare are silent (the BAIT/ROCK throw anims run; General_SafariReaction, the
+    mon's reaction afterwards, isn't ported yet).
+  - The money box and Safari stats window are Phaser MenuWindows (the field isn't on the GBA layer).
+  - Full party: `givemon` returns MON_CANT_GIVE instead of sending the mon to the PC (`SendMonToPC`).
+  - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
+    link play); the quest log's QL_AvoidDisplay bit of ignoreBPress is ignored.
+  - Elevators: SE_ELEVATOR / SE_DING_DONG are silent; UpdateEscapeWarp isn't kept on warps.
+  - PC: PlayerPC (item storage), ShowPokemonStorageSystemPC and HallOfFamePCBeginFade log "not implemented" and go
+    straight back to the PC menu. Facing water does nothing (GetInteractedWaterScript waits for Surf).
+  - Interaction metatiles whose scripts need unported screens/specials (Town Map, Trainer Tower clock, cable club
+    monitors, questionnaire/easy chat) start their scripts and hit the unimplemented-special warnings.
+  - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link flags.
+  - Player names are "PLAYER"/"RIVAL" until Oak's intro exists.
+- **Approximations:**
+  - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical; weather palettes ignored.
+  - `showmonpic`: the sprite appears when its PNG has loaded; no cry.
+  - Text colour is reset to NPC_TEXT_COLOR_DEFAULT when a script starts, not in ProcessPlayerFieldInput.
+  - The RNG (`random.c` formula) is seeded from `Math.random` (or `?seed=` in dev); the trainer id is rolled when the game state is created instead of in Oak's intro.
+  - A mon's met location is the MAPSEC_* name, not the numeric id.
+  - Battle transitions draw the field on the GBA layer (`world/fieldGbaScreen.ts`): BG1-3 come from the map
+    grid as DrawWholeMapView would lay them out (the ring buffer anchored at the camera, tile offsets 0), so a
+    scrolled BG shows the same neighbouring rows/columns the GBA's 32x32 tilemaps hold. Object sprites stay
+    Phaser's and are copied into an OBJ bitmap layer each frame (behind OAM sprites, priority from their depth
+    band); their colours follow palette fades/blends through two probe OBJ palettes, not their real palettes.
+    Weather tints are ignored.
+  - HBlank callbacks run before each line is drawn with REG_VCOUNT = that line, and HBlank DMA gives line L
+    entry L of its table, so per-line effects are one line earlier than on hardware (consistently so).
+  - The barn door wipe's windows are black Phaser rectangles under the screen fade (WININ 0 shows the backdrop,
+    which the field forces to black).
+  - Tile animations: the GBA only has the current map's tilesets in VRAM and draws connected maps with them; here
+    each map keeps its own atlases, so a neighbour with a different secondary tileset only animates it while it's
+    the current map. BG3 under NORMAL-layer metatiles shows the backdrop colour instead of DrawMetatile's
+    garbage tile 0x3014. A door frame doesn't overwrite the last 8 BG tiles for the rest of the map
+    (CopyDoorTilesToVram's side effect).
+  - Field effect sprites are positioned in world pixels, so UpdateObjectEventSpriteInvisibility's off-screen
+    check and the gCamera map-change fixups in the grass callbacks aren't needed. Reflections ignore weather
+    palette tints (UpdateSpritePaletteWithWeather).
+  - `lock`/`lockall` only wait for the player (and the selected object) to finish their steps; other objects already
+    hold still while any script runs. Held movements (trainer approach, camera object) are ObjectEvent moves, so
+    their frame order relative to the script and tasks can be off by a frame.
+  - Sprite order: `fixedPriority` (surf/fly field effects, the `set_fixed_priority` movement action and
+    `setobjectsubpriority`, none of which FRLG scripts use) isn't ported, and neither is OAM priority 0, which no
+    map elevation produces (priority 3 is only used by field effects: reflections and ripples). Sprites tied on priority, subpriority and screen top keep creation order rather
+    than the previous frame's gSpriteOrder.
+  - BIOS ObjAffineSet uses a computed sine table; the PPU has BG mosaic but not OBJ mosaic.
+  - Buy menu map view: object sprites skip their subsprite tables (table 0 is empty for every size, so it draws the
+    same); an inanimate object not facing south shows its only anim instead of reading past the anim table.
+  - The map name popup scrolls only its own window; on the GBA it scrolls all of BG0 (BG0VOFS), so a message
+    box opened during the frame or two before the dismissal clears it would also be shifted.
+- **Data:** Castform has no front pic (its `front.png` isn't in the decomp; it's built from per-form images).
+
+## Deliberate QOL changes
+
+Places where we choose to differ from the GBA on purpose (not placeholders). Keep this list current.
+
+- **NPCs on neighbouring maps are spawned** (`OverworldScene.syncNpcsWithLoadedMaps`). The GBA already draws the
+  connected maps' tiles but only spawns the current map's objects in the view window (TrySpawnObjectEvents), so
+  NPCs pop in when you cross a border. We spawn every object of the current map and its connected neighbours and
+  drop them when their map stops being adjacent. Consequences:
+  - Clone objects (OBJ_KIND_CLONE, 9 in the game, e.g. Route 21 North's copy of Pallet's fat man) are not needed
+    and stay unsupported.
+  - Objects aren't despawned/respawned by the view window (RemoveObjectEventsOutsideView), so wandering NPCs don't
+    snap home when you come back.
+  - A neighbour's templates are its header ones (or the ones it had while it was last current); its map scripts
+    don't run until you enter it. On entry, any of its objects whose reloaded template disagrees (position,
+    graphics, movement type, hidden) is marked stale and respawned once it's off screen, so nobody visibly teleports.
+    A stale one that's on screen keeps its old place until it isn't, as a live object would on the GBA.
+  - Exception: a neighbour's objects with dynamic graphics (OBJ_EVENT_GFX_VAR_*) aren't spawned until it's current,
+    because VAR_OBJ_GFX_ID_* hold the current map's choices, not the neighbour's.
+  - Trainer sight only checks the current map's objects. On the GBA the previous map's objects linger until they
+    scroll off screen, and a trainer among them can still spot you; here a neighbour's trainers never do.
+  - Future: any other per-object logic should likewise check that an object belongs to the current map where the
+    GBA would only have current-map objects alive.
