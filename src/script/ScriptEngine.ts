@@ -1003,6 +1003,10 @@ export class ScriptEngine {
       const label = this.state.pokemon.tables.stdStrings[this.state.value(a[1])];
       this.state.stringVars[this.stringVar(a[0])] = label ? this.charmap.encodePlain(this.strings[label] ?? '') : [];
     },
+    /** ScrCmd_bufferboxname: GetBoxNamePtr(VarGet(var)) */
+    bufferboxname(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      this.state.stringVars[this.stringVar(a[0])] = [...(this.state.storage.getBoxName(this.state.value(a[1])) ?? [])];
+    },
     bufferstring(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       this.state.stringVars[this.stringVar(a[0])] = this.charmap.encodePlain(this.strings[a[1]] ?? '');
     },

@@ -4,8 +4,7 @@
 //
 // Not ported: the help system context, StartTimer1/SeedRngAndSetTrainerId for NAMING_SCREEN_PLAYER
 // (the trainer id is rolled when the game state is created), the REVISION >= 0xA bad-word check, and
-// SE playback (PlaySE is silent). PC boxes don't exist yet: the "sent to PC" message reads the default
-// box names, and the destination box is never full.
+// SE playback (PlaySE is silent).
 
 import { K } from '../battle/constants';
 import { state } from '../battle/env';
@@ -145,7 +144,7 @@ import {
   TEXT_SKIP_DRAW,
   type WindowTemplate,
 } from '../gba/window';
-import { CalculatePlayerPartyCount, ConvertIntToDecimalStringN, concat, encodeRaw, EOS, gStringVar1, gStringVar2, gStringVar3, speciesName, STR_CONV_MODE_LEFT_ALIGN, StringExpandPlaceholders, strBody, text } from './common';
+import { CalculatePlayerPartyCount, encodeRaw, EOS, gStringVar1, gStringVar2, gStringVar3, speciesName, StringExpandPlaceholders, strBody, text } from './common';
 import { menusData } from './data';
 import { CopyObjectGraphicsInfoToSpriteTemplate, CreateObjectGraphicsSprite, objectEventGfxSymbols } from './objectEventGraphics';
 import { CreateMonIcon, GetIconSpecies, LoadMonIconPalettes, monIconSymbol } from './pokemonIcon';
@@ -619,22 +618,21 @@ function MainState_Exit(): boolean {
   return false;
 }
 
-/** GetBoxNamePtr: PC storage isn't ported, so every box has its default name (gText_Box + number). */
+/** GetBoxNamePtr */
 function GetBoxNamePtr(boxId: number): number[] {
-  return concat(text('gText_Box'), ConvertIntToDecimalStringN(boxId + 1, STR_CONV_MODE_LEFT_ALIGN, 2));
+  return state.storage.getBoxName(boxId) ?? [];
 }
 
 function DisplaySentToPCMessage(): void {
   let stringToDisplay = 0;
-  const IsDestinationBoxFull = false; // no PC storage yet
 
-  if (!IsDestinationBoxFull) {
+  if (!state.isDestinationBoxFull()) {
     gStringVar1.set(GetBoxNamePtr(state.getVar('VAR_PC_BOX_TO_SEND_MON')));
     gStringVar2.set(S().destBuffer);
   } else {
     gStringVar1.set(GetBoxNamePtr(state.getVar('VAR_PC_BOX_TO_SEND_MON')));
     gStringVar2.set(S().destBuffer);
-    gStringVar3.set(GetBoxNamePtr(state.getVar('VAR_PC_BOX_TO_SEND_MON'))); // GetPCBoxToSendMon
+    gStringVar3.set(GetBoxNamePtr(state.getPCBoxToSendMon()));
     stringToDisplay = 2;
   }
 

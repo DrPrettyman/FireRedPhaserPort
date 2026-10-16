@@ -1,8 +1,11 @@
+import { ConvertIntToDecimalStringN, STR_CONV_MODE_LEFT_ALIGN } from '../battle/stringUtil';
 import type { Pokemon, PokemonData, StatBlock } from '../pokemon/Pokemon';
 import { TEMP_VARS_END, TEMP_VARS_START, type Defines } from '../script/Defines';
 import type { TextSpeed } from '../text/TextPrinter';
 import { random32 } from '../util/random';
-import { Bag } from './Bag';
+import type { Direction } from '../world/direction';
+import { Bag, type ItemSlot } from './Bag';
+import { boxMonFromMon, boxMonRestorePP, PokemonStorage } from './PokemonStorage';
 
 /**
  * Save-block style game state: event flags, vars, names, options, party, bag, Pokédex.
@@ -28,6 +31,21 @@ export class GameState {
   dynamicWarp?: { mapId: string; warpId: number; x: number; y: number };
   /** gSaveBlock1Ptr->lastHealLocation (set by `setrespawn`): where a white-out sends you. */
   lastHealLocation?: { map: string; x: number; y: number };
+  /**
+   * gSaveBlock1Ptr->escapeWarp: where Dig / Escape Rope lead (SetEscapeWarp / UpdateEscapeWarp). Nothing sets it
+   * yet; it's here so the save keeps it once the field does.
+   */
+  escapeWarp?: WarpData;
+  /** gSaveBlock1Ptr->continueGameWarp: where CONTINUE starts instead of the saved position (SetContinueGameWarp*). */
+  continueGameWarp?: WarpData;
+  /** gSaveBlock2Ptr->specialSaveWarpFlags (CONTINUE_GAME_WARP, ...): NewGameInitData clears it. */
+  specialSaveWarpFlags = 0;
+  /**
+   * Where the player stood when the game was last saved: gSaveBlock1Ptr->location's map, gSaveBlock1Ptr->pos
+   * (map-local) and the player object's facing and avatar flags (SaveObjectEvents). Unlike the GBA, which keeps
+   * pos current on every step, the field writes this only when saving (`OverworldScene.storeLocationForSave`).
+   */
+  location?: PlayerLocation;
   /** gSaveBlock1Ptr->trainerRematches, by local id: set by the VS Seeker (not implemented yet). */
   trainerRematches: number[] = [];
   /** gSaveBlock1Ptr->trainerRematchStepCounter: low byte = steps with the VS Seeker in the bag, high byte = charging steps. */
@@ -84,6 +102,15 @@ export class GameState {
   /** gPlayerParty: up to PARTY_SIZE mons, no gaps. */
   party: Pokemon[] = [];
   readonly bag: Bag;
+  /**
+   * gSaveBlock1Ptr->pcItems (PC_ITEMS_COUNT slots). The item PC (player_pc.c) isn't ported, so it stays empty:
+   * NewGameInitPCItems's Potion isn't added yet.
+   */
+  readonly pcItems: ItemSlot[];
+  /** gPokemonStoragePtr: the PC boxes. */
+  readonly storage: PokemonStorage;
+  /** sPCBoxToSendMon (field_specials.c, EWRAM): the box SendMonToPC / IsDestinationBoxFull started from. */
+  private pcBoxToSendMon = 0;
   /** Pokédex seen/caught flags by national dex number. */
   readonly dexSeen = new Set<number>();
   readonly dexCaught = new Set<number>();
@@ -99,6 +126,8 @@ export class GameState {
     readonly defines: Defines,
     newGameFlags: string[],
     readonly pokemon: PokemonData,
+    /** src/strings.c (text/strings.json), for gText_Box. */
+    strings: Record<string, string>,
   ) {
     for (const f of newGameFlags) this.setFlag(f);
     this.tempFlags = [defines.get('TEMP_FLAGS_START') ?? 0, defines.get('TEMP_FLAGS_END') ?? -1];
@@ -117,23 +146,135 @@ export class GameState {
       (item) => pokemon.itemPocket(item),
       () => this.setFlag('FLAG_SYS_GOT_BERRY_POUCH'),
     );
+    this.pcItems = Array.from({ length: defines.require('PC_ITEMS_COUNT') }, () => ({ itemId: defines.require('ITEM_NONE'), quantity: 0 }));
+    // ResetPokemonStorageSystem (NewGameInitData)
+    this.storage = new PokemonStorage(
+      {
+        TOTAL_BOXES_COUNT: defines.require('TOTAL_BOXES_COUNT'),
+        IN_BOX_COUNT: defines.require('IN_BOX_COUNT'),
+        MAX_DEFAULT_WALLPAPER: defines.require('MAX_DEFAULT_WALLPAPER'),
+        WALLPAPER_COUNT: defines.require('WALLPAPER_COUNT'),
+      },
+      pokemon.encodeName(strings.gText_Box ?? '$'),
+      (n) => ConvertIntToDecimalStringN(n, STR_CONV_MODE_LEFT_ALIGN, 2),
+    );
   }
 
   /**
-   * GiveMonToPlayer: OT is the player; first free party slot. When the party is full the GBA calls
-   * SendMonToPC; PC storage doesn't exist yet, so that case returns MON_CANT_GIVE.
+   * GiveMonToPlayer: OT is the player; the first free party slot, or SendMonToPC when the party is full.
+   * Returns MON_GIVEN_TO_PARTY, MON_GIVEN_TO_PC or MON_CANT_GIVE (every box full).
    */
   giveMon(mon: Pokemon): number {
     const c = this.pokemon.c;
     mon.otName = this.playerName;
     mon.otGender = this.playerGender;
     mon.otId = this.trainerId;
-    if (this.party.length >= c.PARTY_SIZE) {
-      console.warn('[state] party full; SendMonToPC not implemented');
-      return c.MON_CANT_GIVE;
-    }
+    if (this.party.length >= c.PARTY_SIZE) return this.sendMonToPC(mon);
     this.party.push(mon);
     return c.MON_GIVEN_TO_PARTY;
+  }
+
+  /**
+   * SendMonToPC (pokemon.c): the first free slot, searching from the current box and wrapping around. The mon's PP
+   * is restored (MonRestorePP) and its BoxPokemon part copied in; gSpecialVar_MonBoxId/Pos and
+   * VAR_PC_BOX_TO_SEND_MON say where it went (FLAG_SHOWN_BOX_WAS_FULL_MESSAGE is cleared if that isn't the box
+   * the last mon went to).
+   */
+  sendMonToPC(mon: Pokemon): number {
+    const c = this.pokemon.c;
+    this.setPCBoxToSendMon(this.getVar('VAR_PC_BOX_TO_SEND_MON'));
+    const st = this.storage;
+    let boxNo = st.getCurrentBox();
+    do {
+      for (let boxPos = 0; boxPos < st.c.IN_BOX_COUNT; boxPos++) {
+        if (!st.getBoxMonDataAt(boxNo, boxPos, 'species')) {
+          boxMonRestorePP(this.pokemon, mon);
+          st.boxes[boxNo][boxPos] = boxMonFromMon(mon);
+          this.setVar('VAR_MON_BOX_ID', boxNo);
+          this.setVar('VAR_MON_BOX_POS', boxPos);
+          if (this.getPCBoxToSendMon() !== boxNo) this.setFlag('FLAG_SHOWN_BOX_WAS_FULL_MESSAGE', false);
+          this.setVar('VAR_PC_BOX_TO_SEND_MON', boxNo);
+          return c.MON_GIVEN_TO_PC;
+        }
+      }
+      boxNo++;
+      if (boxNo === st.c.TOTAL_BOXES_COUNT) boxNo = 0;
+    } while (boxNo !== st.getCurrentBox());
+    return c.MON_CANT_GIVE;
+  }
+
+  /** SetPCBoxToSendMon (field_specials.c) */
+  setPCBoxToSendMon(boxId: number): void {
+    this.pcBoxToSendMon = boxId & 0xff;
+  }
+
+  /** GetPCBoxToSendMon (field_specials.c) */
+  getPCBoxToSendMon(): number {
+    return this.pcBoxToSendMon;
+  }
+
+  /**
+   * ShouldShowBoxWasFullMessage (field_specials.c): TRUE once per change of destination box, when the mon didn't
+   * go to the current box.
+   */
+  shouldShowBoxWasFullMessage(): boolean {
+    if (this.getFlag('FLAG_SHOWN_BOX_WAS_FULL_MESSAGE')) return false;
+    if (this.storage.getCurrentBox() === this.getVar('VAR_PC_BOX_TO_SEND_MON')) return false;
+    this.setFlag('FLAG_SHOWN_BOX_WAS_FULL_MESSAGE');
+    return true;
+  }
+
+  /**
+   * IsDestinationBoxFull (field_specials.c): SendMonToPC's search without storing anything: points
+   * VAR_PC_BOX_TO_SEND_MON at the first box with room, then ShouldShowBoxWasFullMessage. FALSE (and nothing
+   * changed) if every box is full.
+   */
+  isDestinationBoxFull(): boolean {
+    this.setPCBoxToSendMon(this.getVar('VAR_PC_BOX_TO_SEND_MON'));
+    const st = this.storage;
+    let i = st.getCurrentBox();
+    do {
+      for (let j = 0; j < st.c.IN_BOX_COUNT; j++) {
+        if (!st.getBoxMonDataAt(i, j, 'species')) {
+          if (this.getPCBoxToSendMon() !== i) this.setFlag('FLAG_SHOWN_BOX_WAS_FULL_MESSAGE', false);
+          this.setVar('VAR_PC_BOX_TO_SEND_MON', i);
+          return this.shouldShowBoxWasFullMessage();
+        }
+      }
+      i++;
+      if (i === st.c.TOTAL_BOXES_COUNT) i = 0;
+    } while (i !== st.getCurrentBox());
+    return false;
+  }
+
+  /** IsThereRoomInAnyBoxForMorePokemon (field_specials.c) */
+  isThereRoomInAnyBoxForMorePokemon(): boolean {
+    return !this.storage.isFull();
+  }
+
+  /** IsPlayerPartyAndPokemonStorageFull (pokemon.c) */
+  isPlayerPartyAndPokemonStorageFull(): boolean {
+    return this.party.length >= this.pokemon.c.PARTY_SIZE && this.storage.isFull();
+  }
+
+  /** CountPartyMons (pokemon_storage_system_menu.c); also CalculatePlayerPartyCount, as the party has no gaps. */
+  countPartyMons(): number {
+    return this.party.length;
+  }
+
+  /** CountPartyNonEggMons */
+  countPartyNonEggMons(): number {
+    return this.party.filter((m) => !m.isEgg).length;
+  }
+
+  /** CountPartyAliveNonEggMonsExcept: non-egg mons with HP left, not counting party slot `slotToIgnore`. */
+  countPartyAliveNonEggMonsExcept(slotToIgnore: number): number {
+    return this.party.filter((m, i) => i !== slotToIgnore && !m.isEgg && m.hp !== 0).length;
+  }
+
+  /** CountPartyAliveNonEggMons_IgnoreVar0x8004Slot */
+  countPartyAliveNonEggMonsIgnoreVar0x8004Slot(): number {
+    return this.countPartyAliveNonEggMonsExcept(this.getVar('VAR_0x8004'));
   }
 
   /** GetSetPokedexFlag(FLAG_SET_SEEN / FLAG_SET_CAUGHT) */
@@ -179,12 +320,52 @@ export class GameState {
     return n >= TEMP_VARS_START ? this.getVar(n) : n;
   }
 
+  /** Every set flag id, ascending (for the save: gSaveBlock1Ptr->flags). */
+  flagIds(): number[] {
+    return [...this.flags].sort((a, b) => a - b);
+  }
+
+  /** Replace every flag (loading a save). */
+  setFlagIds(ids: number[]): void {
+    this.flags = new Set(ids);
+  }
+
+  /** Every non-zero var as [id, value], by id (for the save: gSaveBlock1Ptr->vars). */
+  varEntries(): [number, number][] {
+    return [...this.vars].filter(([, v]) => v !== 0).sort((a, b) => a[0] - b[0]);
+  }
+
+  /** Replace every var (loading a save). */
+  setVarEntries(entries: [number, number][]): void {
+    this.vars = new Map(entries.map(([id, v]) => [id, v & 0xffff]));
+  }
+
   /** ClearTempFieldEventData: on every map load. */
   clearTemps(): void {
     const [fs, fe] = this.tempFlags;
     for (const f of [...this.flags]) if (f >= fs && f <= fe) this.flags.delete(f);
     for (let v = TEMP_VARS_START; v <= TEMP_VARS_END; v++) this.vars.delete(v);
   }
+}
+
+/** struct WarpData, with the map as its MAP_* id; x/y are map-local. */
+export interface WarpData {
+  mapId: string;
+  warpId: number;
+  x: number;
+  y: number;
+}
+
+/** gSaveBlock1Ptr->location + pos, plus the player object's facing and PLAYER_AVATAR_FLAG_* (see GameState.location). */
+export interface PlayerLocation {
+  /** MAP_* id */
+  mapId: string;
+  /** Map-local tile */
+  x: number;
+  y: number;
+  facing: Direction;
+  /** PLAYER_AVATAR_FLAG_ON_FOOT / MACH_BIKE / ACRO_BIKE / SURFING (the state, not the transient flags). */
+  avatarFlags: number;
 }
 
 /** struct Roamer */
