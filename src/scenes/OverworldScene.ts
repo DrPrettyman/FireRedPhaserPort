@@ -55,6 +55,16 @@ import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
 import { gFieldCallback, gFieldCallback2, type FieldCallbackHost } from '../menus/fieldCallbacks';
 import { activeFieldEffects, setFieldEffectScriptHost, setFieldEffectScripts } from '../world/fieldEffectScripts';
 import { fieldMoveGfxSymbols, prepareFieldMoveMenu, registerFieldMoves, setFieldMoveHost, UpdateEscapeWarp, type FieldMoveHost } from '../world/fieldMoves';
+import {
+  BOB_MON_ONLY,
+  DestroyPlayerSurfBlob,
+  GetInteractedWaterScript,
+  SetPlayerSurfBlobBobState,
+  SetPlayerSurfBlobInvisible,
+  setSurfHost,
+  StartPlayerSurfBlob,
+  surfBlobProbe,
+} from '../world/surf';
 import { FieldFlash, FldEff_UseFlash, IsMapTypeOutdoors, Overworld_GetFlashLevel, SetDefaultFlashLevel } from '../world/flash';
 import { fieldListMenuGfxSymbols, fieldListMenuProbe, type ListMenuHost } from '../ui/FieldListMenu';
 import { stringWidth } from '../text/stringWidth';
@@ -315,6 +325,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     setFieldEffectScripts(this.assets.fieldEffectScripts);
     setFieldEffectScriptHost({ isPhaserEffectActive: (fldeff) => this.fieldEffects.isActive(fldeff) });
     setFieldMoveHost(this.createFieldMoveHost());
+    setSurfHost({
+      terrainAt: (x, y) => this.world.tileAt(x, y).terrain,
+      createFieldEffectSprite: (fldEff, template, x, y, subpriority, callback) => this.fieldEffects.createSprite(fldEff, template, x, y, subpriority, callback),
+    });
     registerFieldMoves();
     await loadGfx(fieldMoveGfxSymbols());
     this.cameras.main.startFollow(this.player.anchor, true, 1, 1, 0, CAMERA_FOLLOW_OFFSET_Y);
@@ -364,6 +378,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       flash: { level: this.state.flashLevel, dark: this.flash.darkFraction() },
       gbaScreenBlack: this.gbaScreen.active ? this.gbaScreen.blackFraction() : undefined,
       listMenu: fieldListMenuProbe(),
+      surfBlob: surfBlobProbe(),
       avatar: {
         flags: Object.keys(this.assets.scripts.defines)
           .filter((k) => k.startsWith('PLAYER_AVATAR_FLAG_') && gPlayerAvatar.flags & this.defines.require(k))
@@ -705,7 +720,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /**
    * TryStartInteractionScript / GetInteractionScript: the object in front (or across a counter), then a bg
-   * event, then the metatile. GetInteractedWaterScript (Surf, Waterfall) isn't ported: no field moves yet.
+   * event, then the metatile, then the water (GetInteractedWaterScript: Surf, Waterfall; world/surf.ts).
    */
   private interact(): boolean {
     const dir = this.player.facing;
@@ -725,7 +740,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         return this.scripts.start(script);
       }
     }
-    const script = this.interactedBackgroundEventScript(behavior, dir) ?? this.interactedMetatileScript(behavior, dir);
+    const script = this.interactedBackgroundEventScript(behavior, dir) ?? this.interactedMetatileScript(behavior, dir) ?? GetInteractedWaterScript(behavior);
     if (!script) return false;
     this.selectedObject = undefined;
     this.scripts.npcTextColor = 'neutral';
@@ -2198,6 +2213,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       createTask: (tick) => this.fieldTasks.push({ tick }),
       startDust: (x, y, elevation, priority) => this.fieldEffects.dust(x, y, elevation, priority),
       boulderPushed: (boulder) => this.boulderPushed(boulder),
+      startSurfBlob: () => StartPlayerSurfBlob(),
+      stopSurfBlob: () => SetPlayerSurfBlobBobState(BOB_MON_ONLY),
+      destroySurfBlob: () => DestroyPlayerSurfBlob(),
+      setSurfBlobInvisible: (invisible) => SetPlayerSurfBlobInvisible(invisible),
       partyKnowsSurf: () => {
         const surf = this.defines.require('MOVE_SURF');
         return this.state.party.some((m) => m.moves.includes(surf));

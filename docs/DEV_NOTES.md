@@ -28,9 +28,10 @@ this is the next level down. When you add or change a subsystem, update its entr
     water starts surfing. After a battle or menu `ReturnPlayerAvatarToField` rebuilds the flags from the graphics.
   - **Forced movement:** `sForcedMovementFuncs` (ice, spinners, currents, slides, waterfall) run from PlayerStep
     once the player has moved (CONTROLLABLE cleared); step-based scripts and encounters skip forced tiles.
-  - **Surf:** `ForcePlayerToStartSurfing` / the SURFING transition (W-surf adds FLDEFF_SURF_BLOB through the
-    host's optional `startSurfBlob` / `stopSurfBlob`); walking into elevation-3 land gets off
-    (CanStopSurfing → CreateStopSurfingTask). `PartyHasMonWithSurf` and `IsPlayerSurfingNorth` are there.
+  - **Surf:** `ForcePlayerToStartSurfing` / the SURFING transition (the surf blob comes through the host's
+    optional `startSurfBlob` / `stopSurfBlob` / `destroySurfBlob` / `setSurfBlobInvisible`, which OverworldScene
+    points at world/surf.ts); walking into elevation-3 land gets off (CanStopSurfing → CreateStopSurfingTask).
+    `PartyHasMonWithSurf` and `IsPlayerSurfingNorth` are there. Using Surf / Waterfall: "Surf and Waterfall".
   - **Strength:** with FLAG_SYS_USE_STRENGTH, walking into an OBJ_EVENT_GFX_PUSHABLE_BOULDER pushes it
     (TryPushBoulder → Task_BumpBoulder; holes and Victory Road switches in `OverworldScene.boulderPushed`).
   - **Bike:** the Bicycle's bag use is `FieldUseFunc_Bike` (menus/itemUse.ts) through `gFieldCallback`
@@ -82,20 +83,46 @@ this is the next level down. When you add or change a subsystem, update its entr
     battle releases it, since those hold the field's input themselves.
   - `world/fieldMoveShowMon.ts`: FLDEFF_FIELD_MOVE_SHOW_MON(_INIT), the banner, runs the C on the field's GBA
     layer (FieldGbaScreen, like battle transitions): streaks in BG0, WIN0/WIN1, the mon as a GBA pic sprite.
-  - **Adding a field move** (Surf, Strength, Flash, Fly): write SetUpFieldMove_X / FieldCallback_X / FldEff_UseX
+  - **Adding a field move** (e.g. Fly): write SetUpFieldMove_X / FieldCallback_X / FldEff_UseX
     in your own module, `registerFieldMoveSetUp('FIELD_MOVE_X', SetUpFieldMove_X)` and
     `registerFieldEffectNatives({ FldEff_UseX })` at boot (as `registerFieldMoves` does), and start with
     `CreateFieldEffectShowMon` for the banner. Script-driven moves (EventScript_StrengthBoulder, EventScript_UseSurf,
-    EventScript_Waterfall) then work from the field too: until FldEff_UseStrength exists, `dofieldeffect
-    FLDEFF_USE_STRENGTH` + `waitstate` just continue. Fly is special-cased in CursorCB_FieldMove (CB2_OpenFlyMap).
+    EventScript_Waterfall) then work from the field too: until a FldEff_UseX exists, `dofieldeffect
+    FLDEFF_USE_X` + `waitstate` just continue. A move in its own module (world/surf.ts, world/strength.ts) is
+    registered from `registerFieldMoves`. Fly is special-cased in CursorCB_FieldMove (CB2_OpenFlyMap).
     Escape warp: `UpdateEscapeWarp` (from OverworldScene.takeWarp) / `SetEscapeWarp`, state.escapeWarp.
+    `CreateFieldEffectShowMon`, `ScriptContext_Enable` and `ScriptContext_SetupScript` are exported for that.
+  - **Strength:** `world/strength.ts` (fldeff_strength.c). From the party menu SetUpFieldMove_Strength needs a
+    boulder in front (CheckObjectGraphicsInFrontOfPlayer) and no surfing, and runs EventScript_FldEffStrength;
+    talking to a boulder runs EventScript_StrengthBoulder (Rainbow Badge, `checkpartymove`, YES/NO). Both do
+    `dofieldeffect FLDEFF_USE_STRENGTH` (FldEff_UseStrength: banner, nickname into STR_VAR_1) and then
+    EventScript_UseStrength sets FLAG_SYS_USE_STRENGTH, which TryPushBoulder (world/playerAvatar.ts) checks. The
+    flag goes with ClearTempFieldEventData (`GameState.clearTemps`, every map load incl. connections), a white-out
+    and Teleport / Dig / Escape Rope. Victory Road's switch scripts use `copyobjectxytoperm`. Test spot: Victory
+    Road 2F `?map=VictoryRoad_2F&x=6&y=16`, face down (boulder 1; its switch is at (2, 19)).
   - Extracted: `field_effects/scripts.json`, tileset `terrains` (METATILE_ATTRIBUTE_TERRAIN, `TileInfo.terrain`)
     and map `allowEscaping`. Probes: `field().fieldEffects` lists the scripted active list too; events
     `fieldMoveShowMon` (species, outdoors), `cutGrass`, `sweetScent`, `fieldMoveWarp`, `fieldMoveWarpDone`.
     Tests: tests/e2e/fieldMoves.test.ts (Vermilion's cut tree from (19, 25), Route 1 grass (14, 8), Mt. Ember
     rock (29, 41) with `wild.seed(0)` for an encounter / `seed(1)` for none, Mt. Moon from Route 4 (19, 6) for Dig).
+- **Surf and Waterfall:** `world/surf.ts`. SetUpFieldMove_Surf / _Waterfall and FieldCallback_* for the party
+  menu; GetInteractedWaterScript (the last step of `OverworldScene.interact`: EventScript_UseSurf,
+  EventScript_CurrentTooFast, EventScript_Waterfall / CantUseWaterfall); IsPlayerFacingSurfableFishableWater and
+  MetatileAtCoordsIsWaterTile (the terrain attribute; the rods will need them too); FldEff_UseSurf
+  (Task_FldEffUseSurf: pose, banner, JUMP_SPECIAL onto the water, the blob) and FldEff_UseWaterfall
+  (Task_UseWaterfall: banner, WALK_SLOWER north until off MB_WATERFALL), registered as field effect natives.
+  The surf blob (field_effect_helpers.c: FldEff_SurfBlob, UpdateSurfBlobFieldEffect, SetSurfBlob_BobState /
+  _DontSyncAnim / _PlayerOffset for Fly and the rods) is a FieldEffectSprite made through
+  `FieldEffects.createSprite`; `sPlayerSurfBlob` stands for the player's `fieldEffectSpriteId`. In FRLG the blob
+  never moves (sBobDirection stays 0): the player rides 1 px lower on its anim's second frame. `SurfHost`
+  (`setSurfHost` in OverworldScene.create) gives the terrain and sprite creation; the rest goes through the avatar
+  and field move hosts (`LockPlayerFieldControls`, `CreateTask`, `StartPlayerAvatarSummonMonForFieldMoveAnim`,
+  `LoadFieldMoveShowMonGfx` are exported from fieldMoves.ts). Probes: `field().surfBlob` (centre, anim, bob
+  state, the player's y2), event `partyMenuMessage` (msgId, from DisplayPartyMenuStdMessage). Tests:
+  tests/e2e/surf.test.ts (Pallet Town pond from (8, 16) facing down; on the water at (8, 18); Icefall Cave
+  entrance: waterfall x 15-19 y 14-20, its foot at (17, 21), pond at (12, 10) for encounters).
 - **Interactions:** `OverworldScene.interact` is GetInteractionScript (object → bg event → metatile via
-  `METATILE_SCRIPTS`); `tryWalkIntoSignpost` runs after a step (before the wild check) and when holding toward the
+  `METATILE_SCRIPTS` → water); `tryWalkIntoSignpost` runs after a step (before the wild check) and when holding toward the
   facing direction. The signpost / walk-away / last-message-dismiss state (script.c statics) lives in ScriptEngine
   (`msgSetSignpost`, `handleCancelSignpost`, `takeRegisteredInput`); MessageBox draws the signpost frame when told.
   Tests: Viridian Forest item ball (`?start=after-rival&map=ViridianForest&x=5&y=42`, face up, A), hidden Potion
@@ -144,12 +171,18 @@ this is the next level down. When you add or change a subsystem, update its entr
   DoSafariBattle + CB2_EndSafariBattle. To skip the dice in tests:
   `s.startWildBattle(s.state.pokemon.createMonWithNature(species, level, 32, nature, {...}))` on the Overworld scene.
   `state.currentMapId` is the MAP_* id (`currentMap` is the folder name).
-- **Scripted battles:** specials that start a battle (StartOldManTutorialBattle, StartMarowakBattle in
-  `script/specials.ts`) call `host.startScriptedBattle(flags, enemyParty, transition)` and block the script with
-  `setWaitState` until the field has faded back in (their CB2_End* sets VAR_RESULT; a loss calls `endScript()` +
-  `host.whiteOut()`). `setwildbattle` leaves gEnemyParty in `state.enemyParty`; `host.wildBattleTransition(mon)` is
-  GetWildBattleTransition. Every battle start (OverworldScene.runBattle) does Task_BattleStart's
-  RestartWildEncounterImmunitySteps. Tests: tests/e2e/pokemonTower.test.ts (walk onto the 6F trigger at 11,15).
+- **Scripted battles:** specials that start a battle (StartOldManTutorialBattle, StartMarowakBattle,
+  StartLegendaryBattle in `script/specials.ts`) call `host.startScriptedBattle(flags, enemyParty, transition)` and
+  block the script with `setWaitState` until the field has faded back in (their CB2_End* sets VAR_RESULT; a loss
+  calls `endScript()` + `host.whiteOut()`). `setwildbattle` leaves gEnemyParty in `state.enemyParty`;
+  `host.wildBattleTransition(mon)` is GetWildBattleTransition. `dowildbattle` (StartScriptedWildBattle) and
+  StartLegendaryBattle share `runScriptedWildBattle` (CB2_EndScriptedWildBattle): `returnToField` runs the map's
+  ON_RESUME script while FLAG_SYS_SPECIAL_WILD_BATTLE is still set (that's how Snorlax and caught legendaries
+  disappear: `removeobject VAR_LAST_TALKED`), then the script reads `specialvar GetBattleOutcome`
+  (`state.battleOutcome`). Every battle start (OverworldScene.runBattle) does Task_BattleStart's
+  RestartWildEncounterImmunitySteps. Tests: tests/e2e/pokemonTower.test.ts (walk onto the 6F trigger at 11,15),
+  tests/e2e/scriptedBattles.test.ts (Snorlax from Route 12 (14, 69) facing down with FLAG_GOT_POKE_FLUTE, Route
+  16 (30, 13) facing right; Zapdos from Power Plant (5, 12) and Mewtwo from Cerulean Cave B1F (7, 13), facing up).
 - **Step counters:** `world/stepCounters.ts` (happiness, VS Seeker, field poison, egg cycles), called from
   `OverworldScene.tryStartStepCountScript`; `world/roamer.ts` is roamer.c with its EWRAM statics as module state
   (`roamerLocation()` for tests). Field code may call battle-engine pokemon.c functions (AdjustFriendship): the

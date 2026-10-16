@@ -22,6 +22,7 @@ import { seedRng } from '../util/random';
 import { DELTA, type Direction } from '../world/direction';
 import { tilesetVram } from '../world/TilesetVram';
 import { SetPlayerAvatarTransitionFlags } from '../world/playerAvatar';
+import { DestroyPlayerSurfBlob } from '../world/surf';
 import type { FieldListMenuProbe } from '../ui/FieldListMenu';
 import { mainMenuProbe } from '../menus/mainMenu';
 import { saveDialogProbe } from '../ui/SaveDialog';
@@ -196,6 +197,11 @@ export interface FieldProbe {
   gbaScreenBlack: number | undefined;
   /** special ListMenu's list while it's open (ui/FieldListMenu.ts). */
   listMenu: FieldListMenuProbe | undefined;
+  /**
+   * The player's surf blob (world/surf.ts) while it's alive: its centre in world pixels, anim (0 down, 1 up,
+   * 2 left, 3 right), BOB_* state, and the player sprite's y2 it sets.
+   */
+  surfBlob: { x: number; y: number; anim: number; bobState: number; invisible: boolean; playerY2: number } | undefined;
   /** gPlayerAvatar and the player's held movement (world/playerAvatar.ts). */
   avatar: {
     /** PLAYER_AVATAR_FLAG_* set, without the prefix (ON_FOOT, MACH_BIKE, SURFING, FORCED, ...). */
@@ -462,8 +468,12 @@ function createApi(game: Phaser.Game) {
     /**
      * Put the player in an avatar state the way the game does it (SetPlayerAvatarTransitionFlags with
      * PLAYER_AVATAR_FLAG_<state>): 'MACH_BIKE' gets on the bike, 'SURFING' onto a surfing mon, 'ON_FOOT' off.
+     * (The game never leaves the surf blob behind that way, so it goes too.)
      */
-    setAvatarState: (state: 'ON_FOOT' | 'MACH_BIKE' | 'SURFING') => SetPlayerAvatarTransitionFlags(define(`PLAYER_AVATAR_FLAG_${state}`)),
+    setAvatarState: (state: 'ON_FOOT' | 'MACH_BIKE' | 'SURFING') => {
+      if (state !== 'SURFING') DestroyPlayerSurfBlob();
+      SetPlayerAvatarTransitionFlags(define(`PLAYER_AVATAR_FLAG_${state}`));
+    },
     get state() {
       return state();
     },
