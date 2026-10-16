@@ -1310,3 +1310,38 @@ end to end.
   new game; A skipping the intro, START → main menu with a save, B back to the title, CONTINUE; the 2700-frame
   restart; the clear save data screen, NO and YES). saveContinue.test.ts's boot test goes through the title screen
   after B on the main menu.
+### Main-path leftovers: card key doors, setmaplayoutindex, Field_AskSaveTheGame, seteventmon (W-misc, batch 3)
+
+- Silph Co.'s card key doors (data/scripts/silphco_doors.inc) already worked end to end: ON_LOAD's `setmetatile`
+  closes them (collision included), the bg events say "It needs a CARD KEY!" without FLAG_HIDE_SILPH_CO_5F_CARD_KEY,
+  open them with it (`special SetHiddenItemFlag` sets FLAG_SILPH_*_DOOR_*), and ON_LOAD leaves an open door open
+  after a warp. Now covered by e2e tests; no code change.
+- `setmaplayoutindex` (ScrCmd_setmaplayoutindex → SetCurrentMapLayout): `GameState.mapLayoutId`
+  (gSaveBlock1Ptr->mapLayoutId) set from the header before ON_TRANSITION (LoadCurrentMapData), changed by the
+  command, then `OverworldScene.initMapLayout` swaps the current chunk's grid (`World.setCurrentLayout`) before
+  ON_LOAD. Saved with the location (`location.mapLayoutId`) and used by CONTINUE (LoadSaveblockMapHeader).
+  Seafoam Islands B3F/B4F switch to the *_CURRENT_STOPPED layouts once both boulders are down, and the currents
+  (MB_*_CURRENT, world/playerAvatar.ts) stop with them.
+- Extractor: maps get `layoutId`; the 55 layouts no map uses (except the NULL-tileset leftovers) go to
+  `maps/layouts/<LAYOUT_ID>.json` (adds the Building/HoennBuilding tileset pair), `maps/layouts/index.json` maps
+  the used ones to a map file; LAYOUT_* ids (index + 1, as mapjson generates them) in the script defines. Rerun
+  `npm run extract`.
+- `special Field_AskSaveTheGame` (start_menu.c, EventScript_AskSaveGame): the SAVE dialog (ui/SaveDialog.ts) run
+  as the special's wait state (task50_save_game), VAR_RESULT TRUE once saved, FALSE for NO / B / a failed write.
+  The cable club attendants reach it now, so the link specials on that path got stand-ins: TryBattleLinkup /
+  TryTradeLinkup never find a partner (B → LINKUP_FAILED, as on a GBA with nothing plugged in; before, an
+  unported linkup would have left VAR_RESULT = TRUE = LINKUP_SUCCESS and walked the player into the Colosseum),
+  IsWirelessAdapterConnected / ValidateSavedWonderCard / IsBadEggInParty FALSE, CloseLink and
+  HelpSystem_Enable/Disable no-ops.
+- `seteventmon` (`special CreateEnemyEventMon`): Navel Rock's Lugia / Ho-Oh, Birth Island's Deoxys.
+- Shared-file changes: ScriptEngine.ts (`setmaplayoutindex`; SpecialEnv gains `input`, `hideFieldMessageBox`;
+  ScriptHost gains `createSaveDialog`), specials.ts, OverworldScene.ts (onMapLoaded / initMapLayout,
+  storeLocationForSave, createSaveDialog split out of openSaveDialog, a `multichoice` test event), World.ts,
+  assets.ts, types.ts, GameState.ts (`mapLayoutId`, PlayerLocation.mapLayoutId; no saveData.ts change), extract.py.
+- Fix on the way: playerAvatar.test.ts's current ride started on B4F from a dev start, where both boulders now
+  count as down (Route20_OnTransition never ran) and the currents are stopped; it hides them first and warps in.
+  pcBoxes.test.ts's stored-location check now expects `mapLayoutId` in the location.
+- Verified: typecheck, `npm test` (85), full `npm run test:e2e` (221; five battle anim tests failed once while
+  other workers' suites shared the machine and passed on a rerun of those files).
+- Tests: tests/e2e/mainPathLeftovers.test.ts (Silph Co. 5F door + the Card Key ball, Seafoam B4F stopped / running /
+  after CONTINUE, B3F, the cable club save prompt NO and YES, Lugia via seteventmon).

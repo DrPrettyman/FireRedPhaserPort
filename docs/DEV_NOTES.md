@@ -49,6 +49,18 @@ this is the next level down. When you add or change a subsystem, update its entr
   `writeTiles` redraws the slots whose metatiles use a changed tile. `world/tilesetAnims.ts` is tileset_anims.c,
   driven from `OverworldScene.tick` (InitTilesetAnimations on a warp, InitSecondaryTilesetAnimation on a
   connection). `__test.tilesetTile(name, tile)` shows a tile's current bytes.
+- **Map layouts (`setmaplayoutindex`):** maps carry `layoutId` (gMapHeader.mapLayoutId) and `GameState.mapLayoutId`
+  is gSaveBlock1Ptr->mapLayoutId: `onMapLoaded` sets it from the header before ON_TRANSITION (LoadCurrentMapData),
+  the script command changes it (SetCurrentMapLayout), and `initMapLayout` then swaps the current chunk's grid,
+  border and tilesets (`World.setCurrentLayout`) before ON_LOAD, as InitMap would build it. CONTINUE takes it from
+  the save (`location.mapLayoutId`). Layouts no map header uses are extracted to `maps/layouts/<LAYOUT_ID>.json`
+  (`Assets.loadLayout`; `maps/layouts/index.json` names the map file for the others), LAYOUT_* ids are in the
+  script defines. Users: Seafoam Islands B3F/B4F (currents stop once both boulders are down), Three Island's
+  Dunsparce Tunnel, Seven Island's house. Tests: tests/e2e/mainPathLeftovers.test.ts (B4F from (7, 6), B3F from
+  (12, 8); a dev start never passed Route 20, so both boulders count as down there).
+- **Silph Co. card key doors** (data/scripts/silphco_doors.inc) need nothing of their own: ON_LOAD closes them with
+  `setmetatile`, the bg events open them (FLAG_HIDE_SILPH_CO_5F_CARD_KEY, `special SetHiddenItemFlag`). Test spot:
+  `?map=SilphCo_5F&x=9&y=9`, face left (mark the floor's trainers beaten first).
 - **Doors:** `world/doors.ts` (FieldDoors) is field_door.c: a door frame is drawn into small canvas textures over
   the door cell(s), with the map's tiles there hidden (`MapChunk.setCellVisible`). `OverworldScene.doDoorWarp`
   (Task_DoorWarp) and `exitDoor` (Task_ExitDoor) run as overlays, which freeze the NPCs and the input.
@@ -179,7 +191,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   StartLegendaryBattle share `runScriptedWildBattle` (CB2_EndScriptedWildBattle): `returnToField` runs the map's
   ON_RESUME script while FLAG_SYS_SPECIAL_WILD_BATTLE is still set (that's how Snorlax and caught legendaries
   disappear: `removeobject VAR_LAST_TALKED`), then the script reads `specialvar GetBattleOutcome`
-  (`state.battleOutcome`). Every battle start (OverworldScene.runBattle) does Task_BattleStart's
+  (`state.battleOutcome`). `seteventmon` expands to `special CreateEnemyEventMon` (Navel Rock's Lugia and Ho-Oh,
+  Birth Island's Deoxys), which leaves its mon in `state.enemyParty` like `setwildbattle`. Every battle start (OverworldScene.runBattle) does Task_BattleStart's
   RestartWildEncounterImmunitySteps. Tests: tests/e2e/pokemonTower.test.ts (walk onto the 6F trigger at 11,15),
   tests/e2e/scriptedBattles.test.ts (Snorlax from Route 12 (14, 69) facing down with FLAG_GOT_POKE_FLUTE, Route
   16 (30, 13) facing right; Zapdos from Power Plant (5, 12) and Mewtwo from Cerulean Cave B1F (7, 13), facing up).
@@ -322,6 +335,11 @@ this is the next level down. When you add or change a subsystem, update its entr
   (the harness boots with `?skipIntro`, so no title screen first).
   Probes: `t.startMenu()` (items, cursor), `t.saveDialog()` (yesNo, statsWindow, the stats as text),
   `t.mainMenu()` (menuType, cursorPos, fading, the CONTINUE values as text).
+  Scripted save prompts: `special Field_AskSaveTheGame` (EventScript_AskSaveGame + `waitstate`) runs the same
+  dialog through `ScriptHost.createSaveDialog()` (OverworldScene) as the special's wait state (task50_save_game):
+  VAR_RESULT TRUE once saved, FALSE for NO/B or a failed write; the message box is left as is. Users: the cable
+  club attendants (Pokémon Center 2F, e.g. Viridian's at (10, 2) from (10, 4) with FLAG_SYS_POKEDEX_GET; the
+  linkup that follows never connects, B cancels it) and Seven Island's e-Reader trainer (unreachable).
 
 ## Testing and debugging
 
@@ -329,7 +347,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   tests/README.md. Each e2e file starts from a URL preset, drives `window.__test` (`src/dev/testHooks.ts`) and
   asserts on state and events. New field mechanics should get a scenario there rather than a one-off
   `browser-test.mjs` run. The game reports milestones through `testEvent()` (map, script, trainerApproach,
-  battleTransition, battleTransitionEnd, battleStart, battleEnd, whiteOut, mapTransition, barnDoorWipe); add one
+  battleTransition, battleTransitionEnd, battleStart, battleEnd, whiteOut, mapTransition, barnDoorWipe,
+  multichoice); add one
   wherever a test needs to know something happened.
 - **Skip the intro:** `?start=after-rival[&starter=bulbasaur|squirtle|charmander]` (dev only) starts in Oak's lab
   right after the first rival battle, won (`src/dev/startPresets.ts`); add `&map=&x=&y=` to start elsewhere with

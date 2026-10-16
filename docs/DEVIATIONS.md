@@ -49,10 +49,18 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     to black like the GBA and go straight to the map, without the banner (or the flash that follows it).
   - Wild encounters: GAME_STAT_* counters aren't kept.
   - Scripted wild battles (`dowildbattle`, StartLegendaryBattle): no battle music (MUS_VS_MEWTWO / _VS_LEGEND /
-    ...), no GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES. Not ported: `setmaplayoutindex` (Seafoam Islands B3F/B4F
-    keep their current layout after both boulders have been pushed down; the boulders still fall and the flags
-    are set), `seteventmon` (Navel Rock's Lugia / Ho-Oh and Birth Island's Deoxys, which also need the event
-    tickets).
+    ...), no GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES. `seteventmon` (CreateEnemyEventMon) doesn't set
+    MON_DATA_MODERN_FATEFUL_ENCOUNTER (the port keeps no such field; IsBattlerModernFatefulEncounter is always
+    TRUE, so it makes no difference). Navel Rock and Birth Island need the Mystery Gift event tickets, which can't
+    be had, so only a dev start reaches Lugia, Ho-Oh and Deoxys; Navel Rock's `special ShakeScreen` (and the
+    other ShakeScreen users) isn't ported and warns once.
+  - `setmaplayoutindex` (World.setCurrentLayout): the swapped layout replaces the current map's chunk after
+    ON_TRANSITION rather than being picked before the grid is first built (same result; ON_TRANSITION can't see
+    the grid on the GBA either). gSaveBlock1Ptr->mapLayoutId is saved inside the save's `location`
+    (PlayerLocation.mapLayoutId), not as its own field.
+  - Cable club (cable_club.c): there is no link play. TryBattleLinkup / TryTradeLinkup run as if nothing were on
+    the other end of the cable (Task_LinkupAwaitConnection until B, then LINKUP_FAILED), IsWirelessAdapterConnected
+    and ValidateSavedWonderCard are FALSE, IsBadEggInParty is FALSE (no bad eggs), CloseLink is a no-op.
   - Player avatar (world/playerAvatar.ts, world/bike.ts): no audio (bump, ledge, spinner, bike bell, Strength
     and fall sounds; Cycling Road and surf music). Not ported: the warp arrow sprite on arrow mats
     (HandleWarpArrowSpriteHideShow), DoStairWarp's 12-frame delay when a stair warp takes the player off the
@@ -113,7 +121,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     GAME_STAT_SAVED_GAME, no quest log data. A failed write shows the save error message without
     DoSaveFailedScreen. SaveMapView isn't ported: the map view isn't saved, so CONTINUE rebuilds the map from its
     header and ON_LOAD script (metatiles a script changed later aren't restored). `special Field_AskSaveTheGame`
-    (EventScript_AskSaveGame: cable club, Seven Island) isn't wired to the dialog yet.
+    (task50_save_game) doesn't switch to HELPCONTEXT_SAVE.
   - CONTINUE (OverworldScene.continueSavedGame): the map's objects spawn from its templates (object events aren't
     saved, see Save data); gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
@@ -123,7 +131,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, Trainer Tower clock, cable club
     monitors, questionnaire/easy chat) start their scripts and hit the unimplemented-special warnings.
-  - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link flags.
+  - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link
+    flags, CloseLink.
   - Player names are "PLAYER"/"RIVAL" until Oak's intro exists.
 - **Approximations:**
   - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical; weather palettes ignored.
