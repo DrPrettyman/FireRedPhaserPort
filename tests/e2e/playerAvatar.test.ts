@@ -216,6 +216,22 @@ test('surfing: faster steps on water, and jumping off onto the shore', async () 
   expect(f.avatar.flags).not.toContain('SURFING');
 });
 
+test('a current carries a surfing player along until something blocks it', async () => {
+  // Seafoam Islands B4F: an eastward current along row 6 from x = 8 to 16, then northward from (17, 6) to
+  // the rock at (17, 0). Arriving on water here doesn't start surfing (MetatileBehavior_IsSurfableInSeafoamIslands).
+  const game = await session.start({ ...SAFE, map: 'SeafoamIslands_B4F', x: 7, y: 6 });
+  await repel(game);
+  await game.waitIdle();
+  expect(await game.eval((t) => t.field()!.avatar.flags)).toContain('ON_FOOT');
+  await game.eval((t) => t.setAvatarState('SURFING'));
+  await game.eval((t) => t.face('right'));
+  const pushed = game.eval((t) => t.until(() => t.field()?.avatar.action === 'RIDE_WATER_CURRENT_UP', 300));
+  await game.walk('right', 1);
+  expect(await pushed).toBe(true);
+  await game.waitIdle();
+  expect(await game.eval((t) => t.field()!)).toMatchObject({ x: 17, y: 1 });
+});
+
 test('the test hook puts the player in a state and its graphics', async () => {
   const game = await session.start({ start: 'after-rival', map: 'PalletTown', x: 6, y: 18 });
   await game.waitIdle();
