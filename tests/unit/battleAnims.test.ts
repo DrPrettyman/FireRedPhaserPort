@@ -78,13 +78,16 @@ const FULLY_PORTED: Record<string, string[]> = {
   flying: [],
 
   // battle_anim_ghost.c
-  ghost: [],
+  ghost: [
+    'Move_CONFUSE_RAY', 'Move_CURSE', 'Move_DESTINY_BOND', 'Move_GRUDGE', 'Move_LICK', 'Move_NIGHTMARE',
+    'Move_NIGHT_SHADE', 'Move_SHADOW_BALL', 'Move_SPITE',
+  ],
 
   // battle_anim_psychic.c
-  psychic: [],
+  psychic: ['Move_AMNESIA', 'Move_EXTRASENSORY', 'Move_MEDITATE', 'Move_SKILL_SWAP', 'Move_TELEPORT'],
 
   // battle_anim_dark.c
-  dark: [],
+  dark: ['Move_CAMOUFLAGE', 'Move_FAINT_ATTACK', 'Move_FAKE_TEARS', 'Move_MEMENTO'],
 
   // battle_anim_effects_1.c
   effects1: [],
