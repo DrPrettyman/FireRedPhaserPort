@@ -905,7 +905,11 @@ function AnimTrickBag_Step2(sprite: Sprite): void {
 
 function AnimTrickBag_Step3(sprite: Sprite): void {
   const d = sprite.data;
-  if (d[0] > 20) DestroyAnimSprite(sprite);
+  if (d[0] > 20) {
+    // (the C goes on to write to the destroyed sprite; DestroySprite resets ours, so stop here)
+    DestroyAnimSprite(sprite);
+    return;
+  }
   sprite.invisible = d[0] % 2 !== 0;
   d[0]++;
 }

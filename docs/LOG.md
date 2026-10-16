@@ -911,3 +911,27 @@ end to end.
   `FULLY_PORTED.effects3b` list) takes the second half; `effects3.ts` keeps the first.
 - BATTLE_ANIMS_PLAN.md "Working in parallel": batch 2 assignments (E1, E2, E3a, E3b), workers run only their own
   e2e file, and scratch files get a per-worker prefix.
+
+### Battle anims 3E1: battle_anim_effects_1.c
+
+- `src/battle/anim/effects1.ts` now ports every sprite callback and task in battle_anim_effects_1.c (in C order),
+  including the unused ones (AnimTipMon, AnimSlidingHit, AnimFlickeringPunch, AnimCirclingMusicNote,
+  AnimBubbleBurst, UnusedFlickerAnim, AnimTask_Hide/ShowBattlersHealthbox). The file is done.
+- 35 more scripts run (264 -> 299 of 397, counted on this branch alone): General_ItemKnockoff, General_ItemSteal,
+  Belly Drum, Conversion, Conversion 2, Cotton Spore, Double Team, False Swipe, Follow Me, Frenzy Plant,
+  Grass Whistle, Hyper Beam, Ingrain, Leaf Blade, Lock-On, Magical Leaf, Metronome, Milk Drink, Mimic, Moonlight,
+  Needle Arm, Petal Dance, Protect, Razor Leaf, Secret Power, Sharpen, Silver Wind, Sing, Skull Bash, Slash,
+  Spore, Super Fang, Swift, Taunt and Twister. Still waiting on other files: Solar Beam, Heal Bell, Present,
+  Trick, Teeter Dance, Aromatherapy, Air Cutter (effects_2/3 tasks).
+- `AnimMoveTwisterParticle` and `SetSpriteNextToMonHead` are exported (battle_anim_rock.c's
+  gTwisterRockSpriteTemplate resolves the callback by name; effects_2 can import the helper), as is
+  `MoveAlongLinearPath` (non-static in the C).
+- AnimHyperBeamOrb picks `Random() % 8` from a 7-entry anim table; for 7 the GBA reads the next table in ROM
+  (sSolarBeamSmallOrbAnimTable), so the port appends that table for the roll (it threw before).
+- AnimTrickBag_Step3 returns after destroying its sprite (the C keeps writing to it; our DestroySprite resets
+  the sprite, so that would touch a fresh one).
+- No shared-engine or extractor changes.
+- Verified: typecheck, unit tests (`FULLY_PORTED.effects1`), tests/e2e/battleAnims.3e1.test.ts (one move per
+  newly ported callback/task, Conversion 2 after being hit, Thief / Knock Off on a foe holding an item), and
+  mid-anim screenshots of Protect, Moonlight, Leaf Blade, Double Team, Lock-On, Petal Dance, Silver Wind, Sing,
+  Milk Drink, Metronome, False Swipe and Hyper Beam.
