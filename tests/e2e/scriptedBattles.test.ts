@@ -120,9 +120,8 @@ test('Mewtwo caught with a Master Ball: CeruleanCave_B1F_OnResume removes it (B_
   await game.pressTimes('RIGHT', 2);
   await game.pressTimes('A', 2);
   await game.mashUntil((t) => /nickname/.test(t.battle()?.message ?? ''), { what: '"Give a nickname...?"' });
-  await game.eval((t) => t.waitFrames(30));
-  await game.press('B');
-  await game.mashUntil((t) => t.events().some((e) => e.type === 'battleEnd'), { what: 'the battle to end' });
+  // No nickname: mash B (a single B can land while the question is still printing, and A would then pick YES)
+  await game.mashUntil((t) => t.events().some((e) => e.type === 'battleEnd'), { button: 'B', what: 'the battle to end' });
   expect(await outcomeOf(game, since)).toBe('B_OUTCOME_CAUGHT');
   await finishScript(game);
   expect(await objectWithGfx(game, 'OBJ_EVENT_GFX_MEWTWO')).toBeUndefined();

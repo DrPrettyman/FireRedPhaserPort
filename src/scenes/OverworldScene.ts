@@ -1192,6 +1192,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       y: this.player.tileY - cur.originY,
       facing: this.player.facing,
       avatarFlags: gPlayerAvatar.flags & (F.ON_FOOT | F.MACH_BIKE | F.ACRO_BIKE | F.SURFING),
+      mapLayoutId: this.state.mapLayoutId,
     };
   }
 
@@ -1219,9 +1220,13 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       else roamerMove(this.state);
       if (warped && IsMapTypeOutdoors(cur.data.mapType)) this.state.setFlag('FLAG_SYS_FLASH_ACTIVE', false);
       SetDefaultFlashLevel(this.state, cur.data.cave);
+      this.state.mapLayoutId = this.defines.require(cur.data.layoutId); // LoadCurrentMapData
       const transition = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_TRANSITION');
       if (transition) this.scripts.runImmediately(transition);
+    } else {
+      this.state.mapLayoutId = continued.mapLayoutId ?? this.defines.require(cur.data.layoutId); // LoadSaveblockMapHeader
     }
+    await this.initMapLayout();
     const load = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_LOAD');
     if (load) this.scripts.runImmediately(load);
     await this.preloadMapSprites(); // again, now the map scripts have set any VAR_OBJ_GFX_ID_*
@@ -1242,6 +1247,26 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }
     // LoadMapInStepsLocal's (ReturnToFieldLocal's) InitCurrentFlashLevelScanlineEffect (a connection keeps the running effect)
     if (warped || continued) this.flash.initCurrentFlashLevelScanlineEffect(Overworld_GetFlashLevel(this.state));
+  }
+
+  /**
+   * InitMap's InitMapLayoutData with gMapHeader.mapLayout = GetMapLayout(): when an ON_TRANSITION script's
+   * `setmaplayoutindex` (or the save) names another layout than the header's, the map takes that one's grid.
+   */
+  private async initMapLayout(): Promise<void> {
+    const cur = this.world.current;
+    if (this.state.mapLayoutId === this.defines.require(cur.data.layoutId)) return;
+    const id = Object.entries(this.assets.scripts.defines).find(([k, v]) => k.startsWith('LAYOUT_') && v === this.state.mapLayoutId)?.[0];
+    if (!id) {
+      console.warn('[map] unknown layout', this.state.mapLayoutId);
+      return;
+    }
+    const layout = await this.assets.loadLayout(id);
+    await this.world.setCurrentLayout(layout);
+    if (layout.tilesetPair !== cur.data.tilesetPair) {
+      const anims = this.assets.tilesetAnimInfo(layout.tilesetPair);
+      InitTilesetAnimations(anims.primary, anims.secondary);
+    }
   }
 
   /**
@@ -1433,7 +1458,24 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * start menu (DrawStartMenuInOneGo); after saving (or a save error) the message box is cleared and the field resumes.
    */
   private openSaveDialog(): void {
-    const dialog = new SaveDialog({
+    const dialog = this.createSaveDialog();
+    this.overlay = {
+      tick: () => {
+        const r = dialog.tick();
+        if (r === SAVECB_RETURN_CONTINUE) return false;
+        if (r === SAVECB_RETURN_CANCEL) this.openStartMenu();
+        else this.messageBox.hide(); // ClearDialogWindowAndFrameToTransparent
+        return true;
+      },
+    };
+  }
+
+  /**
+   * Field_AskSaveTheGame's StartMenu_PrepareForSave: the dialog its task50_save_game runs, with the script waiting
+   * (`special Field_AskSaveTheGame` + `waitstate`). Unlike the start menu's, it leaves the message box as it is.
+   */
+  createSaveDialog(): SaveDialog {
+    return new SaveDialog({
       scene: this,
       fonts: this.fonts,
       input: this.buttons,
@@ -1444,15 +1486,6 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       mapName: () => GetMapName(this.defines.require(this.mapSection())), // GetMapNameGeneric
       storeLocationForSave: () => this.storeLocationForSave(),
     });
-    this.overlay = {
-      tick: () => {
-        const r = dialog.tick();
-        if (r === SAVECB_RETURN_CONTINUE) return false;
-        if (r === SAVECB_RETURN_CANCEL) this.openStartMenu();
-        else this.messageBox.hide(); // ClearDialogWindowAndFrameToTransparent
-        return true;
-      },
-    };
   }
 
   /**
@@ -1525,6 +1558,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   openMultichoice(req: MultichoiceRequest): { tick(): boolean; result: number } {
     const d = this.defines;
+    testEvent('multichoice', { mcId: req.mcId });
     const cursor = this.charmap.encode(this.assets.strings.gText_SelectorArrow2);
     const frameType = this.state.optionsWindowFrameType + 1;
     if (req.columns !== undefined) {

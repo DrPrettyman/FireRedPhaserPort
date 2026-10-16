@@ -56,7 +56,7 @@ sent as source text, so it can't use the test file's variables: pass them as arg
 | **Input** | A virtual gamepad that the game samples with the keyboard, once per logic tick. `game.press('A')` taps a button for 2 ticks. `t.walk(dir, n)` / `t.walkTo(x, y)` (pathfinding) / `t.face(dir)` / `t.enterWarp()` (stairs, mats). |
 | **Mashing** | `game.mashUntil(t => cond)` presses A until `cond` holds. The check runs in the page at the start of every tick, so a press can't land on a menu that just opened. `answers: [[/nickname/, 'B']]` presses another button while the message matches. `trace: true` logs the messages it went through. |
 | **State** | `t.field()` (map, x, y, facing, script, …), `t.idle()`, `t.message()`, `t.party()`, `t.money()`, `t.itemCount('POTION')`, `t.flag(...)`, `t.var(...)`, `t.trainerDefeated('BUG_CATCHER_RICK')`, `t.battle()` (battlers, the player's `controller` function, the last battle `message`), `t.gbaScreen()` (e.g. `CB2_BuyMenu`, `CB2_NamingScreen`), `t.snapshot()` (every set flag and var), `t.state` (the GameState itself). |
-| **Events** | Milestones the game reports: `map`, `script`, `trainerApproach`, `battleTransition` (`transition`), `battleTransitionEnd` (`black`: share of black pixels in its last frame), `battleStart`, `battleEnd`, `whiteOut`, `evolution` (`from`, `to`, `stopped`), `mapTransition` (a cave's flash screen: `from`, `to`), `barnDoorWipe`, `titleScreen`, `mainMenu`, `oakSpeech`. Use `game.mark()` then `game.waitForEvent(type, { since })`. |
+| **Events** | Milestones the game reports: `map`, `script`, `trainerApproach`, `battleTransition` (`transition`), `battleTransitionEnd` (`black`: share of black pixels in its last frame), `battleStart`, `battleEnd`, `whiteOut`, `evolution` (`from`, `to`, `stopped`), `mapTransition` (a cave's flash screen: `from`, `to`), `barnDoorWipe`, `multichoice` (a multichoice menu opened: `mcId`), `titleScreen`, `titleScene` (`scene`: each SetTitleScreenScene), `mainMenu`, `oakSpeech`. Use `game.mark()` then `game.waitForEvent(type, { since })`. |
 | **Setup** | `t.setParty([...])`, `t.startWildBattle({ species, level })`, `t.forceBattleTransition('SWIRL')` (every battle uses B_TRANSITION_SWIRL), `t.seed(n)`, `t.state.bag.add(...)`. |
 | **Battle** | `game.chooseAction('FIGHT' \| 'BAG' \| 'POKEMON' \| 'RUN')` waits for the action menu. Pressing A at the menu picks FIGHT and then the first move, so `mashUntil(battleEnd)` fights a battle to the end. |
 
@@ -79,6 +79,9 @@ A test fails if the page throws or logs `console.error`. When a test fails, the 
    which uses `t.seedWhen(pred, n)` to seed inside the exact tick (an awaited `t.seed()` lands wherever the
    frame's batch of ticks ends).
    Several tests here failed only when four e2e runs shared the machine.
+6. Don't answer a prompt with one press after a fixed wait: if the question is still printing, the press only
+   speeds the text up and the next mash answers it instead. Mash the answer button itself (a catch's "Give a
+   nickname...?": `mashUntil(..., { button: 'B' })`), use `answers`, or wait in the page for the prompt.
 
 Runs are close to deterministic, not exactly: the RNG is seeded, but the number of logic ticks between
 two harness calls depends on wall-clock time. Write scenarios that hold whatever the dice say.

@@ -88,9 +88,9 @@ async function catchPidgey(game: Game): Promise<void> {
 test('a catch with a full party goes to the PC with the battle\'s "transferred" message', async () => {
   const game = await session.start(ROUTE1_GRASS);
   await catchPidgey(game);
-  await game.eval((t) => t.waitFrames(30));
-  await game.press('B'); // no nickname
-  const sent = await game.mashUntil((t) => /transferred/.test(t.battle()?.message ?? '') && t.battle()!.message, { what: 'the PC message' });
+  // No nickname: mash B, not A. A single B can land while the question is still printing (it only speeds the text up),
+  // and A at the YES/NO would then open the naming screen.
+  const sent = await game.mashUntil((t) => /transferred/.test(t.battle()?.message ?? '') && t.battle()!.message, { button: 'B', what: 'the PC message' });
   expect(sent).toMatch(/PIDGEY was transferred to Someone’s PC\. It was placed in BOX “BOX1\.”/);
   await game.mashUntil((t) => t.idle(), { what: 'the field after the battle' });
   expect(await game.eval((t) => t.lastOutcome())).toBe('B_OUTCOME_CAUGHT');
@@ -102,9 +102,9 @@ test('a catch with a full party and a full current box: "BOX1 was full"', async 
   const game = await session.start(ROUTE1_GRASS);
   await fillBox(game, 0);
   await catchPidgey(game);
-  await game.eval((t) => t.waitFrames(30));
-  await game.press('B');
-  const sent = await game.mashUntil((t) => /transferred/.test(t.battle()?.message ?? '') && t.battle()!.message, { what: 'the PC message' });
+  // No nickname: mash B, not A. A single B can land while the question is still printing (it only speeds the text up),
+  // and A at the YES/NO would then open the naming screen.
+  const sent = await game.mashUntil((t) => /transferred/.test(t.battle()?.message ?? '') && t.battle()!.message, { button: 'B', what: 'the PC message' });
   expect(sent).toMatch(/BOX “BOX1” on Someone’s PC was full\. PIDGEY was transferred to BOX “BOX2\.”/);
   await game.mashUntil((t) => t.idle(), { what: 'the field after the battle' });
   expect(await boxSlot(game, 1, 0)).toEqual({ species: 'SPECIES_PIDGEY', nickname: 'PIDGEY' });
@@ -139,9 +139,10 @@ test('the field stores the player location for a save, and the save slot round-t
     return { written, location: data.location, same: JSON.stringify(back) === JSON.stringify(data), cleared: !sd.hasSave() };
   });
   const onFoot = await game.eval((t) => t.define('PLAYER_AVATAR_FLAG_ON_FOOT'));
+  const layout = await game.eval((t) => t.define('LAYOUT_CELADON_CITY_CONDOMINIUMS_ROOF_ROOM'));
   expect(r).toEqual({
     written: true,
-    location: { mapId: 'MAP_CELADON_CITY_CONDOMINIUMS_ROOF_ROOM', x: 7, y: 4, facing: 'up', avatarFlags: onFoot },
+    location: { mapId: 'MAP_CELADON_CITY_CONDOMINIUMS_ROOF_ROOM', x: 7, y: 4, facing: 'up', avatarFlags: onFoot, mapLayoutId: layout },
     same: true,
     cleared: true,
   });

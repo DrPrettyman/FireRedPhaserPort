@@ -1,6 +1,7 @@
 import { moveName } from '../battle/message';
 import { adjustFriendship } from '../battle/pokemonBattle';
 import { ItemIdToBattleMoveId } from '../menus/partyMenu';
+import type { Input } from '../input/Input';
 import type { GameState } from '../state/GameState';
 import type { Pokemon } from '../pokemon/Pokemon';
 import { DELTA } from '../world/direction';
@@ -9,6 +10,7 @@ import { initRoamer } from '../world/roamer';
 import { isPoisoned } from '../world/stepCounters';
 import { directionId, type ScriptHost } from './ScriptEngine';
 import { ListMenu, ReturnToListMenu } from '../ui/FieldListMenu';
+import { SAVECB_RETURN_CONTINUE, SAVECB_RETURN_OKAY } from '../ui/SaveDialog';
 import { ForcePlayerOntoBike, GetPlayerAvatarBike } from '../world/bike';
 import { ForcePlayerToStartSurfing, GetPlayerFacingDirection, SeafoamIslandsB4F_CurrentDumpsPlayerOnLand } from '../world/playerAvatar';
 import { RockSmashWildEncounter } from '../world/fieldMoves';
@@ -29,6 +31,10 @@ export interface SpecialEnv {
   disableMsgBoxWalkaway(): void;
   /** The extracted text `label` (e.g. gText_Ghost), encoded without the terminator. */
   encodeText(label: string): number[];
+  /** The field's buttons (gMain.newKeys / heldKeys for specials' tasks). */
+  input: Input;
+  /** HideFieldMessageBox */
+  hideFieldMessageBox(): void;
 }
 
 /** A gSpecials entry (data/specials.inc). The return value is stored by `specialvar`. */
@@ -45,6 +51,9 @@ const NO_OP = [
   'SetUnlockedPokedexFlags', // gcnLinkFlags, only used for GameCube link
   'Script_FadeOutMapMusic', // audio: its waitstate ends at once
   'InitUnionRoom', // wireless only (and stubbed out from REVISION 0xA): CableClub_OnResume in every Pokémon Center
+  'CloseLink', // link play: nothing was opened (TryBattleLinkup below never connects)
+  'HelpSystem_Enable', // help system
+  'HelpSystem_Disable',
 ];
 
 export const SPECIALS: Record<string, Special> = {
@@ -124,6 +133,58 @@ export const SPECIALS: Record<string, Special> = {
   AnimatePcTurnOff({ state, host }) {
     setPcMetatile(state, host, true);
   },
+
+  /**
+   * Field_AskSaveTheGame (start_menu.c; EventScript_AskSaveGame): StartMenu_PrepareForSave + task50_save_game,
+   * which runs the save dialog each frame and ends the script's `waitstate` with gSpecialVar_Result = TRUE once
+   * saved, FALSE for NO / B (SAVECB_RETURN_CANCEL) or a failed write (SAVECB_RETURN_ERROR).
+   */
+  Field_AskSaveTheGame({ state, host, setWaitState }) {
+    const dialog = host.createSaveDialog();
+    setWaitState(() => {
+      const r = dialog.tick();
+      if (r === SAVECB_RETURN_CONTINUE) return false;
+      state.setVar('VAR_RESULT', r === SAVECB_RETURN_OKAY ? 1 : 0);
+      return true;
+    });
+  },
+
+  /**
+   * CreateEnemyEventMon (pokemon.c; the `seteventmon` macro): ZeroEnemyPartyMons, then CreateEventMon(gEnemyParty[0],
+   * VAR_0x8004 species, VAR_0x8005 level, random IVs, OT = player) holding VAR_0x8006 if set. The port keeps no
+   * MON_DATA_MODERN_FATEFUL_ENCOUNTER (IsBattlerModernFatefulEncounter treats every mon as legal).
+   */
+  CreateEnemyEventMon({ state, host }) {
+    const mon = state.pokemon.createMon(state.getVar('VAR_0x8004'), state.getVar('VAR_0x8005'), {
+      otId: state.trainerId,
+      otName: state.playerName,
+      otGender: state.playerGender,
+      metLocation: host.mapSection(),
+    });
+    const item = state.getVar('VAR_0x8006');
+    if (item) mon.heldItem = item;
+    state.enemyParty = [mon];
+  },
+
+  /** IsBadEggInParty (field_specials.c): MON_DATA_SANITY_IS_BAD_EGG reads FALSE in the port, so never. */
+  IsBadEggInParty() {
+    return 0;
+  },
+  /** IsWirelessAdapterConnected (link.c): no wireless adapter, so the cable club's direct corner (cable link) menus. */
+  IsWirelessAdapterConnected() {
+    return 0;
+  },
+  /** ValidateSavedWonderCard (mystery_gift.c): no Mystery Gift, so no saved Wonder Card (the deliveryman stays hidden). */
+  ValidateSavedWonderCard() {
+    return 0;
+  },
+  /**
+   * TryBattleLinkup / TryTradeLinkup (cable_club.c) with nothing on the other end of the link: CreateLinkupTask's
+   * Task_LinkupStart (10 frames), then Task_LinkupAwaitConnection, which never sees a second player, so only B ends
+   * it (CheckLinkCanceledBeforeConnection → Task_LinkupFailed: LINKUP_FAILED, HideFieldMessageBox, ScriptContext_Enable).
+   */
+  TryBattleLinkup: linkupWithNoPartner,
+  TryTradeLinkup: linkupWithNoPartner,
 
   /** CreatePCMenu (script_menu.c): VAR_RESULT = the choice, or SCR_MENU_CANCEL, once the menu closes. */
   CreatePCMenu({ state, host, setWaitState }) {
@@ -540,4 +601,19 @@ export function healPlayerParty(state: GameState): void {
 /** IsNationalPokedexEnabled */
 export function isNationalDexEnabled(state: GameState): boolean {
   return state.nationalDexEnabled && state.getVar('VAR_NATIONAL_DEX') === 0x6258 && state.getFlag('FLAG_SYS_NATIONAL_DEX');
+}
+
+/** TryBattleLinkup / TryTradeLinkup without a link partner (see SPECIALS). */
+function linkupWithNoPartner({ state, input, hideFieldMessageBox, setWaitState }: SpecialEnv): void {
+  let tState = 0; // Task_LinkupStart's data[0]
+  setWaitState(() => {
+    if (tState <= 10) {
+      tState++; // OpenLinkTimed etc. on the first frame; Task_LinkupAwaitConnection once data[0] > 9
+      return false;
+    }
+    if (!input.pressed('B')) return false; // GetLinkPlayerCount_2() stays below 2
+    state.setVar('VAR_RESULT', state.defines.require('LINKUP_FAILED'));
+    hideFieldMessageBox();
+    return true;
+  });
 }

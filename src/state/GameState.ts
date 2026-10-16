@@ -70,6 +70,11 @@ export class GameState {
   registeredItem = 0;
   /** gSaveBlock1Ptr->flashLevel: 0 = lit, up to gMaxFlashLevel (world/flash.ts) in a dark cave. */
   flashLevel = 0;
+  /**
+   * gSaveBlock1Ptr->mapLayoutId: the current map's layout (LAYOUT_* value). LoadCurrentMapData sets it from the
+   * header on every map load; `setmaplayoutindex` (SetCurrentMapLayout) changes it from ON_TRANSITION.
+   */
+  mapLayoutId = 0;
 
   private flags = new Set<number>();
   private vars = new Map<number, number>();
@@ -374,6 +379,8 @@ export interface PlayerLocation {
   facing: Direction;
   /** PLAYER_AVATAR_FLAG_ON_FOOT / MACH_BIKE / ACRO_BIKE / SURFING (the state, not the transient flags). */
   avatarFlags: number;
+  /** gSaveBlock1Ptr->mapLayoutId, stored with the location (absent: the header's layout). */
+  mapLayoutId?: number;
 }
 
 /** struct Roamer */

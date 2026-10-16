@@ -355,6 +355,7 @@ function DestroyTaskByFunc(func: TaskFunc): void {
 function SetTitleScreenScene(data: Int16Array, sceneNum: number): void {
   data[tState] = 0;
   data[tSceneNum] = sceneNum;
+  testEvent('titleScene', { scene: SCENE_NAMES[sceneNum] });
 }
 
 function SetTitleScreenScene_Init(data: Int16Array): void {

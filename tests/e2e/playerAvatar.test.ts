@@ -245,6 +245,17 @@ test('a current carries a surfing player along until something blocks it', async
   const game = await session.start({ ...SAFE, map: 'SeafoamIslands_B4F', x: 7, y: 6 });
   await repel(game);
   await game.waitIdle();
+  // A dev start skips Route20_OnTransition, so both boulders count as down and the currents have stopped
+  // (setmaplayoutindex): hide them as Route 20 would and come in again.
+  await game.eval((t) => {
+    t.state!.setFlag('FLAG_STOPPED_SEAFOAM_B4F_CURRENT', false);
+    t.state!.setFlag('FLAG_HIDE_SEAFOAM_B4F_BOULDER_1', true);
+    t.state!.setFlag('FLAG_HIDE_SEAFOAM_B4F_BOULDER_2', true);
+  });
+  const mark = await game.mark();
+  await game.eval(() => (window as any).game.scene.getScene('Overworld').warp('MAP_SEAFOAM_ISLANDS_B4F', -1, 7, 6));
+  await game.waitForEvent('map', { since: mark });
+  await game.waitIdle();
   expect(await game.eval((t) => t.field()!.avatar.flags)).toContain('ON_FOOT');
   await game.eval((t) => t.setAvatarState('SURFING'));
   await game.eval((t) => t.face('right'));
