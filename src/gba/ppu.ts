@@ -177,8 +177,13 @@ function renderObjLine(line: number, dispcnt: number): void {
   }
 }
 
-function inRange(v: number, lo: number, hi: number, max: number): boolean {
-  if (hi > max || lo > hi) return v >= lo || v < (hi > max ? max : hi);
+/**
+ * Whether `v` is inside a window's span: X1 <= x < X2 (WINxH) or Y1 <= line < Y2 (WINxV). GBATEK:
+ * "Garbage values of X2>240 or X1>X2 are interpreted as X2=240" (Y2>160 or Y1>Y2: Y2=160), so the
+ * field's (255, 255) turns a window off.
+ */
+function inWindow(v: number, lo: number, hi: number, max: number): boolean {
+  if (hi > max || lo > hi) hi = max;
   return v >= lo && v < hi;
 }
 
@@ -225,8 +230,8 @@ export function renderFrame(out: Uint32Array): void {
     const win1v = reg(REG_OFFSET_WIN1V, line);
     const winin = reg(REG_OFFSET_WININ, line);
     const winout = reg(REG_OFFSET_WINOUT, line);
-    const in0v = dispcnt & 0x2000 && inRange(line, win0v >> 8, win0v & 0xff, 228);
-    const in1v = dispcnt & 0x4000 && inRange(line, win1v >> 8, win1v & 0xff, 228);
+    const in0v = dispcnt & 0x2000 && inWindow(line, win0v >> 8, win0v & 0xff, H);
+    const in1v = dispcnt & 0x4000 && inWindow(line, win1v >> 8, win1v & 0xff, H);
     const bldcnt = reg(REG_OFFSET_BLDCNT, line);
     const bldalpha = reg(REG_OFFSET_BLDALPHA, line);
     const evy = Math.min(16, reg(REG_OFFSET_BLDY, line) & 0x1f);
@@ -243,8 +248,8 @@ export function renderFrame(out: Uint32Array): void {
       // Window mask: bits 0-3 BGs, 4 OBJ, 5 colour effects
       let mask = 0x3f;
       if (winOn) {
-        if (in0v && inRange(x, win0h >> 8, win0h & 0xff, 240)) mask = winin & 0x3f;
-        else if (in1v && inRange(x, win1h >> 8, win1h & 0xff, 240)) mask = (winin >> 8) & 0x3f;
+        if (in0v && inWindow(x, win0h >> 8, win0h & 0xff, W)) mask = winin & 0x3f;
+        else if (in1v && inWindow(x, win1h >> 8, win1h & 0xff, W)) mask = (winin >> 8) & 0x3f;
         else if (dispcnt & 0x8000 && objWin[x]) mask = (winout >> 8) & 0x3f;
         else mask = winout & 0x3f;
       }

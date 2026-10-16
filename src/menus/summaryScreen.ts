@@ -122,6 +122,7 @@ import {
   text,
 } from './common';
 import { menusData } from './data';
+import { GetMapName } from '../world/regionMap';
 import { DynamicPlaceholderTextUtil_ExpandPlaceholders, DynamicPlaceholderTextUtil_Reset, DynamicPlaceholderTextUtil_SetPlaceholderPtr } from './dynamicPlaceholderText';
 import { SpecialVar } from './itemMenuState';
 import { CreateMonMarkingAllCombosSprite } from './monMarkings';
@@ -444,22 +445,8 @@ function StringCompareWithoutExtCtrlCodes(a: number[], b: number[]): number {
   return retVal;
 }
 
-/** IsCeladonDeptStoreMapsec (region_map.c): the player is in the department store. */
-function IsCeladonDeptStoreMapsec(mapsec: number): boolean {
-  if (mapsec !== K.MAPSEC_CELADON_CITY) return false;
-  return state.currentMap.startsWith('CeladonCity_DepartmentStore_');
-}
-
-/** GetMapNameGeneric_ / GetMapName(dest, mapsec, 0) */
-function GetMapNameGeneric_(mapsec: number): number[] {
-  const idx = mapsec - K.KANTO_MAPSEC_START;
-  if (idx >= 0 && idx < K.MAPSEC_NONE - K.KANTO_MAPSEC_START) {
-    // sMapsecName_CELADON_DEPT_ is MAPSEC_SPECIAL_AREA's name
-    if (IsCeladonDeptStoreMapsec(mapsec)) return encodeRaw(menusData.mapsecNames[K.MAPSEC_SPECIAL_AREA - K.KANTO_MAPSEC_START]!);
-    return encodeRaw(menusData.mapsecNames[idx] ?? '$');
-  }
-  return [...Array(18).fill(0x00), EOS]; // StringFill(dest, CHAR_SPACE, 18)
-}
+/** GetMapNameGeneric_ */
+const GetMapNameGeneric_ = (mapsec: number) => GetMapName(mapsec, 0);
 
 const GetPlayerTrainerId = () => state.trainerId >>> 0;
 

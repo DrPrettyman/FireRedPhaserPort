@@ -1,7 +1,11 @@
 import Phaser from 'phaser';
 import { spriteTextureKey, type Assets } from '../data/assets';
 import type { MapData, ObjectEventData, WarpEventData } from '../data/types';
-import { initBattleEnv } from '../battle/env';
+import { bdata, initBattleEnv } from '../battle/env';
+import { K } from '../battle/constants';
+import { BattleTransition_StartOnField, battleTransitionGfxSymbols, IsBattleTransitionDone, setTransitionFieldCamera } from '../battle/transition';
+import { loadGfx } from '../gba/gfx';
+import { RGB_BLACK, RGB_WHITE } from '../gba/hw';
 import { loadMenusData } from '../menus/data';
 import { expandPlaceholders } from '../text/placeholders';
 import { FieldEffects } from '../entities/FieldEffects';
@@ -30,11 +34,17 @@ import { StartMenu } from '../ui/StartMenu';
 import { YesNoMenu } from '../ui/YesNoMenu';
 import { MonPicBox } from '../ui/MonPicBox';
 import { MoneyBox } from '../ui/MoneyBox';
-import { ScreenFade } from '../ui/ScreenFade';
+import { DEPTH_FADE, ScreenFade } from '../ui/ScreenFade';
+import { BarnDoorWipe } from '../ui/BarnDoorWipe';
+import { FieldGbaScreen, fieldGbaScreenGfxSymbols, type FieldGbaSource } from '../world/fieldGbaScreen';
+import { CB2_DoChangeMap, IsChangeMapDone, MapHasCavePreviewScreen, MapHasForestPreviewScreen, mapTransitionGfxSymbols, MapTransitionIsEnter, MapTransitionIsExit } from '../world/mapTransition';
+import { DEPTH_MIDDLE, DEPTH_TOP } from '../world/MapChunk';
+import { DEPTH_UI } from '../text/TextWindow';
 import { FieldDoors } from '../world/doors';
 import { InitSecondaryTilesetAnimation, InitTilesetAnimations, TransferTilesetAnimsBuffer, UpdateTilesetAnimations } from '../world/tilesetAnims';
 import { ShopMenu, type ShopHost } from '../ui/ShopMenu';
 import { MenuWindow } from '../ui/MenuWindow';
+import { MapNamePopup } from '../ui/MapNamePopup';
 import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
 import { stringWidth } from '../text/stringWidth';
 import { MultichoiceGridMenu, MultichoiceMenu } from '../ui/MultichoiceMenu';
@@ -51,14 +61,13 @@ import {
 } from '../world/trainerSee';
 import { mapResetTrainerRematches, shouldEggHatch, updateHappinessStepCounter, updatePoisonStepCounter, updateVsSeekerStepCounter } from '../world/stepCounters';
 import { sharedBattleData, type BattleStart } from './BattleScene';
-import { logicSpeed, testEvent, testHooks, type FieldProbe } from '../dev/testHooks';
+import { forcedBattleTransition, logicSpeed, testEvent, testHooks, type FieldProbe } from '../dev/testHooks';
 import type { FieldMenuStart, NamingScreenRequest } from './FieldMenuScene';
 
 /** GBA runs at ~59.73Hz; we tick game logic at a fixed 60Hz regardless of display refresh. */
 const FRAME_MS = 1000 / 60;
 /** Frames a tap spends turning in place before a held direction starts walking. */
 const TURN_FRAMES = 8;
-const FADE_MS = 200;
 const PLAYER_GFX = 'OBJ_EVENT_GFX_RED_NORMAL';
 /** The camera centres on the middle of the player's tile, 8 px above its feet (ignoring jump lift). */
 const CAMERA_FOLLOW_OFFSET_Y = TILE / 2;
@@ -98,9 +107,13 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   /** A field UI overlay (start menu, notices) that owns input while open. */
   private overlay?: { tick(): boolean };
   private screenFade!: ScreenFade;
+  /** The field on the GBA layer, while a battle transition (or a cave's map change screen) runs. */
+  private gbaScreen!: FieldGbaScreen;
   private fieldEffects!: FieldEffects;
   private doors!: FieldDoors;
   private monPic?: MonPicBox;
+  /** Task_MapNamePopup, while it runs */
+  private mapNamePopup?: MapNamePopup;
   private wild!: WildEncounters;
   private moneyBox?: MoneyBox;
   /** DrawElevatorCurrentFloorWindow's window while it's up. */
@@ -142,6 +155,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private buttons!: Input;
   private accumulator = 0;
   private busy = true;
+  /** SetupWarp has run and the destination isn't loaded yet. */
+  private warping = false;
   private turnFrames = 0;
   /** Task_QuestLogPlayback_OpenStartMenu: START cancelled a walked-into sign; open the menu once the controls are free. */
   private startMenuWhenFree = false;
@@ -206,6 +221,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       FADE_FROM_WHITE: d.require('FADE_FROM_WHITE'),
       FADE_TO_WHITE: d.require('FADE_TO_WHITE'),
     });
+    this.gbaScreen = new FieldGbaScreen(this, DEPTH_FADE + 10);
+    setTransitionFieldCamera(() => this.gbaScreen.cameraPixelOffset());
+    await loadGfx(mapTransitionGfxSymbols);
     this.fonts = new Fonts(this, this.assets.fonts);
     this.messageBox = new MessageBox(this, this.fonts, this.buttons, charmap, this.state);
     this.scripts = new ScriptEngine(
@@ -239,6 +257,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     testHooks.applyTestOptions(this.state);
     if (start.preset) await applyStartPreset(this.state, start.preset, this.assets.scripts.healLocations);
     await this.enterMap(start.map, start.x, start.y, start.facing ?? 'down', true);
+    this.showMapNameOnWarpArrival(undefined); // CB2_NewGame loads the map like a warp
     this.busy = false;
     testEvent('ready');
   }
@@ -260,11 +279,14 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       moving: this.player.isMoving,
       approaching: this.trainerApproach !== undefined,
       fading: this.screenFade.active,
+      fadeWhite: this.screenFade.white,
       message: this.messageBox.visible ? this.messageBox.text : undefined,
       playerVisible: this.player.visible,
       doorAnimating: this.doors.running,
       fieldEffects: this.fieldEffects.liveEffects(),
       playerEffects: this.fieldEffects.liveEffects(this.player),
+      mapNamePopup: this.mapNamePopup?.text,
+      mapNamePopupHeight: this.mapNamePopup?.visibleHeight ?? 0,
     };
   }
 
@@ -330,10 +352,16 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   // ------------------------------------------------------------------ frame logic
 
   private tick(): void {
+    this.tickField();
+    this.gbaScreen.frame(); // the GBA layer's half of the frame, when it's in use
+  }
+
+  private tickField(): void {
     // OverworldBasic's UpdateTilesetAnimations, and VBlank's transfer of what it queued. CB2_Overworld
-    // removes the VBlank callback while a palette fade runs, so no frames are copied then.
+    // removes the VBlank callback while a palette fade runs, so no frames are copied then (and on the GBA
+    // layer, VBlankCB_Field does the transfer until a battle transition replaces it).
     UpdateTilesetAnimations();
-    if (!this.screenFade.active) TransferTilesetAnimsBuffer();
+    if (!this.screenFade.active && !this.gbaScreen.active) TransferTilesetAnimsBuffer();
     this.buttons.sample();
     // FieldGetPlayerInput: QuestLogOverrideJoyVars replays the key that closed the last script's message.
     if (!this.scripts.running) {
@@ -347,6 +375,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     // frame (CB1_Overworld checks ArePlayerFieldControlsLocked before tasks run), so the A press that
     // dismisses a message or picks EXIT on the start menu can't also start a new interaction.
     const lockedAtFrameStart = this.scripts.running || this.overlay !== undefined;
+    const freeAtFrameStart = !this.busy && !lockedAtFrameStart && this.trainerApproach === undefined;
     this.trainerApproach?.tick();
     if (this.trainerApproach?.done) this.trainerApproach = undefined;
     this.scripts.tick();
@@ -359,6 +388,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     // An overlay may hand off to another (start menu → notice); only clear it if it wasn't replaced.
     if (overlay && overlay.tick() && this.overlay === overlay) this.overlay = undefined;
     this.doors.tick(); // Task_AnimateDoor (priority 80) runs after the tasks that start it
+    if (this.mapNamePopup?.tick()) this.mapNamePopup = undefined; // Task_MapNamePopup (priority 90)
     const scripted = this.scripts.running || this.overlay !== undefined;
     for (const n of this.npcs) {
       n.brain.paused = scripted;
@@ -385,6 +415,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         testEvent('trainerApproach');
       }
       else if (!this.player.isMoving && !this.tryOnFrameScript()) this.handleInput();
+    }
+    // ProcessPlayerFieldInput returned TRUE (a script, menu, warp or trainer started): LockPlayerFieldControls
+    // and DismissMapNamePopup. Crossing a connection isn't one of them (the popup is reshown instead).
+    if (freeAtFrameStart && (this.scripts.running || this.overlay !== undefined || this.trainerApproach !== undefined || this.warping)) {
+      this.mapNamePopup?.dismiss();
     }
     this.wasMoving = this.player.isMoving;
 
@@ -475,11 +510,17 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const chunk = this.world.chunkAt(x, y);
     if (chunk && chunk !== this.world.current) {
       this.busy = true;
+      const fromMapsec = this.mapSection();
       void this.world.setCurrent(chunk).then(async () => {
         InitSecondaryTilesetAnimation(this.assets.tilesetAnimInfo(chunk.data.tilesetPair).secondary);
         await this.onMapLoaded(false);
+        // LoadMapFromCameraTransition (GetLastUsedWarpMapSectionId is the map just left)
+        if (fromMapsec !== this.mapSection()) this.showMapNamePopup();
         this.busy = false;
-        if (!this.scripts.running && this.overlay === undefined) this.processStep(x, y);
+        if (!this.scripts.running && this.overlay === undefined) {
+          this.processStep(x, y);
+          if (this.scripts.running || this.overlay !== undefined || this.warping) this.mapNamePopup?.dismiss(); // as in tickField
+        }
       });
       return;
     }
@@ -719,6 +760,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     // Lock the controls now: the destination may still be loading on the next frames, and a held push
     // direction (stairs, arrow mats) must not set up the same warp again meanwhile.
     this.busy = true;
+    this.warping = true;
     if (w.dest_map === 'MAP_DYNAMIC') {
       // SetWarpDestinationToDynamicWarp
       const dyn = this.state.dynamicWarp;
@@ -726,6 +768,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       if (!dyn || !dynName) {
         console.warn('[warp] no dynamic warp set');
         this.busy = false;
+        this.warping = false;
         return;
       }
       await this.warpTo(dynName, dyn.warpId, dyn.x, dyn.y);
@@ -736,6 +779,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (!name || !Number.isInteger(destIndex)) {
       console.warn('[warp] unsupported destination', w.dest_map, w.dest_warp_id);
       this.busy = false;
+      this.warping = false;
       return;
     }
     // A warp into a map whose matching warp is dynamic remembers where it came from (SetDynamicWarp)
@@ -788,17 +832,21 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /**
-   * Task_ExitDoor: arriving on a door, the player is hidden while the screen fades in; 25 frames on the
-   * door opens, the player walks out, and 14 frames into the step it closes again. `fadeDone` stands in
-   * for FieldFadeTransitionBackgroundEffectIsFinished.
+   * Task_ExitDoor: arriving on a door, the player is hidden while the barn door wipe opens and the screen
+   * fades in (WarpFadeInScreenWithDelay); 25 frames on the door opens, the player walks out, and 14 frames
+   * into the step it closes again. Case 5 runs at once (the screen is still filled).
    */
-  private exitDoor(fadeDone: () => boolean): void {
+  private exitDoor(isExit: boolean): void {
     let state = 5;
     let delay = 0; // data[15]
     let walkFrames = 0; // data[14]
     let doorX = 0;
     let doorY = 0;
-    this.player.setVisible(false); // case 5, before the first frame is shown (FreezeObjectEvents: the overlay)
+    // case 5
+    this.player.setVisible(false); // FreezeObjectEvents: the overlay
+    const wipe = new BarnDoorWipe(this); // DoOutwardBarnDoorWipe
+    testEvent('barnDoorWipe');
+    this.warpFadeInScreen(isExit, 3); // WarpFadeInScreenWithDelay
     state = 6;
     this.overlay = {
       tick: () => {
@@ -825,32 +873,122 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
             }
             break;
           case 9:
-            if (fadeDone() && !this.player.isMoving && !this.doors.running) return true; // case 4
+            // FieldFadeTransitionBackgroundEffectIsFinished, !FuncIsActiveTask(Task_BarnDoorWipe)
+            if (!this.screenFade.active && !this.player.isMoving && !this.doors.running && wipe.done) return true; // case 4
             break;
         }
+        if (!wipe.done) wipe.tick(); // Task_BarnDoorWipe (priority 80) runs after Task_ExitDoor
         return false;
       },
     };
   }
 
+  /** The MAP_TYPE_* of a map's header. */
+  private mapType(data: MapData): number {
+    return this.defines.get(data.mapType ?? '') ?? 0;
+  }
+
+  /**
+   * WarpFadeOutScreen: to white when entering a cave (MapTransitionIsEnter), else to black, which is also
+   * used into another region map section with a cave preview screen. Returns whether it fades to white.
+   */
+  private warpFadeOutScreen(from: MapData, to: MapData): boolean {
+    const d = this.defines;
+    const toMapsec = to.regionMapSection ?? 'MAPSEC_NONE';
+    const white = toMapsec !== (from.regionMapSection ?? 'MAPSEC_NONE') && MapHasCavePreviewScreen(toMapsec) ? false : MapTransitionIsEnter(this.mapType(from), this.mapType(to));
+    this.screenFade.begin(d.require(white ? 'FADE_TO_WHITE' : 'FADE_TO_BLACK'));
+    return white;
+  }
+
+  /** WarpFadeInScreen / WarpFadeInScreenWithDelay: from white when leaving a cave (MapTransitionIsExit), else from black. */
+  private warpFadeInScreen(isExit: boolean, delay = 0): void {
+    this.screenFade.fill(isExit); // palette_bg_faded_fill_white / _black
+    this.screenFade.begin(this.defines.require(isExit ? 'FADE_FROM_WHITE' : 'FADE_FROM_BLACK'), delay);
+  }
+
+  /** Resolves on the first frame (tick) on which `done` holds. */
+  private waitFrames(done: () => boolean): Promise<void> {
+    return new Promise((resolve) => {
+      this.fieldTasks.push({
+        tick: () => {
+          if (!done()) return false;
+          resolve();
+          return true;
+        },
+      });
+    });
+  }
+
+  /**
+   * CB2_LoadMap → CB2_DoChangeMap: in and out of caves, a flash transition on the GBA layer between the
+   * fade out (`fadedWhite`: to white) and the new map.
+   */
+  private async doChangeMap(from: MapData, to: MapData, fadedWhite: boolean): Promise<void> {
+    const change = { fromType: this.mapType(from), toType: this.mapType(to), fromMapsec: from.regionMapSection ?? 'MAPSEC_NONE', toMapsec: to.regionMapSection ?? 'MAPSEC_NONE' };
+    this.gbaScreen.startBare();
+    CB2_DoChangeMap(change, fadedWhite ? RGB_WHITE : RGB_BLACK);
+    if (!IsChangeMapDone()) {
+      testEvent('mapTransition', { from: from.name, to: to.name });
+      await this.waitFrames(IsChangeMapDone);
+    }
+    this.gbaScreen.stop();
+  }
+
   /** Warp to a warp event index, or to explicit coordinates when warpId < 0. */
   private async warpTo(name: string, warpId: number, x: number, y: number): Promise<void> {
     this.busy = true;
-    await fade(this, 'out');
+    const from = this.world.current.data;
     const data = await this.assets.loadMap(name);
+    // DoWarp's WarpFadeOutScreen, then Task_Teleport2Warp waits for it (WaitWarpFadeOutScreen)
+    const white = this.warpFadeOutScreen(from, data);
+    await this.waitFrames(() => !this.screenFade.active);
+    await this.doChangeMap(from, data, white);
     const dest = warpDestCoords(data, warpId, x, y);
     await this.enterMap(name, dest.x, dest.y, this.player.facing, true);
-    // SetUpWarpExitTask: a door (MetatileBehavior_IsWarpDoor_2) gets Task_ExitDoor.
+    this.showMapNameOnWarpArrival(from);
+    // FieldCB_DefaultWarpExit → SetUpWarpExitTask: a door (MetatileBehavior_IsWarpDoor_2) gets Task_ExitDoor;
+    // otherwise ExitWarpFadeInScreen(FALSE) and a task that waits for the fade.
+    const isExit = MapTransitionIsExit(this.mapType(from), this.mapType(data));
     const arrival = this.world.tileAt(this.player.tileX, this.player.tileY);
-    let faded = false;
-    if (this.behaviors.isDoor(arrival.behavior)) this.exitDoor(() => faded);
-    await fade(this, 'in');
-    faded = true;
+    if (this.behaviors.isDoor(arrival.behavior)) this.exitDoor(isExit);
+    else this.warpFadeInScreen(isExit);
+    await this.waitFrames(() => !this.screenFade.active);
     this.busy = false;
+  }
+
+  /**
+   * LoadMapInStepsLocal's state 12: into another region map section with a forest preview screen,
+   * MapPreview_StartForestTransition (not ported, so nothing is shown); else the map name popup if the
+   * header asks for one.
+   */
+  private showMapNameOnWarpArrival(from: MapData | undefined): void {
+    const to = this.world.current.data;
+    const fromMapsec = from?.regionMapSection ?? 'MAPSEC_NONE';
+    if (fromMapsec !== this.mapSection() && MapHasForestPreviewScreen(this.mapSection())) return;
+    if (to.showMapName) this.showMapNamePopup();
+  }
+
+  /** ShowMapNamePopup: start Task_MapNamePopup, or have the running one slide out and back with the new name. */
+  private showMapNamePopup(): void {
+    if (this.state.getFlag('FLAG_DONT_SHOW_MAP_NAME_POPUP')) return;
+    if (this.mapNamePopup && !this.mapNamePopup.closing) {
+      this.mapNamePopup.reshowName();
+      return;
+    }
+    // A task already clearing its window has no window left to reprint into; start over.
+    this.mapNamePopup?.destroy();
+    this.mapNamePopup = new MapNamePopup(this, this.fonts, this.buttons, this.charmap, this.assets.strings, () => ({
+      mapsec: this.defines.require(this.mapSection()),
+      floorNum: this.world.current.data.floorNumber,
+    }));
+    testEvent('mapNamePopup', { map: this.state.currentMap });
   }
 
   /** Load a map fresh (origin at 0,0) and put the player at local (x, y). */
   private async enterMap(name: string, x: number, y: number, facing: Direction, warped: boolean): Promise<void> {
+    this.warping = false;
+    this.mapNamePopup?.destroy(); // the map load's ResetTasks
+    this.mapNamePopup = undefined;
     this.fieldEffects.clear();
     this.doors.clear();
     this.trainerApproach = undefined;
@@ -1291,9 +1429,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /**
-   * StartTrainerBattle + DoTrainerBattle (battle_setup.c): fade out (the battle transitions aren't
-   * implemented) and run the battle scene. The field stays black afterwards until the script engine
-   * either returns to it (`returnToField`) or whites out.
+   * StartTrainerBattle + DoTrainerBattle (battle_setup.c): the trainer's battle transition, then the battle
+   * scene. The field stays black afterwards until the script engine either returns to it (`returnToField`)
+   * or whites out.
    */
   startTrainerBattle(battle: TrainerBattle): TrainerBattleRun {
     const d = this.defines;
@@ -1309,12 +1447,70 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       rivalBattleFlags: battle.mode === d.require('TRAINER_BATTLE_EARLY_RIVAL') ? battle.localIdOrFlags : 0,
       defeatSpeech: speech(battle.defeatText),
       victorySpeech: speech(battle.victoryText),
-    });
+    }, this.trainerBattleTransition(battle.trainer));
   }
 
   /** Scripted non-trainer battles (StartOldManTutorialBattle etc.): gEnemyParty is set up by the caller. */
-  startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[]): TrainerBattleRun {
-    return this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty });
+  startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number): TrainerBattleRun {
+    return this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty }, transition);
+  }
+
+  /**
+   * GetBattleTransitionTypeByMap: TRANSITION_TYPE_NORMAL (0), _CAVE (1), _FLASH (2) or _WATER (3). Flash
+   * isn't ported (the flash level is always 0), so _FLASH never applies.
+   */
+  private battleTransitionTypeByMap(): number {
+    const behavior = this.world.tileAt(this.player.tileX, this.player.tileY).behavior; // PlayerGetDestCoords
+    if (this.behaviors.isSurfable(behavior)) return TRANSITION_TYPE_WATER;
+    switch (this.mapType(this.world.current.data)) {
+      case K.MAP_TYPE_UNDERGROUND:
+        return TRANSITION_TYPE_CAVE;
+      case K.MAP_TYPE_UNDERWATER:
+        return TRANSITION_TYPE_WATER;
+      default:
+        return TRANSITION_TYPE_NORMAL;
+    }
+  }
+
+  /** GetSumOfPlayerPartyLevel: the levels of the first `numMons` healthy, non-egg party mons (a u8). */
+  private sumOfPlayerPartyLevel(numMons: number): number {
+    let sum = 0;
+    for (const mon of this.state.party) {
+      if (mon.isEgg || !mon.species || mon.hp === 0) continue;
+      sum = (sum + mon.level) & 0xff;
+      if (--numMons === 0) break;
+    }
+    return sum;
+  }
+
+  /** GetWildBattleTransition: gEnemyParty[0] against the player's lead mon. */
+  private wildBattleTransition(enemy: Pokemon): number {
+    const transitionType = this.battleTransitionTypeByMap();
+    const enemyLevel = enemy.level;
+    const playerLevel = this.sumOfPlayerPartyLevel(1);
+    return K[sBattleTransitionTable_Wild[transitionType][enemyLevel < playerLevel ? 0 : 1]];
+  }
+
+  /** GetTrainerBattleTransition */
+  private trainerBattleTransition(opponent: number): number {
+    if (opponent === K.TRAINER_SECRET_BASE) return K.B_TRANSITION_BLUE;
+    const trainer = bdata.tables.trainers[opponent];
+    if (!trainer) return K.B_TRANSITION_POKEBALLS_TRAIL;
+    if (trainer.trainerClass === K.TRAINER_CLASS_ELITE_FOUR) {
+      if (opponent === K.TRAINER_ELITE_FOUR_LORELEI || opponent === K.TRAINER_ELITE_FOUR_LORELEI_2) return K.B_TRANSITION_LORELEI;
+      if (opponent === K.TRAINER_ELITE_FOUR_BRUNO || opponent === K.TRAINER_ELITE_FOUR_BRUNO_2) return K.B_TRANSITION_BRUNO;
+      if (opponent === K.TRAINER_ELITE_FOUR_AGATHA || opponent === K.TRAINER_ELITE_FOUR_AGATHA_2) return K.B_TRANSITION_AGATHA;
+      if (opponent === K.TRAINER_ELITE_FOUR_LANCE || opponent === K.TRAINER_ELITE_FOUR_LANCE_2) return K.B_TRANSITION_LANCE;
+      return K.B_TRANSITION_BLUE;
+    }
+    if (trainer.trainerClass === K.TRAINER_CLASS_CHAMPION) return K.B_TRANSITION_BLUE;
+    // double battles always at least have 2 pokemon.
+    const minPartyCount = trainer.doubleBattle ? 2 : 1;
+    const transitionType = this.battleTransitionTypeByMap();
+    // GetSumOfEnemyPartyLevel (a u8)
+    const enemyLevel = trainer.party.slice(0, minPartyCount).reduce((sum, mon) => (sum + mon.lvl) & 0xff, 0);
+    const playerLevel = this.sumOfPlayerPartyLevel(minPartyCount);
+    return K[sBattleTransitionTable_Trainer[transitionType][enemyLevel < playerLevel ? 0 : 1]];
   }
 
   /**
@@ -1345,7 +1541,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private doSafariBattle(enemy: Pokemon): void {
     const d = this.defines;
     this.wild.resetEncounterRateModifiers();
-    const run = this.runBattle({ battleTypeFlags: d.require('BATTLE_TYPE_SAFARI'), trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty: [enemy] });
+    const run = this.runBattle({ battleTypeFlags: d.require('BATTLE_TYPE_SAFARI'), trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty: [enemy] }, this.wildBattleTransition(enemy));
     let fadeIn: (() => boolean) | undefined;
     let afterFade: (() => void) | undefined;
     let warping = false;
@@ -1401,7 +1597,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private runWildBattle(battleTypeFlags: number, enemy: Pokemon): void {
     // Task_BattleStart: RestartWildEncounterImmunitySteps once the transition is done
     this.wild.resetEncounterRateModifiers();
-    const run = this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty: [enemy] });
+    const run = this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty: [enemy] }, this.wildBattleTransition(enemy));
     let fadeIn: (() => boolean) | undefined;
     this.overlay = {
       tick: () => {
@@ -1418,12 +1614,22 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     };
   }
 
-  /** CreateBattleStartTask: fade out, run BattleScene, and leave the field black for the caller. */
-  private runBattle(setup: Pick<BattleStart, 'battleTypeFlags' | 'trainerBattleOpponent_A' | 'trainerBattleMode' | 'rivalBattleFlags' | 'defeatSpeech' | 'victorySpeech' | 'enemyParty'>): TrainerBattleRun {
+  /**
+   * CreateBattleStartTask + Task_BattleStart: the battle transition (B_TRANSITION_*) over the field on the
+   * GBA layer, then BattleScene; the field is left black for the caller.
+   */
+  private runBattle(
+    setup: Pick<BattleStart, 'battleTypeFlags' | 'trainerBattleOpponent_A' | 'trainerBattleMode' | 'rivalBattleFlags' | 'defeatSpeech' | 'victorySpeech' | 'enemyParty'>,
+    transition: number,
+  ): TrainerBattleRun {
     const d = this.defines;
     const color = this.scripts.contextTextColor();
     const map = this.world.current.data;
-    let phase: 'poison' | 'fadeOut' | 'battle' | 'done' = 'poison';
+    let phase: 'poison' | 'transition' | 'battle' | 'done' = 'poison';
+    transition = forcedBattleTransition ?? transition;
+    const source = this.fieldGbaSource();
+    let loaded = false;
+    void loadGfx([...battleTransitionGfxSymbols(transition), ...fieldGbaScreenGfxSymbols(source)]).then(() => (loaded = true));
     let outcome = 0;
     const start: BattleStart = {
       ...setup,
@@ -1446,13 +1652,19 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     };
     return {
       done: () => {
-        // Task_BattleStart: the transition waits for FldEffPoison to finish
-        if (phase === 'poison' && !this.poisonEffect) {
-          phase = 'fadeOut';
-          this.screenFade.begin(d.require('FADE_TO_BLACK'));
+        // Task_BattleStart: the transition waits for FldEffPoison to finish (and here for its graphics)
+        if (phase === 'poison' && !this.poisonEffect && loaded) {
+          phase = 'transition';
+          testEvent('battleTransition', { transition });
+          this.gbaScreen.start(source);
+          BattleTransition_StartOnField(transition);
         }
-        if (phase === 'fadeOut' && !this.screenFade.active) {
+        if (phase === 'transition' && IsBattleTransitionDone()) {
           phase = 'battle';
+          testEvent('battleTransitionEnd', { black: this.gbaScreen.blackFraction() });
+          // Every palette is black now (FadeScreenBlack); the field stays black behind the battle.
+          this.gbaScreen.stop();
+          this.screenFade.fill(false);
           this.state.setVar('VAR_POISON_STEP_COUNTER', 0); // ClearPoisonStepCounter
           testEvent('battleStart', { flags: start.battleTypeFlags, trainer: start.trainerBattleOpponent_A });
           this.scene.launch('Battle', start);
@@ -1468,6 +1680,30 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         return () => !this.screenFade.active;
       },
     };
+  }
+
+  /** The field as the GBA layer draws it (battle transitions). */
+  private fieldGbaSource(): FieldGbaSource {
+    const pairKey = this.world.current.data.tilesetPair;
+    const pair = this.assets.tilesetPair(pairKey);
+    const symbols = this.assets.tilesetSymbols(pairKey);
+    const cam = this.cameras.main;
+    return {
+      primary: { name: pair.info.primary, symbols: symbols.primary },
+      secondary: { name: pair.info.secondary, symbols: symbols.secondary },
+      metatileAt: (x, y) => this.world.tileAt(x, y).metatile,
+      layerType: (metatile) => pair.layerType(metatile),
+      camera: () => ({ x: Math.round(cam.worldView.x), y: Math.round(cam.worldView.y) }),
+      sprites: () => this.fieldSprites(),
+    };
+  }
+
+  /** The object and field effect sprites (OAM on the GBA), back to front, with the priority their depth band stands for. */
+  private fieldSprites(): { sprite: Phaser.GameObjects.Sprite; priority: number }[] {
+    return this.children.list
+      .filter((o): o is Phaser.GameObjects.Sprite => o instanceof Phaser.GameObjects.Sprite && o.visible && o.depth < DEPTH_UI)
+      .sort((a, b) => a.depth - b.depth)
+      .map((sprite) => ({ sprite, priority: sprite.depth >= DEPTH_TOP ? 1 : sprite.depth >= DEPTH_MIDDLE ? 2 : 3 }));
   }
 
   /**
@@ -1541,8 +1777,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     for (const v of ['VAR_MAP_SCENE_ROUTE16', 'VAR_MAP_SCENE_FUCHSIA_CITY_SAFARI_ZONE_ENTRANCE', 'VAR_QL_ENTRANCE']) this.state.setVar(v, 0);
     const respawn = this.whiteOutRespawn();
     const name = this.assets.mapNameForId(respawn.map);
-    if (name) await this.enterMap(name, respawn.x, respawn.y, 'up', true); // WarpIntoMap, DIR_NORTH
-    else console.warn('[whiteout] unknown respawn map', respawn.map);
+    if (name) {
+      const from = this.world.current.data;
+      await this.enterMap(name, respawn.x, respawn.y, 'up', true); // WarpIntoMap, DIR_NORTH
+      this.showMapNameOnWarpArrival(from); // CB2_WhiteOut loads the map in steps like a warp
+    } else console.warn('[whiteout] unknown respawn map', respawn.map);
     if (respawn.healer) {
       // SetWhiteoutRespawnHealerNpcAsLastTalked
       const id = this.resolveLocalId(respawn.healer);
@@ -1839,6 +2078,24 @@ function warpDestCoords(data: MapData, warpId: number, x: number, y: number): { 
 }
 
 /** CheckSilphScopeInPokemonTower: the floors whose wild mons are ghosts without the Silph Scope. */
+// battle_setup.c: GetBattleTransitionTypeByMap's types, and the transitions for each. The first is used
+// if the enemy pokemon are lower level than our pokemon, otherwise the second.
+const TRANSITION_TYPE_NORMAL = 0;
+const TRANSITION_TYPE_CAVE = 1;
+const TRANSITION_TYPE_WATER = 3;
+const sBattleTransitionTable_Wild = [
+  ['B_TRANSITION_SLICE', 'B_TRANSITION_WHITE_BARS_FADE'], // TRANSITION_TYPE_NORMAL
+  ['B_TRANSITION_CLOCKWISE_WIPE', 'B_TRANSITION_GRID_SQUARES'], // TRANSITION_TYPE_CAVE
+  ['B_TRANSITION_BLUR', 'B_TRANSITION_GRID_SQUARES'], // TRANSITION_TYPE_FLASH
+  ['B_TRANSITION_WAVE', 'B_TRANSITION_RIPPLE'], // TRANSITION_TYPE_WATER
+];
+const sBattleTransitionTable_Trainer = [
+  ['B_TRANSITION_POKEBALLS_TRAIL', 'B_TRANSITION_ANGLED_WIPES'],
+  ['B_TRANSITION_SHUFFLE', 'B_TRANSITION_BIG_POKEBALL'],
+  ['B_TRANSITION_BLUR', 'B_TRANSITION_GRID_SQUARES'],
+  ['B_TRANSITION_SWIRL', 'B_TRANSITION_RIPPLE'],
+];
+
 const POKEMON_TOWER_MAPS = ['1F', '2F', '3F', '4F', '5F', '6F', '7F'].map((f) => `MAP_POKEMON_TOWER_${f}`);
 
 /** Whether a tile can be on the 15x10 screen around the player (with a tile's slack for scrolling). */
@@ -1895,16 +2152,6 @@ function signFacingOk(req: string, facing: Direction): boolean {
   const m = /FACING_(\w+)$/.exec(req);
   if (!m || m[1] === 'ANY') return true;
   return { NORTH: 'up', SOUTH: 'down', EAST: 'right', WEST: 'left' }[m[1]] === facing;
-}
-
-function fade(scene: Phaser.Scene, dir: 'in' | 'out'): Promise<void> {
-  return new Promise((resolve) => {
-    const cam = scene.cameras.main;
-    const event = dir === 'out' ? Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE : Phaser.Cameras.Scene2D.Events.FADE_IN_COMPLETE;
-    cam.once(event, () => resolve());
-    if (dir === 'out') cam.fadeOut(FADE_MS, 0, 0, 0);
-    else cam.fadeIn(FADE_MS, 0, 0, 0);
-  });
 }
 
 /** IsElevationMismatchAt */

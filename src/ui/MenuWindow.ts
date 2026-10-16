@@ -73,6 +73,17 @@ export class MenuWindow {
     this.window.flush();
   }
 
+  /** Shifts the window and its frame `dy` px down from where `rect` puts them (a BG scroll offset). */
+  setOffsetY(dy: number): void {
+    this.window.image.y = this.rect.top * 8 + dy;
+    this.frame.y = (this.rect.top - 1) * 8 + dy;
+  }
+
+  setVisible(visible: boolean): void {
+    this.window.setVisible(visible);
+    this.frame.setVisible(visible);
+  }
+
   destroy(): void {
     this.window.destroy();
     this.frame.destroy();

@@ -71,6 +71,8 @@ export interface MapData {
   allowCycling: boolean;
   allowRunning: boolean;
   showMapName: boolean;
+  /** floorNum (map_name_popup.c): 0 none, negative basement, 127 rooftop */
+  floorNumber: number;
   connections: MapConnection[];
   objectEvents: ObjectEventData[];
   warpEvents: WarpEventData[];

@@ -244,6 +244,7 @@ def extract_maps(decomp, out, ts_folders):
             "allowCycling": m.get("allow_cycling"),
             "allowRunning": m.get("allow_running"),
             "showMapName": m.get("show_map_name"),
+            "floorNumber": m.get("floor_number", 0),
             "connections": m.get("connections") or [],
             "objectEvents": m.get("object_events") or [],
             "warpEvents": m.get("warp_events") or [],

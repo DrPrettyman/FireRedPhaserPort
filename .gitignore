@@ -4,6 +4,7 @@ dist/
 public/gen/
 __pycache__/
 .DS_Store
+.claude/worktrees
 
 # Screenshots from failed e2e tests.
 tests/e2e/__output__/

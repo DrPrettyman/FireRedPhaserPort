@@ -1,0 +1,3 @@
+# Branches all append to PROGRESS.md's log; keep both sides instead of conflicting.
+# Concurrent edits to the same line (checklist, "Where to resume") come out duplicated: tidy them after merging.
+PROGRESS.md merge=union

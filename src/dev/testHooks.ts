@@ -25,6 +25,8 @@ let enabled = false;
 let textSpeed: TextSpeed | undefined;
 /** Logic ticks per 60 Hz frame (`?speed=`). Scenes multiply their frame delta by this. */
 export let logicSpeed = 1;
+/** `__test.forceBattleTransition(id)`: the B_TRANSITION_* every battle uses instead of battle_setup.c's pick. */
+export let forcedBattleTransition: number | undefined;
 
 // ------------------------------------------------------------------ virtual gamepad
 
@@ -137,7 +139,9 @@ let seq = 0;
 
 /**
  * Record a milestone for the tests: `ready`, `map` {map}, `script` {label}, `trainerApproach`,
- * `battleStart` {flags, trainer}, `battleEnd` {outcome}, `whiteOut`.
+ * `battleTransition` {transition}, `battleTransitionEnd` {black: share of black pixels in its last
+ * frame}, `battleStart` {flags, trainer}, `battleEnd` {outcome}, `whiteOut`,
+ * `mapTransition` {from, to} (a cave's flash screen), `barnDoorWipe`.
  */
 export function testEvent(type: string, data: Record<string, unknown> = {}): void {
   if (!enabled) return;
@@ -164,6 +168,8 @@ export interface FieldProbe {
   moving: boolean;
   approaching: boolean;
   fading: boolean;
+  /** The screen fade's colour is white (a cave's white fades) rather than black. */
+  fadeWhite: boolean;
   /** The field message box's text while it's open (encoded; `__test.message()` decodes it). */
   message: number[] | undefined;
   playerVisible: boolean;
@@ -173,6 +179,10 @@ export interface FieldProbe {
   fieldEffects: string[];
   /** The ones following the player (shadow, grass, splashes, reflection). */
   playerEffects: string[];
+  /** The map name popup's text while Task_MapNamePopup runs (encoded). */
+  mapNamePopup: number[] | undefined;
+  /** How many px of the popup window are on screen (0..24). */
+  mapNamePopupHeight: number;
 }
 
 /** The parts of OverworldScene the hooks use (`startWildBattle` is private there; reached by name). */
@@ -418,6 +428,11 @@ function createApi(game: Phaser.Game) {
       const m = field()?.message;
       return m ? decode(m) : undefined;
     },
+    /** The map name popup while Task_MapNamePopup runs: its text, decoded, and how many px of it are on screen. */
+    mapNamePopup: () => {
+      const f = field();
+      return f?.mapNamePopup ? { text: decode(f.mapNamePopup), height: f.mapNamePopupHeight } : undefined;
+    },
     /** Quantity of the first stack of ITEM_<name> in the bag (0 if none). */
     itemCount: (name: string) => {
       const id = define(`ITEM_${name}`);
@@ -456,6 +471,10 @@ function createApi(game: Phaser.Game) {
     },
     /** StartWildBattle against a fresh mon, skipping the encounter dice. */
     startWildBattle: (spec: MonSpec) => overworld()!.startWildBattle(createMon(spec)),
+    /** Make every battle start with B_TRANSITION_<name> (undefined: back to the game's own choice). */
+    forceBattleTransition: (name?: string) => {
+      forcedBattleTransition = name === undefined ? undefined : define(`B_TRANSITION_${name}`);
+    },
 
     /**
      * Tap `button` (2 ticks down, 4 up) until `pred(__test)` is truthy, checking at the start of every tick

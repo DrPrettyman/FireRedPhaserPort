@@ -17,9 +17,9 @@ export const DEPTH_FADE = DEPTH_UI + 1000;
  * Approximation: BlendPalette mixes 5-bit colour channels with integer maths; alpha-blending the fade
  * colour on top gives the same ramp but not bit-identical pixels. Weather palettes are ignored.
  *
- * Timing follows UpdateNormalPaletteFade with delay 0: the blend coefficient moves 2/16 per step,
- * each step takes two frames (BG palettes, then OBJ palettes), and the fade stays active for
- * 5 more frames after reaching the target (IsSoftwarePaletteFadeFinishing).
+ * Timing follows UpdateNormalPaletteFade: the blend coefficient moves 2/16 per step, each step takes
+ * two frames (BG palettes, then OBJ palettes) plus `delay` frames before the BG half, and the fade
+ * stays active for 5 more frames after reaching the target (IsSoftwarePaletteFadeFinishing).
  */
 export class ScreenFade {
   private rect: Phaser.GameObjects.Rectangle;
@@ -27,6 +27,8 @@ export class ScreenFade {
   private targetY = 0;
   private objToggle = false;
   private finishing = -1;
+  private delay = 0;
+  private delayCounter = 0;
   active = false;
 
   constructor(
@@ -38,8 +40,8 @@ export class ScreenFade {
     this.rect.setAlpha(0);
   }
 
-  /** FadeScreen(mode, 0). Returns false (and does nothing) if a fade is already running. */
-  begin(mode: number): boolean {
+  /** FadeScreen(mode, delay). Returns false (and does nothing) if a fade is already running. */
+  begin(mode: number, delay = 0): boolean {
     const m = this.modes;
     if (this.active) return false;
     if (![m.FADE_FROM_BLACK, m.FADE_TO_BLACK, m.FADE_FROM_WHITE, m.FADE_TO_WHITE].includes(mode)) return false;
@@ -50,9 +52,22 @@ export class ScreenFade {
     this.targetY = fadeOut ? 16 : 0;
     this.objToggle = false;
     this.finishing = -1;
+    this.delay = delay;
+    this.delayCounter = delay; // so BeginNormalPaletteFade's own update applies the first step at once
     this.active = true;
-    this.update(); // BeginNormalPaletteFade applies the first step immediately
+    this.update();
     return true;
+  }
+
+  /** Whether the fade colour is white (FADE_*_WHITE, palette_bg_faded_fill_white). */
+  get white(): boolean {
+    return this.rect.fillColor === 0xffffff;
+  }
+
+  /** palette_bg_faded_fill_black / _white: every palette shows the colour until a fade starts. */
+  fill(white: boolean): void {
+    this.rect.setFillStyle(white ? 0xffffff : 0x000000);
+    this.rect.setAlpha(1);
   }
 
   /** UpdatePaletteFade, once per frame. */
@@ -65,6 +80,13 @@ export class ScreenFade {
       if (this.finishing === 4) this.active = false;
       else this.finishing++;
       return;
+    }
+    if (!this.objToggle) {
+      if (this.delayCounter < this.delay) {
+        this.delayCounter++;
+        return;
+      }
+      this.delayCounter = 0;
     }
     this.rect.setAlpha(this.y / 16);
     this.objToggle = !this.objToggle;

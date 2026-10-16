@@ -289,7 +289,7 @@ export const SPECIALS: Record<string, Special> = {
       otGender: state.playerGender,
       metLocation: host.mapSection(),
     });
-    const run = host.startScriptedBattle(state.defines.require('BATTLE_TYPE_OLD_MAN_TUTORIAL'), [weedle]);
+    const run = host.startScriptedBattle(state.defines.require('BATTLE_TYPE_OLD_MAN_TUTORIAL'), [weedle], state.defines.require('B_TRANSITION_SLICE'));
     let fadeIn: (() => boolean) | undefined;
     setWaitState(() => {
       if (fadeIn) return fadeIn();

@@ -105,8 +105,8 @@ export interface ScriptHost {
   doNamingScreen(req: NamingScreenRequest): Wait;
   /** StartTrainerBattle: `done` ends when the battle is over (screen still black), with the outcome. */
   startTrainerBattle(battle: TrainerBattle): TrainerBattleRun;
-  /** A non-trainer battle against `enemyParty` (gEnemyParty), e.g. StartOldManTutorialBattle. */
-  startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[]): TrainerBattleRun;
+  /** A non-trainer battle against `enemyParty` (gEnemyParty) behind a B_TRANSITION_*, e.g. StartOldManTutorialBattle. */
+  startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number): TrainerBattleRun;
   /** FieldEffectStart for an effect over `obj` (the emote icons); false if it isn't ported. */
   startFieldEffect(fldEff: string, obj: ObjectEvent): boolean;
   /** EndTrainerApproach: start the approach of the trainer that saw the player; the wait ends with it. */
