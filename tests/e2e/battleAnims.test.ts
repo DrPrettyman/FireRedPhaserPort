@@ -267,3 +267,91 @@ test("a poisoned mon's status anim runs at the end of the turn", async () => {
   const mons = (await game.eval((t) => t.battle()))!.mons;
   expect(mons[0].hp).toBeLessThan(mons[0].maxHP);
 });
+
+/** At the action menu: FIGHT, then the move in `slot` (0-3, laid out 2x2). The cursor starts on `from`, where it was last turn. */
+async function useMoveSlot(game: Game, from: number, slot: number): Promise<number> {
+  await game.waitForActionMenu();
+  const since = await game.mark();
+  await game.press('A'); // FIGHT
+  await game.eval((t) => t.waitFrames(10));
+  if ((slot & 1) !== (from & 1)) await game.press(slot & 1 ? 'RIGHT' : 'LEFT');
+  if ((slot & 2) !== (from & 2)) await game.press(slot & 2 ? 'DOWN' : 'UP');
+  await reseed(game);
+  await game.press('A');
+  return since;
+}
+
+// Battle anims step 1 (BATTLE_ANIMS_PLAN.md): one move per newly ported sprite callback / task, four to a
+// battle against a Snorlax that only splashes (and has the HP to take it).
+test.each([
+  ['CONFUSION', 'ROCK_SLIDE', 'PIN_MISSILE', 'RAIN_DANCE'],
+  ['CONSTRICT', 'HEADBUTT', 'FIRE_SPIN', 'MIST'],
+  ['CUT', 'ROLLING_KICK', 'BONE_CLUB', 'WING_ATTACK'],
+  ['SUNNY_DAY', 'RAGE', 'FOCUS_ENERGY', 'METAL_CLAW'],
+  ['HORN_ATTACK', 'JUMP_KICK', 'COMET_PUNCH', 'BARRIER'],
+])('%s, %s, %s and %s run to the end', async (...moves) => {
+  const game = await session.start({ ...ROUTE1, party: [{ species: 'RATTATA', level: 10, moves }] });
+  await game.eval((t) => t.startWildBattle({ species: 'SNORLAX', level: 100, moves: ['SPLASH'] }));
+  let from = 0;
+  for (const [slot, move] of moves.entries()) {
+    const since = await useMoveSlot(game, from, slot);
+    from = slot;
+    expect(await animEvent(game, 'battleAnim', `Move_${move}`, since)).toMatchObject({ ran: true, attacker: 0 });
+    await animEvent(game, 'battleAnimEnd', `Move_${move}`, since);
+  }
+  await game.waitForActionMenu();
+  // Nothing hidden or left over: both battlers are back on screen.
+  const mons = (await game.eval((t) => t.battle()))!.mons;
+  expect(mons.map((m) => m.spriteInvisible)).toEqual([false, false]);
+});
+
+test('Transform mosaics the attacker into a copy of the target', async () => {
+  const game = await session.start({ ...ROUTE1, speed: 1, party: [{ species: 'DITTO', level: 30, moves: ['TRANSFORM'] }] });
+  await game.eval((t) => t.startWildBattle({ species: 'MAGIKARP', level: 30, moves: ['SPLASH'] }));
+  const since = await useFirstMove(game);
+  expect(await animEvent(game, 'battleAnim', 'Move_TRANSFORM', since)).toMatchObject({ ran: true, attacker: 0, target: 1 });
+  // AnimTask_TransformMon mosaics the mon's BG copy (monbg) up to 16x16 blocks, swaps the pic, and back down.
+  await game.waitFor((t) => t.gpuReg(0x4c) === 0xff, { what: 'the full mosaic' });
+  await animEvent(game, 'battleAnimEnd', 'Move_TRANSFORM', since);
+  await game.waitForActionMenu();
+  const ditto = (await game.eval((t) => t.battle()))!.mons[0];
+  expect(ditto).toMatchObject({ species: 'MAGIKARP', transformSpecies: 'MAGIKARP', spriteInvisible: false });
+  expect(await game.eval((t) => t.gpuReg(0x4c))).toBe(0);
+});
+
+test('the Silph Scope unveils a ghost', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PokemonTower_3F', x: 4, y: 10, party: [{ species: 'MEWTWO', level: 100, moves: ['TAIL_WHIP'] }] });
+  const since = await game.mark();
+  await game.eval((t) => t.startUnveiledGhostBattle({ species: 'MAROWAK', level: 30 }));
+  // past "The GHOST appeared!" and "SILPH SCOPE unveiled the GHOST's identity!"
+  await game.mashUntil((t) => t.events().some((e) => e.type === 'battleAnim' && e.label === 'General_SilphScoped'), { what: 'the unveiling' });
+  expect(await animEvent(game, 'battleAnim', 'General_SilphScoped', since)).toMatchObject({ ran: true, attacker: 1 });
+  expect((await game.eval((t) => t.battle()))!.mons[1].nickname).toBe('GHOST');
+  await animEvent(game, 'battleAnimEnd', 'General_SilphScoped', since);
+  // HandleSpeciesGfxDataChange(…, 255) loaded the real pic and renamed it after its species.
+  await game.waitForActionMenu();
+  expect((await game.eval((t) => t.battle()))!.mons[1]).toMatchObject({ species: 'MAROWAK', nickname: 'MAROWAK', spriteInvisible: false });
+});
+
+test("Surf's wave blends in a band at a time and clears up after", async () => {
+  const game = await session.start({ ...ROUTE1, speed: 1, party: [{ species: 'LAPRAS', level: 30, moves: ['SURF'] }] });
+  await game.eval((t) => t.startWildBattle({ species: 'SNORLAX', level: 100, moves: ['SPLASH'] }));
+  const since = await useFirstMove(game);
+  expect(await animEvent(game, 'battleAnim', 'Move_SURF', since)).toMatchObject({ ran: true });
+  // BG1 (the wave) blends over everything else
+  await game.waitFor((t) => t.gpuReg(0x50) === 0x3f42, { what: 'the wave blend' });
+  await animEvent(game, 'battleAnimEnd', 'Move_SURF', since);
+  await game.waitForActionMenu();
+  expect(await game.eval((t) => [t.gpuReg(0x50), t.gpuReg(0x52)])).toEqual([0, 0]);
+});
+
+test('Reflect: the foe moves to an anim BG under the wall and comes back', async () => {
+  const game = await session.start({ ...ROUTE1, speed: 1, party: [{ species: 'MEWTWO', level: 30, moves: ['REFLECT'] }] });
+  await game.eval((t) => t.startWildBattle({ species: 'MAGIKARP', level: 30, moves: ['SPLASH'] }));
+  const since = await useFirstMove(game);
+  expect(await animEvent(game, 'battleAnim', 'Move_REFLECT', since)).toMatchObject({ ran: true });
+  await game.waitFor((t) => t.battle()!.mons[1].spriteInvisible, { what: 'the foe drawn on a BG' });
+  await animEvent(game, 'battleAnimEnd', 'Move_REFLECT', since);
+  await game.waitForActionMenu();
+  expect((await game.eval((t) => t.battle()))!.mons[1].spriteInvisible).toBe(false);
+});

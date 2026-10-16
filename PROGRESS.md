@@ -114,9 +114,10 @@ Running checklist of what exists and what doesn't. Newest log entries at the bot
 - [x] GBA video layer (src/gba: VRAM/palette/regs, bg.c, window.c, sprite.c, task.c, palette fades, scanline effects, software PPU) and the battle presentation on it (BattleScene)
 - [x] Battle: bag and party menu (choose item, use medicine/PP items/X items/balls, switch/send out) with reshow_battle_screen.c
 - [x] Old Man's catching tutorial (StartOldManTutorialBattle)
-- [~] Battle: move/status animations (src/battle/anim/: the battle_anim.c engine; 101 of the 397 scripts run, incl.
-  every status and special anim (ball throw, switch out, substitute, level up), the stat change, shiny sparkles and
-  most early-game moves; the rest finish at once)
+- [~] Battle: move/status animations (src/battle/anim/: the battle_anim.c engine; 168 of the 397 scripts run, incl.
+  every status and special anim (ball throw, switch out, substitute, level up), the stat change, shiny sparkles,
+  weather, Transform / Silph Scope and most early-game moves; the rest finish at once. Remaining work:
+  BATTLE_ANIMS_PLAN.md steps 2-3)
 - [x] Battle transitions (battle_transition.c): every FRLG B_TRANSITION_* (the grey-blink intro, Blur, Swirl,
   Shuffle, Big Poké Ball, Poké Balls trail, Clockwise wipe, Ripple, Wave, Slice, White bars fade, Grid squares,
   Angled wipes, the Elite Four / Champion mugshots) drawn over the field on the GBA layer, picked like battle_setup.c
@@ -157,8 +158,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (`nurse_joy_bow`) are skipped; the heal itself happens.
   - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
   - VS Seeker: `state.trainerRematches` is never set, so no trainer is ever ready for a rematch.
-  - Battles: battle anim scripts whose sprite callbacks / tasks aren't ported yet finish at once (296 of 397 move
-    and general anims, e.g. Castform's form change); no audio (PlaySE/cries/BGM are no-ops, so anim SE waits and
+  - Battles: battle anim scripts whose sprite callbacks / tasks aren't ported yet finish at once (229 of 397 move
+    and general anims, e.g. Castform's form change: HandleSpeciesGfxDataChange throws for it, since
+    gBattleStruct->castformPalette isn't ported); no audio (PlaySE/cries/BGM are no-ops, so anim SE waits and
     cry waits end at once).
   - Field sounds: doors (SE_DOOR / SE_SLIDING_DOOR) and puddle splashes (SE_PUDDLE) are silent.
   - Evolution scene: no audio, so cries and sound effects count as finished at once (the intro jingle and the SE_EXP
@@ -191,8 +193,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Field steps: eggs count down egg cycles, but the daycare (breeding,
     its mons' steps) and the hatching scene (`special EggHatch`) aren't ported. A finished VS Seeker charge would
     start EventScript_VsSeekerChargingDone, whose specials aren't ported; only the (unported) VS Seeker starts one.
-  - Safari Zone: the entrance's SE/fanfare are silent (the BAIT/ROCK throw anims run; General_SafariReaction, the
-    mon's reaction afterwards, isn't ported yet).
+  - Safari Zone: the entrance's SE/fanfare are silent.
+  - Pokémon Tower: the scripted Marowak battle (`special StartMarowakBattle`) isn't ported, so the Silph Scope
+    unveil (General_SilphScoped) only runs from the e2e hook `startUnveiledGhostBattle`.
   - The money box and Safari stats window are Phaser MenuWindows (the field isn't on the GBA layer).
   - Full party: `givemon` returns MON_CANT_GIVE instead of sending the mon to the PC (`SendMonToPC`).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
@@ -331,10 +334,13 @@ State as of the last log entry:
   `floorNumber`. Tests: `tests/e2e/mapNamePopup.test.ts`, probe `__test.mapNamePopup()`.
 - **Next blockers on the main path:** Silph Co.'s elevator uses `special ListMenu` (scrolling floor list, not
   ported); PC storage (a 7th mon has nowhere to go); save/load; field moves (Cut for Vermilion's gym).
-- **Battle anims:** `src/battle/anim/` (see the log entry "Battle animation engine"). To port more: find what a
-  script still needs with `battleAnimCoverage()` (tests/unit/battleAnims.test.ts), port those callbacks/tasks from
-  the battle_anim_*.c file into a module (or `moves.ts`), register them in `ported.ts`, add the label to the
-  unit test, and graphics a callback loads itself to `registerAnimExtraGfx`. All special anims run, so
+- **Battle anims:** `src/battle/anim/` (see the log entry "Battle animation engine"); BATTLE_ANIMS_PLAN.md has
+  the remaining work (step 1 is done; next: step 2, one PR per type file). To port more: find what a script
+  still needs with `battleAnimCoverage()` (tests/unit/battleAnims.test.ts), port those callbacks/tasks into the
+  module for their C file (`battle_anim_fight.c` → `fight.ts`, `battle_anim_effects_1.c` → `effects1.ts`, ...;
+  create it if missing), register it in `ported.ts`, add the label to the unit test, and graphics a
+  callback loads itself to `registerAnimExtraGfx`. Templates a task creates itself (e.g. gRainDropSpriteTemplate)
+  aren't seen by the coverage check: port their callbacks along with the task. All special anims run, so
   InitAndLaunchSpecialAnimation has no fallback any more (unit-tested: every Special_* script stays fully ported).
 - **Evolution scene:** `menus/evolutionScene.ts` + `menus/evolutionGraphics.ts` run on whichever GBA host is up
   (BattleScene after TryEvolvePokemon, FieldMenuScene from the party menu) and hand back through
@@ -1129,3 +1135,22 @@ State as of the last log entry:
   Node could notice the full height late on a loaded run and land in the slide-out.
 - battleAnims: the Tackle test's Magikarp knows only Splash (a faster Lv. 30 Magikarp's Tackle came first), and
   the RNG is reseeded at the move-select press, so Tackle's 95% accuracy can't miss (a miss plays no anim).
+
+### Battle anims step 1 (BATTLE_ANIMS_PLAN.md, branch `battle-anims-step1`)
+
+- `moves.ts` split into one module per C file (`effects1/2/3.ts`, `fire.ts`, `water.ts`, `poison.ts`,
+  `electric.ts`, `flying.ts`, `ground.ts`, `bug.ts`, `dark.ts`, `ghost.ts`), plus new `fight.ts`, `rock.ts`,
+  `psychic.ts`, `ice.ts`; `ported.ts` registers each. Later PRs can work on separate files.
+- Ported the plan's 25 symbols (+ AnimRainDrop, which AnimTask_CreateRaindrops spawns): 67 more scripts run
+  (168 of 397), e.g. Psychic/Confusion's background, Reflect/Light Screen walls (foes moved to the anim BGs),
+  Rock Slide, Pin Missile, Surf/Muddy Water (BG1 wave with a BLDALPHA scanline band), Rain Dance/Sunny Day and the
+  weather-continues anims, punches and kicks, Fire Spin/Whirlpool/Sand Tomb and General_TurnTrap,
+  General_SafariReaction.
+- Transform and General_SilphScoped: AnimTask_TransformMon (BG mosaic) and HandleSpeciesGfxDataChange
+  (battle_gfx_sfx_util.c) in `gfx.ts`; the Castform branch throws until castformPalette is ported.
+- `ST_OAM_HFLIP` / `ST_OAM_VFLIP` in gba/sprite.ts.
+- Tests: the 67 labels in the unit list; e2e (battleAnims.test.ts) runs one move per new callback four to a battle,
+  plus Transform (mosaic, transformSpecies), the Silph Scope unveil (nickname → species), Surf (blend on, then
+  BLDCNT/BLDALPHA cleared) and Reflect (foe hidden on the BG, then back). New test hooks: `battle().mons[i]`
+  `nickname` / `transformSpecies` / `spriteInvisible`, `gpuReg(offset)`, `startUnveiledGhostBattle(spec)`.
+- Checked by eye in mid-anim screenshots: Transform, Surf, Reflect, Psychic, Rock Slide, Headbutt, Mist, Wing Attack.

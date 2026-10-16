@@ -36,7 +36,10 @@ test('dump', async () => {
 Entries look like `gFallingRockSpriteTemplate (AnimFallingRock)` (a template and its callback) or a bare
 `AnimTask_*` name.
 
-## Step 1: high-value callbacks (one PR)
+## Step 1: high-value callbacks (one PR) — done
+
+Done on branch `battle-anims-step1`: 168 of 397 scripts now run. `moves.ts` is split into one module per C
+file, so step 2 PRs can each take their own file(s).
 
 These 25 symbols complete **67 scripts**. They are the greedy pick: at each step, take whichever symbols finish the
 most scripts.
@@ -80,9 +83,9 @@ most scripts.
 - **General anims:** FocusPunchSetUp, FutureSightHit, HeldItemEffect, Rain, SafariReaction, SilphScoped, Sun,
   TurnTrap, WishHeal.
 
-**Layout:** start a new file per C source (`src/battle/anim/fight.ts`, `rock.ts`, `psychic.ts`, ...) and register
-each one in `ported.ts` like the existing modules. Optionally move that file's section out of `moves.ts` into it.
-Later PRs then touch separate files and can run in parallel worktrees without conflicts.
+**Layout:** one file per C source (`src/battle/anim/fight.ts`, `rock.ts`, `psychic.ts`, `effects1.ts`, ...),
+each registered in `ported.ts`. Later PRs then touch separate files and can run in parallel worktrees without
+conflicts (apart from `ported.ts` when a new file is added).
 
 **Tests:** add the newly complete labels to the list in `tests/unit/battleAnims.test.ts`. Add an e2e case to
 `tests/e2e/battleAnims.test.ts` for any anim that uses a new engine path (for example the psychic background or
@@ -127,7 +130,8 @@ into two or three PRs by move.
 ## Loose ends to close along the way
 
 - `CreateAdditionalMonSpriteForMoveAnim` (battle_anim_mons.c) isn't ported.
-- `General_SafariReaction`: done in step 1. Remove it from PROGRESS.md "Known deviations" when it lands.
+- `General_SafariReaction`: done in step 1.
+- `StartMarowakBattle` (battle_setup.c) isn't ported, so General_SilphScoped only runs from a test hook.
 - Castform's form change (needs the per-form front pics; Castform has no `front.png`).
 - Open question: with the BG dimmed (Thunder Shock, String Shot), faint diagonal lines show at the healthbox
   corners. Compare against the real game (mGBA screenshot) and fix it or record it as matching the GBA.
