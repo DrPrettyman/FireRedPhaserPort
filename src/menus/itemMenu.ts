@@ -152,6 +152,7 @@ import {
   UpdateSwapLinePos,
 } from './itemMenuIcons';
 import { gBagMenuState, SpecialVar } from './itemMenuState';
+import { TestPlayerAvatarFlags } from '../world/playerAvatar';
 import { BATTLE_USE_FUNCS, FIELD_USE_FUNCS } from './itemUse';
 import { AddScrollIndicatorArrowPair, AddScrollIndicatorArrowPairParameterized, RemoveScrollIndicatorArrowPair, SCROLL_ARROW_LEFT, SCROLL_ARROW_RIGHT, SCROLL_ARROW_UP, type ScrollArrowsTemplate } from './menuIndicators';
 import { PrintMoneyAmount, PrintMoneyAmountInMoneyBox } from './money';
@@ -1083,9 +1084,10 @@ function OpenContextMenu(_taskId: number): void {
           sContextMenuNumItems = 3;
           sContextMenuItemsBuffer[2] = K.ITEMMENUACTION_CANCEL;
           sContextMenuItemsBuffer[1] = state.registeredItem === itemId ? K.ITEMMENUACTION_DESELECT : K.ITEMMENUACTION_REGISTER;
-          // ITEMMENUACTION_WALK needs PLAYER_AVATAR_FLAG_ACRO_BIKE | MACH_BIKE; there's no biking yet.
           if (itemId === K.ITEM_TM_CASE || itemId === K.ITEM_BERRY_POUCH) sContextMenuItemsBuffer[0] = K.ITEMMENUACTION_OPEN;
-          else sContextMenuItemsBuffer[0] = K.ITEMMENUACTION_USE;
+          else if (itemId === K.ITEM_BICYCLE && TestPlayerAvatarFlags(K.PLAYER_AVATAR_FLAG_ACRO_BIKE | K.PLAYER_AVATAR_FLAG_MACH_BIKE)) {
+            sContextMenuItemsBuffer[0] = K.ITEMMENUACTION_WALK;
+          } else sContextMenuItemsBuffer[0] = K.ITEMMENUACTION_USE;
           break;
         case K.OPEN_BAG_POKEBALLS:
           sContextMenuItemsPtr = sContextMenuItems_Field()[gBagMenuState.pocket];

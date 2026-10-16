@@ -1,6 +1,6 @@
 // item_use.c: what Use does for each item, from the bag (tasks' data[3] == 0) and in battle. The
 // functions are looked up by the names in the item table (fieldUseFunc / battleUseFunc). Uses that
-// need overworld systems that don't exist yet (bike, rods, Escape Rope, Itemfinder, VS Seeker, Town
+// need overworld systems that don't exist yet (rods, Escape Rope, Itemfinder, VS Seeker, Town
 // Map, Fame Checker, Teachy TV, mail, TM case, berry pouch) aren't in the tables; the bag logs them.
 
 import { K } from '../battle/constants';
@@ -26,7 +26,9 @@ import {
   STR_CONV_MODE_LEFT_ALIGN,
   text,
 } from './common';
-import { CB2_ReturnToField } from './fieldCallbacks';
+import { CB2_ReturnToField, gFieldCallback, type FieldCallbackHost } from './fieldCallbacks';
+import { GetOnOffBike, IsBikingDisallowedByPlayer } from '../world/bike';
+import { avatarField, ClearPlayerHeldMovement, PLAYER_AVATAR_FLAG } from '../world/playerAvatar';
 import {
   Bag_BeginCloseWin0Animation,
   DisplayItemMessageInBag,
@@ -94,6 +96,49 @@ function ItemIdFieldFuncIs(itemId: number, name: string): boolean {
 }
 
 const inField = (taskId: number) => gTasks[taskId].data[3] !== 0;
+
+/** sItemUseOnFieldCB: what an item does once the bag has closed and the field is back. */
+let sItemUseOnFieldCB: (taskId: number) => void = () => {};
+
+/**
+ * SetUpItemUseOnFieldCallback: from the bag, close it (CB2_ReturnToField) with gFieldCallback set to
+ * FieldCB_FadeInFromBlack. (Registered items used with SELECT, data[3] == 1, aren't ported.)
+ */
+function SetUpItemUseOnFieldCallback(taskId: number): void {
+  gFieldCallback.fn = FieldCB_FadeInFromBlack;
+  SetUpItemUseCallback(taskId);
+}
+
+/** FieldCB_FadeInFromBlack + Task_WaitFadeIn_CallItemUseOnFieldCB */
+function FieldCB_FadeInFromBlack(field: FieldCallbackHost): () => boolean {
+  const faded = field.fadeInFromBlack();
+  return () => {
+    if (!faded()) return false;
+    sItemUseOnFieldCB(0);
+    return true;
+  };
+}
+
+/**
+ * FieldUseFunc_Bike: not on Cycling Road, and only where biking is allowed. (Its checks of the player's
+ * tile for rails are MetatileBehavior_Is*Rail, all FALSE in FRLG.)
+ */
+function FieldUseFunc_Bike(taskId: number): void {
+  if (state.getFlag('FLAG_SYS_ON_CYCLING_ROAD')) {
+    DisplayItemMessageInCurrentContext(taskId, inField(taskId), K.FONT_NORMAL, text('gText_CantDismountBike'));
+  } else if (avatarField().allowCycling() && !IsBikingDisallowedByPlayer()) {
+    sItemUseOnFieldCB = ItemUseOnFieldCB_Bicycle;
+    SetUpItemUseOnFieldCallback(taskId);
+  } else {
+    PrintNotTheTimeToUseThat(taskId, inField(taskId));
+  }
+}
+
+/** ItemUseOnFieldCB_Bicycle (SE_BIKE_BELL: no audio). The field's overlay ends with it (UnlockPlayerFieldControls). */
+function ItemUseOnFieldCB_Bicycle(_taskId: number): void {
+  GetOnOffBike(PLAYER_AVATAR_FLAG.MACH_BIKE | PLAYER_AVATAR_FLAG.ACRO_BIKE);
+  ClearPlayerHeldMovement(); // ClearPlayerHeldMovementAndUnfreezeObjectEvents
+}
 
 function FieldUseFunc_CoinCase(taskId: number): void {
   gStringVar1.set(ConvertIntToDecimalStringN(state.coins, STR_CONV_MODE_LEFT_ALIGN, 4)); // GetCoins
@@ -359,6 +404,7 @@ function FieldUseFunc_OakStopsYou(taskId: number): void {
 
 /** Field use functions by name (ItemId_GetFieldFunc) */
 export const FIELD_USE_FUNCS: Record<string, TaskFunc> = {
+  FieldUseFunc_Bike,
   FieldUseFunc_CoinCase,
   FieldUseFunc_PowderJar,
   FieldUseFunc_PokeFlute,

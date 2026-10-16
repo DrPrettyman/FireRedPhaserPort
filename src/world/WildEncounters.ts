@@ -4,6 +4,7 @@ import type { Defines } from '../script/Defines';
 import type { GameState } from '../state/GameState';
 import { random } from '../util/random';
 import { tryStartRoamerEncounter } from './roamer';
+import { PLAYER_AVATAR_FLAG, TestPlayerAvatarFlags } from './playerAvatar';
 import type { TileInfo } from './World';
 
 // wild_encounter.c
@@ -29,7 +30,7 @@ export interface WildBattleHost {
 /**
  * wild_encounter.c: the step encounter check (TryStandardWildEncounter), its cooldown and rate
  * modifiers, the repel counter, and wild mon generation. Fields are sWildEncounterData (EWRAM).
- * Not ported: the quest log/Union Room checks and the bike's 80% rate (no bikes yet). Rock Smash, fishing and Sweet Scent encounters come with those field moves.
+ * Not ported: the quest log/Union Room checks. Rock Smash, fishing and Sweet Scent encounters come with those field moves.
  */
 export class WildEncounters {
   private rngState = 0;
@@ -194,7 +195,7 @@ export class WildEncounters {
   /** DoWildEncounterRateTest */
   private doWildEncounterRateTest(rate: number, ignoreAbility: boolean): boolean {
     let encounterRate = rate * 16;
-    // TestPlayerAvatarFlags(PLAYER_AVATAR_FLAG_MACH_BIKE | PLAYER_AVATAR_FLAG_ACRO_BIKE): no bikes yet
+    if (TestPlayerAvatarFlags(PLAYER_AVATAR_FLAG.MACH_BIKE | PLAYER_AVATAR_FLAG.ACRO_BIKE)) encounterRate = Math.trunc((encounterRate * 80) / 100);
     encounterRate += Math.trunc((this.encounterRateBuff * 16) / 200);
     // ApplyFluteEncounterRateMod
     switch (this.getFluteEncounterRateModType()) {

@@ -21,3 +21,16 @@ export function CB2_ReturnToField(): void {
 export function CB2_ReturnToFieldContinueScriptPlayMapMusic(): void {
   fieldReturn.plain();
 }
+
+/** What a field callback can ask of the field host. */
+export interface FieldCallbackHost {
+  /** FadeInFromBlack: starts the fade; the returned wait ends when it has finished (IsWeatherNotFadingIn). */
+  fadeInFromBlack(): () => boolean;
+}
+
+/**
+ * gFieldCallback: set by a menu before it returns to the field (e.g. item_use.c's FieldCB_FadeInFromBlack),
+ * run once the field is back instead of its default fade in. It returns a per-frame tick that holds the
+ * field's controls until it returns true.
+ */
+export const gFieldCallback: { fn?: (field: FieldCallbackHost) => () => boolean } = {};
