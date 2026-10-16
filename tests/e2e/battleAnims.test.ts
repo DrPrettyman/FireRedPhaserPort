@@ -319,10 +319,15 @@ test('Transform mosaics the attacker into a copy of the target', async () => {
   expect(await game.eval((t) => t.gpuReg(0x4c))).toBe(0);
 });
 
-test('the Silph Scope unveils a ghost', async () => {
-  const game = await session.start({ start: 'after-rival', map: 'PokemonTower_3F', x: 4, y: 10, party: [{ species: 'MEWTWO', level: 100, moves: ['TAIL_WHIP'] }] });
+test('the Silph Scope unveils the ghost Marowak', async () => {
+  // Pokémon Tower 6F: the step below is PokemonTower_6F_EventScript_MarowakGhost's trigger.
+  const game = await session.start({ start: 'after-rival', map: 'PokemonTower_6F', x: 11, y: 14, party: [{ species: 'MEWTWO', level: 100, moves: ['TAIL_WHIP'] }] });
+  await game.eval((t) => t.state!.bag.add(t.define('ITEM_SILPH_SCOPE'), 1));
   const since = await game.mark();
-  await game.eval((t) => t.startUnveiledGhostBattle({ species: 'MAROWAK', level: 30 }));
+  await game.walk('down');
+  // "Begone… Intruders…", then special StartMarowakBattle
+  const start = await game.mashUntil((t) => t.events().find((e) => e.type === 'battleStart'), { what: 'the Marowak battle' });
+  expect(start.flags).toBe(await game.eval((t) => t.define('BATTLE_TYPE_GHOST') | t.define('BATTLE_TYPE_GHOST_UNVEILED')));
   // past "The GHOST appeared!" and "SILPH SCOPE unveiled the GHOST's identity!"
   await game.mashUntil((t) => t.events().some((e) => e.type === 'battleAnim' && e.label === 'General_SilphScoped'), { what: 'the unveiling' });
   expect(await animEvent(game, 'battleAnim', 'General_SilphScoped', since)).toMatchObject({ ran: true, attacker: 1 });
@@ -330,7 +335,7 @@ test('the Silph Scope unveils a ghost', async () => {
   await animEvent(game, 'battleAnimEnd', 'General_SilphScoped', since);
   // HandleSpeciesGfxDataChange(…, 255) loaded the real pic and renamed it after its species.
   await game.waitForActionMenu();
-  expect((await game.eval((t) => t.battle()))!.mons[1]).toMatchObject({ species: 'MAROWAK', nickname: 'MAROWAK', spriteInvisible: false });
+  expect((await game.eval((t) => t.battle()))!.mons[1]).toMatchObject({ species: 'MAROWAK', nickname: 'MAROWAK', level: 30, spriteInvisible: false });
 });
 
 test("Surf's wave blends in a band at a time and clears up after", async () => {

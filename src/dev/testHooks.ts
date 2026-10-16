@@ -16,7 +16,6 @@ import { gMain } from '../gba/main';
 import { gSprites } from '../gba/sprite';
 import type { Button } from '../input/Input';
 import type { Pokemon } from '../pokemon/Pokemon';
-import { Charmap } from '../text/charmap';
 import type { GameState } from '../state/GameState';
 import { TEXT_SPEED, type TextSpeed } from '../text/TextPrinter';
 import { seedRng } from '../util/random';
@@ -188,14 +187,13 @@ export interface FieldProbe {
   mapNamePopupHeight: number;
 }
 
-/** The parts of OverworldScene the hooks use (`startWildBattle` and `runWildBattle` are private there; reached by name). */
+/** The parts of OverworldScene the hooks use (`startWildBattle` is private there; reached by name). */
 interface OverworldLike extends Phaser.Scene {
   testProbe(): FieldProbe | undefined;
   testFindPath(worldX: number, worldY: number): Direction[] | undefined;
   testPushWarpDirection(): Direction | undefined;
   state: GameState;
   startWildBattle(mon: Pokemon): void;
-  runWildBattle(battleTypeFlags: number, mon: Pokemon): void;
 }
 
 export interface MonSpec {
@@ -489,15 +487,6 @@ function createApi(game: Phaser.Game) {
     },
     /** StartWildBattle against a fresh mon, skipping the encounter dice. */
     startWildBattle: (spec: MonSpec) => overworld()!.startWildBattle(createMon(spec)),
-    /**
-     * StartMarowakBattle with the Silph Scope (the scripted battle isn't ported): a GHOST | GHOST_UNVEILED
-     * wild battle against `spec`, nicknamed GHOST, whose intro unveils it (General_SilphScoped).
-     */
-    startUnveiledGhostBattle: (spec: MonSpec) => {
-      const mon = createMon(spec);
-      mon.nickname = new Charmap(assets().charmap).encodePlain(assets().strings.gText_Ghost);
-      overworld()!.runWildBattle(define('BATTLE_TYPE_GHOST') | define('BATTLE_TYPE_GHOST_UNVEILED'), mon);
-    },
     /** Make every battle start with B_TRANSITION_<name> (undefined: back to the game's own choice). */
     forceBattleTransition: (name?: string) => {
       forcedBattleTransition = name === undefined ? undefined : define(`B_TRANSITION_${name}`);
