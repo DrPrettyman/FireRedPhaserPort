@@ -110,6 +110,11 @@ this is the next level down. When you add or change a subsystem, update its entr
   callback loads itself to `registerAnimExtraGfx`. Templates a task creates itself (e.g. gRainDropSpriteTemplate)
   aren't seen by the coverage check: port their callbacks along with the task. All special anims run, so
   InitAndLaunchSpecialAnimation has no fallback any more (unit-tested: every Special_* script stays fully ported).
+  A file's static `union AffineAnimCmd[]` / tables come from anims.json (`bdata.anims.units['battle_anim_x.c']`,
+  `affineAnimTable`; see psychic.ts). Scanline effects: `ScanlineEffect_SetParams` with per-line buffers, or
+  `ScanlineEffect_InitWave` (src/gba/scanline.ts) for a travelling sine wave. An e2e test can read module state
+  in the page with `await new Function('p', 'return import(p)')('/src/gba/hw.ts')` (a bare `import()` in the
+  function gets rewritten by Vitest); see battleAnims.2d.test.ts's `hblankLines`.
 
 ## Testing and debugging
 

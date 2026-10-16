@@ -797,3 +797,25 @@ end to end.
   add its own `battleAnims.<file>.test.ts`.
 - BATTLE_ANIMS_PLAN.md "Working in parallel": who owns which files, the cross-file symbols to leave alone, and
   which shared lines (counts, tables) only the merger edits.
+
+### Battle anims 2D: battle_anim_ghost.c, battle_anim_psychic.c, battle_anim_dark.c
+
+- All three files are fully ported (every sprite callback, task and helper, including the unused
+  AnimMonMoveCircular and AnimUnusedBagSteal): ghost.ts, psychic.ts, dark.ts. Static affine anims
+  (sAffineAnim_MeditateStretchAttacker, sAffineAnim_Teleport, sAffineAnims_QuestionMark) come from anims.json.
+- Scripts now complete (18): Confuse Ray, Curse, Destiny Bond, Grudge, Lick, Nightmare, Night Shade, Shadow Ball,
+  Spite (ghost); Amnesia, Extrasensory, Meditate, Skill Swap, Teleport (psychic); Camouflage, Faint Attack,
+  Fake Tears, Memento (dark).
+- Still waiting on other files: Kinesis (AnimKinesisZapEnergy), Imprison (AnimTask_HorizontalShake), Rock Tomb
+  (AnimRockTomb), Psycho Boost (AnimTask_FadeScreenToWhite), Sky Attack (AnimSkyAttackBird,
+  AnimTask_HorizontalShake), General_SmokeballEscape (AnimSmokeBallEscapeCloud), General_GhostGetOut
+  (AnimSprayWaterDroplet, AnimTask_StretchTargetUp).
+- Engine: `ScanlineEffect_InitWave` (+ TaskFunc_UpdateWavePerFrame, GenerateWave) in src/gba/scanline.ts, used by
+  Spite and AnimTask_GhostGetOut; state 3 now also stops the wave task (sShouldStopWaveTask), as in the C.
+  RelocateBattleBgPal (battle_anim.c) is a local helper in ghost.ts for now, since other workers' files need it
+  too; move it to battleAnim.ts when they land.
+- Verified: typecheck, unit tests (new labels in `FULLY_PORTED`), tests/e2e/battleAnims.2d.test.ts (every newly
+  ported move, plus Spite's wave on BGnHOFS and its cleanup, Teleport ending the battle, Memento's BGnVOFS
+  shadows), and mid-anim screenshots of Curse, Spite, Grudge, Confuse Ray, Destiny Bond, Extrasensory, Amnesia,
+  Teleport and Memento. Memento's attacker stays drawn over its shadow: at 0 HP GetAnimBattlerSpriteId(ANIM_ATTACKER)
+  is SPRITE_NONE, so SetAllBattlersSpritePriority leaves it at priority 2, level with the BG (as on the GBA).
