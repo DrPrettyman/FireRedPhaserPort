@@ -41,6 +41,7 @@ function playedState(): TestGame['state'] {
   s.money = 123456;
   s.coins = 789;
   s.registeredItem = t.d('ITEM_BICYCLE');
+  s.flashLevel = 4;
   s.pcItems[0] = { itemId: t.d('ITEM_POTION'), quantity: 1 };
   s.bag.add(t.d('ITEM_POTION'), 5);
   s.bag.add(t.d('ITEM_ANTIDOTE'), 2);
@@ -115,6 +116,7 @@ describe('save data (save.c / load_save.c)', () => {
       money: 123456,
       coins: 789,
       registeredItem: s.registeredItem,
+      flashLevel: 4,
       trainerRematchStepCounter: 0x1234,
       trainerRematches: [0, 1, 0, 1],
       daycareStepCounter: 77,

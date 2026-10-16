@@ -87,6 +87,8 @@ export interface SaveData {
   money: number;
   coins: number;
   registeredItem: number;
+  /** gSaveBlock1Ptr->flashLevel (world/flash.ts). */
+  flashLevel: number;
   /** pcItems, trailing empty slots left out. */
   pcItems: ItemSlotSave[];
   /** bagPocket_* in POCKET_* order, trailing empty slots left out. */
@@ -177,6 +179,7 @@ export function toSaveData(state: GameState): SaveData {
     money: state.money,
     coins: state.coins,
     registeredItem: state.registeredItem,
+    flashLevel: state.flashLevel,
     pcItems: itemSlotsSave(state.pcItems, none),
     bag: state.bag.pockets.map((p) => itemSlotsSave(p, none)),
     trainerRematchStepCounter: state.trainerRematchStepCounter,
@@ -233,6 +236,7 @@ export function fromSaveData(data: SaveData, state: GameState): GameState {
   state.money = data.money;
   state.coins = data.coins;
   state.registeredItem = data.registeredItem;
+  state.flashLevel = data.flashLevel;
   loadItemSlots(state.pcItems, data.pcItems, none);
   state.bag.pockets.forEach((pocket, i) => loadItemSlots(pocket, data.bag[i] ?? [], none));
   state.trainerRematchStepCounter = data.trainerRematchStepCounter;
