@@ -73,6 +73,8 @@ export interface MapData {
   showMapName: boolean;
   /** floorNum (map_name_popup.c): 0 none, negative basement, 127 rooftop */
   floorNumber: number;
+  /** gMapHeader.cave (map.json `requires_flash`): dark until Flash is used. */
+  cave: boolean;
   connections: MapConnection[];
   objectEvents: ObjectEventData[];
   warpEvents: WarpEventData[];

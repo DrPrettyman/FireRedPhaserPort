@@ -22,6 +22,7 @@ import { seedRng } from '../util/random';
 import { DELTA, type Direction } from '../world/direction';
 import { tilesetVram } from '../world/TilesetVram';
 import { SetPlayerAvatarTransitionFlags } from '../world/playerAvatar';
+import type { FieldListMenuProbe } from '../ui/FieldListMenu';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -186,6 +187,10 @@ export interface FieldProbe {
   mapNamePopup: number[] | undefined;
   /** How many px of the popup window are on screen (0..24). */
   mapNamePopupHeight: number;
+  /** gSaveBlock1Ptr->flashLevel, and the share of the screen Flash's darkness covers (0..1). */
+  flash: { level: number; dark: number };
+  /** special ListMenu's list while it's open (ui/FieldListMenu.ts). */
+  listMenu: FieldListMenuProbe | undefined;
   /** gPlayerAvatar and the player's held movement (world/playerAvatar.ts). */
   avatar: {
     /** PLAYER_AVATAR_FLAG_* set, without the prefix (ON_FOOT, MACH_BIKE, SURFING, FORCED, ...). */
@@ -220,6 +225,7 @@ interface OverworldLike extends Phaser.Scene {
   testObjects(): FieldObjectProbe[];
   state: GameState;
   startWildBattle(mon: Pokemon): void;
+  useFlash(): void;
 }
 
 export interface MonSpec {
@@ -520,6 +526,8 @@ function createApi(game: Phaser.Game) {
     },
     /** StartWildBattle against a fresh mon, skipping the encounter dice. */
     startWildBattle: (spec: MonSpec) => overworld()!.startWildBattle(createMon(spec)),
+    /** FldEff_UseFlash: what using Flash from the party menu ends in (FLAG_SYS_FLASH_ACTIVE + EventScript_FldEffFlash). */
+    useFlash: () => overworld()!.useFlash(),
     /** Make every battle start with B_TRANSITION_<name> (undefined: back to the game's own choice). */
     forceBattleTransition: (name?: string) => {
       forcedBattleTransition = name === undefined ? undefined : define(`B_TRANSITION_${name}`);

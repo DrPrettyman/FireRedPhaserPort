@@ -7,6 +7,7 @@ import { animateElevator, getElevatorFloor, initElevatorFloorSelectMenuPos } fro
 import { initRoamer } from '../world/roamer';
 import { isPoisoned } from '../world/stepCounters';
 import { directionId, type ScriptHost } from './ScriptEngine';
+import { ListMenu, ReturnToListMenu } from '../ui/FieldListMenu';
 import { ForcePlayerOntoBike, GetPlayerAvatarBike } from '../world/bike';
 import { ForcePlayerToStartSurfing, GetPlayerFacingDirection, SeafoamIslandsB4F_CurrentDumpsPlayerOnLand } from '../world/playerAvatar';
 
@@ -167,6 +168,18 @@ export const SPECIALS: Record<string, Special> = {
   /** InitElevatorFloorSelectMenuPos: the floor select menu's starting cursor */
   InitElevatorFloorSelectMenuPos({ state }) {
     return initElevatorFloorSelectMenuPos(state);
+  },
+
+  /** ListMenu (field_specials.c): a scrolling list; VAR_RESULT = the item's index or SCR_MENU_CANCEL. */
+  ListMenu({ state, host, setWaitState }) {
+    const wait = ListMenu(state, host.listMenuHost());
+    if (wait) setWaitState(wait);
+  },
+
+  /** ReturnToListMenu: back to a list that stayed up while the script talked (the Cerulean badge list). */
+  ReturnToListMenu({ setWaitState }) {
+    const wait = ReturnToListMenu();
+    if (wait) setWaitState(wait);
   },
 
   /** DrawElevatorCurrentFloorWindow: "Now on:" and the floor gSpecialVar_0x8005 names */

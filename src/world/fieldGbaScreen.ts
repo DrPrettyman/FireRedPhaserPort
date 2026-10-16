@@ -62,6 +62,7 @@ import { ResetTasks, RunTasks } from '../gba/task';
 import { NUM_METATILES_IN_PRIMARY } from './TilesetPair';
 import { NUM_TILES_IN_PRIMARY, tilesetVram } from './TilesetVram';
 import { TransferTilesetAnimsBuffer } from './tilesetAnims';
+import { InitCurrentFlashLevelScanlineEffect } from './flash';
 
 /** What the field gives the GBA screen each frame. */
 export interface FieldGbaSource {
@@ -75,6 +76,8 @@ export interface FieldGbaSource {
   camera(): { x: number; y: number };
   /** The field's object sprites (what OAM would hold) with their OAM priority, back to front. */
   sprites(): { sprite: Phaser.GameObjects.Sprite; priority: number }[];
+  /** gSaveBlock1Ptr->flashLevel: a dark cave's circle stays on WIN0 through the transition. */
+  flashLevel?: number;
 }
 
 /** The tileset palettes the screen loads (preload them before `start`). */
@@ -202,6 +205,7 @@ export class FieldGbaScreen {
     SetGpuReg(REG_OFFSET_BLDALPHA, BLDALPHA_BLEND(13, 7));
     SetGpuReg(REG_OFFSET_DISPCNT, DISPCNT_MODE_0 | DISPCNT_OBJ_1D_MAP | 0x20 | DISPCNT_OBJ_ON | DISPCNT_WIN0_ON | DISPCNT_WIN1_ON);
     for (let bg = 0; bg < 4; bg++) ShowBg(bg);
+    InitCurrentFlashLevelScanlineEffect(source.flashLevel ?? 0); // the field's flash circle, still running
 
     this.loadMapTilesetPalettes();
     // The field's own sprite palettes: the probes stand in for them.

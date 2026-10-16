@@ -48,6 +48,8 @@ export class GameState {
   enemyParty: Pokemon[] = [];
   /** gSaveBlock1Ptr->registeredItem (ITEM_NONE = 0) */
   registeredItem = 0;
+  /** gSaveBlock1Ptr->flashLevel: 0 = lit, up to gMaxFlashLevel (world/flash.ts) in a dark cave. */
+  flashLevel = 0;
 
   private flags = new Set<number>();
   private vars = new Map<number, number>();

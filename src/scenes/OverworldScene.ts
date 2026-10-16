@@ -46,6 +46,8 @@ import { ShopMenu, type ShopHost } from '../ui/ShopMenu';
 import { MenuWindow } from '../ui/MenuWindow';
 import { MapNamePopup } from '../ui/MapNamePopup';
 import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
+import { FieldFlash, FldEff_UseFlash, IsMapTypeOutdoors, Overworld_GetFlashLevel, SetDefaultFlashLevel } from '../world/flash';
+import { fieldListMenuGfxSymbols, fieldListMenuProbe, type ListMenuHost } from '../ui/FieldListMenu';
 import { gFieldCallback } from '../menus/fieldCallbacks';
 import { stringWidth } from '../text/stringWidth';
 import { MultichoiceGridMenu, MultichoiceMenu } from '../ui/MultichoiceMenu';
@@ -148,6 +150,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private elevatorWindow?: MenuWindow;
   /** Tasks started by specials that run on their own, after the script each frame (RunTasks). */
   private fieldTasks: FieldTask[] = [];
+  /** Flash's darkness in caves (world/flash.ts) */
+  private flash!: FieldFlash;
   /** The facing a map load was asked for (undefined: GetInitialPlayerAvatarState's). */
   private arrivalFacing?: Direction;
   /** sVerticalCameraPan - 32: SetCameraPanning's offset from the standard framing. */
@@ -255,7 +259,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     });
     this.gbaScreen = new FieldGbaScreen(this, DEPTH_FADE + 10);
     setTransitionFieldCamera(() => this.gbaScreen.cameraPixelOffset());
-    await loadGfx(mapTransitionGfxSymbols);
+    await loadGfx([...mapTransitionGfxSymbols, ...fieldListMenuGfxSymbols]);
+    this.flash = new FieldFlash(this);
     this.fonts = new Fonts(this, this.assets.fonts);
     this.messageBox = new MessageBox(this, this.fonts, this.buttons, charmap, this.state);
     this.scripts = new ScriptEngine(
@@ -329,6 +334,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       playerEffects: this.fieldEffects.liveEffects(this.player),
       mapNamePopup: this.mapNamePopup?.text,
       mapNamePopupHeight: this.mapNamePopup?.visibleHeight ?? 0,
+      flash: { level: this.state.flashLevel, dark: this.flash.darkFraction() },
+      listMenu: fieldListMenuProbe(),
       avatar: {
         flags: Object.keys(this.assets.scripts.defines)
           .filter((k) => k.startsWith('PLAYER_AVATAR_FLAG_') && gPlayerAvatar.flags & this.defines.require(k))
@@ -413,6 +420,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   private tick(): void {
     this.tickField();
+    this.flash.vblank(); // VBlankCB_Field's ScanlineEffect_InitHBlankDmaTransfer
     this.gbaScreen.frame(); // the GBA layer's half of the frame, when it's in use
   }
 
@@ -440,6 +448,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (this.trainerApproach?.done) this.trainerApproach = undefined;
     this.scripts.tick();
     this.fieldTasks = this.fieldTasks.filter((t) => !t.tick());
+    this.flash.tick(); // UpdateFlashLevelEffect / Task_WaitForFlashUpdate (priority 80)
     this.messageBox.tick();
     this.screenFade.tick();
     this.monPic?.tick();
@@ -1120,6 +1129,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     updateLocationHistoryForRoamer(this.state);
     if (warped) roamerMoveToOtherLocationSet(this.state);
     else roamerMove(this.state);
+    if (warped && IsMapTypeOutdoors(cur.data.mapType)) this.state.setFlag('FLAG_SYS_FLASH_ACTIVE', false);
+    SetDefaultFlashLevel(this.state, cur.data.cave);
     const transition = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_TRANSITION');
     if (transition) this.scripts.runImmediately(transition);
     const load = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_LOAD');
@@ -1134,6 +1145,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       const table = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_WARP_INTO_MAP_TABLE');
       const script = table && this.scripts.mapScriptTable(table);
       if (script) this.scripts.runImmediately(script);
+      // LoadMapInStepsLocal's InitCurrentFlashLevelScanlineEffect (a connection keeps the running effect)
+      this.flash.initCurrentFlashLevelScanlineEffect(Overworld_GetFlashLevel(this.state));
     }
   }
 
@@ -1571,12 +1584,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     return this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty }, transition);
   }
 
-  /**
-   * GetBattleTransitionTypeByMap: TRANSITION_TYPE_NORMAL (0), _CAVE (1), _FLASH (2) or _WATER (3). Flash
-   * isn't ported (the flash level is always 0), so _FLASH never applies.
-   */
+  /** GetBattleTransitionTypeByMap: TRANSITION_TYPE_NORMAL (0), _CAVE (1), _FLASH (2) or _WATER (3). */
   private battleTransitionTypeByMap(): number {
     const behavior = this.world.tileAt(this.player.tileX, this.player.tileY).behavior; // PlayerGetDestCoords
+    if (Overworld_GetFlashLevel(this.state)) return TRANSITION_TYPE_FLASH;
     if (this.behaviors.isSurfable(behavior)) return TRANSITION_TYPE_WATER;
     switch (this.mapType(this.world.current.data)) {
       case K.MAP_TYPE_UNDERGROUND:
@@ -1809,6 +1820,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       layerType: (metatile) => pair.layerType(metatile),
       camera: () => ({ x: Math.round(cam.worldView.x), y: Math.round(cam.worldView.y) }),
       sprites: () => this.fieldSprites(),
+      flashLevel: Overworld_GetFlashLevel(this.state),
     };
   }
 
@@ -1832,6 +1844,33 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       const script = this.scripts.mapScript(name, type);
       if (script) this.scripts.runImmediately(script);
     }
+    // ResumeMap's ResetTasks + ScanlineEffect_Clear, then InitCurrentFlashLevelScanlineEffect
+    this.flash.initCurrentFlashLevelScanlineEffect(Overworld_GetFlashLevel(this.state));
+  }
+
+  /**
+   * FldEff_UseFlash: Flash from the party menu (FieldCallback_Flash's mon banner hands over to this)
+   * sets FLAG_SYS_FLASH_ACTIVE and lights the cave with EventScript_FldEffFlash.
+   */
+  useFlash(): void {
+    FldEff_UseFlash(this.state, (label) => this.scripts.start(label));
+  }
+
+  /** AnimateFlash (field_screen_effect.c) from the current flash level. */
+  animateFlash(newFlashLevel: number): Wait {
+    return this.flash.animateFlash(Overworld_GetFlashLevel(this.state), newFlashLevel);
+  }
+
+  listMenuHost(): ListMenuHost {
+    return {
+      scene: this,
+      fonts: this.fonts,
+      input: this.buttons,
+      frameType: () => this.state.optionsWindowFrameType + 1,
+      cursorGlyph: () => this.charmap.encode(this.assets.strings.gText_SelectorArrow2),
+      labels: (id) => this.assets.scripts.listMenus[id]?.map((label) => this.charmap.encode(this.assets.strings[label] ?? '?$')),
+      startFieldTask: (task) => this.startFieldTask(task),
+    };
   }
 
   /**
@@ -2261,6 +2300,7 @@ function warpDestCoords(data: MapData, warpId: number, x: number, y: number): { 
 // if the enemy pokemon are lower level than our pokemon, otherwise the second.
 const TRANSITION_TYPE_NORMAL = 0;
 const TRANSITION_TYPE_CAVE = 1;
+const TRANSITION_TYPE_FLASH = 2;
 const TRANSITION_TYPE_WATER = 3;
 const sBattleTransitionTable_Wild = [
   ['B_TRANSITION_SLICE', 'B_TRANSITION_WHITE_BARS_FADE'], // TRANSITION_TYPE_NORMAL

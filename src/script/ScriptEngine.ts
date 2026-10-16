@@ -12,6 +12,8 @@ import { parseDirection, type Direction } from '../world/direction';
 import type { Defines } from './Defines';
 import { MovementRunner, towards, type Instruction } from './MovementRunner';
 import type { FieldTask } from '../world/elevator';
+import type { ListMenuHost } from '../ui/FieldListMenu';
+import { SetFlashLevel } from '../world/flash';
 import { SPECIALS, type SpecialEnv } from './specials';
 import { testEvent } from '../dev/testHooks';
 import { random } from '../util/random';
@@ -29,6 +31,8 @@ export interface ScriptsData {
   whiteOut: { moneyLossMultipliers: number[]; moneyLossBadgeFlags: number[] };
   /** script_menu.c sMultichoiceLists: MULTICHOICE_* -> the list's string symbols */
   multichoices: (string[] | null)[];
+  /** field_specials.c sListMenuLabels: LISTMENU_* -> special ListMenu's item strings */
+  listMenus: (string[] | null)[];
 }
 
 /** sHealLocations + sWhiteoutRespawnHealCenterMapIdxs + sWhiteoutRespawnHealerNpcIds. */
@@ -120,6 +124,10 @@ export interface ScriptHost {
   whiteOutMoneyLoss(): number;
   /** GetCurrentRegionMapSectionId, for a new mon's met location. */
   mapSection(): string;
+  /** What special ListMenu draws with (ui/FieldListMenu.ts). */
+  listMenuHost(): ListMenuHost;
+  /** AnimateFlash (world/flash.ts): the wait ends once the flash circle has finished changing. */
+  animateFlash(newFlashLevel: number): Wait;
 }
 
 export interface MultichoiceRequest {
@@ -879,6 +887,16 @@ export class ScriptEngine {
       let frames = this.state.value(a[0]);
       ctx.wait = () => --frames <= 0;
     },
+    // ------------------------------------------------ flash (scrcmd.c; world/flash.ts)
+    /** ScrCmd_animateflash: AnimateFlash(level) + ScriptContext_Stop until Task_WaitForFlashUpdate re-enables it. */
+    animateflash(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      ctx.wait = this.host.animateFlash(this.defines.require(a[0]));
+    },
+    /** ScrCmd_setflashlevel: SetFlashLevel(VarGet(level)) */
+    setflashlevel(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      SetFlashLevel(this.state, this.state.value(a[0]));
+    },
+
     /** ScrCmd_waitstate: block until the task a special started re-enables the script. */
     waitstate(this: ScriptEngine, ctx: ScriptContext) {
       const w = this.waitState;
