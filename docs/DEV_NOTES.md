@@ -90,7 +90,18 @@ this is the next level down. When you add or change a subsystem, update its entr
     EventScript_Waterfall) then work from the field too: until FldEff_UseStrength exists, `dofieldeffect
     FLDEFF_USE_STRENGTH` + `waitstate` just continue. A move in its own module (world/surf.ts) exports a
     `register*` function that `registerFieldMoves` calls. Fly is special-cased in CursorCB_FieldMove (CB2_OpenFlyMap).
+    EventScript_Waterfall) then work from the field too: until a FldEff_UseX exists, `dofieldeffect
+    FLDEFF_USE_X` + `waitstate` just continue. Fly is special-cased in CursorCB_FieldMove (CB2_OpenFlyMap).
     Escape warp: `UpdateEscapeWarp` (from OverworldScene.takeWarp) / `SetEscapeWarp`, state.escapeWarp.
+    `CreateFieldEffectShowMon`, `ScriptContext_Enable` and `ScriptContext_SetupScript` are exported for that.
+  - **Strength:** `world/strength.ts` (fldeff_strength.c). From the party menu SetUpFieldMove_Strength needs a
+    boulder in front (CheckObjectGraphicsInFrontOfPlayer) and no surfing, and runs EventScript_FldEffStrength;
+    talking to a boulder runs EventScript_StrengthBoulder (Rainbow Badge, `checkpartymove`, YES/NO). Both do
+    `dofieldeffect FLDEFF_USE_STRENGTH` (FldEff_UseStrength: banner, nickname into STR_VAR_1) and then
+    EventScript_UseStrength sets FLAG_SYS_USE_STRENGTH, which TryPushBoulder (world/playerAvatar.ts) checks. The
+    flag goes with ClearTempFieldEventData (`GameState.clearTemps`, every map load incl. connections), a white-out
+    and Teleport / Dig / Escape Rope. Victory Road's switch scripts use `copyobjectxytoperm`. Test spot: Victory
+    Road 2F `?map=VictoryRoad_2F&x=6&y=16`, face down (boulder 1; its switch is at (2, 19)).
   - Extracted: `field_effects/scripts.json`, tileset `terrains` (METATILE_ATTRIBUTE_TERRAIN, `TileInfo.terrain`)
     and map `allowEscaping`. Probes: `field().fieldEffects` lists the scripted active list too; events
     `fieldMoveShowMon` (species, outdoors), `cutGrass`, `sweetScent`, `fieldMoveWarp`, `fieldMoveWarpDone`.
@@ -162,12 +173,18 @@ this is the next level down. When you add or change a subsystem, update its entr
   DoSafariBattle + CB2_EndSafariBattle. To skip the dice in tests:
   `s.startWildBattle(s.state.pokemon.createMonWithNature(species, level, 32, nature, {...}))` on the Overworld scene.
   `state.currentMapId` is the MAP_* id (`currentMap` is the folder name).
-- **Scripted battles:** specials that start a battle (StartOldManTutorialBattle, StartMarowakBattle in
-  `script/specials.ts`) call `host.startScriptedBattle(flags, enemyParty, transition)` and block the script with
-  `setWaitState` until the field has faded back in (their CB2_End* sets VAR_RESULT; a loss calls `endScript()` +
-  `host.whiteOut()`). `setwildbattle` leaves gEnemyParty in `state.enemyParty`; `host.wildBattleTransition(mon)` is
-  GetWildBattleTransition. Every battle start (OverworldScene.runBattle) does Task_BattleStart's
-  RestartWildEncounterImmunitySteps. Tests: tests/e2e/pokemonTower.test.ts (walk onto the 6F trigger at 11,15).
+- **Scripted battles:** specials that start a battle (StartOldManTutorialBattle, StartMarowakBattle,
+  StartLegendaryBattle in `script/specials.ts`) call `host.startScriptedBattle(flags, enemyParty, transition)` and
+  block the script with `setWaitState` until the field has faded back in (their CB2_End* sets VAR_RESULT; a loss
+  calls `endScript()` + `host.whiteOut()`). `setwildbattle` leaves gEnemyParty in `state.enemyParty`;
+  `host.wildBattleTransition(mon)` is GetWildBattleTransition. `dowildbattle` (StartScriptedWildBattle) and
+  StartLegendaryBattle share `runScriptedWildBattle` (CB2_EndScriptedWildBattle): `returnToField` runs the map's
+  ON_RESUME script while FLAG_SYS_SPECIAL_WILD_BATTLE is still set (that's how Snorlax and caught legendaries
+  disappear: `removeobject VAR_LAST_TALKED`), then the script reads `specialvar GetBattleOutcome`
+  (`state.battleOutcome`). Every battle start (OverworldScene.runBattle) does Task_BattleStart's
+  RestartWildEncounterImmunitySteps. Tests: tests/e2e/pokemonTower.test.ts (walk onto the 6F trigger at 11,15),
+  tests/e2e/scriptedBattles.test.ts (Snorlax from Route 12 (14, 69) facing down with FLAG_GOT_POKE_FLUTE, Route
+  16 (30, 13) facing right; Zapdos from Power Plant (5, 12) and Mewtwo from Cerulean Cave B1F (7, 13), facing up).
 - **Step counters:** `world/stepCounters.ts` (happiness, VS Seeker, field poison, egg cycles), called from
   `OverworldScene.tryStartStepCountScript`; `world/roamer.ts` is roamer.c with its EWRAM statics as module state
   (`roamerLocation()` for tests). Field code may call battle-engine pokemon.c functions (AdjustFriendship): the
