@@ -95,13 +95,20 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     checker, Trainer Tower and minigame records, the enigma berry, mystery gift, easy chat, link records and
     the sound and region map zoom options. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
-  - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): there is no copyright screen, intro or title
-    screen yet, so the game boots into the main menu when the save slot holds something, and straight into the
-    new game otherwise (as the main menu itself does with an empty slot). B on the main menu (back to the title
-    screen) brings the main menu back; NEW GAME skips Oak's speech. Dev starts (`?start=`, `?map=`) skip the main
-    menu. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
+  - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the title screen; the
+    copyright screen and intro.c's Game Freak / Nidorino movie before it aren't ported. NEW GAME skips Oak's
+    speech. Dev starts (`?start=`, `?map=`) skip the title screen and the main menu; dev `?skipIntro` (the e2e
+    harness's default) skips the title screen: the main menu with a save, the new game without. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
     before CONTINUE, no SE_SELECT. SAVE_STATUS_ERROR ("the previous save file will be loaded") can't happen: one
     slot, no backup; an unreadable slot is SAVE_STATUS_INVALID ("The save file has been deleted...").
+  - Title screen (menus/titleScreen.ts): no MUS_TITLE, no Charizard cry (the cry scene still waits its 90
+    frames), no help system (HELPCONTEXT_TITLE_SCREEN: L/R do nothing). When its 2700-frame timer runs out it goes
+    straight back to the title screen (CB2_InitCopyrightScreenAfterTitleScreen would replay the copyright screen
+    and the intro). StartTimer1 / SeedRngAndSetTrainerId don't seed the RNG from the time spent on the title
+    screen: the port seeds it at load. B+SELECT (REVISION 0's berry fix program, a multiboot program for Ruby and
+    Sapphire's berry clock) does nothing. The clear save data screen (B+SELECT+UP) empties the one localStorage
+    slot (ClearSaveData erases every flash sector, incl. the Hall of Fame) and its soft reset (DoSoftReset) is
+    `softReset` in scenes/BootScene.ts: the scenes restart, the extracted data stays loaded.
   - Save dialog (ui/SaveDialog.ts): SE_SAVE / SE_BOO / SE_SELECT are silent; no help context, no
     GAME_STAT_SAVED_GAME, no quest log data. A failed write shows the save error message without
     DoSaveFailedScreen. SaveMapView isn't ported: the map view isn't saved, so CONTINUE rebuilds the map from its

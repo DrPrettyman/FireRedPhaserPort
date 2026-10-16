@@ -206,6 +206,21 @@ this is the next level down. When you add or change a subsystem, update its entr
   `ScriptHost.doNamingScreen` (FieldMenuScene `naming`). Oak's speech (not ported) should call it with
   NAMING_SCREEN_PLAYER (monSpecies = the player's gender) and NAMING_SCREEN_RIVAL, preloading
   `namingScreenGfxSymbols` after `setObjectEventGraphicsInfo` (the icons are object event graphics).
+- **Boot, title screen and soft reset:** `BootScene` loads the extracted data and starts `MainMenuScene` on the
+  title screen (`entry: 'title'`). MainMenuScene is one GbaHostScene for the boot screens, which hand over through
+  gMain like the C: `menus/titleScreen.ts` (title_screen.c: CB2_InitTitleScreen, the intro scenes, the run scene
+  with PRESS START / flames / the slash, the 2700-frame restart; A/START → the cry scene → `titleScreenEnv.
+  loadGameSave` (LoadGameSave) → CB2_InitMainMenu), `menus/clearSaveDataScreen.ts` (B+SELECT+UP on the title
+  screen) and `menus/mainMenu.ts` (B goes back to CB2_InitTitleScreen). Dev starts (`?start=`, `?map=`) go
+  straight to the field; dev `?skipIntro` boots like the port did before the title screen: MainMenuScene with
+  `entry: 'mainMenu'` when the slot holds something, else the new game. **Restarting the game** (DoSoftReset, e.g.
+  after the credits): `softReset(scene)` from scenes/BootScene.ts stops every scene and starts BootScene again with
+  `{ softReset: true }`, which ignores the URL's dev starts and shows the title screen (with `?skipIntro`: the main
+  menu / new game). From a GbaHostScene, `stopHost()` and clear gMain's callbacks first (see MainMenuScene's
+  clear save data env). The extracted data stays loaded; the overworld builds a new GameState when it starts.
+  Probes: `t.titleScreen()` (scene INIT/FLASHSPRITE/FADEIN/RUN/RESTART/CRY, state, timer, pressStartShown,
+  flames), `t.clearSaveData()`; events `titleScreen` (CB2_InitTitleScreen) and `mainMenu` (CB2_InitMainMenu).
+  Tests: tests/e2e/titleScreen.test.ts (harness option `title: true`).
 - **PC storage screens:** the PC's "Someone's/BILL's PC" runs `special ShowPokemonStorageSystemPC`: the storage menu
   (WITHDRAW / DEPOSIT / MOVE POKéMON / MOVE ITEMS / SEE YA!, Task_PCMainMenu) is a field overlay,
   `ui/StoragePcMenu.ts`, through `OverworldScene.openPokemonStoragePc`. An option fades out and runs the box screen
@@ -293,9 +308,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   SaveDialogCB_* chain, one callback per frame, in the field message box; the save info window is PrintSaveStats
   on `ui/saveMenuUtil.ts`'s SaveStatToString / GetKantoPokedexCount). It calls `storeLocationForSave()` right
   before writing, since the port doesn't keep gSaveBlock1Ptr->pos current. NO goes back to the start menu.
-  Boot: BootScene reads the slot; with something in it (and no `?start=` / `?map=`) it starts `MainMenuScene`
-  (a GbaHostScene running `menus/mainMenu.ts`, main_menu.c: CONTINUE / NEW GAME, no OPTIONS in FRLG, no MYSTERY
-  GIFT), otherwise the new game. The main menu reads the save through `saveDataView` (what LoadGameSave leaves in
+  Boot: see "Boot, title screen and soft reset". The main menu (`menus/mainMenu.ts`, main_menu.c: CONTINUE / NEW
+  GAME, no OPTIONS in FRLG, no MYSTERY GIFT) reads the save through `saveDataView` (what LoadGameSave leaves in
   gSaveBlock1/2). CONTINUE starts the overworld with `{ continueGame: save }`: `create()` loads it with
   `fromSaveData` into the fresh GameState, then `continueSavedGame()` is CB2_ContinueSavedGame
   (Overworld_ResetStateOnContinue, PlayTimeCounter_Start, the continue-game warp if CONTINUE_GAME_WARP is set,
@@ -304,7 +318,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   (state/playTime.ts) is started by the field (new game or CONTINUE) and updated once per logic tick by
   `OverworldScene.tick` and by GbaHostScene's loop (`initHost(texture, state.playTime)`), i.e. on every screen as
   AgbMain does. Tests: tests/unit/save.test.ts, tests/e2e/saveContinue.test.ts. The e2e harness empties the slot
-  before every `load()` unless `keepSave: true`; `mainMenu: true` waits for the main menu instead of the field.
+  before every `load()` unless `keepSave: true`; `mainMenu: true` waits for the main menu instead of the field
+  (the harness boots with `?skipIntro`, so no title screen first).
   Probes: `t.startMenu()` (items, cursor), `t.saveDialog()` (yesNo, statsWindow, the stats as text),
   `t.mainMenu()` (menuType, cursorPos, fading, the CONTINUE values as text).
 

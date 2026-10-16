@@ -1283,3 +1283,30 @@ end to end.
 - playerAvatar.test.ts: the bike ride and the hold / watch / release sequences (bump, run, ledge, ice, spinner,
   boulder push) are each one eval now. The bike test failed under load (the gaps between evals counted as frames).
 - Passed three loaded runs of playerAvatar, strength, surf and battleAnims.3e3a together.
+
+### Title screen and clear save data screen (`title-screen`)
+
+- title_screen.c on the GBA layer (menus/titleScreen.ts): CB2_InitTitleScreen, the flash sweeping up Charizard
+  (a BLDY scanline effect), the grey fade-in, the WIN0 slide that brings in the border and copyright BGs, the white
+  flashes, then the run scene: PRESS START blinking, Task_FlameSpawner's flames, the OBJ-window slash lightening
+  the logo. A/B/START during the intro skip to the run scene; A/START there plays the cry scene and fades to white
+  into the main menu (LoadGameSave again, as SetTitleScreenScene_Cry does); 2700 frames without input restart the
+  title screen (straight back to it: intro.c isn't ported). B+SELECT+UP opens clear_save_data_screen.c
+  (menus/clearSaveDataScreen.ts), whose YES empties the save slot; both answers soft-reset.
+- Boot: BootScene now starts MainMenuScene on the title screen; MainMenuScene hosts the title screen, the clear
+  save data screen and the main menu (B on the main menu goes back to the title screen for real now). Dev
+  `?skipIntro` keeps the old boot (main menu with a save, else the new game); the e2e harness passes it unless a
+  test asks for `title: true`. `softReset(scene)` (scenes/BootScene.ts) is the restart-the-game entry point
+  (DoSoftReset): it stops every scene and boots again, reusing the loaded data.
+- Shared helpers: TintPalette_GrayScale2 and DestroyBlendPalettesGraduallyTask (gba/palette.ts), ResetBgPositions
+  (gba/menu.ts), no-op m4aSongNumStart / FadeOutBGM / FadeOutMapMusic / IsNotWaitingForBGMStop (gba/sound.ts).
+  CB2_InitMainMenu reports the `mainMenu` test event (it used to be the scene's create).
+- Found on the way: SetTitleScreenScene_Restart destroys the blink task by FindTaskIdByFunc after it may have ended
+  itself, i.e. DestroyTask(TASK_NONE), which reads past gTasks on the GBA; the port skips it. The clear save data
+  screen's backdrop is the title logo palette's colour 0 (green), since neither screen reloads gPlttBufferUnfaded[0]
+  (as on the GBA).
+- Extractor: graphics/title_screen/ in extract_gfx.py. Rerun `npm run extract` (or `python3 tools/extract_gfx.py`).
+- Tests: tests/e2e/titleScreen.test.ts (boot → title → intro scenes → PRESS START blinking and flames → START →
+  new game; A skipping the intro, START → main menu with a save, B back to the title, CONTINUE; the 2700-frame
+  restart; the clear save data screen, NO and YES). saveContinue.test.ts's boot test goes through the title screen
+  after B on the main menu.
