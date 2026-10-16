@@ -798,49 +798,6 @@ end to end.
 - BATTLE_ANIMS_PLAN.md "Working in parallel": who owns which files, the cross-file symbols to leave alone, and
   which shared lines (counts, tables) only the merger edits.
 
-### Battle anims 2C: battle_anim_fire.c, battle_anim_electric.c, battle_anim_flying.c
-
-- All three files are fully ported (`src/battle/anim/fire.ts`, `electric.ts`, `flying.ts`): every sprite callback,
-  task and helper, including the unused ones (AnimUnusedSmallEmber, AnimUnusedSpinningFist, AnimUnusedCirclingShock,
-  AnimUnusedBubbleThrow, AnimUnusedFeather, AnimUnusedFlashingLight, AnimTask_SetAttackerVisibility).
-  DestroyAnimSpriteAfterTimer (flying.c) was already in animMons.ts.
-- 20 more scripts run (168 → 188 of 397): Fire Punch, Fire Blast, Flame Wheel, Sacred Fire, Will-O-Wisp,
-  Blast Burn, Thunder Punch, Thunderbolt, Thunder, Zap Cannon, Spark, Charge, Volt Tackle, Shock Wave, Aeroblast,
-  Whirlwind, Fly, Drill Peck, Feather Dance, Bounce.
-- Still waiting on other files: Eruption (ground's AnimTask_HorizontalShake), Blaze Kick (fight), Heat Wave (rock),
-  Dive (water), Sky Attack (dark), Tri Attack (effects_3, ice), Glare / Scary Face / Razor Wind / Astonish /
-  General_MonScared (effects_2/3), General_GhostGetOut (ghost, effects_2).
-- Feather Dance's `struct FeatherDanceData` (bitfields overlaid on `sprite->data`) is read into an object and
-  written back each frame (readFeatherData / writeFeatherData); AnimUnusedFeather_Step's memcpy/memset juggling
-  is done on the raw halfwords. Spark and the feathers write `gOamMatrices` directly, as in the C.
-- No shared-engine changes.
-- Tests: the labels in the fire/electric/flying `FULLY_PORTED` lists; tests/e2e/battleAnims.2c.test.ts runs every
-  new callback/task four moves to a battle, plus Fly and Bounce (the attacker hidden between turns and back after)
-  and Whirlwind (ends the wild battle). Checked by eye in mid-anim screenshots: Fire Blast, Sacred Fire,
-  Will-O-Wisp, Thunder, Spark, Charge, Volt Tackle, Shock Wave, Feather Dance, Fly.
-### Battle anims 2B: battle_anim_water.c, battle_anim_ice.c, battle_anim_dragon.c
-
-- All three files are ported whole (every sprite callback, task and helper, including ones no script uses:
-  AnimUnusedIceCrystalThrow). New module `dragon.ts`, registered in `ported.ts` along with `registerIceExtraGfx`.
-  Contest-only branches are left out (IsContest() is FALSE in FRLG); each port cites its C function.
-- 22 more scripts run: Aurora Beam, Hydro Cannon, Waterfall, Water Pulse, Water Sport, Water Spout, Blizzard,
-  Hail (and General_Hail), Haze, Ice Ball, Ice Beam, Ice Punch, Icy Wind, Mist Ball, Poison Gas, Powder Snow,
-  Dragon Breath, Dragon Dance, Dragon Rage, Outrage, Overheat. Waiting on other files: Dive (effects_1/3), Secret
-  Power (effects_1/2), Tri Attack (fire/electric/effects), Weather Ball (effects_3/rock).
-- AnimTask_WaterSpoutRain calls AnimTask_HorizontalShake (ground.c, worker A) through `taskFuncByName`, skipped
-  until it's registered (docs/DEVIATIONS.md). AnimWaterPulseRing is exported for effects_2's template.
-- Haze and Mist Ball load the field weather's fog tiles and palette (gWeatherFogHorizontalTiles,
-  gDefaultWeatherSpritePalette): `tools/extract_gfx.py` now also extracts `graphics/weather/` (rerun
-  `npm run extract`).
-- The C's "run backwards until off screen" loops (AnimSwirlingSnowball, AnimMoveParticleBeyondTarget,
-  AnimUnusedIceCrystalThrow) are capped, since a zero velocity would hang the page as it hangs the GBA.
-- No shared-engine changes.
-- Tests: the labels in the water/ice/dragon `FULLY_PORTED` lists; tests/e2e/battleAnims.2b.test.ts runs every
-  move four to a battle, plus Poison Gas (clouds appear and clear), Haze (BG1 fog blends to 9/16, then BLDCNT /
-  BLDALPHA cleared), Hail (hailstones, crystal bursts, then General_Hail at the end of the turn) and Water Spout
-  (≥10 launched droplets, splashes on the foe, both mons visible after).
-- Checked by eye in mid-anim screenshots: Dragon Dance (scanline waver), Haze, Blizzard, Aurora Beam, Overheat,
-  Ice Beam, Water Spout, Hail, Outrage, Dragon Rage.
 ### Battle anims 2A: battle_anim_fight.c, _rock.c, _ground.c, _bug.c, _poison.c
 
 - All five files are fully ported: every sprite callback, task and helper, including the unused
@@ -865,3 +822,48 @@ end to end.
   after turn 1, both turns' anims, visible after) and Fissure (BG3 crack positioned, then the OHKO).
 - Checked by eye in mid-anim screenshots: Sandstorm, Superpower, Sludge, Seismic Toss, Sky Uppercut, Dig, Rollout,
   Megahorn, and others.
+
+### Battle anims 2B: battle_anim_water.c, battle_anim_ice.c, battle_anim_dragon.c
+
+- All three files are ported whole (every sprite callback, task and helper, including ones no script uses:
+  AnimUnusedIceCrystalThrow). New module `dragon.ts`, registered in `ported.ts` along with `registerIceExtraGfx`.
+  Contest-only branches are left out (IsContest() is FALSE in FRLG); each port cites its C function.
+- 22 more scripts run: Aurora Beam, Hydro Cannon, Waterfall, Water Pulse, Water Sport, Water Spout, Blizzard,
+  Hail (and General_Hail), Haze, Ice Ball, Ice Beam, Ice Punch, Icy Wind, Mist Ball, Poison Gas, Powder Snow,
+  Dragon Breath, Dragon Dance, Dragon Rage, Outrage, Overheat. Waiting on other files: Dive (effects_1/3), Secret
+  Power (effects_1/2), Tri Attack (fire/electric/effects), Weather Ball (effects_3/rock).
+- AnimTask_WaterSpoutRain calls AnimTask_HorizontalShake (ground.c, worker A) through `taskFuncByName`, skipped
+  until it's registered (docs/DEVIATIONS.md). AnimWaterPulseRing is exported for effects_2's template.
+- Haze and Mist Ball load the field weather's fog tiles and palette (gWeatherFogHorizontalTiles,
+  gDefaultWeatherSpritePalette): `tools/extract_gfx.py` now also extracts `graphics/weather/` (rerun
+  `npm run extract`).
+- The C's "run backwards until off screen" loops (AnimSwirlingSnowball, AnimMoveParticleBeyondTarget,
+  AnimUnusedIceCrystalThrow) are capped, since a zero velocity would hang the page as it hangs the GBA.
+- No shared-engine changes.
+- Tests: the labels in the water/ice/dragon `FULLY_PORTED` lists; tests/e2e/battleAnims.2b.test.ts runs every
+  move four to a battle, plus Poison Gas (clouds appear and clear), Haze (BG1 fog blends to 9/16, then BLDCNT /
+  BLDALPHA cleared), Hail (hailstones, crystal bursts, then General_Hail at the end of the turn) and Water Spout
+  (≥10 launched droplets, splashes on the foe, both mons visible after).
+- Checked by eye in mid-anim screenshots: Dragon Dance (scanline waver), Haze, Blizzard, Aurora Beam, Overheat,
+  Ice Beam, Water Spout, Hail, Outrage, Dragon Rage.
+
+### Battle anims 2C: battle_anim_fire.c, battle_anim_electric.c, battle_anim_flying.c
+
+- All three files are fully ported (`src/battle/anim/fire.ts`, `electric.ts`, `flying.ts`): every sprite callback,
+  task and helper, including the unused ones (AnimUnusedSmallEmber, AnimUnusedSpinningFist, AnimUnusedCirclingShock,
+  AnimUnusedBubbleThrow, AnimUnusedFeather, AnimUnusedFlashingLight, AnimTask_SetAttackerVisibility).
+  DestroyAnimSpriteAfterTimer (flying.c) was already in animMons.ts.
+- 20 more scripts run (168 → 188 of 397): Fire Punch, Fire Blast, Flame Wheel, Sacred Fire, Will-O-Wisp,
+  Blast Burn, Thunder Punch, Thunderbolt, Thunder, Zap Cannon, Spark, Charge, Volt Tackle, Shock Wave, Aeroblast,
+  Whirlwind, Fly, Drill Peck, Feather Dance, Bounce.
+- Still waiting on other files: Eruption (ground's AnimTask_HorizontalShake), Blaze Kick (fight), Heat Wave (rock),
+  Dive (water), Sky Attack (dark), Tri Attack (effects_3, ice), Glare / Scary Face / Razor Wind / Astonish /
+  General_MonScared (effects_2/3), General_GhostGetOut (ghost, effects_2).
+- Feather Dance's `struct FeatherDanceData` (bitfields overlaid on `sprite->data`) is read into an object and
+  written back each frame (readFeatherData / writeFeatherData); AnimUnusedFeather_Step's memcpy/memset juggling
+  is done on the raw halfwords. Spark and the feathers write `gOamMatrices` directly, as in the C.
+- No shared-engine changes.
+- Tests: the labels in the fire/electric/flying `FULLY_PORTED` lists; tests/e2e/battleAnims.2c.test.ts runs every
+  new callback/task four moves to a battle, plus Fly and Bounce (the attacker hidden between turns and back after)
+  and Whirlwind (ends the wild battle). Checked by eye in mid-anim screenshots: Fire Blast, Sacred Fire,
+  Will-O-Wisp, Thunder, Spark, Charge, Volt Tackle, Shock Wave, Feather Dance, Fly.
