@@ -1,5 +1,9 @@
 # Battle animations: plan to finish
 
+**Done (2026-10-16): every battle_anim_*.c file is ported and all 397 scripts run.** Steps 2-3 ran as eight
+workers in two batches (PRs #6-#13). Kept for the record; the one open question (healthbox corner lines) is in
+STATUS.md "Loose ends".
+
 Status as of 2026-10-16 (master at `a9d97a8`). See STATUS.md for what is already ported.
 
 The engine is complete: the `battle_anim.c` interpreter, battle_anim_mons.c, mon_movement, normal, utility_funcs,
@@ -156,7 +160,7 @@ from the file. "Only this file" is how many of them would be complete after port
 Small files can share a PR (for example bug + poison + dragon + dark). Port each C file completely, not just the
 symbols scripts need right now, so the file can be marked done in STATUS.md.
 
-## Step 3: battle_anim_effects_1/2/3.c
+## Step 3: battle_anim_effects_1/2/3.c — done
 
 | C file | Symbols left | Scripts touching | Only this file |
 |---|---:|---:|---:|
@@ -173,7 +177,7 @@ into two or three PRs by move.
 
 - `CreateAdditionalMonSpriteForMoveAnim` (battle_anim_mons.c): done in E3b (animMons.ts).
 - `General_SafariReaction`: done in step 1.
-- Castform's form change (needs the per-form front pics; Castform has no `front.png`).
+- Castform's form change: done in E3a (HandleSpeciesGfxDataChange's Castform branch; see DEVIATIONS).
 - Open question: with the BG dimmed (Thunder Shock, String Shot), faint diagonal lines show at the healthbox
   corners. Compare against the real game (mGBA screenshot) and fix it or record it as matching the GBA.
 - Without audio, SE and cry waits in anim scripts end at once. Revisit the timing when audio lands.

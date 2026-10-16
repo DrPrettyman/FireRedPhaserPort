@@ -1,5 +1,5 @@
-// Battle anim scripts: the ported sprite callbacks and tasks cover the scripts we expect to run.
-// (Running them is checked end to end in tests/e2e/battleAnims.test.ts.)
+// Battle anim scripts: every one of the 397 is fully ported. (Running them is checked end to end in
+// tests/e2e/battleAnims*.test.ts.)
 
 import { beforeAll, describe, expect, test } from 'vitest';
 import { battleAnimCoverage } from '../../src/battle/anim/battleAnim';
@@ -12,151 +12,10 @@ beforeAll(async () => {
   coverage = battleAnimCoverage();
 });
 
-// Scripts whose sprite callbacks and tasks are all ported. BATTLE_ANIMS_PLAN.md steps 2-3: each PR adds the
-// labels it completes to its own C file's list, so PRs for different files don't touch the same lines. A label
-// that needs two files goes in the list of whichever file lands second.
-const FULLY_PORTED: Record<string, string[]> = {
-  before: [
-    'Move_POUND', 'Move_SCRATCH', 'Move_TACKLE', 'Move_GROWL', 'Move_TAIL_WHIP', 'Move_LEER', 'Move_EMBER',
-    'Move_WATER_GUN', 'Move_VINE_WHIP', 'Move_BUBBLE', 'Move_THUNDER_SHOCK', 'Move_QUICK_ATTACK',
-    'Move_SAND_ATTACK', 'Move_GUST', 'Move_PECK', 'Move_STRING_SHOT', 'Move_POISON_STING', 'Move_HARDEN',
-    'Move_BITE', 'Move_SUPERSONIC', 'Move_ABSORB', 'Move_LEECH_SEED', 'Move_POISON_POWDER', 'Move_SLEEP_POWDER',
-    'Move_STUN_SPORE', 'Move_THUNDER_WAVE', 'Move_FLAMETHROWER',
-    'Status_Poison', 'Status_Confusion', 'Status_Burn', 'Status_Infatuation', 'Status_Sleep', 'Status_Paralysis',
-    'Status_Freeze', 'Status_Curse', 'Status_Nightmare',
-    'General_StatsChange', 'General_MonHit', 'General_BaitThrow', 'General_SafariRockThrow', 'General_SubstituteFade',
-    'General_SubstituteAppear',
-    // battle anims step 1 (BATTLE_ANIMS_PLAN.md)
-    'Move_AERIAL_ACE', 'Move_BARRIER', 'Move_BEAT_UP', 'Move_BONE_CLUB', 'Move_BONE_RUSH', 'Move_CHARM',
-    'Move_COMET_PUNCH', 'Move_CONFUSION', 'Move_CONSTRICT', 'Move_COSMIC_POWER', 'Move_COUNTER', 'Move_COVET',
-    'Move_CRUSH_CLAW', 'Move_CUT', 'Move_DRAGON_CLAW', 'Move_DREAM_EATER', 'Move_DYNAMIC_PUNCH', 'Move_ENDURE',
-    'Move_FIRE_SPIN', 'Move_FOCUS_ENERGY', 'Move_FURY_ATTACK', 'Move_FUTURE_SIGHT', 'Move_HEADBUTT',
-    'Move_HI_JUMP_KICK', 'Move_HORN_ATTACK', 'Move_HORN_DRILL', 'Move_HYPNOSIS', 'Move_ICICLE_SPEAR',
-    'Move_JUMP_KICK', 'Move_LIGHT_SCREEN', 'Move_LOW_KICK', 'Move_MACH_PUNCH', 'Move_MAGIC_COAT', 'Move_METAL_CLAW',
-    'Move_MIRROR_COAT', 'Move_MIST', 'Move_MUDDY_WATER', 'Move_PIN_MISSILE', 'Move_PSYBEAM', 'Move_PSYCHIC',
-    'Move_PSYWAVE', 'Move_RAGE', 'Move_RAIN_DANCE', 'Move_REFLECT', 'Move_ROCK_SLIDE', 'Move_ROCK_THROW',
-    'Move_ROLLING_KICK', 'Move_SAND_TOMB', 'Move_SHADOW_PUNCH', 'Move_SMOG', 'Move_STEEL_WING', 'Move_SUNNY_DAY',
-    'Move_SURF', 'Move_SYNTHESIS', 'Move_TRANSFORM', 'Move_TRIPLE_KICK', 'Move_WHIRLPOOL', 'Move_WING_ATTACK',
-    'General_FocusPunchSetUp', 'General_FutureSightHit', 'General_HeldItemEffect', 'General_Rain',
-    'General_SafariReaction', 'General_SilphScoped', 'General_Sun', 'General_TurnTrap', 'General_WishHeal',
-    // every special anim: InitAndLaunchSpecialAnimation has no fallback
-    'Special_LevelUp', 'Special_SwitchOutPlayerMon', 'Special_SwitchOutOpponentMon', 'Special_BallThrow',
-    'Special_BallThrowWithTrainer', 'Special_SubstituteToMon', 'Special_MonToSubstitute',
-  ],
-
-  // Added when batch 1 merged: scripts that needed files from more than one worker, plus scripts that were
-  // already complete before step 2 but never listed.
-  batch1Merge: [
-    'General_IngrainHeal', 'General_LeechSeedDrain', 'Move_AGILITY', 'Move_BIDE', 'Move_BIND', 'Move_BLAZE_KICK',
-    'Move_BODY_SLAM', 'Move_BUBBLE_BEAM', 'Move_CALM_MIND', 'Move_CLAMP', 'Move_COUNT', 'Move_CRABHAMMER',
-    'Move_CRUNCH', 'Move_DETECT', 'Move_DIVE', 'Move_DOOM_DESIRE', 'Move_DOUBLE_EDGE', 'Move_DOUBLE_SLAP',
-    'Move_EGG_BOMB', 'Move_ERUPTION', 'Move_EXPLOSION', 'Move_FLASH', 'Move_GIGA_DRAIN', 'Move_GROWTH',
-    'Move_HEAT_WAVE', 'Move_HYDRO_PUMP', 'Move_IMPRISON', 'Move_IRON_DEFENSE', 'Move_IRON_TAIL', 'Move_MEGA_DRAIN',
-    'Move_METAL_SOUND', 'Move_MUD_SHOT', 'Move_MUD_SLAP', 'Move_OCTAZOOKA', 'Move_POISON_TAIL', 'Move_PSYCH_UP',
-    'Move_PURSUIT', 'Move_RECOVER', 'Move_REST', 'Move_ROAR', 'Move_ROCK_TOMB', 'Move_SCREECH',
-    'Move_SELF_DESTRUCT', 'Move_SHEER_COLD', 'Move_SIGNAL_BEAM', 'Move_SKY_ATTACK', 'Move_SLAM', 'Move_SNATCH',
-    'Move_SNORE', 'Move_SPIKE_CANNON', 'Move_STRENGTH', 'Move_SUBMISSION', 'Move_SUBSTITUTE', 'Move_TAKE_DOWN',
-    'Move_THIEF', 'Move_TOXIC', 'Move_TWINEEDLE', 'Move_VITAL_THROW', 'Move_WRAP',
-  ],
-
-  // battle_anim_fight.c
-  fight: [
-    'Move_KARATE_CHOP', 'Move_STOMP', 'Move_DOUBLE_KICK', 'Move_DIZZY_PUNCH', 'Move_CROSS_CHOP', 'Move_SUPERPOWER',
-    'Move_REVENGE', 'Move_BRICK_BREAK', 'Move_ARM_THRUST', 'Move_SKY_UPPERCUT',
-  ],
-
-  // battle_anim_rock.c
-  rock: [
-    'Move_SEISMIC_TOSS', 'Move_SANDSTORM', 'Move_ROLLOUT', 'Move_ANCIENT_POWER', 'Move_ROCK_SMASH', 'Move_ROCK_BLAST',
-    'General_Sandstorm',
-  ],
-
-  // battle_anim_ground.c
-  ground: ['Move_EARTHQUAKE', 'Move_FISSURE', 'Move_DIG', 'Move_BONEMERANG', 'Move_MAGNITUDE'],
-
-  // battle_anim_bug.c
-  bug: ['Move_LEECH_LIFE', 'Move_SPIDER_WEB', 'Move_MEGAHORN', 'Move_TAIL_GLOW'],
-
-  // battle_anim_poison.c
-  poison: ['Move_ACID', 'Move_SLUDGE', 'Move_SLUDGE_BOMB'],
-
-  // battle_anim_water.c
-  water: ['Move_AURORA_BEAM', 'Move_HYDRO_CANNON', 'Move_WATERFALL', 'Move_WATER_PULSE', 'Move_WATER_SPORT', 'Move_WATER_SPOUT'],
-
-  // battle_anim_ice.c
-  ice: [
-    'Move_BLIZZARD', 'Move_HAIL', 'Move_HAZE', 'Move_ICE_BALL', 'Move_ICE_BEAM', 'Move_ICE_PUNCH', 'Move_ICY_WIND',
-    'Move_MIST_BALL', 'Move_POISON_GAS', 'Move_POWDER_SNOW', 'General_Hail',
-  ],
-
-  // battle_anim_dragon.c
-  dragon: ['Move_DRAGON_BREATH', 'Move_DRAGON_DANCE', 'Move_DRAGON_RAGE', 'Move_OUTRAGE', 'Move_OVERHEAT'],
-
-  // battle_anim_fire.c
-  fire: ['Move_BLAST_BURN', 'Move_FIRE_BLAST', 'Move_FIRE_PUNCH', 'Move_FLAME_WHEEL', 'Move_SACRED_FIRE', 'Move_WILL_O_WISP'],
-
-  // battle_anim_electric.c (Thunder also needs fire's AnimTask_ShakeTargetInPattern)
-  electric: [
-    'Move_CHARGE', 'Move_SHOCK_WAVE', 'Move_SPARK', 'Move_THUNDER', 'Move_THUNDERBOLT', 'Move_THUNDER_PUNCH',
-    'Move_VOLT_TACKLE', 'Move_ZAP_CANNON',
-  ],
-
-  // battle_anim_flying.c
-  flying: ['Move_AEROBLAST', 'Move_BOUNCE', 'Move_DRILL_PECK', 'Move_FEATHER_DANCE', 'Move_FLY', 'Move_WHIRLWIND'],
-
-  // battle_anim_ghost.c
-  ghost: [
-    'Move_CONFUSE_RAY', 'Move_CURSE', 'Move_DESTINY_BOND', 'Move_GRUDGE', 'Move_LICK', 'Move_NIGHTMARE',
-    'Move_NIGHT_SHADE', 'Move_SHADOW_BALL', 'Move_SPITE',
-  ],
-
-  // battle_anim_psychic.c
-  psychic: ['Move_AMNESIA', 'Move_EXTRASENSORY', 'Move_MEDITATE', 'Move_SKILL_SWAP', 'Move_TELEPORT'],
-
-  // battle_anim_dark.c
-  dark: ['Move_CAMOUFLAGE', 'Move_FAINT_ATTACK', 'Move_FAKE_TEARS', 'Move_MEMENTO'],
-
-  // battle_anim_effects_1.c
-  effects1: [
-    'General_ItemKnockoff', 'General_ItemSteal', 'Move_BELLY_DRUM', 'Move_CONVERSION', 'Move_CONVERSION_2',
-    'Move_COTTON_SPORE', 'Move_DOUBLE_TEAM', 'Move_FALSE_SWIPE', 'Move_FOLLOW_ME', 'Move_FRENZY_PLANT',
-    'Move_GRASS_WHISTLE', 'Move_HYPER_BEAM', 'Move_INGRAIN', 'Move_LEAF_BLADE', 'Move_LOCK_ON', 'Move_MAGICAL_LEAF',
-    'Move_METRONOME', 'Move_MILK_DRINK', 'Move_MIMIC', 'Move_MOONLIGHT', 'Move_NEEDLE_ARM', 'Move_PETAL_DANCE',
-    'Move_PROTECT', 'Move_RAZOR_LEAF', 'Move_SECRET_POWER', 'Move_SHARPEN', 'Move_SILVER_WIND', 'Move_SING',
-    'Move_SKULL_BASH', 'Move_SLASH', 'Move_SPORE', 'Move_SUPER_FANG', 'Move_SWIFT', 'Move_TAUNT', 'Move_TWISTER',
-  ],
-
-  // battle_anim_effects_2.c (Air Cutter, Aromatherapy, Glare, Heal Bell, Spit Up and Trick also need effects_1/3)
-  effects2: [
-    'General_GhostGetOut', 'General_MonScared', 'Move_ASTONISH', 'Move_ATTRACT', 'Move_BULK_UP', 'Move_BULLET_SEED',
-    'Move_DISABLE', 'Move_EXTREME_SPEED', 'Move_FAKE_OUT', 'Move_FURY_CUTTER', 'Move_FURY_SWIPES', 'Move_GUILLOTINE',
-    'Move_HIDDEN_POWER', 'Move_HYPER_VOICE', 'Move_KINESIS', 'Move_LOVELY_KISS', 'Move_MINIMIZE', 'Move_MUD_SPORT',
-    'Move_PAY_DAY', 'Move_PERISH_SONG', 'Move_RAZOR_WIND', 'Move_SAFEGUARD', 'Move_SCARY_FACE', 'Move_SKETCH',
-    'Move_SOFT_BOILED', 'Move_SONIC_BOOM', 'Move_SPLASH', 'Move_STRUGGLE', 'Move_SWAGGER', 'Move_SWEET_KISS',
-    'Move_SWORDS_DANCE', 'Move_THRASH', 'Move_TICKLE', 'Move_UPROAR', 'Move_VICE_GRIP', 'Move_WITHDRAW',
-  ],
-
-  // battle_anim_effects_3.c, first half (effects3.ts)
-  effects3: [
-    'Move_BATON_PASS', 'Move_DEFENSE_CURL', 'Move_ENCORE', 'Move_FLAIL', 'Move_FOCUS_PUNCH', 'Move_FRUSTRATION',
-    'Move_HYPER_FANG', 'Move_LUSTER_PURGE', 'Move_MEAN_LOOK', 'Move_MEGA_KICK', 'Move_MEGA_PUNCH', 'Move_MIND_READER',
-    'Move_MORNING_SUN', 'Move_POISON_FANG', 'Move_PSYCHO_BOOST', 'Move_RAPID_SPIN', 'Move_SLEEP_TALK',
-    'Move_SMOKESCREEN', 'Move_SPIKES', 'Move_STOCKPILE', 'Move_SWALLOW', 'Move_SWEET_SCENT', 'Move_TORMENT',
-    'Move_TRI_ATTACK', 'Move_WISH', 'General_CastformChange', 'General_DoomDesireHit',
-  ],
-
-  // battle_anim_effects_3.c, second half (effects3b.ts)
-  effects3b: [
-    'Move_BARRAGE', 'Move_ACID_ARMOR', 'Move_REVERSAL', 'Move_FORESIGHT', 'Move_RETURN', 'Move_FACADE',
-    'Move_SMELLING_SALT', 'Move_HELPING_HAND', 'Move_ROLE_PLAY', 'Move_ASSIST', 'Move_RECYCLE', 'Move_YAWN',
-    'Move_KNOCK_OFF', 'Move_ENDEAVOR', 'Move_REFRESH', 'Move_SLACK_OFF', 'Move_WEATHER_BALL', 'Move_ODOR_SLEUTH',
-    'Move_BLOCK', 'Move_HOWL', 'General_SmokeballEscape', 'General_FocusBand', 'General_SnatchMove',
-  ],
-};
-
 describe('battle anim coverage', () => {
-  test.each(Object.values(FULLY_PORTED).flat())('%s is fully ported', (label) => {
-    expect(coverage[label]).toEqual([]);
+  test('every script is fully ported (every sprite callback and task it can reach is registered)', () => {
+    const missing = Object.entries(coverage).filter(([, symbols]) => symbols.length > 0);
+    expect(Object.fromEntries(missing)).toEqual({});
   });
 
   test('every script resolves (no unknown commands or C symbols)', () => {

@@ -14,8 +14,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (`nurse_joy_bow`) are skipped; the heal itself happens.
   - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
   - VS Seeker: `state.trainerRematches` is never set, so no trainer is ever ready for a rematch.
-  - Battles: battle anim scripts whose sprite callbacks / tasks aren't ported yet finish at once (133 of 397 move
-    and general anims); no audio (PlaySE/cries/BGM are no-ops, so anim SE waits and cry waits end at once).
+  - Battles: no audio (PlaySE/cries/BGM are no-ops, so anim SE waits and cry waits end at once).
   - Field sounds: doors (SE_DOOR / SE_SLIDING_DOOR) and puddle splashes (SE_PUDDLE) are silent.
   - Evolution scene: no audio, so cries and sound effects count as finished at once (the intro jingle and the SE_EXP
     wait don't hold the scene up); the help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving

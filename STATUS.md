@@ -30,8 +30,6 @@ Main-path blockers, roughly in the order a playthrough hits them:
 
 Other open work:
 
-- Battle move animations: steps 1-2 done (264 of 397 scripts run). Step 3 of
-  [BATTLE_ANIMS_PLAN.md](BATTLE_ANIMS_PLAN.md) (battle_anim_effects_1/2/3.c) is all that's left.
 - Audio: extraction and playback (SE, cries and BGM are no-ops; see DEVIATIONS for what waits on them).
 - Title screen, intro, Oak's speech (the naming screen is ready for it; see DEV_NOTES "Naming screen").
 - Start menu screens: Pokédex, options, TM case, berry pouch; the start menu help window.
@@ -49,6 +47,8 @@ Loose ends:
 - Dynamic-graphics objects (`OBJ_EVENT_GFX_VAR_*`) are only checked on Viridian's old man; other maps that use them
   (e.g. rival appearances) are untested. A script that sets `VAR_OBJ_GFX_ID_*` and then `addobject`s in the same
   run only works if that sprite was already preloaded; otherwise it logs `[overworld] no sprite loaded`.
+- Battle anims: with the BG dimmed (Thunder Shock, String Shot), faint diagonal lines show at the healthbox
+  corners. Compare against the real game (mGBA screenshot) and fix it or record it as matching the GBA.
 
 ## Checklist
 
@@ -166,10 +166,8 @@ Loose ends:
 - [x] GBA video layer (src/gba: VRAM/palette/regs, bg.c, window.c, sprite.c, task.c, palette fades, scanline effects, software PPU) and the battle presentation on it (BattleScene)
 - [x] Battle: bag and party menu (choose item, use medicine/PP items/X items/balls, switch/send out) with reshow_battle_screen.c
 - [x] Old Man's catching tutorial (StartOldManTutorialBattle)
-- [~] Battle: move/status animations (src/battle/anim/: the battle_anim.c engine; 264 of the 397 scripts run, incl.
-  every status and special anim (ball throw, switch out, substitute, level up), the stat change, shiny sparkles,
-  weather, Transform / Silph Scope and every type file (fight ... water, dragon); the rest finish at once.
-  Remaining work: BATTLE_ANIMS_PLAN.md step 3)
+- [x] Battle: move/status animations (src/battle/anim/: the battle_anim.c engine and every battle_anim_*.c file;
+  all 397 move, status, general and special anim scripts run. Without audio, SE and cry waits end at once)
 - [x] Battle transitions (battle_transition.c): every FRLG B_TRANSITION_* (the grey-blink intro, Blur, Swirl,
   Shuffle, Big Poké Ball, Poké Balls trail, Clockwise wipe, Ripple, Wave, Slice, White bars fade, Grid squares,
   Angled wipes, the Elite Four / Champion mugshots) drawn over the field on the GBA layer, picked like battle_setup.c

@@ -912,81 +912,6 @@ end to end.
 - BATTLE_ANIMS_PLAN.md "Working in parallel": batch 2 assignments (E1, E2, E3a, E3b), workers run only their own
   e2e file, and scratch files get a per-worker prefix.
 
-### Battle anims 3E1: battle_anim_effects_1.c
-
-- `src/battle/anim/effects1.ts` now ports every sprite callback and task in battle_anim_effects_1.c (in C order),
-  including the unused ones (AnimTipMon, AnimSlidingHit, AnimFlickeringPunch, AnimCirclingMusicNote,
-  AnimBubbleBurst, UnusedFlickerAnim, AnimTask_Hide/ShowBattlersHealthbox). The file is done.
-- 35 more scripts run (264 -> 299 of 397, counted on this branch alone): General_ItemKnockoff, General_ItemSteal,
-  Belly Drum, Conversion, Conversion 2, Cotton Spore, Double Team, False Swipe, Follow Me, Frenzy Plant,
-  Grass Whistle, Hyper Beam, Ingrain, Leaf Blade, Lock-On, Magical Leaf, Metronome, Milk Drink, Mimic, Moonlight,
-  Needle Arm, Petal Dance, Protect, Razor Leaf, Secret Power, Sharpen, Silver Wind, Sing, Skull Bash, Slash,
-  Spore, Super Fang, Swift, Taunt and Twister. Still waiting on other files: Solar Beam, Heal Bell, Present,
-  Trick, Teeter Dance, Aromatherapy, Air Cutter (effects_2/3 tasks).
-- `AnimMoveTwisterParticle` and `SetSpriteNextToMonHead` are exported (battle_anim_rock.c's
-  gTwisterRockSpriteTemplate resolves the callback by name; effects_2 can import the helper), as is
-  `MoveAlongLinearPath` (non-static in the C).
-- AnimHyperBeamOrb picks `Random() % 8` from a 7-entry anim table; for 7 the GBA reads the next table in ROM
-  (sSolarBeamSmallOrbAnimTable), so the port appends that table for the roll (it threw before).
-- AnimTrickBag_Step3 returns after destroying its sprite (the C keeps writing to it; our DestroySprite resets
-  the sprite, so that would touch a fresh one).
-- No shared-engine or extractor changes.
-- Verified: typecheck, unit tests (`FULLY_PORTED.effects1`), tests/e2e/battleAnims.3e1.test.ts (one move per
-  newly ported callback/task, Conversion 2 after being hit, Thief / Knock Off on a foe holding an item), and
-  mid-anim screenshots of Protect, Moonlight, Leaf Blade, Double Team, Lock-On, Petal Dance, Silver Wind, Sing,
-  Milk Drink, Metronome, False Swipe and Hyper Beam.
-### Battle anims 3E2: battle_anim_effects_2.c
-
-- Ported the whole file into `src/battle/anim/effects2.ts`: 41 sprite callbacks (the unused templates' ones too:
-  AnimCirclingFinger, AnimBouncingMusicNote, AnimVibrateBattlerBack, AnimMovingClamp, AnimVoidLines) and 23 tasks.
-  AnimWaterPulseRing, also in this C file, stays in water.ts. AnimParticleBurst is exported (effects_3's templates
-  use it by name). SetSpriteNextToMonHead (effects_1, worker E1) is looked up on `./effects1` at call time, so
-  the file builds before E1's PR lands; only the unused sBouncingMusicNoteSpriteTemplate needs it. Swap in a
-  plain import once both are merged. Q_8_8_mul / Q_8_8_inv (math_util.c) are local helpers for Air Cutter.
-- 36 more scripts run (264 → 300): Astonish, Attract, Bulk Up, Bullet Seed, Disable, Extreme Speed, Fake Out,
-  Fury Cutter, Fury Swipes, Guillotine, Hidden Power, Hyper Voice, Kinesis, Lovely Kiss, Minimize, Mud Sport,
-  Pay Day, Perish Song, Razor Wind, Safeguard, Scary Face, Sketch, Soft-Boiled, Sonic Boom, Splash, Struggle,
-  Swagger, Sweet Kiss, Swords Dance, Thrash, Tickle, Uproar, Vice Grip, Withdraw, General_GhostGetOut,
-  General_MonScared. Still waiting on effects_1/3: Air Cutter (AnimAirCutterSlice), Aromatherapy, Glare
-  (AnimTask_GlareEyeDots), Heal Bell (AnimSparklingStars), Spit Up (AnimTask_SpitUpDeformMon), Trick (AnimTrickBag).
-- No shared-engine changes; `registerEffects2ExtraGfx` (Attract hearts BG, Scary Face BG, the music note
-  palettes) is registered in `ported.ts`.
-- Trap found on the way: DestroySprite resets the sprite, data included (ResetSprite in the C; a new `data`
-  array here), so code that checks `sprite.data` again after destroying must re-read it rather than use a cached
-  `const d = sprite.data`. AnimPerishSongMusicNote_Step2 relies on this to not destroy twice (it would have
-  underflowed the visual task count and hung Perish Song).
-- Verified: typecheck, unit tests (36 labels in `FULLY_PORTED.effects2`), tests/e2e/battleAnims.3e2.test.ts (one
-  move per new callback / task; Chansey vs Tauros for Attract and Soft-Boiled; Guillotine from a level-100 user;
-  Sketch's HBlank BGnHOFS lines and their cleanup), and mid-anim screenshots of Fake Out, Scary Face, Attract,
-  Hidden Power, Perish Song, Sketch, Soft-Boiled, Pay Day and Extreme Speed.
-### Battle anims 3E3b: battle_anim_effects_3.c, second half
-
-- The second half of battle_anim_effects_3.c (AnimTask_PainSplitMovement, C line 2914, to the end) is fully
-  ported into effects3b.ts: every sprite callback, task and helper, including the unused AnimUnusedItemBagSteal.
-  Static affine anims (sDeepInhale, sFacadeSquish, sSmellingSaltsSquish, sSlackOffSquish) come from anims.json;
-  sFacadeBlendColors is a small inline table. AnimRoarNoiseLine and AnimTask_MonToSubstitute stay in effects3.ts.
-- CreateAdditionalMonSpriteForMoveAnim (battle_anim_mons.c) is ported into animMons.ts (Role Play's silhouette,
-  Snatch's runner): a 64x64 affine sprite with its own sheet and palette (tags 55125/55126, local to the C file),
-  the species' front or back pic (preloaded with the battle) and palette, at y + the pic's y offset.
-- 24 more scripts run: Acid Armor, Assist, Barrage, Block, Endeavor, Facade, Foresight, Helping Hand, Howl,
-  Knock Off, Meteor Mash, Odor Sleuth, Recycle, Refresh, Return, Reversal, Role Play, Slack Off, Smelling Salt,
-  Weather Ball, Yawn, General_FocusBand, General_SmokeballEscape, General_SnatchMove. Meteor Mash isn't in
-  `FULLY_PORTED.effects3b`: its trail of stars (gMiniTwinklingStarSpriteTemplate, AnimMiniTwinklingStar) is E3a's
-  half, and AnimMeteorMashStar skips the trail until that callback is registered.
-- Still waiting on other workers' code: Pain Split (AnimPainSplitProjectile), Flatter (AnimTask_CreateSpotlight /
-  RemoveSpotlight), Glare (AnimEyeSparkle, AnimTask_ScaryFace), Teeter Dance (AnimFlyingMusicNotes), Aromatherapy
-  (AnimFlyingParticle, AnimSparklingStars, AnimBlendThinRing).
-- Shared engine: only the new CreateAdditionalMonSpriteForMoveAnim in animMons.ts. Refresh/Aromatherapy's cure
-  bubbles (gCureBubbles*) are registered with registerAnimExtraGfx (registerEffects3bExtraGfx, called from
-  ported.ts). No extractor changes.
-- Verified: typecheck, unit tests (new labels in `FULLY_PORTED.effects3b`), tests/e2e/battleAnims.3e3b.test.ts
-  (every newly ported move; Assist/Slack Off/Refresh with a poisoned attacker and a partner; Recycle after a
-  Pecha Berry; Smoke Ball fleeing; Snatch stealing Swords Dance, with the extra mon sprite made and freed; Role
-  Play's white silhouette; Acid Armor's 32-bit HBlank DMA on BGnHOFS + BGnVOFS and its cleanup; Helping Hand and
-  General_FocusBand launched straight from the action menu, since the hooks have no double battles and Focus
-  Band only holds 10% of the time), and tests/e2e/battleAnims.test.ts. Checked by eye in mid-anim screenshots:
-  Acid Armor, Role Play, Barrage, Foresight, Facade, Refresh, Block, Smelling Salt, Yawn, Meteor Mash,
-  Odor Sleuth.
 ### Battle anims 3E3a: battle_anim_effects_3.c, first half
 
 - Ported every sprite callback, task and helper of battle_anim_effects_3.c up to AnimPainSplitProjectile (C line
@@ -1015,3 +940,94 @@ end to end.
   Encore's OBJ window + WIN1 and their reset; Castform changing to its sunny form under Sunny Day), and mid-anim
   screenshots of Smokescreen, Encore, Mean Look, Mind Reader, Morning Sun, Wish, Spikes, Sweet Scent, Rapid Spin,
   Tri Attack, Torment, Psycho Boost and Castform's sunny form.
+
+### Battle anims 3E3b: battle_anim_effects_3.c, second half
+
+- The second half of battle_anim_effects_3.c (AnimTask_PainSplitMovement, C line 2914, to the end) is fully
+  ported into effects3b.ts: every sprite callback, task and helper, including the unused AnimUnusedItemBagSteal.
+  Static affine anims (sDeepInhale, sFacadeSquish, sSmellingSaltsSquish, sSlackOffSquish) come from anims.json;
+  sFacadeBlendColors is a small inline table. AnimRoarNoiseLine and AnimTask_MonToSubstitute stay in effects3.ts.
+- CreateAdditionalMonSpriteForMoveAnim (battle_anim_mons.c) is ported into animMons.ts (Role Play's silhouette,
+  Snatch's runner): a 64x64 affine sprite with its own sheet and palette (tags 55125/55126, local to the C file),
+  the species' front or back pic (preloaded with the battle) and palette, at y + the pic's y offset.
+- 24 more scripts run: Acid Armor, Assist, Barrage, Block, Endeavor, Facade, Foresight, Helping Hand, Howl,
+  Knock Off, Meteor Mash, Odor Sleuth, Recycle, Refresh, Return, Reversal, Role Play, Slack Off, Smelling Salt,
+  Weather Ball, Yawn, General_FocusBand, General_SmokeballEscape, General_SnatchMove. Meteor Mash isn't in
+  `FULLY_PORTED.effects3b`: its trail of stars (gMiniTwinklingStarSpriteTemplate, AnimMiniTwinklingStar) is E3a's
+  half, and AnimMeteorMashStar skips the trail until that callback is registered.
+- Still waiting on other workers' code: Pain Split (AnimPainSplitProjectile), Flatter (AnimTask_CreateSpotlight /
+  RemoveSpotlight), Glare (AnimEyeSparkle, AnimTask_ScaryFace), Teeter Dance (AnimFlyingMusicNotes), Aromatherapy
+  (AnimFlyingParticle, AnimSparklingStars, AnimBlendThinRing).
+- Shared engine: only the new CreateAdditionalMonSpriteForMoveAnim in animMons.ts. Refresh/Aromatherapy's cure
+  bubbles (gCureBubbles*) are registered with registerAnimExtraGfx (registerEffects3bExtraGfx, called from
+  ported.ts). No extractor changes.
+- Verified: typecheck, unit tests (new labels in `FULLY_PORTED.effects3b`), tests/e2e/battleAnims.3e3b.test.ts
+  (every newly ported move; Assist/Slack Off/Refresh with a poisoned attacker and a partner; Recycle after a
+  Pecha Berry; Smoke Ball fleeing; Snatch stealing Swords Dance, with the extra mon sprite made and freed; Role
+  Play's white silhouette; Acid Armor's 32-bit HBlank DMA on BGnHOFS + BGnVOFS and its cleanup; Helping Hand and
+  General_FocusBand launched straight from the action menu, since the hooks have no double battles and Focus
+  Band only holds 10% of the time), and tests/e2e/battleAnims.test.ts. Checked by eye in mid-anim screenshots:
+  Acid Armor, Role Play, Barrage, Foresight, Facade, Refresh, Block, Smelling Salt, Yawn, Meteor Mash,
+  Odor Sleuth.
+
+### Battle anims 3E2: battle_anim_effects_2.c
+
+- Ported the whole file into `src/battle/anim/effects2.ts`: 41 sprite callbacks (the unused templates' ones too:
+  AnimCirclingFinger, AnimBouncingMusicNote, AnimVibrateBattlerBack, AnimMovingClamp, AnimVoidLines) and 23 tasks.
+  AnimWaterPulseRing, also in this C file, stays in water.ts. AnimParticleBurst is exported (effects_3's templates
+  use it by name). SetSpriteNextToMonHead (effects_1, worker E1) is looked up on `./effects1` at call time, so
+  the file builds before E1's PR lands; only the unused sBouncingMusicNoteSpriteTemplate needs it. Swap in a
+  plain import once both are merged. Q_8_8_mul / Q_8_8_inv (math_util.c) are local helpers for Air Cutter.
+- 36 more scripts run (264 → 300): Astonish, Attract, Bulk Up, Bullet Seed, Disable, Extreme Speed, Fake Out,
+  Fury Cutter, Fury Swipes, Guillotine, Hidden Power, Hyper Voice, Kinesis, Lovely Kiss, Minimize, Mud Sport,
+  Pay Day, Perish Song, Razor Wind, Safeguard, Scary Face, Sketch, Soft-Boiled, Sonic Boom, Splash, Struggle,
+  Swagger, Sweet Kiss, Swords Dance, Thrash, Tickle, Uproar, Vice Grip, Withdraw, General_GhostGetOut,
+  General_MonScared. Still waiting on effects_1/3: Air Cutter (AnimAirCutterSlice), Aromatherapy, Glare
+  (AnimTask_GlareEyeDots), Heal Bell (AnimSparklingStars), Spit Up (AnimTask_SpitUpDeformMon), Trick (AnimTrickBag).
+- No shared-engine changes; `registerEffects2ExtraGfx` (Attract hearts BG, Scary Face BG, the music note
+  palettes) is registered in `ported.ts`.
+- Trap found on the way: DestroySprite resets the sprite, data included (ResetSprite in the C; a new `data`
+  array here), so code that checks `sprite.data` again after destroying must re-read it rather than use a cached
+  `const d = sprite.data`. AnimPerishSongMusicNote_Step2 relies on this to not destroy twice (it would have
+  underflowed the visual task count and hung Perish Song).
+- Verified: typecheck, unit tests (36 labels in `FULLY_PORTED.effects2`), tests/e2e/battleAnims.3e2.test.ts (one
+  move per new callback / task; Chansey vs Tauros for Attract and Soft-Boiled; Guillotine from a level-100 user;
+  Sketch's HBlank BGnHOFS lines and their cleanup), and mid-anim screenshots of Fake Out, Scary Face, Attract,
+  Hidden Power, Perish Song, Sketch, Soft-Boiled, Pay Day and Extreme Speed.
+
+### Battle anims 3E1: battle_anim_effects_1.c
+
+- `src/battle/anim/effects1.ts` now ports every sprite callback and task in battle_anim_effects_1.c (in C order),
+  including the unused ones (AnimTipMon, AnimSlidingHit, AnimFlickeringPunch, AnimCirclingMusicNote,
+  AnimBubbleBurst, UnusedFlickerAnim, AnimTask_Hide/ShowBattlersHealthbox). The file is done.
+- 35 more scripts run (264 -> 299 of 397, counted on this branch alone): General_ItemKnockoff, General_ItemSteal,
+  Belly Drum, Conversion, Conversion 2, Cotton Spore, Double Team, False Swipe, Follow Me, Frenzy Plant,
+  Grass Whistle, Hyper Beam, Ingrain, Leaf Blade, Lock-On, Magical Leaf, Metronome, Milk Drink, Mimic, Moonlight,
+  Needle Arm, Petal Dance, Protect, Razor Leaf, Secret Power, Sharpen, Silver Wind, Sing, Skull Bash, Slash,
+  Spore, Super Fang, Swift, Taunt and Twister. Still waiting on other files: Solar Beam, Heal Bell, Present,
+  Trick, Teeter Dance, Aromatherapy, Air Cutter (effects_2/3 tasks).
+- `AnimMoveTwisterParticle` and `SetSpriteNextToMonHead` are exported (battle_anim_rock.c's
+  gTwisterRockSpriteTemplate resolves the callback by name; effects_2 can import the helper), as is
+  `MoveAlongLinearPath` (non-static in the C).
+- AnimHyperBeamOrb picks `Random() % 8` from a 7-entry anim table; for 7 the GBA reads the next table in ROM
+  (sSolarBeamSmallOrbAnimTable), so the port appends that table for the roll (it threw before).
+- AnimTrickBag_Step3 returns after destroying its sprite (the C keeps writing to it; our DestroySprite resets
+  the sprite, so that would touch a fresh one).
+- No shared-engine or extractor changes.
+- Verified: typecheck, unit tests (`FULLY_PORTED.effects1`), tests/e2e/battleAnims.3e1.test.ts (one move per
+  newly ported callback/task, Conversion 2 after being hit, Thief / Knock Off on a foe holding an item), and
+  mid-anim screenshots of Protect, Moonlight, Leaf Blade, Double Team, Lock-On, Petal Dance, Silver Wind, Sing,
+  Milk Drink, Metronome, False Swipe and Hyper Beam.
+
+### Battle anims batch 2 merged (PRs #10-#13): all 397 scripts run
+
+- Merged E3a (#12), E3b (#10), E2 (#11), E1 (#13). Conflicts: only `ported.ts`'s imports and extra-gfx calls.
+  Checked E3b (done before the warning) for reads of `sprite.data` after a destroy: none.
+- Merging E2 broke three earlier e2e tests (Bounce, Poison Gas, Doom Desire): with Splash's anim ported, the
+  turns before their accuracy rolls take longer, and the seeded rolls missed (traced for Bounce:
+  MOVE_RESULT_MISSED on turn 2). The tests now reseed right before the roll (Poison Gas: a slower foe, so its
+  roll follows the move-select reseed).
+- effects2.ts imports SetSpriteNextToMonHead from effects1.ts instead of looking it up at runtime.
+- BATTLE_ANIMS_PLAN.md "Done when": the unit test now asserts every one of the 397 scripts is fully ported
+  (replacing the per-file label lists); STATUS.md item ticked; the anim placeholder in DEVIATIONS.md is down to
+  the no-audio note; the healthbox corner-lines question moved to STATUS.md "Loose ends".

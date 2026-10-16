@@ -119,7 +119,7 @@ import {
   AnimLoadCompressedBgTilemap,
 } from './animMons';
 import { animSpriteTemplate, BattleAnimAdjustPanning, PlaySE12WithPanning } from './battleAnim';
-import * as effects1 from './effects1';
+import { SetSpriteNextToMonHead } from './effects1';
 import { anim, ARG_RET_ID, DestroyAnimSprite, DestroyAnimVisualTask, gBattleAnimArgs, registerAnimExtraGfx } from './state';
 
 const UNIT = 'battle_anim_effects_2.c';
@@ -132,14 +132,6 @@ const s16 = (v: number) => (v << 16) >> 16;
 const Q_8_8_mul = (x: number, y: number) => s16(Math.trunc((s16(x) * s16(y)) / 256));
 /** Q_8_8_inv (math_util.c) */
 const Q_8_8_inv = (y: number) => s16(Math.trunc(0x10000 / s16(y)));
-
-/**
- * SetSpriteNextToMonHead is defined in battle_anim_effects_1.c (effects1.ts). Looked up at call time, so this
- * file builds whether or not effects1.ts exports it yet; only the unused sBouncingMusicNoteSpriteTemplate needs it.
- */
-function SetSpriteNextToMonHead(battler: number, sprite: Sprite): void {
-  (effects1 as unknown as Record<string, (battler: number, sprite: Sprite) => void>).SetSpriteNextToMonHead(battler, sprite);
-}
 
 // ------------------------------------------------------------------ unused templates' callbacks
 

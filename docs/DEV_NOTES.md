@@ -102,14 +102,15 @@ this is the next level down. When you add or change a subsystem, update its entr
   battle_main.c, battle_script_commands.c, battle_util.c, the controllers, battle_interface.c, battle_gfx_sfx_util.c,
   pokeball.c etc. on top of it. `BattleScene` runs CB2_InitBattle → CB2_HandleStartBattle → BattleMainCB1/CB2 +
   VBlankCB_Battle at 60 Hz and draws with the software PPU. `OverworldScene.startTrainerBattle` builds `BattleStart`.
-- **Battle anims:** `src/battle/anim/` (see docs/LOG.md "Battle animation engine"); BATTLE_ANIMS_PLAN.md has
-  the remaining work (step 1 is done; next: step 2, one PR per type file). To port more: find what a script
-  still needs with `battleAnimCoverage()` (tests/unit/battleAnims.test.ts), port those callbacks/tasks into the
-  module for their C file (`battle_anim_fight.c` → `fight.ts`, `battle_anim_effects_1.c` → `effects1.ts`, ...;
-  create it if missing), register it in `ported.ts`, add the label to the unit test, and graphics a
-  callback loads itself to `registerAnimExtraGfx`. Templates a task creates itself (e.g. gRainDropSpriteTemplate)
-  aren't seen by the coverage check: port their callbacks along with the task. All special anims run, so
-  InitAndLaunchSpecialAnimation has no fallback any more (unit-tested: every Special_* script stays fully ported).
+- **Battle anims:** `src/battle/anim/` (see docs/LOG.md "Battle animation engine"): every battle_anim_*.c file is
+  ported, one module per C file (`battle_anim_fight.c` → `fight.ts`, ...; `battle_anim_effects_3.c` is split over
+  `effects3.ts` and `effects3b.ts` at AnimTask_PainSplitMovement), each registered in `ported.ts`, with graphics a
+  callback loads itself listed through `registerAnimExtraGfx`. The unit test asserts `battleAnimCoverage()` finds
+  nothing missing in any of the 397 scripts. Templates a task creates itself (e.g. gRainDropSpriteTemplate) aren't
+  seen by the coverage check. `DestroySprite` gives the sprite a new `data` array: don't read a saved
+  `sprite.data` after destroying it. E2e tests whose outcome depends on an accuracy roll should reseed
+  (`reseed()` in tests/e2e/battleAnimHelpers.ts) right before that roll: other anims' lengths change when the
+  roll happens.
   A file's static `union AffineAnimCmd[]` / tables come from anims.json (`bdata.anims.units['battle_anim_x.c']`,
   `affineAnimTable`; see psychic.ts). Scanline effects: `ScanlineEffect_SetParams` with per-line buffers, or
   `ScanlineEffect_InitWave` (src/gba/scanline.ts) for a travelling sine wave. An e2e test can read module state
