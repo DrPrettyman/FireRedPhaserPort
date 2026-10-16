@@ -18,12 +18,21 @@ async function animEvent(game: Game, type: 'battleAnim' | 'battleAnimEnd', label
   throw new Error(`no ${type} event for ${label}: ${JSON.stringify((await game.events(since)).map((e) => [e.type, e.label]))}`);
 }
 
+/**
+ * Reseeds the RNG, so the turn's rolls (the wild mon's move, accuracy, damage) don't depend on how many frames
+ * the run took to get here: a 95% Tackle otherwise misses now and then, and a miss plays no anim at all.
+ */
+async function reseed(game: Game): Promise<void> {
+  await game.eval((t) => t.seed(1));
+}
+
 /** Picks the first move at the action menu. */
 async function useFirstMove(game: Game): Promise<number> {
   await game.waitForActionMenu();
   const since = await game.mark();
   await game.press('A'); // FIGHT
   await game.eval((t) => t.waitFrames(10));
+  await reseed(game);
   await game.press('A'); // move 1
   return since;
 }
@@ -31,7 +40,8 @@ async function useFirstMove(game: Game): Promise<number> {
 test('Tackle runs its anim script to the end, then the turn carries on', async () => {
   // speed 1 so polling from here catches the hit splat while it's up
   const game = await session.start({ ...ROUTE1, speed: 1, party: [{ species: 'RATTATA', level: 30, moves: ['TACKLE'] }] });
-  await game.eval((t) => t.startWildBattle({ species: 'MAGIKARP', level: 30 }));
+  // Splash only: a Lv. 30 Magikarp knows Tackle too, and when it's faster its Tackle is the first one
+  await game.eval((t) => t.startWildBattle({ species: 'MAGIKARP', level: 30, moves: ['SPLASH'] }));
   const since = await useFirstMove(game);
 
   const start = await animEvent(game, 'battleAnim', 'Move_TACKLE', since);
@@ -157,6 +167,7 @@ test('a substitute swaps back to the mon to attack, then back to the doll', asyn
   await game.press('A');
   await game.eval((t) => t.waitFrames(10));
   await game.press('LEFT');
+  await reseed(game);
   await game.press('A');
   expect(await animEvent(game, 'battleAnim', 'Special_SubstituteToMon', since)).toMatchObject({ ran: true });
   await animEvent(game, 'battleAnimEnd', 'Move_TACKLE', since);

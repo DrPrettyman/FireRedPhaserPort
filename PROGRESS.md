@@ -116,14 +116,13 @@ Running checklist of what exists and what doesn't. Newest log entries at the bot
 - [x] Old Man's catching tutorial (StartOldManTutorialBattle)
 - [~] Battle: move/status animations (src/battle/anim/: the battle_anim.c engine; 101 of the 397 scripts run, incl.
   every status and special anim (ball throw, switch out, substitute, level up), the stat change, shiny sparkles and
-  most early-game moves; the rest finish at once), battle transitions
+  most early-game moves; the rest finish at once)
 - [x] Battle transitions (battle_transition.c): every FRLG B_TRANSITION_* (the grey-blink intro, Blur, Swirl,
   Shuffle, Big Poké Ball, Poké Balls trail, Clockwise wipe, Ripple, Wave, Slice, White bars fade, Grid squares,
   Angled wipes, the Elite Four / Champion mugshots) drawn over the field on the GBA layer, picked like battle_setup.c
   (GetWildBattleTransition / GetTrainerBattleTransition; Old Man's tutorial uses Slice)
 - [x] Warp screen effects: WarpFadeOutScreen / WarpFadeInScreen (white in and out of caves), the cave flash
   transitions (FlashTransition_Enter / _Exit from CB2_DoChangeMap), the barn door wipe leaving through a door
-- [ ] Battle: move/status animations
 - [ ] Map preview screens (map_preview_screen.c: the cave/forest name banners)
 - [x] Evolution scene (evolution_scene.c, evolution_graphics.c): after a battle (TryEvolvePokemon), from a Rare Candy
   or an evolution stone; holding B stops it; Crobat-style evolutions stop without the National Dex; learning the
@@ -1083,6 +1082,7 @@ State as of the last log entry:
 - Note from the old man's test: his ball's click clears gDoingBattleAnim at frame 95 of 315, so the tutorial
   battle can end before Special_BallThrowWithTrainer reaches `end` (the C does the same).
 - The Substitute test fights a Lv. 12 Magikarp (Splash only): at Lv. 30 its Flail can break the substitute first.
+
 ### Screen transitions: battle transitions, warp fades, barn door wipe (user request)
 
 - Battle transitions: port of battle_transition.c (`battle/transition.ts`) for every transition FRLG uses (Spiral,
@@ -1122,3 +1122,10 @@ State as of the last log entry:
 - `.gitattributes`: `PROGRESS.md merge=union`, so branches that each append a log entry merge without a conflict
   (git keeps both sides). Two branches editing the same line (a checklist item, "Where to resume") come out with
   both versions: tidy them after merging. Log entries from the two sides may also need a blank line between them.
+
+### Flaky e2e fixes (merging `battle-move-anims`)
+
+- mapNamePopup: the hold check now waits for the full height and counts the 100 frames in the page; polling from
+  Node could notice the full height late on a loaded run and land in the slide-out.
+- battleAnims: the Tackle test's Magikarp knows only Splash (a faster Lv. 30 Magikarp's Tackle came first), and
+  the RNG is reseeded at the move-select press, so Tackle's 95% accuracy can't miss (a miss plays no anim).
