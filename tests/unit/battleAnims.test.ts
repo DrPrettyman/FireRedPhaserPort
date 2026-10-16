@@ -45,19 +45,25 @@ const FULLY_PORTED: Record<string, string[]> = {
   ],
 
   // battle_anim_fight.c
-  fight: [],
+  fight: [
+    'Move_KARATE_CHOP', 'Move_STOMP', 'Move_DOUBLE_KICK', 'Move_DIZZY_PUNCH', 'Move_CROSS_CHOP', 'Move_SUPERPOWER',
+    'Move_REVENGE', 'Move_BRICK_BREAK', 'Move_ARM_THRUST', 'Move_SKY_UPPERCUT',
+  ],
 
   // battle_anim_rock.c
-  rock: [],
+  rock: [
+    'Move_SEISMIC_TOSS', 'Move_SANDSTORM', 'Move_ROLLOUT', 'Move_ANCIENT_POWER', 'Move_ROCK_SMASH', 'Move_ROCK_BLAST',
+    'General_Sandstorm',
+  ],
 
   // battle_anim_ground.c
-  ground: [],
+  ground: ['Move_EARTHQUAKE', 'Move_FISSURE', 'Move_DIG', 'Move_BONEMERANG', 'Move_MAGNITUDE'],
 
   // battle_anim_bug.c
-  bug: [],
+  bug: ['Move_LEECH_LIFE', 'Move_SPIDER_WEB', 'Move_MEGAHORN', 'Move_TAIL_GLOW'],
 
   // battle_anim_poison.c
-  poison: [],
+  poison: ['Move_ACID', 'Move_SLUDGE', 'Move_SLUDGE_BOMB'],
 
   // battle_anim_water.c
   water: ['Move_AURORA_BEAM', 'Move_HYDRO_CANNON', 'Move_WATERFALL', 'Move_WATER_PULSE', 'Move_WATER_SPORT', 'Move_WATER_SPOUT'],

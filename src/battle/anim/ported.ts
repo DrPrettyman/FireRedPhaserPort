@@ -26,7 +26,7 @@ import { groundSpriteCallbacks, groundTasks } from './ground';
 import { iceSpriteCallbacks, iceTasks, registerIceExtraGfx } from './ice';
 import { poisonSpriteCallbacks, poisonTasks } from './poison';
 import { psychicSpriteCallbacks, psychicTasks } from './psychic';
-import { rockSpriteCallbacks, rockTasks } from './rock';
+import { registerRockExtraGfx, rockSpriteCallbacks, rockTasks } from './rock';
 import { registerWaterExtraGfx, waterSpriteCallbacks, waterTasks } from './water';
 
 let done = false;
@@ -90,5 +90,6 @@ export function registerPortedBattleAnims(): void {
   registerDarkExtraGfx();
   registerWaterExtraGfx();
   registerIceExtraGfx();
+  registerRockExtraGfx();
   registerSpecialExtraGfx();
 }
