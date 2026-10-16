@@ -23,9 +23,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     them as English and Shedinja doesn't clear those fields.
   - Summary screen: no trade-screen view or multi-battle party order; the struct Pokemon fields the port doesn't
     store read as defaults (met game FireRed, no fateful-encounter flag, English).
-  - Party menu: mail, the move relearner, Union Room, minigames, Pokédude/Teachy TV demos are not ported. Of
-    the field moves, Fly isn't registered yet (it says it can't be used here), and no field move records a quest
-    log event.
+  - Party menu: mail, the move relearner, Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
+    field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
+  - Region map / Fly (menus/regionMap.ts, world/fly.ts): no audio (SE_DEX_SCROLL, SE_CARD_OPEN, SE_M_FLY, ...).
+    The Town Map's registered (SELECT) use, Task_UseTownMapFromField, isn't ported (registered items aren't).
+    The bird of Fly always uses the extracted bird sheet's own palette (Red's), where the GBA draws it in OBJ
+    palette 0, the player's (Leaf's frames would use hers). gExitStairsMovementDisabled isn't kept (no stair
+    walk-out). The dungeon previews' third palette is zero-filled: the C loads 3 palettes from 2-palette data,
+    reading on into the ROM (no preview tilemap uses it). Where the C reads a NULL sMapCursor (naming the section
+    before the cursor exists, CB2_OpenRegionMap / UpdateMapsecNameBox), the port reads MAPSEC_NONE.
   - Field moves (world/fieldMoves.ts, world/fieldMoveShowMon.ts): no audio (the cry in the banner, SE_M_CUT,
     SE_M_ROCK_THROW, SE_M_SWEET_SCENT, the warp sounds) and no GAME_STAT_USED_CUT / _ROCK_SMASH. The field
     effect scripts' palette commands (loadfadedpal, ...) do nothing: the field's sprites are Phaser textures. A
@@ -36,7 +42,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     follows. The show-mon banner's graphics load while the player's pose plays, so a very slow load would hold the
     banner back. Dig/Escape Rope with no escape warp saved (a dev start in a cave) go to the last heal location.
   - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Bag uses that need overworld systems
-    (rods, Escape Rope, Itemfinder, VS Seeker, Town Map, Fame Checker, Teachy TV, mail, TM case, berry pouch,
+    (rods, Escape Rope, Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail, TM case, berry pouch,
     registered SELECT items) log "not implemented" and return to the bag. Berry powder reads as 0. The TM case
     and berry pouch can't be opened to give from (the PC box's GIVE, GoToTMCase_PCBox / GoToBerryPouch_PCBox).
   - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
@@ -114,7 +120,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Elevators: SE_ELEVATOR / SE_DING_DONG are silent; UpdateEscapeWarp isn't kept on warps.
   - Field ListMenu (ui/FieldListMenu.ts): SE_SELECT is silent; the quest log's QL_AvoidDisplay is ignored.
   - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu.
-  - Interaction metatiles whose scripts need unported screens/specials (Town Map, Trainer Tower clock, cable club
+  - Interaction metatiles whose scripts need unported screens/specials (Trainer Tower clock, cable club
     monitors, questionnaire/easy chat) start their scripts and hit the unimplemented-special warnings.
   - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link flags.
   - Player names are "PLAYER"/"RIVAL" until Oak's intro exists.
@@ -156,6 +162,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     map elevation produces (priority 3 is only used by field effects: reflections and ripples). Sprites tied on priority, subpriority and screen top keep creation order rather
     than the previous frame's gSpriteOrder.
   - BIOS ObjAffineSet uses a computed sine table; the PPU has BG mosaic but not OBJ mosaic.
+  - Fly's bird is a Phaser sprite (like the field's objects): its OAM matrix becomes a uniform scale and a
+    rotation, and the double-size box it's drawn in is a crop of the frame (exact while unrotated; the bird only
+    rotates while smaller than the box). Its screen coordinates go through the Phaser camera's view.
+  - The GBA layer's BG copies happen at once rather than at the next VBlank (DMA3). The region map re-copies the
+    tilemaps it asked for at its VBlank, so a window put after the request in the same frame shows as on the GBA
+    (ClearOrDrawTopBar after PrintTopBarTextRight); other screens don't.
   - Buy menu map view: object sprites skip their subsprite tables (table 0 is empty for every size, so it draws the
     same); an inanimate object not facing south shows its only anim instead of reading past the anim table.
   - The map name popup scrolls only its own window; on the GBA it scrolls all of BG0 (BG0VOFS), so a message

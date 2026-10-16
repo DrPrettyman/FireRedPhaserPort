@@ -1283,3 +1283,35 @@ end to end.
 - playerAvatar.test.ts: the bike ride and the hold / watch / release sequences (bump, run, ledge, ice, spinner,
   boulder push) are each one eval now. The bike test failed under load (the gaps between evals counted as frames).
 - Passed three loaded runs of playerAvatar, strength, surf and battleAnims.3e3a together.
+
+### Region map (Town Map, wall maps, fly map) and Fly (W-fly, batch 3)
+
+- `menus/regionMap.ts` is region_map.c on the GBA layer, all three REGIONMAP_TYPE_*s: the Town Map from the bag
+  (FieldUseFunc_TownMap → InitRegionMapWithExitCB(NORMAL, CB2_BagMenuFromStartMenu): the map edges opening and
+  closing, the Kanto / Sevii 1-3 / 4-5 / 6-7 switch menu, the dungeon map previews with their tint and description),
+  the wall maps (`special ShowTownMap`, EventScript_WallTownMap) and the fly map (CB2_OpenFlyMap). The cursor (held
+  D-pad, START snapping to the player / SWITCH / CANCEL), the player icon (with the section overrides and the
+  position scaled into its section, from the escape / dynamic warp indoors), dungeon icons (visited or not), fly
+  icons on visited towns (FLAG_WORLD_MAP_*), the map name and dungeon name windows, the top bar.
+- `world/fly.ts`: SetUpFieldMove_Fly, the fly destination (sMapFlyDestinations → SetWarpDestinationToHealLocation),
+  ReturnToFieldFromFlyMapSelect / FieldCallback_UseFly / Task_UseFly, FldEff_FlyOut and FldEff_FlyIn with the bird's
+  sprite callbacks and affine anims, Overworld_ResetStateAfterFly, FieldCallback_FlyIntoMap / Task_FlyIntoMap.
+  The party menu's FLY opens the fly map; B there goes back to the party menu (CB2_ReturnToPartyMenuFromFlyMap).
+- Found on the way: the port's BG copies are immediate where the GBA's DMA3 copies at VBlank, so the region map's
+  top bar (put right after its copy request) stayed blank; the screen now re-copies requested tilemaps at its
+  VBlank (DEVIATIONS).
+- Shared changes: partyMenu.ts (the FLY case, CB2_ReturnToPartyMenuFromFlyMap), fieldMoves.ts (FieldMoveHost
+  `loadMapHeader` / `healLocation` / `camera` / `createFieldEffectSprite`, `fieldMoveHost`,
+  Overworld_ResetStateAfterFly, `prepareRegionMap` from prepareFieldMoveMenu, `registerFly`), OverworldScene
+  (those host members, `showTownMap`, the bag also waits for prepareFieldMoveMenu), FieldMenuScene ('townMap',
+  region map graphics preloaded with the party menu and the bag), itemUse.ts (FieldUseFunc_TownMap),
+  ScriptEngine.ts (`ScriptHost.showTownMap`), specials.ts (ShowTownMap), FieldEffects.ts (FieldEffectSprite
+  `scaleY` / `rotation` / `crop`), ObjectEvent.ts (run-time `inanimate`), menus/data.ts (`regionMap`), testHooks
+  (`regionMap()` probe).
+- Extractor: graphics/region_map/ and graphics/map_preview/ in extract_gfx.py; menus.json `regionMap` in
+  extract_menus.py (layouts, section corners and sizes, sSeviiMapsecs, sMapFlyDestinations, sDungeonInfo,
+  sMapPreviewScreenData, MAP_NUMs). Rerun `npm run extract`.
+- Tests: tests/e2e/fly.test.ts (9: the Town Map + a dungeon preview + back to the bag, the Sevii switch menu,
+  opening on the Sevii map, indoors via the escape warp, a wall map, flying Pallet → Viridian's heal location, an
+  unvisited town refused, indoors refused, no Thunder Badge refused). typecheck, `npm test` (85) and the full
+  `npm run test:e2e` (222) pass.

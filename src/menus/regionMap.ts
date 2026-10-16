@@ -2985,6 +2985,8 @@ export function regionMapProbe():
       /** The main task is at its input state (Task_RegionMap 3, Task_FlyMap 4). */
       ready: boolean;
       cursor: { x: number; y: number };
+      /** The cursor is between two cells (MoveMapCursor). */
+      moving: boolean;
       player: { x: number; y: number } | undefined;
       selectedRegion: number;
       playersRegion: number;
@@ -3008,6 +3010,7 @@ export function regionMapProbe():
     task,
     ready,
     cursor: { x: sMapCursor.x, y: sMapCursor.y },
+    moving: sMapCursor.inputHandler === MoveMapCursor,
     player: sPlayerIcon ? { x: sPlayerIcon.x, y: sPlayerIcon.y } : undefined,
     selectedRegion: sRegionMap.selectedRegion,
     playersRegion: sRegionMap.playersRegion,

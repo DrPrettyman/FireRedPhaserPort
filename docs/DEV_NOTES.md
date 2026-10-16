@@ -89,7 +89,7 @@ this is the next level down. When you add or change a subsystem, update its entr
     `CreateFieldEffectShowMon` for the banner. Script-driven moves (EventScript_StrengthBoulder, EventScript_UseSurf,
     EventScript_Waterfall) then work from the field too: until a FldEff_UseX exists, `dofieldeffect
     FLDEFF_USE_X` + `waitstate` just continue. A move in its own module (world/surf.ts, world/strength.ts) is
-    registered from `registerFieldMoves`. Fly is special-cased in CursorCB_FieldMove (CB2_OpenFlyMap).
+    registered from `registerFieldMoves`. Fly is special-cased in CursorCB_FieldMove (CB2_OpenFlyMap, see "Fly").
     Escape warp: `UpdateEscapeWarp` (from OverworldScene.takeWarp) / `SetEscapeWarp`, state.escapeWarp.
     `CreateFieldEffectShowMon`, `ScriptContext_Enable` and `ScriptContext_SetupScript` are exported for that.
   - **Strength:** `world/strength.ts` (fldeff_strength.c). From the party menu SetUpFieldMove_Strength needs a
@@ -105,6 +105,20 @@ this is the next level down. When you add or change a subsystem, update its entr
     `fieldMoveShowMon` (species, outdoors), `cutGrass`, `sweetScent`, `fieldMoveWarp`, `fieldMoveWarpDone`.
     Tests: tests/e2e/fieldMoves.test.ts (Vermilion's cut tree from (19, 25), Route 1 grass (14, 8), Mt. Ember
     rock (29, 41) with `wild.seed(0)` for an encounter / `seed(1)` for none, Mt. Moon from Route 4 (19, 6) for Dig).
+- **Fly:** `world/fly.ts`. SetUpFieldMove_Fly (registered from `registerFieldMoves`) only checks the map type; the
+  badge check is CursorCB_FieldMove's, which then closes the party menu into CB2_OpenFlyMap (menus/regionMap.ts,
+  in FieldMenuScene). Choosing a visited town calls SetFlyWarpDestination → SetWarpDestinationToHealLocation
+  (sMapFlyDestinations' HEAL_LOCATION_*, `FieldMoveHost.healLocation`) and ReturnToFieldFromFlyMapSelect, which
+  sets `gFieldCallback.fn = FieldCallback_UseFly`; cancelling goes back to the party menu
+  (CB2_ReturnToPartyMenuFromFlyMap). On the field, Task_UseFly runs FLDEFF_FLY_OUT (FldEff_FlyOut: pose, banner,
+  the bird leaving its ball, swooping, the player jumping on and flying off, WarpFadeOutScreen), then
+  Overworld_ResetStateAfterFly and `FieldMoveHost.warpIntoMap` with FieldCallback_FlyIntoMap → FLDEFF_FLY_IN. The
+  bird is a field effect sprite (`createFieldEffectSprite`) in screen coordinates: `BirdSprite` keeps the C's
+  struct Sprite fields and runs sprite.c's affine anims, and FieldEffectSprite gained `scaleY` / `rotation` /
+  `crop` to draw the matrix and the double-size box. While the bird carries the player, the player's Phaser
+  sprite is placed from the bird's position; `ObjectEvent.inanimate` (the C's run-time flag) keeps the
+  get-on frame through the jump. Test events `flyOut`, `flyWarp` (map, x, y), `flyIn`, `flyDone`. Tests:
+  tests/e2e/fly.test.ts (Pallet Town → Viridian City with FLAG_BADGE03_GET and FLAG_WORLD_MAP_VIRIDIAN_CITY).
 - **Surf and Waterfall:** `world/surf.ts`. SetUpFieldMove_Surf / _Waterfall and FieldCallback_* for the party
   menu; GetInteractedWaterScript (the last step of `OverworldScene.interact`: EventScript_UseSurf,
   EventScript_CurrentTooFast, EventScript_Waterfall / CantUseWaterfall); IsPlayerFacingSurfableFishableWater and
@@ -231,6 +245,20 @@ this is the next level down. When you add or change a subsystem, update its entr
   `SpecialEnv.setupScript` (ScriptContext_SetupScript). Probes: `__test.pcStorage()` (task, state, cursor, box,
   displayed species, bottom message, menu items, the popup's box) and `__test.itemPc()`. Tests:
   tests/e2e/pcStorage.test.ts (Viridian Pokémon Center, the PC above (11, 2)).
+- **Region map:** `menus/regionMap.ts` is region_map.c (GetMapName stays in `world/regionMap.ts`): the Town Map
+  from the bag (FieldUseFunc_TownMap → InitRegionMapWithExitCB(REGIONMAP_TYPE_NORMAL, CB2_BagMenuFromStartMenu):
+  the map edges' open/close animation, the Kanto / Sevii switch menu once FLAG_SYS_SEVII_MAP_123 is set, the dungeon
+  previews with map_preview_screen.c's graphics), the wall maps (`special ShowTownMap`, REGIONMAP_TYPE_WALL,
+  FieldMenuScene 'townMap' through `ScriptHost.showTownMap`) and the fly map (CB2_OpenFlyMap, REGIONMAP_TYPE_FLY:
+  fly icons on visited towns). Towns count as visited by their FLAG_WORLD_MAP_* flags (`setworldmapflag` in the
+  maps' scripts). What the C reads from the overworld (gMapHeader, the location, pos, escape / dynamic warps and
+  their headers) is handed over with `setRegionMapField`, which `prepareFieldMoveMenu` / `prepareRegionMap`
+  (world/fieldMoves.ts) fill before the party menu, the bag or a wall map opens. Tables: menus.json `regionMap`
+  (tools/extract_menus.py: layouts, section corners/sizes, sSeviiMapsecs, sMapFlyDestinations, sDungeonInfo,
+  sMapPreviewScreenData, MAP_NUMs); graphics: graphics/region_map/ and graphics/map_preview/
+  (`regionMapGfxSymbols`, preloaded by FieldMenuScene). The screen re-copies its tilemaps at VBlank (see
+  DEVIATIONS: the port's DMA is immediate). Probe `__test.regionMap()` (type, task, `ready`, cursor, `moving`,
+  player icon, section and its MAPSECTYPE_*, fly icons, map name, top bar text). Tests: tests/e2e/fly.test.ts.
 - **Evolution scene:** `menus/evolutionScene.ts` + `menus/evolutionGraphics.ts` run on whichever GBA host is up
   (BattleScene after TryEvolvePokemon, FieldMenuScene from the party menu) and hand back through
   `gCB2_AfterEvolution` (`setCB2_AfterEvolution`). It draws on the battle BG/window layout, so the field host
