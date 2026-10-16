@@ -126,7 +126,12 @@ const FULLY_PORTED: Record<string, string[]> = {
   effects3: [],
 
   // battle_anim_effects_3.c, second half (effects3b.ts)
-  effects3b: [],
+  effects3b: [
+    'Move_BARRAGE', 'Move_ACID_ARMOR', 'Move_REVERSAL', 'Move_FORESIGHT', 'Move_RETURN', 'Move_FACADE',
+    'Move_SMELLING_SALT', 'Move_HELPING_HAND', 'Move_ROLE_PLAY', 'Move_ASSIST', 'Move_RECYCLE', 'Move_YAWN',
+    'Move_KNOCK_OFF', 'Move_ENDEAVOR', 'Move_REFRESH', 'Move_SLACK_OFF', 'Move_WEATHER_BALL', 'Move_ODOR_SLEUTH',
+    'Move_BLOCK', 'Move_HOWL', 'General_SmokeballEscape', 'General_FocusBand', 'General_SnatchMove',
+  ],
 };
 
 describe('battle anim coverage', () => {
