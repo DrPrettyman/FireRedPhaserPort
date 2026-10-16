@@ -223,12 +223,32 @@ this is the next level down. When you add or change a subsystem, update its entr
   saved anyway since the Safari start menu has no SAVE, and the roamer's location). Other optional warps the save
   keeps: `continueGameWarp` + `specialSaveWarpFlags` (CONTINUE_GAME_WARP), `escapeWarp` (nothing sets it yet).
   When a new GameState field belongs in the save, add it to SaveData, toSaveData and fromSaveData and bump
-  SAVE_VERSION; a new Pokemon field won't compile until it's listed in saveData.ts's field lists. Play time
-  (`state.playTime`, state/playTime.ts) is ported but not ticked yet: whoever builds the save info window needs
-  PlayTimeCounter_Start on entering the field (CB2_NewGame / CB2_ContinueSavedGame) and PlayTimeCounter_Update
-  once per frame on every screen. Tests: tests/unit/pcBoxes.test.ts, tests/unit/saveData.test.ts,
-  tests/e2e/pcBoxes.test.ts (Celadon Condominiums roof Eevee at (7,3) with a full party; catches on Route 1).
-  `t.battle().message` is the battle's last displayed string.
+  SAVE_VERSION; a new Pokemon field won't compile until it's listed in saveData.ts's field lists. Saving and
+  loading from the game: see "Saving and continuing". Tests: tests/unit/pcBoxes.test.ts,
+  tests/unit/saveData.test.ts, tests/e2e/pcBoxes.test.ts (Celadon Condominiums roof Eevee at (7,3) with a full
+  party; catches on Route 1). `t.battle().message` is the battle's last displayed string.
+- **Saving and continuing:** `state/save.ts` is save.c on top of the slot: `LoadGameSave()` (BootScene, at boot)
+  sets `gSave.fileStatus` (gSaveFileStatus: SAVE_STATUS_EMPTY / OK / INVALID for an unreadable slot),
+  `TrySavingData(type, state)` writes `toSaveData(state)` and sets `gSave.attemptStatus`; `gSave.differentSaveFile`
+  is gDifferentSaveFile (set by the new game, cleared by CONTINUE and by the new file's first save); plus
+  load_save.c's UseContinueGameWarp & co. The start menu's SAVE runs `ui/SaveDialog.ts` (start_menu.c's
+  SaveDialogCB_* chain, one callback per frame, in the field message box; the save info window is PrintSaveStats
+  on `ui/saveMenuUtil.ts`'s SaveStatToString / GetKantoPokedexCount). It calls `storeLocationForSave()` right
+  before writing, since the port doesn't keep gSaveBlock1Ptr->pos current. NO goes back to the start menu.
+  Boot: BootScene reads the slot; with something in it (and no `?start=` / `?map=`) it starts `MainMenuScene`
+  (a GbaHostScene running `menus/mainMenu.ts`, main_menu.c: CONTINUE / NEW GAME, no OPTIONS in FRLG, no MYSTERY
+  GIFT), otherwise the new game. The main menu reads the save through `saveDataView` (what LoadGameSave leaves in
+  gSaveBlock1/2). CONTINUE starts the overworld with `{ continueGame: save }`: `create()` loads it with
+  `fromSaveData` into the fresh GameState, then `continueSavedGame()` is CB2_ContinueSavedGame
+  (Overworld_ResetStateOnContinue, PlayTimeCounter_Start, the continue-game warp if CONTINUE_GAME_WARP is set,
+  else the saved map with only ON_LOAD (`onMapLoaded(false, location)`), the player put back with the saved facing
+  and bike/surf state, ResumeMap's scripts, the map name popup and a fade from black). Play time
+  (state/playTime.ts) is started by the field (new game or CONTINUE) and updated once per logic tick by
+  `OverworldScene.tick` and by GbaHostScene's loop (`initHost(texture, state.playTime)`), i.e. on every screen as
+  AgbMain does. Tests: tests/unit/save.test.ts, tests/e2e/saveContinue.test.ts. The e2e harness empties the slot
+  before every `load()` unless `keepSave: true`; `mainMenu: true` waits for the main menu instead of the field.
+  Probes: `t.startMenu()` (items, cursor), `t.saveDialog()` (yesNo, statsWindow, the stats as text),
+  `t.mainMenu()` (menuType, cursorPos, fading, the CONTINUE values as text).
 
 ## Testing and debugging
 

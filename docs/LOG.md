@@ -1152,3 +1152,33 @@ end to end.
   check and FldEff_UseFlash; FieldMoveHost gains `cave()` and `useFlash()`. e2e: fieldMoves.test.ts.
 - Extracting in a worktree: set `FIRERED_DECOMP=/path/to/pret/firered` (the default is a path relative to the
   checkout, which a worktree doesn't have).
+
+### Save dialog, main menu and CONTINUE (MAIN_PATH_PLAN.md W-save)
+
+- start_menu.c's save dialog (`ui/SaveDialog.ts`): StartMenuSaveCallback → StartCB_Save1/2 and the SaveDialogCB_*
+  chain ("Would you like to save the game?", the overwrite / different game file questions, "SAVING... DON'T TURN
+  OFF THE POWER.", "PLAYER saved the game." with the 60-frame / A-held wait, the save error), with the save info
+  window (PrintSaveStats; save_menu_util.c's SaveStatToString and pokedex.c's Kanto/National counts in
+  `ui/saveMenuUtil.ts`). The start menu's SAVE entry opens it; NO returns to the start menu.
+- save.c on the localStorage slot (`state/save.ts`): LoadGameSave / gSaveFileStatus (EMPTY / OK / INVALID),
+  TrySavingData / gSaveAttemptStatus, gDifferentSaveFile, load_save.c's continue-game warp flag.
+- main_menu.c on the GBA layer (`menus/mainMenu.ts` + `scenes/MainMenuScene.ts`): CONTINUE with the player's
+  name, play time, Pokédex count and badges / NEW GAME, the WIN0 darkening, the "save file has been deleted"
+  message for an unreadable slot. FRLG has no OPTIONS on the main menu; MYSTERY GIFT is left out.
+- CB2_ContinueSavedGame (`OverworldScene.continueSavedGame`): the save loaded into the state, the saved map and
+  position, facing and bike/surf state, ON_LOAD then ResumeMap's scripts, or the continue-game warp if set.
+- Boot (decided in MAIN_PATH_PLAN.md): main menu when the slot holds something, the new game otherwise; dev
+  starts skip it. Logged as a deviation until the title screen exists.
+- Play time: PlayTimeCounter_Start on the new game and CONTINUE, PlayTimeCounter_Update every logic tick in the
+  field and on every GBA-layer screen (GbaHostScene).
+- Shared changes: OverworldScene (OverworldStart.continueGame, the CONTINUE path, onMapLoaded's continue mode, the
+  new game's gDifferentSaveFile/play time, play time per tick, SAVE in the start menu), BootScene (boot flow),
+  main.ts (MainMenuScene), GbaHostScene/BattleScene/FieldMenuScene (play time), YesNoMenu (default NO, input
+  delay option), StartMenu (probe), saveData.ts (`saveSlotUsed`), testHooks (`startMenu`, `saveDialog`,
+  `mainMenu` probes), e2e harness (`keepSave`, `mainMenu`, `clearSave`).
+- Extractor: include/save.h, save_location.h and save_menu_util.h defines (SAVE_STATUS_*, SAVE_NORMAL..,
+  CONTINUE_GAME_WARP, SAVE_STAT_*), and graphics/main_menu/ palettes (sBg_Pal, sTextbox_Pal).
+- Tests: tests/unit/save.test.ts, tests/e2e/saveContinue.test.ts (YES / NO / overwrite, CONTINUE after a reload
+  with map, position, facing, bike, party, bag, flags, money and play time, the continue-game warp, play time
+  per frame in the field and the bag and shown in both windows, the boot flow and NEW GAME's warning, an
+  unreadable save).
