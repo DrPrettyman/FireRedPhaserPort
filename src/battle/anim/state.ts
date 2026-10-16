@@ -11,8 +11,11 @@ export const ANIM_ARGS_COUNT = 8;
 /** ARG_RET_ID: the gBattleAnimArgs slot tasks return values in */
 export const ARG_RET_ID = ANIM_ARGS_COUNT - 1;
 
-/** gBattleAnimArgs */
-export const gBattleAnimArgs = new Int16Array(ANIM_ARGS_COUNT);
+/**
+ * gBattleAnimArgs. ANIM_ARGS_COUNT long in the C, but AnimTask_IsPowerOver99 writes (and Move_MAGNITUDE's
+ * jumpargeq reads) index 15, past the end into whatever EWRAM follows; the spare slots stand in for that.
+ */
+export const gBattleAnimArgs = new Int16Array(16);
 
 /** gBattleAnimBgTileBuffer / gBattleAnimBgTilemapBuffer (AllocateBattleResources) */
 export const gBattleAnimBgTileBuffer = new Uint8Array(0x2000);
