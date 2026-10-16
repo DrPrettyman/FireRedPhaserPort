@@ -940,3 +940,31 @@ end to end.
   Band only holds 10% of the time), and tests/e2e/battleAnims.test.ts. Checked by eye in mid-anim screenshots:
   Acid Armor, Role Play, Barrage, Foresight, Facade, Refresh, Block, Smelling Salt, Yawn, Meteor Mash,
   Odor Sleuth.
+### Battle anims 3E3a: battle_anim_effects_3.c, first half
+
+- Ported every sprite callback, task and helper of battle_anim_effects_3.c up to AnimPainSplitProjectile (C line
+  2877) into `effects3.ts`, in C order: AnimBlackSmoke, AnimTask_SmokescreenImpact, AnimWhiteHalo, AnimTealAlert,
+  AnimMeanLookEye, AnimTask_FadeScreenToWhite, AnimSpikes, AnimLetterZ, AnimFang, AnimTask_IsTargetPlayerSide,
+  AnimTask_IsHealingMove, AnimSpotlight, AnimClappingHand(2), AnimTask_CreateSpotlight / RemoveSpotlight,
+  AnimRapidSpin, AnimTask_RapinSpinMonElevation, AnimTask_TormentAttacker, AnimTriAttackTriangle, the
+  Defense Curl / Stockpile / Spit Up / Swallow deform tasks, AnimBatonPassPokeball, AnimWishStar,
+  AnimMiniTwinklingStar, AnimSwallowBlueOrb, AnimTask_IsMonInvisible, AnimTask_CastformGfxChange,
+  AnimTask_MorningSunLightBeam, AnimGreenStar, AnimTask_DoomDesireLightBeam, AnimTask_StrongFrustrationGrowAndShrink,
+  AnimWeakFrustrationAngerMark, AnimSweetScentPetal, AnimTask_FlailMovement, AnimPainSplitProjectile (step 1's
+  four stay). The deform tasks' affine anims come from anims.json; the light beam BG and the smoke are preloaded
+  through `registerEffects3ExtraGfx` (registered in `ported.ts`).
+- Scripts now complete (27): Baton Pass, Defense Curl, Encore, Flail, Focus Punch, Frustration, Hyper Fang,
+  Luster Purge, Mean Look, Mega Kick, Mega Punch, Mind Reader, Morning Sun, Poison Fang, Psycho Boost, Rapid Spin,
+  Sleep Talk, Smokescreen, Spikes, Stockpile, Swallow, Sweet Scent, Torment, Tri Attack, Wish,
+  General_CastformChange, General_DoomDesireHit (291 of 397 with this PR alone).
+- Still waiting on effects3b.ts (the other half): Spit Up (AnimSpitUpOrb), Pain Split
+  (AnimTask_PainSplitMovement), Flatter (AnimFlatterSpotlight, AnimFlatterConfetti), Present (AnimPresent,
+  AnimPresentHealParticle), Solar Beam (AnimTask_CreateSmallSolarBeamOrbs, AnimSolarBeamBigOrb).
+- New module `smokescreen.ts`: SmokescreenImpact (battle_anim_smokescreen.c), the four-part smoke cloud.
+- Engine: HandleSpeciesGfxDataChange's Castform branch (gfx.ts) no longer throws: it takes the form from
+  animationData.animArg and its palette row from the battler's Castform palette (see DEVIATIONS.md).
+- Verified: typecheck, unit tests (27 labels in `FULLY_PORTED.effects3`), tests/e2e/battleAnims.3e3a.test.ts
+  (every newly ported move; Doom Desire's delayed hit; Smokescreen's four smoke sprites and their cleanup;
+  Encore's OBJ window + WIN1 and their reset; Castform changing to its sunny form under Sunny Day), and mid-anim
+  screenshots of Smokescreen, Encore, Mean Look, Mind Reader, Morning Sun, Wish, Spikes, Sweet Scent, Rapid Spin,
+  Tri Attack, Torment, Psycho Boost and Castform's sunny form.

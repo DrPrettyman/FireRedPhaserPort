@@ -13,7 +13,7 @@ import { registerSpriteCallbacks, registerTaskFuncs } from './state';
 // The per-move files (battle_anim_effects_1.c ... battle_anim_water.c)
 import { effects1SpriteCallbacks, effects1Tasks } from './effects1';
 import { effects2SpriteCallbacks, effects2Tasks } from './effects2';
-import { effects3SpriteCallbacks, effects3Tasks } from './effects3';
+import { effects3SpriteCallbacks, effects3Tasks, registerEffects3ExtraGfx } from './effects3';
 import { effects3bSpriteCallbacks, effects3bTasks, registerEffects3bExtraGfx } from './effects3b';
 import { bugSpriteCallbacks, bugTasks } from './bug';
 import { darkSpriteCallbacks, darkTasks, registerDarkExtraGfx } from './dark';
@@ -96,5 +96,6 @@ export function registerPortedBattleAnims(): void {
   registerIceExtraGfx();
   registerRockExtraGfx();
   registerSpecialExtraGfx();
+  registerEffects3ExtraGfx();
   registerEffects3bExtraGfx();
 }

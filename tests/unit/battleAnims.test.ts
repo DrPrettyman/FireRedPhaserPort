@@ -123,7 +123,13 @@ const FULLY_PORTED: Record<string, string[]> = {
   effects2: [],
 
   // battle_anim_effects_3.c, first half (effects3.ts)
-  effects3: [],
+  effects3: [
+    'Move_BATON_PASS', 'Move_DEFENSE_CURL', 'Move_ENCORE', 'Move_FLAIL', 'Move_FOCUS_PUNCH', 'Move_FRUSTRATION',
+    'Move_HYPER_FANG', 'Move_LUSTER_PURGE', 'Move_MEAN_LOOK', 'Move_MEGA_KICK', 'Move_MEGA_PUNCH', 'Move_MIND_READER',
+    'Move_MORNING_SUN', 'Move_POISON_FANG', 'Move_PSYCHO_BOOST', 'Move_RAPID_SPIN', 'Move_SLEEP_TALK',
+    'Move_SMOKESCREEN', 'Move_SPIKES', 'Move_STOCKPILE', 'Move_SWALLOW', 'Move_SWEET_SCENT', 'Move_TORMENT',
+    'Move_TRI_ATTACK', 'Move_WISH', 'General_CastformChange', 'General_DoomDesireHit',
+  ],
 
   // battle_anim_effects_3.c, second half (effects3b.ts)
   effects3b: [
