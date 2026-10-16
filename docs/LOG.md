@@ -818,3 +818,50 @@ end to end.
   new callback/task four moves to a battle, plus Fly and Bounce (the attacker hidden between turns and back after)
   and Whirlwind (ends the wild battle). Checked by eye in mid-anim screenshots: Fire Blast, Sacred Fire,
   Will-O-Wisp, Thunder, Spark, Charge, Volt Tackle, Shock Wave, Feather Dance, Fly.
+### Battle anims 2B: battle_anim_water.c, battle_anim_ice.c, battle_anim_dragon.c
+
+- All three files are ported whole (every sprite callback, task and helper, including ones no script uses:
+  AnimUnusedIceCrystalThrow). New module `dragon.ts`, registered in `ported.ts` along with `registerIceExtraGfx`.
+  Contest-only branches are left out (IsContest() is FALSE in FRLG); each port cites its C function.
+- 22 more scripts run: Aurora Beam, Hydro Cannon, Waterfall, Water Pulse, Water Sport, Water Spout, Blizzard,
+  Hail (and General_Hail), Haze, Ice Ball, Ice Beam, Ice Punch, Icy Wind, Mist Ball, Poison Gas, Powder Snow,
+  Dragon Breath, Dragon Dance, Dragon Rage, Outrage, Overheat. Waiting on other files: Dive (effects_1/3), Secret
+  Power (effects_1/2), Tri Attack (fire/electric/effects), Weather Ball (effects_3/rock).
+- AnimTask_WaterSpoutRain calls AnimTask_HorizontalShake (ground.c, worker A) through `taskFuncByName`, skipped
+  until it's registered (docs/DEVIATIONS.md). AnimWaterPulseRing is exported for effects_2's template.
+- Haze and Mist Ball load the field weather's fog tiles and palette (gWeatherFogHorizontalTiles,
+  gDefaultWeatherSpritePalette): `tools/extract_gfx.py` now also extracts `graphics/weather/` (rerun
+  `npm run extract`).
+- The C's "run backwards until off screen" loops (AnimSwirlingSnowball, AnimMoveParticleBeyondTarget,
+  AnimUnusedIceCrystalThrow) are capped, since a zero velocity would hang the page as it hangs the GBA.
+- No shared-engine changes.
+- Tests: the labels in the water/ice/dragon `FULLY_PORTED` lists; tests/e2e/battleAnims.2b.test.ts runs every
+  move four to a battle, plus Poison Gas (clouds appear and clear), Haze (BG1 fog blends to 9/16, then BLDCNT /
+  BLDALPHA cleared), Hail (hailstones, crystal bursts, then General_Hail at the end of the turn) and Water Spout
+  (≥10 launched droplets, splashes on the foe, both mons visible after).
+- Checked by eye in mid-anim screenshots: Dragon Dance (scanline waver), Haze, Blizzard, Aurora Beam, Overheat,
+  Ice Beam, Water Spout, Hail, Outrage, Dragon Rage.
+### Battle anims 2A: battle_anim_fight.c, _rock.c, _ground.c, _bug.c, _poison.c
+
+- All five files are fully ported: every sprite callback, task and helper, including the unused
+  AnimUnusedHumanoidFoot (fight.ts, rock.ts, ground.ts, bug.ts, poison.ts). New: AnimTask_LoadSandstormBackground
+  (BG1 blend, like Surf), AnimTask_Rollout (dirt and rock sizes follow the Rollout counter), the Seismic Toss and
+  Sky Uppercut BG3 scrolls, Dig (a BG1/BG2HOFS scanline effect hides the lines below the hole),
+  AnimTask_HorizontalShake (battlers or terrain), the Fissure BG3 positioning, and the Flying-sand subsprites.
+- 29 more scripts run (168 → 197 of 397): Karate Chop, Stomp, Double Kick, Dizzy Punch, Cross Chop, Superpower,
+  Revenge, Brick Break, Arm Thrust, Sky Uppercut, Seismic Toss, Sandstorm, Rollout, Ancient Power, Rock Smash,
+  Rock Blast, Earthquake, Fissure, Dig, Bonemerang, Magnitude, Leech Life, Spider Web, Megahorn, Tail Glow, Acid,
+  Sludge, Sludge Bomb, General_Sandstorm. Still waiting on other workers' files: Mega Punch, Mega Kick and
+  Focus Punch (AnimTask_IsTargetPlayerSide, effects_3), Thrash, Sky Attack, Heat Wave, Eruption, Imprison,
+  Luster Purge, Blaze Kick, Mud Sport, Meteor Mash, Weather Ball, Rock Tomb.
+- Engine: `gBattleAnimArgs` has 16 slots (state.ts). AnimTask_IsPowerOver99 writes index 15, past the C array's
+  end, and Move_MAGNITUDE's `jumpargeq 15` reads it back; with 8 slots neither branch ran. `ported.ts` registers
+  the rock module's extra gfx (the sandstorm BG).
+- Matches the C's out-of-range read: Sludge and Sludge Bomb call StartSpriteAnim(sprite, 2) on the one-entry
+  sAnims_PoisonProjectile, which on the GBA reads the next tables in ROM (anim 2 = sAnim_SludgeBombHit); the sprite
+  gets a table laid out like that.
+- Tests: the 29 labels in `FULLY_PORTED`; tests/e2e/battleAnims.2a.test.ts runs one move per new callback/task
+  (four to a battle, Rollout through its lock), plus Magnitude (BG3HOFS terrain shake, via arg 15), Dig (hidden
+  after turn 1, both turns' anims, visible after) and Fissure (BG3 crack positioned, then the OHKO).
+- Checked by eye in mid-anim screenshots: Sandstorm, Superpower, Sludge, Seismic Toss, Sky Uppercut, Dig, Rollout,
+  Megahorn, and others.
