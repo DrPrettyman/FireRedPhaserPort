@@ -20,8 +20,8 @@ export async function animEvent(game: Game, type: 'battleAnim' | 'battleAnimEnd'
  * Reseeds the RNG, so the turn's rolls (the wild mon's move, accuracy, damage) don't depend on how many frames
  * the run took to get here: a 95% Tackle otherwise misses now and then, and a miss plays no anim at all.
  */
-export async function reseed(game: Game): Promise<void> {
-  await game.eval((t) => t.seed(1));
+export async function reseed(game: Game, seed = 1): Promise<void> {
+  await game.eval((t, n) => t.seed(n), seed);
 }
 
 /** Picks the first move at the action menu. */
@@ -35,15 +35,18 @@ export async function useFirstMove(game: Game): Promise<number> {
   return since;
 }
 
-/** At the action menu: FIGHT, then the move in `slot` (0-3, laid out 2x2). The cursor starts on `from`, where it was last turn. */
-export async function useMoveSlot(game: Game, from: number, slot: number): Promise<number> {
+/**
+ * At the action menu: FIGHT, then the move in `slot` (0-3, laid out 2x2). The cursor starts on `from`, where it was
+ * last turn. Reseeds with `seed` just before the move is chosen.
+ */
+export async function useMoveSlot(game: Game, from: number, slot: number, seed = 1): Promise<number> {
   await game.waitForActionMenu();
   const since = await game.mark();
   await game.press('A'); // FIGHT
   await game.eval((t) => t.waitFrames(10));
   if ((slot & 1) !== (from & 1)) await game.press(slot & 1 ? 'RIGHT' : 'LEFT');
   if ((slot & 2) !== (from & 2)) await game.press(slot & 2 ? 'DOWN' : 'UP');
-  await reseed(game);
+  await reseed(game, seed);
   await game.press('A');
   return since;
 }
@@ -52,7 +55,8 @@ export async function useMoveSlot(game: Game, from: number, slot: number): Promi
  * Uses up to four moves in turn against a Lv. 100 Snorlax that only splashes (and has the HP to take them),
  * checking each move's anim script runs to its end, and that both battlers are back on screen afterwards.
  * A move that can miss (SING, DISABLE, THUNDER, ...) plays no anim when it does, and the reseed can't rule that
- * out (the ticks between it and the roll depend on wall-clock time), so a miss uses the move again.
+ * out (the ticks between it and the roll depend on wall-clock time), so a miss uses the move again, with another
+ * seed (the same seed would roll about the same).
  */
 export async function expectMovesRun(session: ReturnType<typeof useGame>, moves: string[]): Promise<void> {
   const game = await session.start({ ...ROUTE1, party: [{ species: 'RATTATA', level: 10, moves }] });
@@ -62,7 +66,7 @@ export async function expectMovesRun(session: ReturnType<typeof useGame>, moves:
     const label = `Move_${move}`;
     for (let attempt = 0; ; attempt++) {
       if (attempt === 8) throw new Error(`${move} missed ${attempt} times`);
-      const since = await useMoveSlot(game, from, slot);
+      const since = await useMoveSlot(game, from, slot, 1 + attempt);
       from = slot;
       await game.waitForActionMenu(); // the end of the turn
       const events = await game.events(since);
