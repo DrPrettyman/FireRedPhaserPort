@@ -949,6 +949,8 @@ EXTRA_DEFINE_HEADERS = (
     "include/naming_screen.h", "include/pokemon_storage_system.h", "include/battle_transition.h",
     # field_player_avatar.c / bike.c: PLAYER_AVATAR_FLAG_*, COLLISION_*, T_*, running states, BIKE_*
     "include/global.fieldmap.h", "include/bike.h",
+    # save.c / start_menu.c / main_menu.c: SAVE_STATUS_*, SAVE_NORMAL.., CONTINUE_GAME_WARP, SAVE_STAT_*
+    "include/save.h", "include/save_location.h", "include/save_menu_util.h",
 )
 
 
