@@ -1073,3 +1073,25 @@ end to end.
   and arrived after turn 2's accuracy roll. `reseedAfterAnims()` (tests/e2e/battleAnimHelpers.ts) waits and
   reseeds inside the page; started before the anims play, it lands within a frame of the last one ending. Bounce
   and Doom Desire use it. Passed twice in a row with the anim and avatar files running four at a time.
+
+### Field move framework: Cut, Rock Smash, Sweet Scent, Dig, Teleport, Soft-Boiled (W-fieldmove)
+
+- field_effect.c's script interpreter (world/fieldEffectScripts.ts) over the extracted
+  data/field_effect_scripts.s, and the script commands `dofieldeffect`, `waitfieldeffect`,
+  `setfieldeffectargument`, `checkpartymove`, plus `buffermovename` and `setescapewarp`.
+- Party menu: CursorCB_FieldMove for real (sFieldMoveCursorCallbacks as a registry, badge check, the Teleport/Dig
+  YES/NO with the destination's name, Surf/Flash failure messages), FieldCallback_PrepareFadeInFromMenu +
+  gPostMenuFieldCallback through a new `gFieldCallback2`, and Soft-Boiled / Milk Drink (fldeff_softboiled.c).
+- FLDEFF_FIELD_MOVE_SHOW_MON(_INIT): the banner (outdoor and indoor) on the field's GBA layer, and the player's
+  field move pose (CreateFieldEffectShowMon).
+- Cut (trees via EventScript_CutTree / _FldEffCut, the `cut_tree` movement; grass around the player with
+  FldEff_CutGrass and its 8 sprites; the Ruin Valley braille), Rock Smash (+ `rock_smash_break`, the
+  RockSmashWildEncounter special), Sweet Scent (red fade, SweetScentWildEncounter, EventScript_FailSweetScent),
+  Dig (escape warp, Escape Rope warp-out/in) and Teleport (last heal location, TeleportFieldEffectTask*).
+- Field: the escape warp is set when leaving an outdoor map for an indoor one (UpdateEscapeWarp); warps can end in a
+  gFieldCallback (OverworldScene.loadWarpedMap); a field task created by another task is no longer dropped;
+  ObjectEvent.fixedPriority; ScreenFade.beginBlend.
+- Extractor: field_effects/scripts.json, tileset `terrains` (METATILE_ATTRIBUTE_TERRAIN) and map `allowEscaping`.
+  Rerun `npm run extract`.
+- Tests: tests/e2e/fieldMoves.test.ts (11 scenarios). Deviations (audio, Sweet Scent's overlay, unported natives) in
+  docs/DEVIATIONS.md; how to add Surf/Strength/Flash/Fly in docs/DEV_NOTES.md "Field moves".

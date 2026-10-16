@@ -59,6 +59,41 @@ this is the next level down. When you add or change a subsystem, update its entr
   landing tile, for collisions). Probes: `field().fieldEffects` / `playerEffects`. Test spots: Route 1 ledge into
   grass (12, 4), Viridian pond (14, 24), Four Island puddles (10, 8; mash through the rival scene first), Five
   Island sand (8, 3), Kindle Road shallow water (4, 17), Ember Spa (11, 10).
+- **Field moves:** four pieces.
+  - `world/fieldEffectScripts.ts` is field_effect.c's interpreter: `FieldEffectStart('FLDEFF_*')` runs the
+    decomp's own script (data/field_effect_scripts.s → `field_effects/scripts.json`), whose `callnative` calls a
+    function registered with `registerFieldEffectNatives({ FldEff_X })`; `gFieldEffectArguments`,
+    `FieldEffectActiveListRemove/Contains` as in C (Contains also sees `entities/FieldEffects.ts`' Phaser
+    effects). Script commands `dofieldeffect` (a following `waitstate` waits for the effect's
+    ScriptContext_Enable), `waitfieldeffect`, `setfieldeffectargument`, `checkpartymove` (+ `buffermovename`,
+    `setescapewarp`) are in ScriptEngine's "field effects and field moves" block.
+  - Party menu (`menus/partyMenu.ts`): CursorCB_FieldMove calls the move's SetUpFieldMove_* from
+    `registerFieldMoveSetUp('FIELD_MOVE_X', fn)`; it returns TRUE after setting `gFieldCallback2.fn =
+    FieldCallback_PrepareFadeInFromMenu` and `setPostMenuFieldCallback(FieldCallback_X)`. The menu closes with
+    CB2_ReturnToField; the field (OverworldScene.openFieldMenu) runs gFieldCallback2 (RunFieldCallback), which
+    fades in, sets `gFieldEffectArguments[0]` to the species and calls FieldCallback_X. Teleport/Dig ask first
+    (their map names come from headers `prepareFieldMoveMenu` loads before the menu opens). Soft-Boiled stays in
+    the menu.
+  - `world/fieldMoves.ts`: fldeff_cut/rocksmash/sweetscent/dig/teleport.c and the Teleport / Escape Rope warp
+    tasks, on top of `FieldMoveHost` (OverworldScene.createFieldMoveHost: map grid, scripts, wild encounters,
+    the GBA layer, warps with a gFieldCallback) and the avatar host (locks, tasks, objects).
+    `CreateFieldEffectShowMon(func)` is the shared part: the player's pose, the banner, then `func`.
+    LockPlayerFieldControls is a flag here; handing over to a script (ScriptContext_Enable / _SetupScript) or a
+    battle releases it, since those hold the field's input themselves.
+  - `world/fieldMoveShowMon.ts`: FLDEFF_FIELD_MOVE_SHOW_MON(_INIT), the banner, runs the C on the field's GBA
+    layer (FieldGbaScreen, like battle transitions): streaks in BG0, WIN0/WIN1, the mon as a GBA pic sprite.
+  - **Adding a field move** (Surf, Strength, Flash, Fly): write SetUpFieldMove_X / FieldCallback_X / FldEff_UseX
+    in your own module, `registerFieldMoveSetUp('FIELD_MOVE_X', SetUpFieldMove_X)` and
+    `registerFieldEffectNatives({ FldEff_UseX })` at boot (as `registerFieldMoves` does), and start with
+    `CreateFieldEffectShowMon` for the banner. Script-driven moves (EventScript_StrengthBoulder, EventScript_UseSurf,
+    EventScript_Waterfall) then work from the field too: until FldEff_UseStrength exists, `dofieldeffect
+    FLDEFF_USE_STRENGTH` + `waitstate` just continue. Fly is special-cased in CursorCB_FieldMove (CB2_OpenFlyMap).
+    Escape warp: `UpdateEscapeWarp` (from OverworldScene.takeWarp) / `SetEscapeWarp`, state.escapeWarp.
+  - Extracted: `field_effects/scripts.json`, tileset `terrains` (METATILE_ATTRIBUTE_TERRAIN, `TileInfo.terrain`)
+    and map `allowEscaping`. Probes: `field().fieldEffects` lists the scripted active list too; events
+    `fieldMoveShowMon` (species, outdoors), `cutGrass`, `sweetScent`, `fieldMoveWarp`, `fieldMoveWarpDone`.
+    Tests: tests/e2e/fieldMoves.test.ts (Vermilion's cut tree from (19, 25), Route 1 grass (14, 8), Mt. Ember
+    rock (29, 41) with `wild.seed(0)` for an encounter / `seed(1)` for none, Mt. Moon from Route 4 (19, 6) for Dig).
 - **Interactions:** `OverworldScene.interact` is GetInteractionScript (object → bg event → metatile via
   `METATILE_SCRIPTS`); `tryWalkIntoSignpost` runs after a step (before the wild check) and when holding toward the
   facing direction. The signpost / walk-away / last-message-dismiss state (script.c statics) lives in ScriptEngine

@@ -79,6 +79,7 @@ animated metatiles are redrawn from the GBA tile data (`world/TilesetVram.ts`).
 | Map graphics | `world/TilesetVram.ts`, `tilesetAnims.ts`, `doors.ts` | the tilesets' GBA tiles as VRAM, tileset_anims.c, field_door.c |
 | Objects | `entities/ObjectEvent.ts`, `movementActions.ts`, `NpcBrain.ts` | grid movement at GBA speeds (walk/run/jump/slow/fast/in-place), held movement actions (MOVEMENT_ACTION_*), NPC movement types |
 | Player | `world/playerAvatar.ts`, `bike.ts` | field_player_avatar.c and bike.c: gPlayerAvatar, PlayerStep, collision, ledges, forced movement tiles, the bike, surfing, boulders |
+| Field moves | `world/fieldMoves.ts`, `fieldMoveShowMon.ts`, `fieldEffectScripts.ts` | fldeff_*.c (Cut, Rock Smash, Sweet Scent, Dig, Teleport), the show-mon banner, field_effect.c's script interpreter; the party menu side is in `menus/partyMenu.ts` |
 | Field effects | `entities/FieldEffects.ts`, `groundEffects.ts` | field effect sprites (field_effect_helpers.c, emote icons) and the ground effects objects trigger (grass, shadows, splashes, reflections, ...) |
 | Field | `scenes/OverworldScene.ts` | fixed 60 Hz tick; FieldGetPlayerInput / ProcessPlayerFieldInput, then PlayerStep; warps; coord triggers; map scripts; object spawning (on map entry and as objects come into view) |
 | Input | `input/Input.ts` | GBA buttons sampled once per tick (`held` / `pressed`) |
