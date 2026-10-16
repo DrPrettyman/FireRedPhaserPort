@@ -12,11 +12,11 @@ test('crossing into another map section slides the new name in, holds it, and sl
   await game.waitIdle();
 
   // Crossing the connection while it's up reshows it: out, reprinted, back in.
-  await game.walk('up', 3); // stops at the connection while Route 1 loads
-  await game.waitFor((t) => t.field()?.map === 'Route1', { what: 'Route 1' });
   // 120 frames on screen (tTimer > 120), 12 frames out, then the window is cleared. Counted in the page, frame by
-  // frame: polling from here can notice the full height several frames late on a loaded machine.
+  // frame, from the walk on: polling from here can notice the new map (and the full height) many frames late on a
+  // loaded machine, by when the popup's 120 frames are nearly up.
   expect(await game.eval(async (t) => {
+    await t.walk('up', 3); // stops at the connection while Route 1 loads
     const shown = await t.until(() => { const p = t.mapNamePopup(); return p?.text === 'ROUTE 1' && p.height === 24; }, 600);
     await t.waitFrames(100);
     return shown && t.mapNamePopup()?.height;
