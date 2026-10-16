@@ -19,6 +19,8 @@ export class Task {
   readonly data = new Int16Array(NUM_TASK_DATA);
   /** SetTaskFuncWithFollowupFunc stores a function pointer in data[14..15]; JS keeps it here. */
   followupFunc: TaskFunc = TaskDummy;
+  /** StorePointerInVars keeps a pointer in two data slots; JS keeps the object here. */
+  ref: unknown = undefined;
 }
 
 export const gTasks: Task[] = Array.from({ length: NUM_TASKS }, () => new Task());

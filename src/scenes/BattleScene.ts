@@ -2,6 +2,8 @@
 // (battle/battleCallbacks.ts) on the GBA host loop. The bag and party menu open inside it.
 
 import type { Assets } from '../data/assets';
+import { battleAnimGfxSymbols } from '../battle/anim/battleAnim';
+import { shinyGfxSymbols } from '../battle/anim/special';
 import { battleBgGfxSymbols } from '../battle/battleBg';
 import { CB2_InitBattle } from '../battle/battleCallbacks';
 import { setBattleUi, type BattleUi, type GbaButton } from '../battle/battleUi';
@@ -111,6 +113,16 @@ function gfxSymbolsFor(data: BattleData, start: BattleStart): string[] {
   }
   a.trainerBackPics.forEach(add);
   a.trainerBackPalettes.forEach(add);
+  // Battle anims: every move anyone can use (trainer mons without a set moveset know their level-up
+  // moves up to their level), plus the status/general/special anims. Anything else loads on first use.
+  const moves = new Set<number>();
+  for (const mon of [...start.state.party, ...(start.enemyParty ?? [])]) mon.moves.forEach((m) => moves.add(m));
+  for (const m of trainer?.party ?? []) {
+    if (m.moves) m.moves.forEach((mv) => moves.add(mv));
+    else for (const [lvl, mv] of start.pokemon.species[m.species].learnset) if (lvl <= m.lvl) moves.add(mv);
+  }
+  battleAnimGfxSymbols(moves).forEach(add);
+  shinyGfxSymbols().forEach(add);
   return [...syms];
 }
 

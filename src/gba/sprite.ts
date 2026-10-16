@@ -189,6 +189,14 @@ export class Sprite {
   }
 }
 
+/** `gSprites[dst] = gSprites[src]`: a struct copy (oam and data copied, not shared). */
+export function CopySprite(dst: Sprite, src: Sprite): void {
+  const data = dst.data;
+  Object.assign(dst, src, { oam: { ...src.oam } });
+  (dst as { data: Int16Array }).data = data;
+  data.set(src.data);
+}
+
 export const gSprites: Sprite[] = Array.from({ length: MAX_SPRITES + 1 }, () => new Sprite());
 const gSpritePriorities = new Uint16Array(MAX_SPRITES);
 const gSpriteOrder = new Uint8Array(MAX_SPRITES).map((_, i) => i);

@@ -14,6 +14,7 @@ import { BattlePutTextOnWindow } from './battleWindow';
 import { K } from './constants';
 import { handleGetMonData, handleSetMonData, healthbarStep, hitAnimBlinkStep } from './controllerCommon';
 import { BtlCtrl_OakOldMan_SetState2Flag, btlCtrlOakOldManTestState2Flag, PrintOakText_HowDisappointing, PrintOakText_InflictingDamageIsKey, PrintOakText_OakNoRunningFromATrainer } from './controllerOakOldMan';
+import { SetMoveAnimGlobalsFromBuffer } from './anim/battleAnim';
 import { doMoveAnimationStep, TryShinyAnimation } from './controllerPlayer';
 import { emitChosenMonReturnValue, emitOneReturnValue, emitTwoReturnValues } from './controllers';
 import { bdata, g, gBattleMoves } from './env';
@@ -422,6 +423,7 @@ function OpponentHandleFaintAnimation(): void {
 
 function OpponentHandleMoveAnimation(): void {
   const move = bufA()[1] | (bufA()[2] << 8);
+  SetMoveAnimGlobalsFromBuffer(ab());
   if (IsMoveWithoutAnimation(move, bufA()[3])) {
     OpponentBufferExecCompleted();
   } else {

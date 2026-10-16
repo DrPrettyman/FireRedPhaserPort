@@ -12,6 +12,18 @@ from pathlib import Path
 from extract import eval_const_expr
 from extract_gfx import firered_only
 
+# Every battle anim source (their sprite templates point at these tables); extract_battle_anims imports it.
+ANIM_C_FILES = sorted(
+    [
+        "battle_anim.c", "battle_anim_bug.c", "battle_anim_dark.c", "battle_anim_dragon.c", "battle_anim_effects_1.c",
+        "battle_anim_effects_2.c", "battle_anim_effects_3.c", "battle_anim_electric.c", "battle_anim_fight.c",
+        "battle_anim_fire.c", "battle_anim_flying.c", "battle_anim_ghost.c", "battle_anim_ground.c", "battle_anim_ice.c",
+        "battle_anim_mon_movement.c", "battle_anim_mons.c", "battle_anim_normal.c", "battle_anim_poison.c",
+        "battle_anim_psychic.c", "battle_anim_rock.c", "battle_anim_smokescreen.c", "battle_anim_sound_tasks.c",
+        "battle_anim_special.c", "battle_anim_status_effects.c", "battle_anim_utility_funcs.c", "battle_anim_water.c",
+    ]
+)
+
 ANIM_FILES = [
     "src/data.c",
     "src/pokemon.c",
@@ -20,13 +32,7 @@ ANIM_FILES = [
     "src/battle_interface.c",
     "src/battle_gfx_sfx_util.c",
     "src/battle_bg.c",
-    "src/battle_anim.c",
-    "src/battle_anim_mons.c",
-    "src/battle_anim_special.c",
-    "src/battle_anim_status_effects.c",
-    "src/battle_anim_effects_1.c",
-    "src/battle_anim_effects_2.c",
-    "src/battle_anim_effects_3.c",
+    *(f"src/{f}" for f in ANIM_C_FILES),
     "src/battle_controllers.c",
     "src/battle_controller_player.c",
     "src/battle_controller_opponent.c",

@@ -11,6 +11,7 @@ import type Phaser from 'phaser';
 import type { Assets } from '../data/assets';
 import { g } from '../battle/env';
 import { gMain } from '../gba/main';
+import { gSprites } from '../gba/sprite';
 import type { Button } from '../input/Input';
 import type { Pokemon } from '../pokemon/Pokemon';
 import type { GameState } from '../state/GameState';
@@ -193,6 +194,10 @@ export interface MonSpec {
   iv?: number;
   /** ITEM_* without the prefix. */
   item?: string;
+  /** STATUS1_* without the prefix, e.g. "POISON". */
+  status?: string;
+  /** A personality that makes it shiny (for the player's OT id). */
+  shiny?: boolean;
 }
 
 /** Argument bytes after FC <code> (as TextPrinter reads them); codes not listed take none. */
@@ -270,6 +275,8 @@ function createApi(game: Phaser.Game) {
       otGender: s.playerGender,
       metLocation: s.currentMapSection,
       fixedIV: spec.iv,
+      // shiny value = otId hi ^ otId lo ^ personality hi ^ personality lo = 0
+      personality: spec.shiny ? ((((s.trainerId >>> 16) ^ (s.trainerId & 0xffff)) << 16) >>> 0) : undefined,
     });
     if (spec.moves) {
       mon.moves = [0, 0, 0, 0];
@@ -280,6 +287,7 @@ function createApi(game: Phaser.Game) {
       });
     }
     if (spec.item) mon.heldItem = define(`ITEM_${spec.item}`);
+    if (spec.status) mon.status = define(`STATUS1_${spec.status}`);
     return mon;
   };
 
@@ -426,6 +434,11 @@ function createApi(game: Phaser.Game) {
       const controller = g.battlerControllerFuncs[0]?.name;
       return { typeFlags: g.battleTypeFlags, trainer: g.trainerBattleOpponent_A, mons, outcome: g.battleOutcome, controller };
     },
+    /** The GBA layer's sprites in use (battle and GBA-hosted menus): template tags, position, visibility. */
+    gbaSprites: () =>
+      gSprites
+        .filter((s) => s.inUse)
+        .map((s) => ({ tileTag: s.template.tileTag, paletteTag: s.template.paletteTag, x: s.x + s.x2, y: s.y + s.y2, invisible: s.invisible })),
     /** gBattleOutcome as the last battle left it, by name (B_OUTCOME_WON, ...). */
     lastOutcome: () => {
       const o = state()?.battleOutcome;

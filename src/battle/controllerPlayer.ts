@@ -25,6 +25,9 @@ import { gMain } from '../gba/main';
 import { CB2_BagMenuFromBattle } from '../menus/itemMenu';
 import { SpecialVar } from '../menus/itemMenuState';
 import { gPartyMenuUseExitCallback, gSelectedMonPartyId, OpenPartyMenuInTutorialBattle } from '../menus/partyMenu';
+import { DoMoveAnim, SetMoveAnimGlobalsFromBuffer } from './anim/battleAnim';
+import { TryShinyAnimation as TryShinyAnimationSpecial } from './anim/special';
+import { anim } from './anim/state';
 import { BattleMainCB2 } from './battleCallbacks';
 import { DISPLAY_HEIGHT, DISPLAY_WIDTH } from '../gba/hw';
 import { CreatePartyStatusSummarySprites, SetBattleBarStruct, SetHealthboxSpriteInvisible, SetHealthboxSpriteVisible, SwapHpBarsWithHpText, Task_HidePartyStatusSummary, UpdateHealthboxAttribute, UpdateHpTextInHealthbox } from './battleInterface';
@@ -536,10 +539,10 @@ function Intro_WaitForShinyAnimAndHealthbox(): void {
   }
 }
 
-/** TryShinyAnimation: the sparkle anim isn't implemented; non-shiny path for everyone. */
+/** TryShinyAnimation(battler, &party[gBattlerPartyIndexes[battler]]): every caller passes the battler's own mon */
 export function TryShinyAnimation(battler: number): void {
-  sbd().healthBoxesData[battler].triedShinyMonAnim = 1;
-  sbd().healthBoxesData[battler].finishedShinyMonAnim = 1;
+  const party = getBattlerSide(battler) === K.B_SIDE_PLAYER ? g.playerParty : g.enemyParty;
+  TryShinyAnimationSpecial(battler, party[g.battlerPartyIndexes[battler]]!);
 }
 
 function Intro_TryShinyAnimShowHealthbox(): void {
@@ -846,10 +849,11 @@ function PlayerHandleBallThrowAnim(): void {
   g.battlerControllerFuncs[ab()] = CompleteOnSpecialAnimDone;
 }
 
-/** PlayerHandleMoveAnimation: move animation scripts aren't implemented (substitute swaps still run). */
+/** PlayerHandleMoveAnimation (IsBattleSEPlaying is always FALSE without audio) */
 function PlayerHandleMoveAnimation(): void {
   const move = bufA()[1] | (bufA()[2] << 8);
-  if (IsMoveWithoutAnimation(move, bufA()[3])) {
+  SetMoveAnimGlobalsFromBuffer(ab());
+  if (IsMoveWithoutAnimation(move, anim.moveTurn)) {
     PlayerBufferExecCompleted();
   } else {
     sbd().healthBoxesData[ab()].animationState = 0;
@@ -875,17 +879,20 @@ export function doMoveAnimationStep(substituteNeedsFlag: boolean): boolean {
     case 1:
       if (!h.specialAnimActive) {
         SetBattlerSpriteAffineMode(0);
-        // DoMoveAnim(move): battle anim scripts not implemented
+        DoMoveAnim(move);
         h.animationState = 2;
       }
       break;
     case 2:
-      SetBattlerSpriteAffineMode(1);
-      if (bd.behindSubstitute && (!substituteNeedsFlag || multihit < 2)) {
-        InitAndLaunchSpecialAnimation(a, a, a, K.B_ANIM_MON_TO_SUBSTITUTE);
-        bd.flag_x8 = 0;
+      anim.scriptCallback();
+      if (!anim.scriptActive) {
+        SetBattlerSpriteAffineMode(1);
+        if (bd.behindSubstitute && (!substituteNeedsFlag || multihit < 2)) {
+          InitAndLaunchSpecialAnimation(a, a, a, K.B_ANIM_MON_TO_SUBSTITUTE);
+          bd.flag_x8 = 0;
+        }
+        h.animationState = 3;
       }
-      h.animationState = 3;
       break;
     case 3:
       if (!h.specialAnimActive) {

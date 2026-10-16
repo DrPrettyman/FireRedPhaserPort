@@ -114,12 +114,49 @@ export interface BattleAnimsData {
   monShinyPalettes: (string | null)[];
 }
 
+/** A `struct SpriteTemplate` from a battle_anim_*.c file (tags as numbers, pointers by C name). */
+export interface BattleAnimTemplateData {
+  tileTag: number;
+  paletteTag: number;
+  oam: string;
+  anims: string;
+  images: string;
+  affineAnims: string;
+  callback: string;
+  /** the C file it's defined in (for its file-static anim tables) */
+  unit: string;
+}
+
+/** battle/battle_anims.json (tools/extract_battle_anims.py) */
+export interface BattleAnimScriptsData {
+  romBase: number;
+  /** base64 of the assembled data/battle_anim_scripts.s */
+  rom: string;
+  /** label -> ROM address */
+  labels: Record<string, number>;
+  /** gBattleAnims_Moves / _StatusConditions / _General / _Special: script addresses by table id */
+  tables: Record<string, number[]>;
+  /** sprite templates / task functions the scripts point at: address externBase + 4 * index */
+  externBase: number;
+  externs: string[];
+  templates: Record<string, BattleAnimTemplateData>;
+  /** OamData structs of src/data/battle_anim.h */
+  oam: Record<string, { affineMode: number; objMode: number; bpp: number; shape: number; size: number; priority: number; paletteNum: number; tileNum: number }>;
+  /** gBattleAnimPicTable / gBattleAnimPaletteTable, indexed by ANIM_TAG - ANIM_SPRITES_START */
+  pics: ({ symbol: string; size: number; tag: number } | null)[];
+  palettes: ({ symbol: string; tag: number } | null)[];
+  /** gBattleAnimBackgroundTable by BG_* */
+  backgrounds: ({ image: string; palette: string; tilemap: string } | null)[];
+  animSpritesStart: number;
+}
+
 export interface BattleData {
   scripts: BattleScriptsData;
   strings: BattleStringsData;
   tables: BattleTablesData;
   palettes: BattlePalettesData;
   anims: BattleAnimsData;
+  animScripts: BattleAnimScriptsData;
 }
 
 export async function loadBattleData(base: string): Promise<BattleData> {
@@ -128,12 +165,13 @@ export async function loadBattleData(base: string): Promise<BattleData> {
     if (!res.ok) throw new Error(`Failed to load battle/${f}: ${res.status}`);
     return res.json() as Promise<T>;
   };
-  const [scripts, strings, tables, palettes, anims] = await Promise.all([
+  const [scripts, strings, tables, palettes, anims, animScripts] = await Promise.all([
     get<BattleScriptsData>('scripts.json'),
     get<BattleStringsData>('strings.json'),
     get<BattleTablesData>('tables.json'),
     get<BattlePalettesData>('palettes.json'),
     get<BattleAnimsData>('anims.json'),
+    get<BattleAnimScriptsData>('battle_anims.json'),
   ]);
-  return { scripts, strings, tables, palettes, anims };
+  return { scripts, strings, tables, palettes, anims, animScripts };
 }

@@ -61,6 +61,7 @@ Debug: `?map=PalletTown&x=12&y=10` starts at any map and coordinate. In dev buil
 | `doors.json` | `sDoorGraphics` and the door anim frame lists (field_door.c) |
 | `gfx/<symbol>.bin`, `gfx/index.json` | every `INCBIN` graphic used by battle/interface code, by C symbol, as the ROM holds it once decompressed (`tools/extract_gfx.py`, `graphics_file_rules.mk` rules) |
 | `battle/scripts.json` | battle scripts + AI scripts assembled into a ROM image with labels and RAM symbols |
+| `battle/battle_anims.json` | battle anim scripts (`battle_anim_scripts.s`) assembled the same way, with the sprite templates and task functions they point at by C name; the anim sprite templates, OamData, pic/palette/background tables (`tools/extract_battle_anims.py`) |
 | `battle/strings.json`, `tables.json`, `anims.json` | battle strings and text-window info, trainers/parties, type chart, mechanics tables, sprite anim command tables per C file, pic tables (`tools/extract_battle.py`, `extract_anims.py`) |
 
 Each metatile's two layers are spread over three atlases by layer type, as DrawMetatile fills the field's BG3,
@@ -86,6 +87,7 @@ animated metatiles are redrawn from the GBA tile data (`world/TilesetVram.ts`).
 | State | `state/GameState.ts`, `Bag.ts` | flags/vars by numeric id, names, text speed, party, bag, Pokédex (memory only) |
 | GBA video | `gba/hw.ts`, `bg.ts`, `window.ts`, `sprite.ts`, `palette.ts`, `task.ts`, `scanline.ts`, `ppu.ts` | VRAM/palette/IO registers, ports of bg.c, window.c, sprite.c, palette.c, task.c, scanline_effect.c; software PPU (text BGs, OBJ, windows, blending) |
 | Battle | `battle/*.ts`, `scenes/BattleScene.ts` | port of battle_main.c, battle scripts/commands, util, AI, controllers, interface/gfx code on the GBA layer; the scene runs the C main/VBlank callbacks |
+| Battle anims | `battle/anim/*.ts` | battle_anim.c's script engine and the battle_anim_*.c callbacks, registered by C name (`ported.ts`); scripts with unported callbacks finish at once |
 | UI | `ui/MenuWindow.ts`, `Menu.ts`, `YesNoMenu.ts`, `StartMenu.ts`, `MonPicBox.ts`, `ScreenFade.ts` | std-framed windows, cursor menus, `showmonpic` box, `fadescreen` |
 
 ### Testing

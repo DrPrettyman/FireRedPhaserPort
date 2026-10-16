@@ -81,6 +81,14 @@ export const WINOUT_WIN01_BG_ALL = 0xf;
 export const WINOUT_WIN01_OBJ = 1 << 4;
 export const WINOUT_WIN01_CLR = 1 << 5;
 export const WINOUT_WIN01_ALL = 0x3f;
+export const WINOUT_WINOBJ_BG0 = 1 << 8;
+export const WINOUT_WINOBJ_BG1 = 1 << 9;
+export const WINOUT_WINOBJ_BG2 = 1 << 10;
+export const WINOUT_WINOBJ_BG3 = 1 << 11;
+export const WINOUT_WINOBJ_BG_ALL = 0xf00;
+export const WINOUT_WINOBJ_OBJ = 1 << 12;
+export const WINOUT_WINOBJ_CLR = 1 << 13;
+export const WINOUT_WINOBJ_ALL = 0x3f00;
 
 // BLDCNT
 export const BLDCNT_TGT1_BG0 = 1 << 0;

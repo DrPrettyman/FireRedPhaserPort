@@ -33,6 +33,11 @@ export function IsCryFinished(): boolean {
 
 export function StopCryAndClearCrySongs(): void {}
 
+/** IsCryPlaying: FALSE (no cries yet) */
+export function IsCryPlaying(): boolean {
+  return false;
+}
+
 /** IsCryPlayingOrClearCrySongs: TRUE while a cry is playing. */
 export function IsCryPlayingOrClearCrySongs(): boolean {
   return false;

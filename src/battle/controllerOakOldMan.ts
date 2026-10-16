@@ -15,6 +15,8 @@ import { gMain } from '../gba/main';
 import { CB2_BagMenuFromBattle, InitOldManBag } from '../menus/itemMenu';
 import { SpecialVar } from '../menus/itemMenuState';
 import { gPartyMenuUseExitCallback, gSelectedMonPartyId, OpenPartyMenuInTutorialBattle } from '../menus/partyMenu';
+import { DoMoveAnim, SetMoveAnimGlobalsFromBuffer } from './anim/battleAnim';
+import { anim } from './anim/state';
 import { BattleMainCB2 } from './battleCallbacks';
 import { DISPLAY_HEIGHT, DISPLAY_WIDTH } from '../gba/hw';
 import { CreatePartyStatusSummarySprites, SetBattleBarStruct, SetHealthboxSpriteInvisible, SetHealthboxSpriteVisible, Task_HidePartyStatusSummary, UpdateHealthboxAttribute, UpdateHpTextInHealthbox } from './battleInterface';
@@ -554,6 +556,7 @@ function ballThrowAnim(caseId: number): void {
 
 function OakOldManHandleMoveAnimation(): void {
   const move = bufA()[1] | (bufA()[2] << 8);
+  SetMoveAnimGlobalsFromBuffer(ab());
   if (IsMoveWithoutAnimation(move, bufA()[3])) {
     OakOldManBufferExecCompleted();
   } else {
@@ -575,14 +578,17 @@ function OakOldManDoMoveAnimation(): void {
     case 1:
       if (!h.specialAnimActive) {
         SetBattlerSpriteAffineMode(0);
-        // DoMoveAnim(move): battle anim scripts not implemented
+        DoMoveAnim(bufA()[1] | (bufA()[2] << 8));
         h.animationState = 2;
       }
       break;
     case 2:
-      SetBattlerSpriteAffineMode(1);
-      if (bd.behindSubstitute) InitAndLaunchSpecialAnimation(a, a, a, K.B_ANIM_MON_TO_SUBSTITUTE);
-      h.animationState = 3;
+      anim.scriptCallback();
+      if (!anim.scriptActive) {
+        SetBattlerSpriteAffineMode(1);
+        if (bd.behindSubstitute) InitAndLaunchSpecialAnimation(a, a, a, K.B_ANIM_MON_TO_SUBSTITUTE);
+        h.animationState = 3;
+      }
       break;
     case 3:
       if (!h.specialAnimActive) {

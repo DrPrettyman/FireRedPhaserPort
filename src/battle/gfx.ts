@@ -3,12 +3,15 @@
 // pokeball.c (send-out and healthbox slide-in), the ball-open effects from battle_anim_special.c,
 // and the battler sprite callbacks of battle_main.c.
 //
-// Move/special battle animation scripts are not implemented: InitAndLaunchSpecialAnimation and
-// TryHandleLaunchBattleTableAnimation finish immediately (see the per-animation notes below).
+// The anim launchers (InitAndLaunchChosenStatusAnimation etc.) hand off to anim/battleAnim.ts; a script
+// that isn't ported yet finishes immediately (see the per-animation notes below).
 
 import { gfx, gfx16 } from '../gba/gfx';
+import { LaunchBattleAnimation, LaunchStatusAnimation } from './anim/battleAnim';
+import { AnimateBallOpenParticles, LaunchBallFadeMonTask } from './anim/special';
+import { anim } from './anim/state';
 import { DISPLAY_HEIGHT, OBJ_VRAM0, RGB, RGB_WHITE, vram } from '../gba/hw';
-import { BeginNormalPaletteFade, BlendPalette, BG_PLTT_ID, gPaletteFade, gPlttBufferFaded, gPlttBufferUnfaded, LoadPalette, OBJ_PLTT_ID, PLTT_SIZE_4BPP } from '../gba/palette';
+import { BeginNormalPaletteFade, BlendPalette, BG_PLTT_ID, gPlttBufferFaded, gPlttBufferUnfaded, LoadPalette, OBJ_PLTT_ID, PLTT_SIZE_4BPP } from '../gba/palette';
 import {
   AnimateSprite,
   CreateInvisibleSprite,
@@ -25,7 +28,6 @@ import {
   LoadCompressedSpriteSheet,
   LoadSpritePalette,
   LoadSpriteSheet,
-  MAX_SPRITES,
   oam,
   SetCallbackToStoredInData6,
   SPRITE_SHAPE,
@@ -55,7 +57,7 @@ import { ui } from './battleUi';
 import { K } from './constants';
 import { bdata, g } from './env';
 import { bufferBattlePartyCurrentOrderBySide } from './partyOrder';
-import { Cos, Sin } from './trig';
+import { Sin } from './trig';
 import { getBattlerAtPosition, getBattlerPosition, getBattlerSide } from './util';
 
 const isDoubleBattle = () => (g.battleTypeFlags & K.BATTLE_TYPE_DOUBLE) !== 0;
@@ -88,6 +90,8 @@ class MonSpritesGfx {
   readonly images: SpriteFrameImage[][] = this.sprites.map((buf) => [0, 1, 2, 3].map((j) => ({ data: buf.subarray(j * MON_PIC_SIZE, (j + 1) * MON_PIC_SIZE), size: MON_PIC_SIZE })));
   templates: SpriteTemplate[] = [];
   readonly barFontGfx = new Uint8Array(0x1000);
+  /** multiUseBuffer (u16 *): battle anims keep backup palettes here (AnimTask_AllocBackupPalBuffer) */
+  multiUseBuffer: Uint16Array | null = null;
 }
 
 export let gMonSpritesGfxPtr: MonSpritesGfx | null = null;
@@ -176,16 +180,16 @@ const sBattlerCoords = [
   [[32, 80], [200, 40], [90, 88], [152, 32]],
 ];
 
-const GET_UNOWN_LETTER = (p: number) => ((((p >>> 24) & 3) << 6) | (((p >>> 16) & 3) << 4) | (((p >>> 8) & 3) << 2) | (p & 3)) % 28;
+export const GET_UNOWN_LETTER = (p: number) => ((((p >>> 24) & 3) << 6) | (((p >>> 16) & 3) << 4) | (((p >>> 8) & 3) << 2) | (p & 3)) % 28;
 
-function battlerSpecies(battlerId: number): number {
+export function battlerSpecies(battlerId: number): number {
   const t = sbd().battlerData[battlerId].transformSpecies;
   if (t) return t;
   const party = getBattlerSide(battlerId) !== K.B_SIDE_PLAYER ? g.enemyParty : g.playerParty;
   return party[g.battlerPartyIndexes[battlerId]]?.species ?? 0;
 }
 
-function battlerPersonality(battlerId: number): number {
+export function battlerPersonality(battlerId: number): number {
   if (sbd().battlerData[battlerId].transformSpecies) return g.transformedPersonalities[battlerId];
   const party = getBattlerSide(battlerId) !== K.B_SIDE_PLAYER ? g.enemyParty : g.playerParty;
   return party[g.battlerPartyIndexes[battlerId]]?.personality ?? 0;
@@ -212,14 +216,14 @@ function GetBattlerYDelta(battlerId: number, species: number): number {
 }
 
 /** GetBattlerElevation */
-function GetBattlerElevation(battlerId: number, species: number): number {
+export function GetBattlerElevation(battlerId: number, species: number): number {
   if (getBattlerSide(battlerId) !== K.B_SIDE_OPPONENT) return 0;
   if (species === K.SPECIES_CASTFORM) return [13, 14, 13, 13][g.battleMonForms[battlerId]];
   const elev = bdata.tables.coords.enemyElevation;
   return species > K.NUM_SPECIES ? elev[0] : (elev[species] ?? 0);
 }
 
-function GetBattlerSpriteFinal_Y(battlerId: number, species: number, a3: boolean): number {
+export function GetBattlerSpriteFinal_Y(battlerId: number, species: number, a3: boolean): number {
   let offset = GetBattlerYDelta(battlerId, species);
   if (getBattlerSide(battlerId) !== K.B_SIDE_PLAYER) offset -= GetBattlerElevation(battlerId, species);
   let y = (offset + sBattlerCoords[+isDoubleBattle()][getBattlerPosition(battlerId)][1]) & 0xff;
@@ -571,51 +575,82 @@ export function SpriteCB_TrainerSlideIn(sprite: Sprite): void {
 /** CreateInvisibleSpriteWithCallback */
 export const CreateInvisibleSpriteWithCallback = CreateInvisibleSprite;
 
-/** InitAndLaunchChosenStatusAnimation: status anims are battle anim scripts (not implemented). */
-export function InitAndLaunchChosenStatusAnimation(_isStatus2: boolean, _status: number): void {
-  sbd().healthBoxesData[g.activeBattler].statusAnimActive = 0;
+/** InitAndLaunchChosenStatusAnimation */
+export function InitAndLaunchChosenStatusAnimation(isStatus2: boolean, status: number): void {
+  const a = g.activeBattler;
+  sbd().healthBoxesData[a].statusAnimActive = 1;
+  if (!isStatus2) {
+    if (status === K.STATUS1_FREEZE) LaunchStatusAnimation(a, K.B_ANIM_STATUS_FRZ);
+    else if (status === K.STATUS1_POISON || status & K.STATUS1_TOXIC_POISON) LaunchStatusAnimation(a, K.B_ANIM_STATUS_PSN);
+    else if (status === K.STATUS1_BURN) LaunchStatusAnimation(a, K.B_ANIM_STATUS_BRN);
+    else if (status & K.STATUS1_SLEEP) LaunchStatusAnimation(a, K.B_ANIM_STATUS_SLP);
+    else if (status === K.STATUS1_PARALYSIS) LaunchStatusAnimation(a, K.B_ANIM_STATUS_PRZ);
+    else sbd().healthBoxesData[a].statusAnimActive = 0;
+  } else {
+    if (status & K.STATUS2_INFATUATION) LaunchStatusAnimation(a, K.B_ANIM_STATUS_INFATUATION);
+    else if (status & K.STATUS2_CONFUSION) LaunchStatusAnimation(a, K.B_ANIM_STATUS_CONFUSION);
+    else if (status & K.STATUS2_CURSED) LaunchStatusAnimation(a, K.B_ANIM_STATUS_CURSED);
+    else if (status & K.STATUS2_NIGHTMARE) LaunchStatusAnimation(a, K.B_ANIM_STATUS_NIGHTMARE);
+    else if (status & K.STATUS2_WRAPPED) LaunchStatusAnimation(a, K.B_ANIM_STATUS_WRAPPED); // this animation doesn't actually exist
+    else sbd().healthBoxesData[a].statusAnimActive = 0;
+  }
+}
+
+/** ShouldAnimBeDoneRegardlessOfSubsitute */
+function ShouldAnimBeDoneRegardlessOfSubsitute(animId: number): boolean {
+  return [K.B_ANIM_SUBSTITUTE_FADE, K.B_ANIM_RAIN_CONTINUES, K.B_ANIM_SUN_CONTINUES, K.B_ANIM_SANDSTORM_CONTINUES, K.B_ANIM_HAIL_CONTINUES, K.B_ANIM_SNATCH_MOVE].includes(animId);
 }
 
 /**
- * TryHandleLaunchBattleTableAnimation: gBattleAnims_General scripts aren't implemented; the
- * substitute and Castform bookkeeping still happens. Returns true when done immediately.
+ * TryHandleLaunchBattleTableAnimation: runs the gBattleAnims_General script. One that isn't ported
+ * yet finishes at once (returns true), keeping the bookkeeping above it. Returns true when done immediately.
  */
-export function TryHandleLaunchBattleTableAnimation(activeBattler: number, _atkBattler: number, _defBattler: number, tableId: number, argument: number): boolean {
+export function TryHandleLaunchBattleTableAnimation(activeBattler: number, atkBattler: number, defBattler: number, tableId: number, argument: number): boolean {
   if (tableId === K.B_ANIM_CASTFORM_CHANGE && argument & 0x80) {
     g.battleMonForms[activeBattler] = argument & ~0x80;
     return true;
   }
+  if (sbd().battlerData[activeBattler].behindSubstitute && !ShouldAnimBeDoneRegardlessOfSubsitute(tableId)) return true;
   if (sbd().battlerData[activeBattler].behindSubstitute && tableId === K.B_ANIM_SUBSTITUTE_FADE && gSprites[g.battlerSpriteIds[activeBattler]].invisible) {
     LoadBattleMonGfxAndAnimate(activeBattler, true, g.battlerSpriteIds[activeBattler]);
     ClearBehindSubstituteBit(activeBattler);
+    return true;
   }
-  return true;
+  anim.attacker = atkBattler;
+  anim.target = defBattler;
+  sbd().animationData.animArg = argument;
+  if (!LaunchBattleAnimation('gBattleAnims_General', tableId, false)) return true;
+  const taskId = CreateTask(Task_ClearBitWhenBattleTableAnimDone, 10);
+  gTasks[taskId].data[0] = activeBattler;
+  sbd().healthBoxesData[activeBattler].animFromTableActive = 1;
+  return false;
 }
 
-/**
- * InitAndLaunchSpecialAnimation: gBattleAnims_Special scripts aren't implemented. The effects the
- * battle flow depends on are applied directly: switching out hides the mon, the substitute swaps
- * load the right gfx, and the ball throw finishes at once.
- */
-export function InitAndLaunchSpecialAnimation(activeBattler: number, atkBattler: number, _defBattler: number, tableId: number): void {
-  switch (tableId) {
-    case K.B_ANIM_SWITCH_OUT_PLAYER_MON:
-    case K.B_ANIM_SWITCH_OUT_OPPONENT_MON:
-      gSprites[g.battlerSpriteIds[atkBattler]].invisible = true;
-      break;
-    case K.B_ANIM_SUBSTITUTE_TO_MON:
-      LoadBattleMonGfxAndAnimate(atkBattler, true, g.battlerSpriteIds[atkBattler]);
-      break;
-    case K.B_ANIM_MON_TO_SUBSTITUTE:
-      LoadBattleMonGfxAndAnimate(atkBattler, false, g.battlerSpriteIds[atkBattler]);
-      break;
-    case K.B_ANIM_BALL_THROW:
-    case K.B_ANIM_BALL_THROW_WITH_TRAINER:
-      g.doingBattleAnim = false;
-      break;
+const Task_ClearBitWhenBattleTableAnimDone: TaskFunc = (taskId) => {
+  anim.scriptCallback();
+  if (!anim.scriptActive) {
+    sbd().healthBoxesData[gTasks[taskId].data[0]].animFromTableActive = 0;
+    DestroyTask(taskId);
   }
-  sbd().healthBoxesData[activeBattler].specialAnimActive = 0;
+};
+
+/** InitAndLaunchSpecialAnimation */
+export function InitAndLaunchSpecialAnimation(activeBattler: number, atkBattler: number, defBattler: number, tableId: number): void {
+  anim.attacker = atkBattler;
+  anim.target = defBattler;
+  LaunchBattleAnimation('gBattleAnims_Special', tableId, false);
+  const taskId = CreateTask(Task_ClearBitWhenSpecialAnimDone, 10);
+  gTasks[taskId].data[0] = activeBattler;
+  sbd().healthBoxesData[activeBattler].specialAnimActive = 1;
 }
+
+const Task_ClearBitWhenSpecialAnimDone: TaskFunc = (taskId) => {
+  anim.scriptCallback();
+  if (!anim.scriptActive) {
+    sbd().healthBoxesData[gTasks[taskId].data[0]].specialAnimActive = 0;
+    DestroyTask(taskId);
+  }
+};
 
 /** IsMoveWithoutAnimation: always FALSE */
 export function IsMoveWithoutAnimation(_moveId: number, _animationTurn: number): boolean {
@@ -1275,155 +1310,6 @@ function SpriteCB_HitAnimHealthoxEffect(sprite: Sprite): void {
     DestroySprite(sprite);
   }
 }
-
-// ------------------------------------------------------------------ battle_anim_special.c (ball open)
-
-const sBallOpenFadeColors = [
-  RGB(31, 22, 30),
-  RGB(16, 23, 30),
-  RGB(23, 30, 20),
-  RGB(31, 31, 15),
-  RGB(23, 20, 28),
-  RGB(21, 31, 25),
-  RGB(12, 25, 30),
-  RGB(30, 27, 10),
-  RGB(31, 24, 16),
-  RGB(29, 30, 30),
-  RGB(31, 17, 10),
-  RGB(31, 9, 10),
-];
-/** sBallParticleAnimNums */
-const sBallParticleAnimNums = [0, 0, 0, 5, 1, 2, 2, 3, 5, 5, 4, 4];
-// TAG_PARTICLES_POKEBALL .. TAG_PARTICLES_PREMIERBALL (file-local #defines in battle_anim_special.c)
-const TAG_PARTICLES = (ballId: number) => 55020 + ballId;
-
-function particleTemplate(ballId: number): SpriteTemplate {
-  return {
-    tileTag: TAG_PARTICLES(ballId),
-    paletteTag: TAG_PARTICLES(ballId),
-    oam: oam({ shape: 0, size: 0 }), // gOamData_AffineOff_ObjNormal_8x8
-    anims: animTable('battle_anim_special.c', 'sAnims_BallParticles'),
-    images: null,
-    affineAnims: gDummySpriteAffineAnimTable,
-    callback: SpriteCallbackDummy,
-  };
-}
-
-/** AnimateBallOpenParticles: every ball uses the Poké Ball burst here (other bursts not ported). */
-export function AnimateBallOpenParticles(x: number, y: number, priority: number, subpriority: number, ballId: number): number {
-  const tag = TAG_PARTICLES(ballId);
-  if (GetSpriteTileStartByTag(tag) === TAG_NONE) {
-    LoadCompressedSpriteSheet({ data: gfx('gBattleAnimSpriteGfx_Particles'), size: 0x100, tag });
-    LoadCompressedSpritePalette({ data: gfx16('gBattleAnimSpritePal_CircleImpact'), tag });
-  }
-  const taskId = CreateTask(PokeBallOpenParticleAnimation, 5);
-  const d = gTasks[taskId].data;
-  d[1] = x;
-  d[2] = y;
-  d[3] = priority;
-  d[4] = subpriority;
-  d[15] = ballId;
-  ui.playSE(K.SE_BALL_OPEN);
-  return taskId;
-}
-
-const PokeBallOpenParticleAnimation: TaskFunc = (taskId) => {
-  const d = gTasks[taskId].data;
-  const ballId = d[15];
-  if (d[0] < 16) {
-    const spriteId = CreateSprite(particleTemplate(ballId), d[1], d[2], d[4]);
-    if (spriteId !== MAX_SPRITES) {
-      sbd().animationData.numBallParticles++;
-      StartSpriteAnim(gSprites[spriteId], sBallParticleAnimNums[ballId]);
-      gSprites[spriteId].callback = PokeBallOpenParticleAnimation_Step1;
-      gSprites[spriteId].oam.priority = d[3];
-      let var0 = d[0] & 0xff;
-      if (var0 >= 8) var0 -= 8;
-      gSprites[spriteId].data[0] = var0 * 32;
-    }
-    if (d[0] === 15) {
-      DestroyTask(taskId);
-      return;
-    }
-  }
-  d[0]++;
-};
-
-function PokeBallOpenParticleAnimation_Step1(sprite: Sprite): void {
-  if (sprite.data[1] === 0) sprite.callback = PokeBallOpenParticleAnimation_Step2;
-  else sprite.data[1]--;
-}
-
-function PokeBallOpenParticleAnimation_Step2(sprite: Sprite): void {
-  sprite.x2 = Sin(sprite.data[0], sprite.data[1]);
-  sprite.y2 = Cos(sprite.data[0], sprite.data[1]);
-  sprite.data[1] += 2;
-  if (sprite.data[1] === 50) DestroyBallOpenAnimationParticle(sprite);
-}
-
-function DestroyBallOpenAnimationParticle(sprite: Sprite): void {
-  sbd().animationData.numBallParticles--;
-  if (sbd().animationData.numBallParticles === 0) {
-    for (let j = 0; j < BALL_NAMES.length; j++) {
-      FreeSpriteTilesByTag(TAG_PARTICLES(j));
-      FreeSpritePaletteByTag(TAG_PARTICLES(j));
-    }
-  }
-  DestroySprite(sprite);
-}
-
-/** LaunchBallFadeMonTask */
-export function LaunchBallFadeMonTask(unfadeLater: boolean, battler: number, selectedPalettes: number, ballId: number): number {
-  const taskId = CreateTask(Task_FadeMon_ToBallColor, 5);
-  const d = gTasks[taskId].data;
-  d[15] = ballId;
-  d[3] = battler;
-  d[10] = selectedPalettes & 0xffff;
-  d[11] = selectedPalettes >>> 16;
-  if (!unfadeLater) {
-    BlendPalette(OBJ_PLTT_ID(battler), 16, 0, sBallOpenFadeColors[ballId]);
-    d[1] = 1;
-  } else {
-    BlendPalette(OBJ_PLTT_ID(battler), 16, 16, sBallOpenFadeColors[ballId]);
-    d[0] = 16;
-    d[1] = -1;
-    gTasks[taskId].func = Task_FadeMon_ToNormal;
-  }
-  BeginNormalPaletteFade(selectedPalettes, 0, 0, 16, RGB_WHITE);
-  return taskId;
-}
-
-const selected = (d: Int16Array) => ((d[10] & 0xffff) | ((d[11] & 0xffff) << 16)) >>> 0;
-
-const Task_FadeMon_ToBallColor: TaskFunc = (taskId) => {
-  const d = gTasks[taskId].data;
-  if (d[2] <= 16) {
-    BlendPalette(OBJ_PLTT_ID(d[3]), 16, d[0], sBallOpenFadeColors[d[15]]);
-    d[0] += d[1];
-    d[2]++;
-  } else if (!gPaletteFade.active) {
-    BeginNormalPaletteFade(selected(d), 0, 16, 0, RGB_WHITE);
-    DestroyTask(taskId);
-  }
-};
-
-const Task_FadeMon_ToNormal: TaskFunc = (taskId) => {
-  if (!gPaletteFade.active) {
-    BeginNormalPaletteFade(selected(gTasks[taskId].data), 0, 16, 0, RGB_WHITE);
-    gTasks[taskId].func = Task_FadeMon_ToNormal_Step;
-  }
-};
-
-const Task_FadeMon_ToNormal_Step: TaskFunc = (taskId) => {
-  const d = gTasks[taskId].data;
-  if (d[2] <= 16) {
-    BlendPalette(OBJ_PLTT_ID(d[3]), 16, d[0], sBallOpenFadeColors[d[15]]);
-    d[0] += d[1];
-    d[2]++;
-  } else {
-    DestroyTask(taskId);
-  }
-};
 
 /** Graphics a battle needs besides per-mon/trainer pics. */
 export function battleSpriteGfxSymbols(): string[] {

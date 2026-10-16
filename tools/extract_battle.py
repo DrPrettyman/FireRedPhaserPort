@@ -488,6 +488,9 @@ def extract_battle(decomp, out):
     from extract_anims import extract_anims
 
     extract_anims(decomp, out, defines)
+    from extract_battle_anims import extract_battle_anims
+
+    extract_battle_anims(decomp, out, defines)
 
     # ------------------------------------------------------------ graphics
     n_gfx = extract_battle_graphics(decomp, bd, defines)

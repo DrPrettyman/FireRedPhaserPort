@@ -33,7 +33,8 @@ Running checklist of what exists and what doesn't. Newest log entries at the bot
 - [x] Shop buy menu graphics; GBA-native tileset tiles/palettes/metatiles (`tilesets/index.json` `symbols`) and object
   event pics/palettes (sprite manifest `gba`), with spritesheet_rules.mk / tileset_rules.mk applied by extract_gfx
 - [x] Party menu / bag / item icon / mon icon / help-window graphics; `menus.json` (`tools/extract_menus.py`: mon and item icon tables, TM/HM + tutor learnsets, TM/HM + tutor moves, evolutions)
-- [ ] Move/status battle animation scripts
+- [x] Move/status battle animation scripts (`battle/battle_anims.json`, `tools/extract_battle_anims.py`: assembled
+  battle_anim_scripts.s with template/task pointers as named externs, sprite templates, anim OamData, pic/palette/bg tables)
 - [x] Evolution scene graphics (`graphics/evolution_scene/`: moving background, sparkles)
 - [x] Pure event macros (giveitem_msg, famechecker, trainerbattle_*, ...) expanded like the assembler would, incl. `.if/.elseif/.else` on arguments
 - [ ] Audio
@@ -112,7 +113,9 @@ Running checklist of what exists and what doesn't. Newest log entries at the bot
 - [x] GBA video layer (src/gba: VRAM/palette/regs, bg.c, window.c, sprite.c, task.c, palette fades, scanline effects, software PPU) and the battle presentation on it (BattleScene)
 - [x] Battle: bag and party menu (choose item, use medicine/PP items/X items/balls, switch/send out) with reshow_battle_screen.c
 - [x] Old Man's catching tutorial (StartOldManTutorialBattle)
-- [ ] Battle: move/status animations, battle transitions
+- [~] Battle: move/status animations (src/battle/anim/: the battle_anim.c engine; 101 of the 397 scripts run, incl.
+  every status and special anim (ball throw, switch out, substitute, level up), the stat change, shiny sparkles and
+  most early-game moves; the rest finish at once), battle transitions
 - [x] Evolution scene (evolution_scene.c, evolution_graphics.c): after a battle (TryEvolvePokemon), from a Rare Candy
   or an evolution stone; holding B stops it; Crobat-style evolutions stop without the National Dex; learning the
   new species' move (incl. forgetting one through the summary screen); Nincada's Shedinja. TradeEvolutionScene
@@ -146,8 +149,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (`nurse_joy_bow`) are skipped; the heal itself happens.
   - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
   - VS Seeker: `state.trainerRematches` is never set, so no trainer is ever ready for a rematch.
-  - Battles: no move/status/special battle animation scripts (InitAndLaunchSpecialAnimation etc. finish at once;
-    only the Poké Ball open burst is drawn); no shiny sparkle; no audio (PlaySE/cries/BGM are no-ops).
+  - Battles: battle anim scripts whose sprite callbacks / tasks aren't ported yet finish at once (296 of 397 move
+    and general anims, e.g. Castform's form change); no audio (PlaySE/cries/BGM are no-ops, so anim SE waits and
+    cry waits end at once).
   - Field sounds: doors (SE_DOOR / SE_SLIDING_DOOR) and puddle splashes (SE_PUDDLE) are silent.
   - Evolution scene: no audio, so cries and sound effects count as finished at once (the intro jingle and the SE_EXP
     wait don't hold the scene up); the help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
@@ -176,8 +180,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Field steps: eggs count down egg cycles, but the daycare (breeding,
     its mons' steps) and the hatching scene (`special EggHatch`) aren't ported. A finished VS Seeker charge would
     start EventScript_VsSeekerChargingDone, whose specials aren't ported; only the (unported) VS Seeker starts one.
-  - Safari Zone: BAIT/ROCK throw animations are skipped like every battle animation. The Safari Zone's own field
-    effects (none) and the entrance's SE/fanfare are silent.
+  - Safari Zone: the entrance's SE/fanfare are silent (the BAIT/ROCK throw anims run; General_SafariReaction, the
+    mon's reaction afterwards, isn't ported yet).
   - The money box and Safari stats window are Phaser MenuWindows (the field isn't on the GBA layer).
   - Full party: `givemon` returns MON_CANT_GIVE instead of sending the mon to the PC (`SendMonToPC`).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
@@ -300,8 +304,12 @@ State as of the last log entry:
   Tests: Viridian Forest item ball (`?start=after-rival&map=ViridianForest&x=5&y=42`, face up, A), hidden Potion
   (x=3 y=23), Pallet town sign (x=9 y=13, hold up), Viridian PC (`map=ViridianCity_PokemonCenter_1F&x=11&y=2`).
 - **Next blockers on the main path:** Silph Co.'s elevator uses `special ListMenu` (scrolling floor list, not
-  ported); PC storage (a 7th mon has nowhere to go); save/load; in battle: move animations (battle_anim scripts);
-  field moves (Cut for Vermilion's gym).
+  ported); PC storage (a 7th mon has nowhere to go); save/load; field moves (Cut for Vermilion's gym).
+- **Battle anims:** `src/battle/anim/` (see the log entry "Battle animation engine"). To port more: find what a
+  script still needs with `battleAnimCoverage()` (tests/unit/battleAnims.test.ts), port those callbacks/tasks from
+  the battle_anim_*.c file into a module (or `moves.ts`), register them in `ported.ts`, add the label to the
+  unit test, and graphics a callback loads itself to `registerAnimExtraGfx`. All special anims run, so
+  InitAndLaunchSpecialAnimation has no fallback any more (unit-tested: every Special_* script stays fully ported).
 - **Evolution scene:** `menus/evolutionScene.ts` + `menus/evolutionGraphics.ts` run on whichever GBA host is up
   (BattleScene after TryEvolvePokemon, FieldMenuScene from the party menu) and hand back through
   `gCB2_AfterEvolution` (`setCB2_AfterEvolution`). It draws on the battle BG/window layout, so the field host
@@ -959,3 +967,85 @@ State as of the last log entry:
 - Tests: `tests/e2e/fieldEffects.test.ts` (water/flower tiles change, door entry and exit, ledge jump shadow into
   grass, pond reflection). New probes: `field().playerVisible/doorAnimating/fieldEffects/playerEffects`,
   `__test.tilesetTile()`.
+
+### Battle animation scripts: extraction (user request, branch `battle-move-anims`)
+
+- `tools/extract_battle_anims.py` assembles data/battle_anim_scripts.s (macros from battle_anim_script.inc) with the
+  battle script assembler, extended with `\@`, `.L` local labels, `.if/.else/.endif` (REVISION 0), vararg macro
+  parameters and RGB(). C symbols the scripts point at (sprite templates, AnimTask_/SoundTask_ functions, data
+  pointers) get addresses from `externBase` and are listed by name in `externs`. It also writes every
+  `struct SpriteTemplate` of the battle_anim_*.c files (with its C unit), the OamData structs of
+  src/data/battle_anim.h, and gBattleAnimPicTable / gBattleAnimPaletteTable / gBattleAnimBackgroundTable.
+  `extract_anims.py` now reads anim tables from all battle_anim_*.c files (`ANIM_C_FILES`).
+- `BattleData.animScripts` (src/battle/data.ts) loads it. The extractor also writes each pointer table's
+  entries (`tables`), resolves file-local #defines in templates, and reads OamData from every anim C file.
+
+### Battle animation engine (user request, branch `battle-move-anims`)
+
+- `src/battle/anim/`: `state.ts` (battle_anim.c globals, DestroyAnimSprite/VisualTask/SoundTask, registry of
+  ported sprite callbacks / task functions by C name), `battleAnim.ts` (the battle_anim.c interpreter, all 0x00-0x2F
+  commands incl. monbg/MoveBattlerSpriteToBG, fadetobg, pan tasks; LaunchBattleAnimation, DoMoveAnim,
+  LaunchStatusAnimation, template building from the extracted data), `animMons.ts` (battle_anim_mons.c in full
+  except CreateAdditionalMonSpriteForMoveAnim, plus Set/GetAnimBgAttribute and CopyBattlerSpriteToBg from
+  battle_intro.c), `monMovement.ts` (battle_anim_mon_movement.c, complete), `normal.ts` (battle_anim_normal.c,
+  minus the unused AnimTask_TintPalettes), `ported.ts` (registration, called lazily), `src/gba/bios.ts` (ArcTan2).
+- A script runs only if every callback/task it can reach is registered and its graphics are loaded
+  (`isAnimRunnable`, static walk of the bytecode); otherwise it ends at once like before and logs once
+  `[battle anim] <label> skipped, not ported: ...`. BattleScene preloads the anim graphics of every move the
+  parties know (`battleAnimGfxSymbols`); others load on first use and run from the next time.
+- Hooked up: the three controllers' HandleMoveAnimation (gAnim* globals from the buffer) / DoMoveAnimation
+  (DoMoveAnim + gAnimScriptCallback), InitAndLaunchChosenStatusAnimation (C port), TryHandleLaunchBattleTableAnimation
+  and InitAndLaunchSpecialAnimation (script when runnable, old fallback otherwise), ClearBattleAnimationVars,
+  AllocateBattleResources' anim BG buffers. Helpers: `CopySprite` (struct copy), `Task.ref` (StorePointerInVars).
+- More ports: `utilityFuncs.ts` (battle_anim_utility_funcs.c complete: palette blends, InitStatsChangeAnimation
+  and the OBJ-window BG1 masks, StartMonScrollingBgMask, traces, the small get/set tasks), `statusEffects.ts`
+  (battle_anim_status_effects.c: AnimTask_FrozenIceCube, AnimTask_StatsChange), `soundTasks.ts`
+  (battle_anim_sound_tasks.c; SE/cries are the sound.ts no-ops, `IsCryPlaying` added), `moves.ts` (the per-move
+  callbacks/tasks for the early-game moves and every status anim, from effects_1/2/3, fire, water, poison,
+  electric, flying, ground, bug, dark and ghost).
+- Graphics a callback loads itself (stat masks, metal shine, curse lines) are listed with `registerAnimExtraGfx`, so
+  runnability and preloading count them. Templates pointing into the middle of an anim table (`&sAnims_X[2]`)
+  resolve. Fix: InitAnimLinearTranslationWithSpeed divides by data[0] (sTransl_Duration is data[0]).
+- 88 of 397 scripts run: all status anims, General_StatsChange / MonHit / IngrainHeal, and moves incl. Pound,
+  Scratch, Tackle, Growl, Tail Whip, Leer, Ember, Flamethrower, Water Gun, Bubble(Beam), Vine Whip, Gust, Peck,
+  Sand-Attack, Poison Sting, String Shot, Harden, Bite, Supersonic, Absorb, Leech Seed, the powders, Thunder
+  Shock/Wave, Quick Attack, Agility, Body Slam, Take Down. Checked by eye (screenshots mid-anim) for Tackle, Growl
+  + stat change, Ember, Water Gun, Harden, Thunder Shock, String Shot, Leer. Open question: with the BG dimmed
+  (Thunder Shock, String Shot) faint diagonal lines show at the healthbox corners; likely BG pixels in a palette
+  the blend doesn't select, as on the GBA, but not compared against the game.
+- Tests: `tests/unit/battleAnims.test.ts` (the scripts above are fully ported; `battleAnimCoverage()` lists what any
+  script still needs), `tests/e2e/battleAnims.test.ts` (Tackle runs to its end with its hit splat and the turn
+  goes on; Growl then the stat change; a poisoned mon's Status_Poison). New test probes: `battleAnim` /
+  `battleAnimEnd` events (label, ran, attacker, target), `t.gbaSprites()`, MonSpec `status`.
+
+
+### Special battle anims (user request, branch `battle-move-anims`)
+
+- `src/battle/anim/special.ts`: battle_anim_special.c complete. The level-up healthbox flash, switch out (ball
+  burst + fade + shrink), the ball throw (arc, the target shrinking in, bounces, the shakes by
+  ballThrowCaseId, the click with stars and fade, or the break-out; the trainer block and ghost dodge),
+  AnimTask_ThrowBallSpecial (the player's / old man's throw), the substitute swap and fade, every ball's open
+  particles (each ball's own pattern, where the old gfx.ts version drew the Poké Ball burst for all) and
+  LaunchBallFadeMonTask (both moved here from gfx.ts), shiny sparkles (TryShinyAnimation, replacing the
+  controllers' stub), the Safari bait/rock throws and the small get/set tasks. Plus AnimTask_MonToSubstitute
+  (General_SubstituteAppear, from effects_3).
+- InitAndLaunchSpecialAnimation is the C again: the fallback switch is gone. `animSpriteTemplate(name, true)`
+  gives templates for code that sets its own callback (the shiny stars). Code-loaded graphics (ball particles,
+  gold stars, Safari bait) are preloaded.
+- 101 of 397 scripts run. Checked by eye: the Master Ball throw (arc, burst, the target fading and shrinking in,
+  the shakes) and switching out.
+- Tests (`tests/e2e/battleAnims.test.ts`): a Poké Ball the wild Mewtwo breaks out of, a Master Ball catch
+  (shakes, click, B_OUTCOME_CAUGHT), switching to the second mon, a level-up's healthbox flash, and Substitute
+  (the doll, then SubstituteToMon / MonToSubstitute around a Tackle). The unit test covers every Special_* script.
+
+### Battle anim e2e tests for the remaining throw paths (user request, branch `battle-move-anims`)
+
+- `tests/e2e/battleAnims.test.ts` now also covers: the old man's tutorial (the Viridian coord trigger with
+  VAR_MAP_SCENE_VIRIDIAN_CITY_OLD_MAN = 1; his throw, the ball in flight, Weedle caught), a ball thrown at Bug
+  Catcher Rick's mon (TrainerBallBlock; battle goes on), a ball at a Pokémon Tower GHOST (GhostBallDodge), a
+  shiny wild Pidgey's sparkles (gold stars appear and are gone by the action menu), and the Safari Zone's BAIT and
+  ROCK throws (one battle each, since the wild mon may flee). All five were also checked by eye in screenshots.
+- New test option: MonSpec `shiny` (a personality that is shiny for the player's OT id).
+- Note from the old man's test: his ball's click clears gDoingBattleAnim at frame 95 of 315, so the tutorial
+  battle can end before Special_BallThrowWithTrainer reaches `end` (the C does the same).
+- The Substitute test fights a Lv. 12 Magikarp (Splash only): at Lv. 30 its Flail can break the substitute first.

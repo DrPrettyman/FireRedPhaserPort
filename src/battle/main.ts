@@ -11,6 +11,9 @@ import { gMain } from '../gba/main';
 import { ResetSpriteData } from '../gba/sprite';
 import { FreeAllWindowBuffers } from '../gba/window';
 import { EvolutionScene, setCB2_AfterEvolution } from '../menus/evolutionScene';
+import { SetBgTilemapBuffer } from '../gba/bg';
+import { ClearBattleAnimationVars } from './anim/battleAnim';
+import { gBattleAnimBgTileBuffer, gBattleAnimBgTilemapBuffer } from './anim/state';
 import { BattleMainCB2 } from './battleCallbacks';
 import { GetEvolutionTargetSpecies } from './items';
 import { ui } from './battleUi';
@@ -94,6 +97,11 @@ function battlerBusy(battler: number): boolean {
 export function allocateBattleResources(): void {
   g.battleStruct = new BattleStruct();
   g.battleResources = new BattleResources();
+  gBattleAnimBgTileBuffer.fill(0);
+  gBattleAnimBgTilemapBuffer.fill(0);
+  // InitBattleBgsVideo's InitBgsFromTemplates clears these again, as on the GBA.
+  SetBgTilemapBuffer(1, gBattleAnimBgTilemapBuffer);
+  SetBgTilemapBuffer(2, gBattleAnimBgTilemapBuffer);
 }
 
 /** SetUpBattleVars (battle_controllers.c) */
@@ -106,7 +114,7 @@ export function setUpBattleVars(): void {
     g.moveSelectionCursor[i] = 0;
   }
   g.battleControllerExecFlags = 0;
-  // ClearBattleAnimationVars: no move animations yet
+  ClearBattleAnimationVars();
   clearBattleMonForms();
   battleAI_HandleItemUseBeforeAISetup();
 }
