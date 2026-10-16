@@ -45,37 +45,49 @@ const FULLY_PORTED: Record<string, string[]> = {
   ],
 
   // battle_anim_fight.c
-  fight: [],
+  fight: [
+    'Move_KARATE_CHOP', 'Move_STOMP', 'Move_DOUBLE_KICK', 'Move_DIZZY_PUNCH', 'Move_CROSS_CHOP', 'Move_SUPERPOWER',
+    'Move_REVENGE', 'Move_BRICK_BREAK', 'Move_ARM_THRUST', 'Move_SKY_UPPERCUT',
+  ],
 
   // battle_anim_rock.c
-  rock: [],
+  rock: [
+    'Move_SEISMIC_TOSS', 'Move_SANDSTORM', 'Move_ROLLOUT', 'Move_ANCIENT_POWER', 'Move_ROCK_SMASH', 'Move_ROCK_BLAST',
+    'General_Sandstorm',
+  ],
 
   // battle_anim_ground.c
-  ground: [],
+  ground: ['Move_EARTHQUAKE', 'Move_FISSURE', 'Move_DIG', 'Move_BONEMERANG', 'Move_MAGNITUDE'],
 
   // battle_anim_bug.c
-  bug: [],
+  bug: ['Move_LEECH_LIFE', 'Move_SPIDER_WEB', 'Move_MEGAHORN', 'Move_TAIL_GLOW'],
 
   // battle_anim_poison.c
-  poison: [],
+  poison: ['Move_ACID', 'Move_SLUDGE', 'Move_SLUDGE_BOMB'],
 
   // battle_anim_water.c
-  water: [],
+  water: ['Move_AURORA_BEAM', 'Move_HYDRO_CANNON', 'Move_WATERFALL', 'Move_WATER_PULSE', 'Move_WATER_SPORT', 'Move_WATER_SPOUT'],
 
   // battle_anim_ice.c
-  ice: [],
+  ice: [
+    'Move_BLIZZARD', 'Move_HAIL', 'Move_HAZE', 'Move_ICE_BALL', 'Move_ICE_BEAM', 'Move_ICE_PUNCH', 'Move_ICY_WIND',
+    'Move_MIST_BALL', 'Move_POISON_GAS', 'Move_POWDER_SNOW', 'General_Hail',
+  ],
 
   // battle_anim_dragon.c
-  dragon: [],
+  dragon: ['Move_DRAGON_BREATH', 'Move_DRAGON_DANCE', 'Move_DRAGON_RAGE', 'Move_OUTRAGE', 'Move_OVERHEAT'],
 
   // battle_anim_fire.c
-  fire: [],
+  fire: ['Move_BLAST_BURN', 'Move_FIRE_BLAST', 'Move_FIRE_PUNCH', 'Move_FLAME_WHEEL', 'Move_SACRED_FIRE', 'Move_WILL_O_WISP'],
 
-  // battle_anim_electric.c
-  electric: [],
+  // battle_anim_electric.c (Thunder also needs fire's AnimTask_ShakeTargetInPattern)
+  electric: [
+    'Move_CHARGE', 'Move_SHOCK_WAVE', 'Move_SPARK', 'Move_THUNDER', 'Move_THUNDERBOLT', 'Move_THUNDER_PUNCH',
+    'Move_VOLT_TACKLE', 'Move_ZAP_CANNON',
+  ],
 
   // battle_anim_flying.c
-  flying: [],
+  flying: ['Move_AEROBLAST', 'Move_BOUNCE', 'Move_DRILL_PECK', 'Move_FEATHER_DANCE', 'Move_FLY', 'Move_WHIRLWIND'],
 
   // battle_anim_ghost.c
   ghost: [
