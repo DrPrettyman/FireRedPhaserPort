@@ -117,7 +117,14 @@ const FULLY_PORTED: Record<string, string[]> = {
   dark: ['Move_CAMOUFLAGE', 'Move_FAINT_ATTACK', 'Move_FAKE_TEARS', 'Move_MEMENTO'],
 
   // battle_anim_effects_1.c
-  effects1: [],
+  effects1: [
+    'General_ItemKnockoff', 'General_ItemSteal', 'Move_BELLY_DRUM', 'Move_CONVERSION', 'Move_CONVERSION_2',
+    'Move_COTTON_SPORE', 'Move_DOUBLE_TEAM', 'Move_FALSE_SWIPE', 'Move_FOLLOW_ME', 'Move_FRENZY_PLANT',
+    'Move_GRASS_WHISTLE', 'Move_HYPER_BEAM', 'Move_INGRAIN', 'Move_LEAF_BLADE', 'Move_LOCK_ON', 'Move_MAGICAL_LEAF',
+    'Move_METRONOME', 'Move_MILK_DRINK', 'Move_MIMIC', 'Move_MOONLIGHT', 'Move_NEEDLE_ARM', 'Move_PETAL_DANCE',
+    'Move_PROTECT', 'Move_RAZOR_LEAF', 'Move_SECRET_POWER', 'Move_SHARPEN', 'Move_SILVER_WIND', 'Move_SING',
+    'Move_SKULL_BASH', 'Move_SLASH', 'Move_SPORE', 'Move_SUPER_FANG', 'Move_SWIFT', 'Move_TAUNT', 'Move_TWISTER',
+  ],
 
   // battle_anim_effects_2.c
   effects2: [],
