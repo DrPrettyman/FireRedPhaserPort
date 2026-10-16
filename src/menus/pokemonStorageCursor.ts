@@ -35,7 +35,6 @@ import {
   DisplayMonPalette,
   gPlayerParty,
   gStorage,
-  InPartyMenu,
   SpeciesOrEgg,
   StoragePartyCount,
   ZeroedMon,
@@ -1542,5 +1541,6 @@ export function StorageCursor(): { area: number; position: number; holding: bool
   return { area: sCursorArea, position: sCursorPosition, holding: sIsMonBeingMoved };
 }
 
+
+// sMovingMonOrigBoxPos is written but never read (as in the C).
 void sMovingMonOrigBoxPos;
-void InPartyMenu;

@@ -44,7 +44,7 @@ import {
   type Sprite,
   type SpriteTemplate,
 } from '../gba/sprite';
-import { AddTextPrinter, AddWindow, COPYWIN_FULL, COPYWIN_GFX, DUMMY_WIN_TEMPLATE, FillWindowPixelBuffer, gWindows, PIXEL_FILL, PutWindowTilemap, WINDOW_NONE, GetFontAttribute, FONTATTR_COLOR_FOREGROUND, FONTATTR_COLOR_BACKGROUND, FONTATTR_COLOR_SHADOW, type WindowTemplate } from '../gba/window';
+import { AddTextPrinter, AddWindow, COPYWIN_FULL, COPYWIN_GFX, FillWindowPixelBuffer, gWindows, PIXEL_FILL, PutWindowTilemap, WINDOW_NONE, GetFontAttribute, FONTATTR_COLOR_FOREGROUND, FONTATTR_COLOR_BACKGROUND, FONTATTR_COLOR_SHADOW, type WindowTemplate } from '../gba/window';
 import { ItemId_GetDescription, ItemId_GetName } from './common';
 import { GetItemIconGfxSymbol } from './itemMenuIcons';
 import { menusData } from './data';
@@ -807,12 +807,12 @@ function LoadItemIconGfx(id: number, itemId: number): void {
   if (id >= MAX_ITEM_ICONS) return;
   const icon = gStorage.itemIcons[id];
   gStorage.itemIconBuffer.fill(0);
-  const tiles = gfx(GetItemIconGfxSymbol(itemId, 0));
+  const tiles = gfx(GetItemIconGfxSymbol(itemId, K.ITEMICON_TILES));
   gStorage.tileBuffer.fill(0);
   gStorage.tileBuffer.set(tiles.subarray(0, Math.min(tiles.length, gStorage.tileBuffer.length)));
   for (let i = 0; i < 3; i++) gStorage.itemIconBuffer.set(gStorage.tileBuffer.subarray(i * 0x60, i * 0x60 + 0x60), i * 0x80);
   vram.set(gStorage.itemIconBuffer, icon.tilesAddr);
-  LoadPalette(gfx16(GetItemIconGfxSymbol(itemId, 1)), icon.palIndex, PLTT_SIZE_4BPP);
+  LoadPalette(gfx16(GetItemIconGfxSymbol(itemId, K.ITEMICON_PAL)), icon.palIndex, PLTT_SIZE_4BPP);
 }
 
 function SetItemIconAffineAnim(id: number, animNum: number): void {
@@ -1041,4 +1041,3 @@ function SpriteCB_ItemIcon_HideParty(sprite: Sprite): void {
   }
 }
 
-void DUMMY_WIN_TEMPLATE;

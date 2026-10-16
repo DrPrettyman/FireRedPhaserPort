@@ -70,7 +70,7 @@ import {
   RemoveWindow,
   type WindowTemplate,
 } from '../gba/window';
-import { AddPCItem, ItemPcCompaction, RemovePCItem } from '../state/pcItems';
+import { ItemPcCompaction, RemovePCItem } from '../state/pcItems';
 import {
   AddBagItem,
   CalculatePlayerPartyCount,
@@ -879,4 +879,3 @@ export function itemPcProbe(): { task: string; scroll: number; row: number; nIte
   return { task, scroll: sListMenuState.scroll, row: sListMenuState.row, nItems: sStateDataPtr.nItems };
 }
 
-void AddPCItem;

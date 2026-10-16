@@ -406,6 +406,62 @@ test('move items: put a held item in the bag, then give one from the bag', async
   await leavePc(game);
 });
 
+test('the summary of a party mon from the party box, and release one', async () => {
+  const game = await session.start(PC);
+  await openStorageMenu(game);
+  await enterBoxes(game, DEPOSIT);
+  await boxPress(game, 'DOWN'); // RATTATA
+  await openMonMenu(game);
+  await chooseMenuItem(game, 1); // SUMMARY
+  await game.waitFor((t) => t.gbaScreen() === 'CB2_RunPokemonSummaryScreen', { what: 'the summary screen' });
+  await game.eval((t) => t.waitFrames(30));
+  await game.press('DOWN'); // the next party mon: PIDGEY
+  await game.eval((t) => t.waitFrames(30));
+  await game.press('B');
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  expect((await game.eval((t) => t.pcStorage()!.cursor)).position).toBe(2);
+  // RELEASE the PIDGEY: the party closes up behind it
+  expect(await openMonMenu(game)).toEqual(['STORE', 'SUMMARY', 'MARK', 'RELEASE', 'CANCEL']);
+  await chooseMenuItem(game, 3);
+  await waitStorage(game, 'Task_ReleaseMon', 1);
+  await game.press('UP');
+  await game.press('A');
+  await waitStorage(game, 'Task_ReleaseMon', 4);
+  await game.press('A');
+  await waitStorage(game, 'Task_ReleaseMon', 5);
+  await game.press('A');
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  await leaveBoxes(game);
+  await leavePc(game);
+  expect(await partySpecies(game)).toEqual(['MEWTWO', 'RATTATA']);
+});
+
+test("a mon that knows Surf can't be released while no other mon knows it", async () => {
+  const game = await session.start({ ...PC, party: [PARTY[0], { species: 'LAPRAS', level: 30, moves: ['SURF'] }] });
+  await openStorageMenu(game);
+  await enterBoxes(game, DEPOSIT);
+  await boxPress(game, 'DOWN'); // LAPRAS
+  await openMonMenu(game);
+  await chooseMenuItem(game, 3); // RELEASE
+  await waitStorage(game, 'Task_ReleaseMon', 1);
+  await game.press('UP');
+  await game.press('A');
+  // RunCanReleaseMon finds no other Surf user: "LAPRAS was released...", "....!", then it comes back
+  await waitStorage(game, 'Task_ReleaseMon', 9);
+  await game.press('A');
+  await waitStorage(game, 'Task_ReleaseMon', 10);
+  await game.press('A');
+  const cameBack = await waitStorage(game, 'Task_ReleaseMon', 12);
+  expect(cameBack.message).toMatch(/LAPRAS came back!/);
+  await game.press('A');
+  await waitStorage(game, 'Task_ReleaseMon', 13);
+  await game.press('A');
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  await leaveBoxes(game);
+  await leavePc(game);
+  expect(await partySpecies(game)).toEqual(['MEWTWO', 'LAPRAS']);
+});
+
 // ------------------------------------------------------------------ the player's PC (item storage)
 
 /** PC items as [item id, quantity]. */
