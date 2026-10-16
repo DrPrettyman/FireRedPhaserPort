@@ -14,8 +14,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (`nurse_joy_bow`) are skipped; the heal itself happens.
   - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
   - VS Seeker: `state.trainerRematches` is never set, so no trainer is ever ready for a rematch.
-  - Battles: battle anim scripts whose sprite callbacks / tasks aren't ported yet finish at once (296 of 397 move
-    and general anims, e.g. Castform's form change); no audio (PlaySE/cries/BGM are no-ops, so anim SE waits and
+  - Battles: battle anim scripts whose sprite callbacks / tasks aren't ported yet finish at once (229 of 397 move
+    and general anims, e.g. Castform's form change: HandleSpeciesGfxDataChange throws for it, since
+    gBattleStruct->castformPalette isn't ported); no audio (PlaySE/cries/BGM are no-ops, so anim SE waits and
     cry waits end at once).
   - Field sounds: doors (SE_DOOR / SE_SLIDING_DOOR) and puddle splashes (SE_PUDDLE) are silent.
   - Evolution scene: no audio, so cries and sound effects count as finished at once (the intro jingle and the SE_EXP
@@ -48,8 +49,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Field steps: eggs count down egg cycles, but the daycare (breeding,
     its mons' steps) and the hatching scene (`special EggHatch`) aren't ported. A finished VS Seeker charge would
     start EventScript_VsSeekerChargingDone, whose specials aren't ported; only the (unported) VS Seeker starts one.
-  - Safari Zone: the entrance's SE/fanfare are silent (the BAIT/ROCK throw anims run; General_SafariReaction, the
-    mon's reaction afterwards, isn't ported yet).
+  - Safari Zone: the entrance's SE/fanfare are silent.
   - The money box and Safari stats window are Phaser MenuWindows (the field isn't on the GBA layer).
   - Full party: `givemon` returns MON_CANT_GIVE instead of sending the mon to the PC (`SendMonToPC`).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no

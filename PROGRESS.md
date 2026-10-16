@@ -194,6 +194,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     its mons' steps) and the hatching scene (`special EggHatch`) aren't ported. A finished VS Seeker charge would
     start EventScript_VsSeekerChargingDone, whose specials aren't ported; only the (unported) VS Seeker starts one.
   - Safari Zone: the entrance's SE/fanfare are silent.
+  - Pokémon Tower: the scripted Marowak battle (`special StartMarowakBattle`) isn't ported, so the Silph Scope
+    unveil (General_SilphScoped) only runs from the e2e hook `startUnveiledGhostBattle`.
   - The money box and Safari stats window are Phaser MenuWindows (the field isn't on the GBA layer).
   - Full party: `givemon` returns MON_CANT_GIVE instead of sending the mon to the PC (`SendMonToPC`).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no

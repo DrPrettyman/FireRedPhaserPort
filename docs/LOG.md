@@ -744,6 +744,25 @@ end to end.
 - `.gitattributes`: STATUS.md and `docs/*.md` use merge=union too. CLAUDE.md says what goes where. README's stale
   roadmap removed (STATUS.md is the one checklist).
 
+### Battle anims step 1 (BATTLE_ANIMS_PLAN.md, branch `battle-anims-step1`)
+
+- `moves.ts` split into one module per C file (`effects1/2/3.ts`, `fire.ts`, `water.ts`, `poison.ts`,
+  `electric.ts`, `flying.ts`, `ground.ts`, `bug.ts`, `dark.ts`, `ghost.ts`), plus new `fight.ts`, `rock.ts`,
+  `psychic.ts`, `ice.ts`; `ported.ts` registers each. Later PRs can work on separate files.
+- Ported the plan's 25 symbols (+ AnimRainDrop, which AnimTask_CreateRaindrops spawns): 67 more scripts run
+  (168 of 397), e.g. Psychic/Confusion's background, Reflect/Light Screen walls (foes moved to the anim BGs),
+  Rock Slide, Pin Missile, Surf/Muddy Water (BG1 wave with a BLDALPHA scanline band), Rain Dance/Sunny Day and the
+  weather-continues anims, punches and kicks, Fire Spin/Whirlpool/Sand Tomb and General_TurnTrap,
+  General_SafariReaction.
+- Transform and General_SilphScoped: AnimTask_TransformMon (BG mosaic) and HandleSpeciesGfxDataChange
+  (battle_gfx_sfx_util.c) in `gfx.ts`; the Castform branch throws until castformPalette is ported.
+- `ST_OAM_HFLIP` / `ST_OAM_VFLIP` in gba/sprite.ts.
+- Tests: the 67 labels in the unit list; e2e (battleAnims.test.ts) runs one move per new callback four to a battle,
+  plus Transform (mosaic, transformSpecies), the Silph Scope unveil (nickname → species), Surf (blend on, then
+  BLDCNT/BLDALPHA cleared) and Reflect (foe hidden on the BG, then back). New test hooks: `battle().mons[i]`
+  `nickname` / `transformSpecies` / `spriteInvisible`, `gpuReg(offset)`, `startUnveiledGhostBattle(spec)`.
+- Checked by eye in mid-anim screenshots: Transform, Surf, Reflect, Psychic, Rock Slide, Headbutt, Mist, Wing Attack.
+
 ### Pokémon Tower 6F: the ghost Marowak battle (StartMarowakBattle)
 
 - `special StartMarowakBattle` + CB2_EndMarowakBattle (battle_setup.c) in `script/specials.ts`: with the Silph Scope
