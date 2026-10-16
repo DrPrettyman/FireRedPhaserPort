@@ -46,6 +46,7 @@ import { ShopMenu, type ShopHost } from '../ui/ShopMenu';
 import { MenuWindow } from '../ui/MenuWindow';
 import { MapNamePopup } from '../ui/MapNamePopup';
 import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
+import { gFieldCallback } from '../menus/fieldCallbacks';
 import { stringWidth } from '../text/stringWidth';
 import { MultichoiceGridMenu, MultichoiceMenu } from '../ui/MultichoiceMenu';
 import type { ShopFieldView } from '../menus/shop';
@@ -62,12 +63,28 @@ import {
 import { mapResetTrainerRematches, shouldEggHatch, updateHappinessStepCounter, updatePoisonStepCounter, updateVsSeekerStepCounter } from '../world/stepCounters';
 import { sharedBattleData, type BattleStart } from './BattleScene';
 import { forcedBattleTransition, logicSpeed, testEvent, testHooks, type FieldProbe } from '../dev/testHooks';
+import {
+  GetInitialPlayerAvatarState,
+  GetPlayerAvatarGraphicsIdByStateIdAndGender,
+  gPlayerAvatar,
+  InitPlayerAvatar,
+  PLAYER_AVATAR_FLAG,
+  PlayerStep,
+  ResetInitialPlayerAvatarState,
+  ReturnPlayerAvatarToField,
+  SetPlayerAvatarTransitionFlags,
+  setPlayerAvatarHost,
+  StoreInitialPlayerAvatarState,
+  TestPlayerAvatarFlags,
+  UpdatePlayerAvatarTransitionState,
+  type PlayerAvatarHost,
+} from '../world/playerAvatar';
+import { GetPlayerSpeed } from '../world/bike';
+import { movementActionName } from '../entities/movementActions';
 import type { FieldMenuStart, NamingScreenRequest } from './FieldMenuScene';
 
 /** GBA runs at ~59.73Hz; we tick game logic at a fixed 60Hz regardless of display refresh. */
 const FRAME_MS = 1000 / 60;
-/** Frames a tap spends turning in place before a held direction starts walking. */
-const TURN_FRAMES = 8;
 const PLAYER_GFX = 'OBJ_EVENT_GFX_RED_NORMAL';
 /** The camera centres on the middle of the player's tile, 8 px above its feet (ignoring jump lift). */
 const CAMERA_FOLLOW_OFFSET_Y = TILE / 2;
@@ -79,6 +96,17 @@ export interface OverworldStart {
   facing?: Direction;
   /** Dev: start from a story preset instead of a new game. */
   preset?: StartPreset;
+}
+
+/** struct FieldInput: the parts ProcessPlayerFieldInput uses. */
+interface FieldInput {
+  pressedAButton: boolean;
+  pressedStartButton: boolean;
+  heldDirection: boolean;
+  heldDirection2: boolean;
+  tookStep: boolean;
+  checkStandardWildEncounter: boolean;
+  dpadDirection: Direction | undefined;
 }
 
 interface Npc {
@@ -120,6 +148,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private elevatorWindow?: MenuWindow;
   /** Tasks started by specials that run on their own, after the script each frame (RunTasks). */
   private fieldTasks: FieldTask[] = [];
+  /** The facing a map load was asked for (undefined: GetInitialPlayerAvatarState's). */
+  private arrivalFacing?: Direction;
   /** sVerticalCameraPan - 32: SetCameraPanning's offset from the standard framing. */
   private cameraPanY = 0;
   /** sWarpDestination as set by `setwarp` (only Safari Zone's out-of-balls exit reads it so far). */
@@ -157,10 +187,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private busy = true;
   /** SetupWarp has run and the destination isn't loaded yet. */
   private warping = false;
-  private turnFrames = 0;
+  /** LockPlayerFieldControls from field tasks (a boulder push, getting off a surfing mon): a count of holders. */
+  private controlsLocked = 0;
+  /** FreezeObjectEvents from field tasks: the NPCs hold still. */
+  private objectsFrozen = false;
   /** Task_QuestLogPlayback_OpenStartMenu: START cancelled a walked-into sign; open the menu once the controls are free. */
   private startMenuWhenFree = false;
-  private wasMoving = false;
   private hud!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -252,10 +284,20 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const playerInfo = await this.assets.loadSprite(this, PLAYER_GFX);
     if (!playerInfo) throw new Error(`Missing player sprite ${PLAYER_GFX}`);
     this.player = new ObjectEvent(this, playerInfo, 0, 0, this.field);
+    this.player.graphicsId = PLAYER_GFX;
+    // The avatar's other looks (bike, surfing, field move), so ObjectEventSetGraphicsId can swap at once.
+    const gender = this.playerGender();
+    await Promise.all(
+      ['PLAYER_AVATAR_GFX_NORMAL', 'PLAYER_AVATAR_GFX_BIKE', 'PLAYER_AVATAR_GFX_RIDE', 'PLAYER_AVATAR_GFX_FIELD_MOVE'].map((s) =>
+        this.assets.loadSprite(this, GetPlayerAvatarGraphicsIdByStateIdAndGender(this.defines.require(s), gender)),
+      ),
+    );
+    setPlayerAvatarHost(this.createAvatarHost());
     this.cameras.main.startFollow(this.player.anchor, true, 1, 1, 0, CAMERA_FOLLOW_OFFSET_Y);
 
     testHooks.applyTestOptions(this.state);
     if (start.preset) await applyStartPreset(this.state, start.preset, this.assets.scripts.healLocations);
+    ResetInitialPlayerAvatarState();
     await this.enterMap(start.map, start.x, start.y, start.facing ?? 'down', true);
     this.showMapNameOnWarpArrival(undefined); // CB2_NewGame loads the map like a warp
     this.busy = false;
@@ -287,7 +329,25 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       playerEffects: this.fieldEffects.liveEffects(this.player),
       mapNamePopup: this.mapNamePopup?.text,
       mapNamePopupHeight: this.mapNamePopup?.visibleHeight ?? 0,
+      avatar: {
+        flags: Object.keys(this.assets.scripts.defines)
+          .filter((k) => k.startsWith('PLAYER_AVATAR_FLAG_') && gPlayerAvatar.flags & this.defines.require(k))
+          .map((k) => k.slice('PLAYER_AVATAR_FLAG_'.length)),
+        runningState: gPlayerAvatar.runningState,
+        tileTransitionState: gPlayerAvatar.tileTransitionState,
+        graphicsId: this.player.graphicsId,
+        action: this.player.heldMovementActive ? movementActionName(this.player.movementActionId) : undefined,
+        movementDirection: this.player.movementDirection,
+      },
     };
+  }
+
+  /** Dev: the current map's objects, for `__test.objects()`. */
+  testObjects(): { localId: number; graphicsId: string; x: number; y: number; moving: boolean }[] {
+    const cur = this.world.current;
+    return this.npcs
+      .filter((n) => n.chunk === cur)
+      .map((n) => ({ localId: n.localId, graphicsId: n.graphicsId, x: n.brain.obj.tileX - cur.originX, y: n.brain.obj.tileY - cur.originY, moving: n.brain.obj.isMoving }));
   }
 
   /** Dev: the direction to push to take the warp the player stands on (stairs, arrow mats), if it is one. */
@@ -374,7 +434,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     // Like the GBA, field input is only considered if the controls were free at the start of the
     // frame (CB1_Overworld checks ArePlayerFieldControlsLocked before tasks run), so the A press that
     // dismisses a message or picks EXIT on the start menu can't also start a new interaction.
-    const lockedAtFrameStart = this.scripts.running || this.overlay !== undefined;
+    const lockedAtFrameStart = this.scripts.running || this.overlay !== undefined || this.controlsLocked > 0;
     const freeAtFrameStart = !this.busy && !lockedAtFrameStart && this.trainerApproach === undefined;
     this.trainerApproach?.tick();
     if (this.trainerApproach?.done) this.trainerApproach = undefined;
@@ -389,7 +449,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (overlay && overlay.tick() && this.overlay === overlay) this.overlay = undefined;
     this.doors.tick(); // Task_AnimateDoor (priority 80) runs after the tasks that start it
     if (this.mapNamePopup?.tick()) this.mapNamePopup = undefined; // Task_MapNamePopup (priority 90)
-    const scripted = this.scripts.running || this.overlay !== undefined;
+    const scripted = this.scripts.running || this.overlay !== undefined || this.objectsFrozen;
     for (const n of this.npcs) {
       n.brain.paused = scripted;
       n.brain.tick();
@@ -397,31 +457,26 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const arrived = this.player.tick();
     this.cameraObject?.tick();
     if (arrived) this.updateObjectsForCamera(); // the camera moved a tile, scripted or not
-    if (arrived && !scripted) this.onPlayerArrived();
-    // Re-check after arrival: a coord trigger or warp started this frame must also block movement
-    // (on the GBA, TryStartCoordEventScript makes ProcessPlayerFieldInput return before moving).
-    const blocked = this.scripts.running || this.overlay !== undefined;
+    if (arrived && !this.scripts.running && this.overlay === undefined) this.onPlayerArrived();
+    // DoCB1_Overworld (next frame's, as the GBA's CB1 sees this frame's sprite updates):
+    // UpdatePlayerAvatarTransitionState and FieldGetPlayerInput run whether or not the controls are locked.
+    UpdatePlayerAvatarTransitionState();
+    const input = this.fieldGetPlayerInput();
+    // A script or warp started this frame also blocks the player (ArePlayerFieldControlsLocked).
+    const blocked = this.scripts.running || this.overlay !== undefined || this.controlsLocked > 0;
     if (!this.busy && !lockedAtFrameStart && !blocked) {
-      this.scripts.msgSetNotSignpost(); // ResetFacingNpcOrSignpostVars
       if (this.startMenuWhenFree) {
         this.startMenuWhenFree = false;
         this.openStartMenu();
         return;
       }
-      // ProcessPlayerFieldInput checks for trainers first, on every frame the controls are free (mid-step too).
-      const approach = checkForTrainersWantingBattle(this.trainerSee);
-      if (approach) {
-        this.trainerApproach = approach;
-        testEvent('trainerApproach');
-      }
-      else if (!this.player.isMoving && !this.tryOnFrameScript()) this.handleInput();
+      if (!this.processPlayerFieldInput(input)) PlayerStep(input.dpadDirection, this.buttons);
     }
     // ProcessPlayerFieldInput returned TRUE (a script, menu, warp or trainer started): LockPlayerFieldControls
     // and DismissMapNamePopup. Crossing a connection isn't one of them (the popup is reshown instead).
     if (freeAtFrameStart && (this.scripts.running || this.overlay !== undefined || this.trainerApproach !== undefined || this.warping)) {
       this.mapNamePopup?.dismiss();
     }
-    this.wasMoving = this.player.isMoving;
 
     // AnimateSprites runs every object's ObjectEventUpdateSubpriority against last frame's camera;
     // only then do CameraUpdate and UpdateCameraPanning move it.
@@ -442,115 +497,138 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.field.cameraTop = (this.cameraObject ?? this.player).feetY - CAMERA_FOLLOW_OFFSET_Y + this.cameraPanY - this.cameras.main.height / 2;
   }
 
-  private handleInput(): void {
-    const dir = this.heldDirection();
-    // ProcessPlayerFieldInput: walking into a sign, then an A-press interaction, then START, all before movement.
-    if (dir && dir === this.player.facing && this.tryWalkIntoSignpost()) return;
-    if (this.buttons.pressed('A') && this.interact()) return;
-    // TryDoorWarp: holding north while facing a door with a warp on it
-    if (dir === 'up' && this.player.facing === 'up') {
-      const door = this.world.tileAt(this.player.tileX, this.player.tileY - 1);
-      const warp = this.behaviors.isDoor(door.behavior) && this.warpAt(this.player.tileX, this.player.tileY - 1);
-      if (warp) {
-        this.doDoorWarp(warp);
-        return;
+  /** FieldGetPlayerInput: which buttons count this frame, given where the player is in their step. */
+  private fieldGetPlayerInput(): FieldInput {
+    const runningState = gPlayerAvatar.runningState;
+    const tileTransitionState = gPlayerAvatar.tileTransitionState;
+    const { x, y } = this.player.current;
+    const forcedMove = this.behaviors.isForcedMovementTile(this.world.tileAt(x, y).behavior); // GetPlayerCurMetatileBehavior
+    const input: FieldInput = {
+      pressedAButton: false,
+      pressedStartButton: false,
+      heldDirection: false,
+      heldDirection2: false,
+      tookStep: false,
+      checkStandardWildEncounter: false,
+      dpadDirection: this.heldDirection(),
+    };
+    if ((tileTransitionState === K.T_TILE_CENTER && !forcedMove) || tileTransitionState === K.T_NOT_MOVING) {
+      if (GetPlayerSpeed() !== K.PLAYER_SPEED_FASTEST) {
+        const forced = gPlayerAvatar.flags & PLAYER_AVATAR_FLAG.FORCED;
+        if (this.buttons.pressed('START') && !forced) input.pressedStartButton = true;
+        if (!forced && this.buttons.pressed('A')) input.pressedAButton = true; // (SELECT / B / R: no field use yet)
+      }
+      if (input.dpadDirection) {
+        input.heldDirection = true;
+        input.heldDirection2 = true;
       }
     }
-    if (this.buttons.pressed('START')) {
-      this.openStartMenu();
-      return;
+    if (!forcedMove) {
+      if (tileTransitionState === K.T_TILE_CENTER && runningState === K.MOVING) input.tookStep = true;
+      if (tileTransitionState === K.T_TILE_CENTER) input.checkStandardWildEncounter = true;
     }
-    if (!dir) {
-      this.turnFrames = 0;
-      return;
-    }
-
-    const here = this.world.tileAt(this.player.tileX, this.player.tileY);
-    const pushWarp = this.warpAt(this.player.tileX, this.player.tileY);
-    if (pushWarp && this.behaviors.isPushWarp(here.behavior, dir)) {
-      this.player.face(dir);
-      void this.takeWarp(pushWarp);
-      return;
-    }
-
-    // Tap to turn: from a standstill, a new direction turns first and only walks if still held.
-    if (dir !== this.player.facing && !this.wasMoving) {
-      this.player.face(dir);
-      this.turnFrames = TURN_FRAMES;
-      return;
-    }
-    if (this.turnFrames > 0) {
-      this.turnFrames--;
-      return;
-    }
-
-    const { dx, dy } = DELTA[dir];
-    const tx = this.player.tileX + dx;
-    const ty = this.player.tileY + dy;
-    const target = this.world.tileAt(tx, ty);
-
-    if (this.behaviors.isJump(target.behavior, dir) && this.canOccupy(this.player, tx + dx, ty + dy)) {
-      this.player.move(dir, 'jump');
-      return;
-    }
-
-    if (this.canMove(this.player, dir)) {
-      const run = this.buttons.held('B') && this.world.current.data.allowRunning;
-      this.player.move(dir, run ? 'run' : 'walk');
-    } else {
-      this.player.face(dir);
-    }
-  }
-
-  private onPlayerArrived(): void {
-    const { tileX: x, tileY: y } = this.player;
-
-    // LoadMapFromCameraTransition: the step's tile already belongs to the new map, so the rest of
-    // the step is handled against it once it's loaded.
-    const chunk = this.world.chunkAt(x, y);
-    if (chunk && chunk !== this.world.current) {
-      this.busy = true;
-      const fromMapsec = this.mapSection();
-      void this.world.setCurrent(chunk).then(async () => {
-        InitSecondaryTilesetAnimation(this.assets.tilesetAnimInfo(chunk.data.tilesetPair).secondary);
-        await this.onMapLoaded(false);
-        // LoadMapFromCameraTransition (GetLastUsedWarpMapSectionId is the map just left)
-        if (fromMapsec !== this.mapSection()) this.showMapNamePopup();
-        this.busy = false;
-        if (!this.scripts.running && this.overlay === undefined) {
-          this.processStep(x, y);
-          if (this.scripts.running || this.overlay !== undefined || this.warping) this.mapNamePopup?.dismiss(); // as in tickField
-        }
-      });
-      return;
-    }
-    this.processStep(x, y);
+    return input;
   }
 
   /**
-   * ProcessPlayerFieldInput for a completed step (tookStep / checkStandardWildEncounter):
-   * TryStartStepBasedScript (step warps, coord events, step counters, the repel counter), then
-   * TrySetUpWalkIntoSignpostScript and CheckStandardWildEncounter.
+   * ProcessPlayerFieldInput: trainers, ON_FRAME scripts, what a finished step starts (step-based scripts,
+   * walking into a sign, wild encounters), then arrow/stair warps, signs, A, doors and START, in the C's
+   * order. True when something took the controls; otherwise PlayerStep moves the player.
    */
-  private processStep(x: number, y: number): void {
+  private processPlayerFieldInput(input: FieldInput): boolean {
+    this.scripts.msgSetNotSignpost(); // ResetFacingNpcOrSignpostVars
+    const facing = this.player.facing;
+    const { x, y } = this.player.current; // GetPlayerPosition
     const tile = this.world.tileAt(x, y);
+    // CheckForTrainersWantingBattle runs on every frame the controls are free (mid-step too).
+    const approach = checkForTrainersWantingBattle(this.trainerSee);
+    if (approach) {
+      this.trainerApproach = approach;
+      testEvent('trainerApproach');
+      return true;
+    }
+    if (this.tryOnFrameScript()) return true;
+    if (input.tookStep && this.tryStartStepBasedScript(x, y, tile.behavior)) return true;
+    if (input.checkStandardWildEncounter) {
+      if ((!input.dpadDirection || input.dpadDirection === facing) && this.tryWalkIntoSignpost()) return true;
+      if (this.wild.tryStandardWildEncounter(tile)) return true; // CheckStandardWildEncounter
+    }
+    const facingHeld = input.heldDirection && input.dpadDirection === facing;
+    if (facingHeld && this.tryArrowWarp(x, y, tile.behavior, facing)) return true;
+    if (facingHeld && this.tryWalkIntoSignpost()) return true;
+    if (input.pressedAButton && this.interact()) return true;
+    if (input.heldDirection2 && input.dpadDirection === facing && this.tryDoorWarp(facing)) return true;
+    if (input.pressedStartButton) {
+      this.openStartMenu();
+      return true;
+    }
+    return false; // (SELECT: UseRegisteredKeyItemOnField isn't ported)
+  }
+
+  /** TryStartStepBasedScript */
+  private tryStartStepBasedScript(x: number, y: number, behavior: number): boolean {
+    if (this.tryCoordEvent(x, y)) return true;
+    if (this.tryStartWarpEventScript(x, y, behavior)) return true;
+    // TryStartMiscWalkingScripts is dummied out
+    const forced = (gPlayerAvatar.flags & PLAYER_AVATAR_FLAG.FORCED) !== 0 || this.behaviors.isForcedMovementTile(behavior);
+    if (this.tryStartStepCountScript(forced)) return true;
+    if (!forced && this.wild.updateRepelCounter()) return this.startFieldScript('EventScript_RepelWoreOff');
+    return false;
+  }
+
+  /** TryStartWarpEventScript: warps that fire on stepping onto them. */
+  private tryStartWarpEventScript(x: number, y: number, behavior: number): boolean {
     const warp = this.warpAt(x, y);
-    if (warp && this.behaviors.isStepWarp(tile.behavior)) {
-      void this.takeWarp(warp);
-      return;
+    if (!warp || !this.behaviors.isStepWarp(behavior)) return false;
+    if (this.behaviors.is(behavior, 'FALL_WARP')) ResetInitialPlayerAvatarState();
+    else StoreInitialPlayerAvatarState();
+    void this.takeWarp(warp);
+    return true;
+  }
+
+  /** TryArrowWarp: pushing the way an arrow mat or a directional stair warp points. */
+  private tryArrowWarp(x: number, y: number, behavior: number, dir: Direction): boolean {
+    const warp = this.warpAt(x, y);
+    if (!warp || !this.behaviors.isPushWarp(behavior, dir)) return false;
+    // A stair warp gets the player off the bike first (DoStairWarp's delay isn't ported).
+    if (this.behaviors.isDirectionalStairWarp(behavior, dir) && TestPlayerAvatarFlags(PLAYER_AVATAR_FLAG.MACH_BIKE | PLAYER_AVATAR_FLAG.ACRO_BIKE)) {
+      SetPlayerAvatarTransitionFlags(PLAYER_AVATAR_FLAG.ON_FOOT);
     }
-    if (this.tryCoordEvent(x, y)) return;
-    // No forced movement (PLAYER_AVATAR_FLAG_FORCED) exists yet, so only the tile is checked.
-    const forced = this.behaviors.isForcedMovementTile(tile.behavior);
-    if (this.tryStartStepCountScript(forced)) return;
-    if (!forced && this.wild.updateRepelCounter()) {
-      this.startFieldScript('EventScript_RepelWoreOff');
-      return;
-    }
-    if (forced) return;
-    const dir = this.heldDirection();
-    if ((!dir || dir === this.player.facing) && this.tryWalkIntoSignpost()) return;
-    this.wild.tryStandardWildEncounter(tile);
+    StoreInitialPlayerAvatarState();
+    void this.takeWarp(warp);
+    return true;
+  }
+
+  /** TryDoorWarp: holding north while facing a door with a warp on it. */
+  private tryDoorWarp(dir: Direction): boolean {
+    if (dir !== 'up') return false;
+    const { x, y } = this.player.current;
+    const door = this.world.tileAt(x, y - 1);
+    const warp = this.behaviors.isDoor(door.behavior) && this.warpAt(x, y - 1);
+    if (!warp) return false;
+    StoreInitialPlayerAvatarState();
+    this.doDoorWarp(warp);
+    return true;
+  }
+
+  /**
+   * A finished step onto another map's tile: LoadMapFromCameraTransition. The step's tile already
+   * belongs to the new map, so the rest of the step (tookStep) is handled against it once it's loaded:
+   * the player's finished held movement keeps the next free frame's tile transition state at T_TILE_CENTER.
+   */
+  private onPlayerArrived(): void {
+    const { tileX: x, tileY: y } = this.player;
+    const chunk = this.world.chunkAt(x, y);
+    if (!chunk || chunk === this.world.current) return;
+    this.busy = true;
+    const fromMapsec = this.mapSection();
+    void this.world.setCurrent(chunk).then(async () => {
+      InitSecondaryTilesetAnimation(this.assets.tilesetAnimInfo(chunk.data.tilesetPair).secondary);
+      await this.onMapLoaded(false);
+      // LoadMapFromCameraTransition (GetLastUsedWarpMapSectionId is the map just left)
+      if (fromMapsec !== this.mapSection()) this.showMapNamePopup();
+      this.busy = false;
+    });
   }
 
   /** TryStartStepCountScript */
@@ -723,25 +801,24 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   // ------------------------------------------------------------------ collision
 
-  private canMove(obj: ObjectEvent, dir: Direction): boolean {
-    const { dx, dy } = DELTA[dir];
-    const tx = obj.tileX + dx;
-    const ty = obj.tileY + dy;
-    const from = this.world.tileAt(obj.tileX, obj.tileY);
-    const to = this.world.tileAt(tx, ty);
-    if (this.behaviors.blocksMove(from.behavior, to.behavior, dir)) return false;
-    if (this.behaviors.isAnyJump(to.behavior)) return false;
-    return this.canOccupy(obj, tx, ty);
+  /**
+   * GetCollisionAtCoords: COLLISION_IMPASSABLE (the collision bit, the map border, a directionally blocked
+   * edge), COLLISION_ELEVATION_MISMATCH, COLLISION_OBJECT_EVENT or COLLISION_NONE. The movement range
+   * check (COLLISION_OUTSIDE_RANGE) is NpcBrain's; the camera check (trackedByCamera) is covered by the
+   * border, which tileAt makes impassable.
+   */
+  private collisionAt(obj: ObjectEvent, x: number, y: number, dir: Direction): number {
+    const t = this.world.tileAt(x, y);
+    if (t.collision !== 0 || this.behaviors.blocksMove(obj.currentMetatileBehavior, t.behavior, dir)) return K.COLLISION_IMPASSABLE;
+    if (isElevationMismatchAt(obj.currentElevation, t.elevation)) return K.COLLISION_ELEVATION_MISMATCH;
+    if (this.objectCollidesAt(obj, x, y)) return K.COLLISION_OBJECT_EVENT;
+    return K.COLLISION_NONE;
   }
 
-  /** GetCollisionAtCoords minus the directional check: collision bit, elevation, other objects. */
-  private canOccupy(obj: ObjectEvent, x: number, y: number): boolean {
-    const t = this.world.tileAt(x, y);
-    if (t.collision !== 0) return false;
-    const e = obj.currentElevation;
-    if (e !== 0 && t.elevation !== 0 && t.elevation !== 15 && t.elevation !== e) return false; // IsElevationMismatchAt
-    if (obj !== this.player && this.player.tileX === x && this.player.tileY === y) return false;
-    return !this.npcs.some((n) => n.brain.obj !== obj && n.brain.obj.tileX === x && n.brain.obj.tileY === y);
+  /** GetCollisionInDirection == COLLISION_NONE: whether an NPC may step that way. */
+  private canMove(obj: ObjectEvent, dir: Direction): boolean {
+    const { dx, dy } = DELTA[dir];
+    return this.collisionAt(obj, obj.tileX + dx, obj.tileY + dy, dir) === K.COLLISION_NONE;
   }
 
   private npcAt(x: number, y: number): Npc | undefined {
@@ -944,7 +1021,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     await this.waitFrames(() => !this.screenFade.active);
     await this.doChangeMap(from, data, white);
     const dest = warpDestCoords(data, warpId, x, y);
-    await this.enterMap(name, dest.x, dest.y, this.player.facing, true);
+    await this.enterMap(name, dest.x, dest.y, undefined, true);
     this.showMapNameOnWarpArrival(from);
     // FieldCB_DefaultWarpExit → SetUpWarpExitTask: a door (MetatileBehavior_IsWarpDoor_2) gets Task_ExitDoor;
     // otherwise ExitWarpFadeInScreen(FALSE) and a task that waits for the fade.
@@ -985,7 +1062,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /** Load a map fresh (origin at 0,0) and put the player at local (x, y). */
-  private async enterMap(name: string, x: number, y: number, facing: Direction, warped: boolean): Promise<void> {
+  /**
+   * `facing`: the direction to face on arrival, or undefined for the one GetInitialPlayerAvatarState
+   * picks (by the arrival tile: south out of doors, north off a mat, ...).
+   */
+  private async enterMap(name: string, x: number, y: number, facing: Direction | undefined, warped: boolean): Promise<void> {
     this.warping = false;
     this.mapNamePopup?.destroy(); // the map load's ResetTasks
     this.mapNamePopup = undefined;
@@ -1000,8 +1081,26 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.player.setPosition(x, y); // also updates elevation and priority, as on spawn
     this.updateFieldCamera(); // the warp resets the camera onto the player
     this.player.updateSubpriority();
-    this.player.face(facing);
+    this.arrivalFacing = facing;
     await this.onMapLoaded(warped);
+  }
+
+  /**
+   * InitObjectEventsLocal's player part: InitPlayerAvatar facing the way GetInitialPlayerAvatarState
+   * says (or `arrivalFacing`), with the state the warp brought along (on the bike, surfing), then
+   * ResetInitialPlayerAvatarState.
+   */
+  private initPlayerAvatarOnWarp(): void {
+    const data = this.world.current.data;
+    const { x, y } = this.player.current;
+    const initial = GetInitialPlayerAvatarState(this.mapType(data), this.world.tileAt(x, y).behavior, data.id);
+    InitPlayerAvatar(this.arrivalFacing ?? initial.direction, this.playerGender(), initial.transitionFlags);
+    ResetInitialPlayerAvatarState();
+  }
+
+  /** gSaveBlock2Ptr->playerGender as MALE / FEMALE */
+  private playerGender(): number {
+    return this.defines.require(this.state.playerGender === 'female' ? 'FEMALE' : 'MALE');
   }
 
   /** Map entry sequence: templates reloaded, temps cleared, ON_TRANSITION, ON_LOAD, objects spawned, ON_WARP_INTO. */
@@ -1026,7 +1125,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const load = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_LOAD');
     if (load) this.scripts.runImmediately(load);
     await this.preloadMapSprites(); // again, now the map scripts have set any VAR_OBJ_GFX_ID_*
-    if (warped) this.clearNpcs(); // ResetObjectEvents
+    if (warped) {
+      this.clearNpcs(); // ResetObjectEvents
+      this.initPlayerAvatarOnWarp();
+    }
     this.syncNpcsWithLoadedMaps();
     if (warped) {
       const table = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_WARP_INTO_MAP_TABLE');
@@ -1148,6 +1250,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       return undefined;
     }
     const obj = new ObjectEvent(this, info, chunk.originX + e.x, chunk.originY + e.y, this.field, e.elevation);
+    obj.graphicsId = graphicsId;
     obj.updateElevationAndPriority(); // DoGroundEffects_OnSpawn
     const data = { ...e };
     return { localId, chunk, spawnedAs: data, graphicsId, stale: false, brain: new NpcBrain(obj, data, (o, d) => this.canMove(o, d)) };
@@ -1189,6 +1292,19 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         if (launched || this.screenFade.active) return false;
         launched = true;
         this.runFieldMenu({ menu }, (openStartMenu) => {
+          const fieldCallback = gFieldCallback.fn;
+          gFieldCallback.fn = undefined;
+          if (fieldCallback) {
+            // gFieldCallback (e.g. item_use.c's FieldCB_FadeInFromBlack for the Bicycle) fades in itself.
+            const tick = fieldCallback({
+              fadeInFromBlack: () => {
+                this.screenFade.begin(d.require('FADE_FROM_BLACK'));
+                return () => !this.screenFade.active;
+              },
+            });
+            this.overlay = { tick };
+            return;
+          }
           this.screenFade.begin(d.require('FADE_FROM_BLACK'));
           if (openStartMenu) {
             this.openStartMenu(true);
@@ -1588,7 +1704,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.busy = true;
     const data = await this.assets.loadMap(name);
     const dest = warpDestCoords(data, w.warpId, w.x, w.y);
-    await this.enterMap(name, dest.x, dest.y, this.player.facing, true);
+    await this.enterMap(name, dest.x, dest.y, undefined, true);
     this.busy = false;
   }
 
@@ -1709,6 +1825,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * RunOnResumeMapScript, then ReloadObjectsAndRunReturnToFieldMapScript's RunOnReturnToFieldMapScript.
    */
   private resumeMap(): void {
+    ReturnPlayerAvatarToField(); // SpawnObjectEventsOnReturnToField
+    this.player.clearHeldMovementIfFinished(); // (a finished step isn't processed again after a battle)
     const name = this.world.current.name;
     for (const type of ['MAP_SCRIPT_ON_RESUME', 'MAP_SCRIPT_ON_RETURN_TO_FIELD']) {
       const script = this.scripts.mapScript(name, type);
@@ -1773,6 +1891,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       this.state.setFlag(f, false);
     }
     for (const v of ['VAR_MAP_SCENE_ROUTE16', 'VAR_MAP_SCENE_FUCHSIA_CITY_SAFARI_ZONE_ENTRANCE', 'VAR_QL_ENTRANCE']) this.state.setVar(v, 0);
+    ResetInitialPlayerAvatarState();
     const respawn = this.whiteOutRespawn();
     const name = this.assets.mapNameForId(respawn.map);
     if (name) {
@@ -1858,6 +1977,67 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (b.isSurfable(behavior)) return d.require('BATTLE_TERRAIN_POND');
     if (b.isMountain(behavior)) return d.require('BATTLE_TERRAIN_MOUNTAIN');
     return d.require('BATTLE_TERRAIN_PLAIN');
+  }
+
+  // ------------------------------------------------------------------ player avatar
+
+  /** What field_player_avatar.c (world/playerAvatar.ts) reads and does on the field. */
+  private createAvatarHost(): PlayerAvatarHost {
+    const scene = this;
+    const objects = () => [this.player, ...this.npcs.map((n) => n.brain.obj)];
+    return {
+      get player() {
+        return scene.player;
+      },
+      behaviors: this.behaviors,
+      behaviorAt: (x, y) => this.world.tileAt(x, y).behavior,
+      elevationAt: (x, y) => this.world.tileAt(x, y).elevation,
+      collisionAt: (obj, x, y, dir) => this.collisionAt(obj, x, y, dir),
+      objectAt: (x, y) => objects().find((o) => o.tileX === x && o.tileY === y), // GetObjectEventIdByXY
+      // GetObjectEventIdByPosition (ObjectEventDoesElevationMatch)
+      objectAtPosition: (x, y, elevation) =>
+        objects().find((o) => o.tileX === x && o.tileY === y && (o.currentElevation === 0 || elevation === 0 || o.currentElevation === elevation)),
+      graphicsIdOf: (obj) => obj.graphicsId || undefined,
+      flag: (name) => this.state.getFlag(name),
+      allowRunning: () => this.world.current.data.allowRunning,
+      allowCycling: () => this.world.current.data.allowCycling,
+      mapId: () => this.world.current.data.id,
+      spriteInfo: (gfxId) => {
+        const info = this.assets.sprites[gfxId];
+        return info && this.textures.exists(spriteTextureKey(info)) ? info : undefined;
+      },
+      lockPlayerFieldControls: () => this.controlsLocked++,
+      unlockPlayerFieldControls: () => (this.controlsLocked = Math.max(0, this.controlsLocked - 1)),
+      freezeObjectEvents: () => (this.objectsFrozen = true),
+      unfreezeObjectEvents: () => (this.objectsFrozen = false),
+      createTask: (tick) => this.fieldTasks.push({ tick }),
+      startDust: (x, y, elevation, priority) => this.fieldEffects.dust(x, y, elevation, priority),
+      boulderPushed: (boulder) => this.boulderPushed(boulder),
+      partyKnowsSurf: () => {
+        const surf = this.defines.require('MOVE_SURF');
+        return this.state.party.some((m) => m.moves.includes(surf));
+      },
+    };
+  }
+
+  /** HandleBoulderFallThroughHole + HandleBoulderActivateVictoryRoadSwitch (field_control_avatar.c) */
+  private boulderPushed(boulder: ObjectEvent): void {
+    const { x, y } = boulder.current;
+    const behavior = this.world.tileAt(x, y).behavior;
+    const cur = this.world.current;
+    const npc = this.npcs.find((n) => n.brain.obj === boulder && n.chunk === cur);
+    if (this.behaviors.is(behavior, 'FALL_WARP') && npc) {
+      // RemoveObjectEventByLocalIdAndMap, then FlagClear(GetBoulderRevealFlagByLocalIdAndMap): a boulder's
+      // template keeps the flag of its twin on the floor below in its trainer type (SE_FALL: no audio).
+      const reveal = this.templatesFor(cur)[npc.localId - 1]?.trainer_type;
+      this.removeObject(npc.localId);
+      if (reveal && reveal.startsWith('FLAG_')) this.state.setFlag(reveal, false);
+    }
+    if (this.behaviors.is(behavior, 'STRENGTH_BUTTON')) {
+      for (const e of cur.data.coordEvents) {
+        if (e.x === x - cur.originX && e.y === y - cur.originY && e.script && e.script !== '0x0') this.startFieldScript(e.script);
+      }
+    }
   }
 
   // ------------------------------------------------------------------ trainer sight
@@ -2038,6 +2218,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       console.warn('[warp] unknown map', mapId);
       return;
     }
+    ResetInitialPlayerAvatarState(); // ScrCmd_warp
     void this.warpTo(name, warpId, x, y);
   }
 

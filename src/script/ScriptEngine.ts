@@ -1,3 +1,4 @@
+import { ClearPlayerHeldMovement, IsFreezePlayerFinished } from '../world/playerAvatar';
 import type { ObjectEvent } from '../entities/ObjectEvent';
 import type { Button, Input } from '../input/Input';
 import type { NamingScreenRequest } from '../scenes/FieldMenuScene';
@@ -777,18 +778,24 @@ export class ScriptEngine {
      * script runs, so this only waits for the player and the selected object to finish their steps.
      */
     lock(this: ScriptEngine, ctx: ScriptContext) {
-      ctx.wait = () => !this.host.player.isMoving && !this.host.selectedObject?.isMoving;
+      let player = false;
+      ctx.wait = () => (player ||= IsFreezePlayerFinished()) && !this.host.selectedObject?.isMoving;
     },
-    /** ScrCmd_lockall: FreezeObjects_WaitForPlayer */
+    /** ScrCmd_lockall: FreezeObjects_WaitForPlayer (IsFreezePlayerFinished: the player stops and faces their way) */
     lockall(this: ScriptEngine, ctx: ScriptContext) {
-      ctx.wait = () => !this.host.player.isMoving;
+      ctx.wait = () => IsFreezePlayerFinished();
     },
-    /** ScrCmd_release / ScrCmd_releaseall: both hide the field message box. */
+    /**
+     * ScrCmd_release / ScrCmd_releaseall: both hide the field message box, and
+     * ClearPlayerHeldMovementAndUnfreezeObjectEvents lets go of the player's finished movement.
+     */
     release(this: ScriptEngine) {
       this.messageBox.hide();
+      ClearPlayerHeldMovement();
     },
     releaseall(this: ScriptEngine) {
       this.messageBox.hide();
+      ClearPlayerHeldMovement();
     },
     faceplayer(this: ScriptEngine) {
       const obj = this.host.selectedObject;

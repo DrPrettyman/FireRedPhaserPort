@@ -137,6 +137,23 @@ export class Behaviors {
     return inRange('WALK_EAST', 'TRICK_HOUSE_PUZZLE_8_FLOOR') || inRange('EASTWARD_CURRENT', 'SOUTHWARD_CURRENT') || this.is(behavior, 'WATERFALL', 'ICE') || inRange('SPIN_RIGHT', 'SPIN_DOWN');
   }
 
+  /** MetatileBehavior_IsSpinTile */
+  isSpinTile(behavior: number): boolean {
+    return behavior >= (this.id('SPIN_RIGHT') ?? Infinity) && behavior <= (this.id('SPIN_DOWN') ?? -Infinity);
+  }
+
+  /** MetatileBehavior_IsCyclingRoadPullDownTile */
+  isCyclingRoadPullDownTile(behavior: number): boolean {
+    return behavior >= (this.id('CYCLING_ROAD_PULL_DOWN') ?? Infinity) && behavior <= (this.id('CYCLING_ROAD_PULL_DOWN_GRASS') ?? -Infinity);
+  }
+
+  /** IsDirectionalStairWarpMetatileBehavior (field_control_avatar.c) */
+  isDirectionalStairWarp(behavior: number, dir: Direction): boolean {
+    if (dir === 'left') return this.is(behavior, 'UP_LEFT_STAIR_WARP', 'DOWN_LEFT_STAIR_WARP');
+    if (dir === 'right') return this.is(behavior, 'UP_RIGHT_STAIR_WARP', 'DOWN_RIGHT_STAIR_WARP');
+    return false;
+  }
+
   /** IsMetatileDirectionallyImpassable: can't leave `from` across edge `dir`, or enter `to` across the opposite edge. */
   blocksMove(from: number, to: number, dir: Direction): boolean {
     return this.blocksEdge(from, dir) || this.blocksEdge(to, OPPOSITE[dir]);

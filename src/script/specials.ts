@@ -6,7 +6,9 @@ import { DELTA } from '../world/direction';
 import { animateElevator, getElevatorFloor, initElevatorFloorSelectMenuPos } from '../world/elevator';
 import { initRoamer } from '../world/roamer';
 import { isPoisoned } from '../world/stepCounters';
-import type { ScriptHost } from './ScriptEngine';
+import { directionId, type ScriptHost } from './ScriptEngine';
+import { ForcePlayerOntoBike, GetPlayerAvatarBike } from '../world/bike';
+import { ForcePlayerToStartSurfing, GetPlayerFacingDirection, SeafoamIslandsB4F_CurrentDumpsPlayerOnLand } from '../world/playerAvatar';
 
 export interface SpecialEnv {
   state: GameState;
@@ -42,6 +44,16 @@ const NO_OP = [
 
 export const SPECIALS: Record<string, Special> = {
   ...Object.fromEntries(NO_OP.map((name) => [name, () => {}])),
+
+  // field_player_avatar.c / bike.c / field_specials.c's player avatar specials
+  ForcePlayerOntoBike,
+  ForcePlayerToStartSurfing,
+  SeafoamIslandsB4F_CurrentDumpsPlayerOnLand,
+  GetPlayerAvatarBike,
+  /** GetPlayerFacingDirection: DIR_* */
+  GetPlayerFacingDirection({ state }) {
+    return directionId(GetPlayerFacingDirection(), state.defines);
+  },
 
   DisableMsgBoxWalkaway({ disableMsgBoxWalkaway }) {
     disableMsgBoxWalkaway();

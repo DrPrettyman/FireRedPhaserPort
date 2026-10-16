@@ -21,6 +21,7 @@ import { TEXT_SPEED, type TextSpeed } from '../text/TextPrinter';
 import { seedRng } from '../util/random';
 import { DELTA, type Direction } from '../world/direction';
 import { tilesetVram } from '../world/TilesetVram';
+import { SetPlayerAvatarTransitionFlags } from '../world/playerAvatar';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -185,6 +186,30 @@ export interface FieldProbe {
   mapNamePopup: number[] | undefined;
   /** How many px of the popup window are on screen (0..24). */
   mapNamePopupHeight: number;
+  /** gPlayerAvatar and the player's held movement (world/playerAvatar.ts). */
+  avatar: {
+    /** PLAYER_AVATAR_FLAG_* set, without the prefix (ON_FOOT, MACH_BIKE, SURFING, FORCED, ...). */
+    flags: string[];
+    /** NOT_MOVING / TURN_DIRECTION / MOVING */
+    runningState: number;
+    /** T_NOT_MOVING / T_TILE_TRANSITION / T_TILE_CENTER */
+    tileTransitionState: number;
+    /** The player object's OBJ_EVENT_GFX_* */
+    graphicsId: string;
+    /** The held MOVEMENT_ACTION_* (without the prefix), if any. */
+    action: string | undefined;
+    movementDirection: Direction;
+  };
+}
+
+/** An object on the field, for tests. */
+export interface FieldObjectProbe {
+  localId: number;
+  graphicsId: string;
+  /** Map-local position (its destination while it moves). */
+  x: number;
+  y: number;
+  moving: boolean;
 }
 
 /** The parts of OverworldScene the hooks use (`startWildBattle` is private there; reached by name). */
@@ -192,6 +217,7 @@ interface OverworldLike extends Phaser.Scene {
   testProbe(): FieldProbe | undefined;
   testFindPath(worldX: number, worldY: number): Direction[] | undefined;
   testPushWarpDirection(): Direction | undefined;
+  testObjects(): FieldObjectProbe[];
   state: GameState;
   startWildBattle(mon: Pokemon): void;
 }
@@ -408,6 +434,13 @@ function createApi(game: Phaser.Game) {
     gbaScreen: () => (game.scene.isActive('Battle') || game.scene.isActive('FieldMenu') ? gMain.callback2?.name : undefined),
     field,
     idle,
+    /** The current map's objects: local id, graphics and map-local position. */
+    objects: () => overworld()?.testObjects() ?? [],
+    /**
+     * Put the player in an avatar state the way the game does it (SetPlayerAvatarTransitionFlags with
+     * PLAYER_AVATAR_FLAG_<state>): 'MACH_BIKE' gets on the bike, 'SURFING' onto a surfing mon, 'ON_FOOT' off.
+     */
+    setAvatarState: (state: 'ON_FOOT' | 'MACH_BIKE' | 'SURFING') => SetPlayerAvatarTransitionFlags(define(`PLAYER_AVATAR_FLAG_${state}`)),
     get state() {
       return state();
     },

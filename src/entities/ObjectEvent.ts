@@ -3,6 +3,7 @@ import { spriteTextureKey } from '../data/assets';
 import type { SpriteInfo } from '../data/types';
 import { DELTA, type Direction } from '../world/direction';
 import { TILE, objectDepth } from '../world/MapChunk';
+import { heldActionSpec, movementActionNone } from './movementActions';
 
 /** Standard 9-frame overworld sheet: face S/N/W, then two step frames per direction. East = west flipped. */
 const FACE_FRAME: Record<Direction, number> = { down: 0, up: 1, left: 2, right: 2 };
@@ -13,6 +14,13 @@ const RUN_FRAMES: Record<Direction, [number, number, number]> = {
   up: [12, 13, 14],
   left: [15, 16, 17],
   right: [15, 16, 17],
+};
+/** sAnim_Spin*: [frame, hFlip], 2 frames each, looped once (two turns over a SPIN step). */
+const SPIN_FRAMES: Record<Direction, [number, boolean][]> = {
+  down: [[0, false], [2, true], [1, false], [2, false]],
+  up: [[1, false], [2, false], [0, false], [2, true]],
+  left: [[2, true], [1, false], [2, false], [0, false]],
+  right: [[2, false], [0, false], [2, true], [1, false]],
 };
 
 /** sElevationToPriority: the OAM priority an object gets from its (previous) elevation. */
@@ -38,28 +46,38 @@ export interface ObjectEventField {
   startShadow?(obj: ObjectEvent): void;
 }
 
-/** Parabolic hop: peaks `height` px up halfway through. */
-function jumpLift(frame: number, frames: number, height: number): number {
-  const t = frame / frames;
-  return -Math.round(4 * height * t * (1 - t));
-}
+// sJumpY_High / sJumpY_Normal: sprite->y2 through a jump, indexed by its timer >> shift.
+const JUMP_Y_HIGH = [-4, -6, -8, -10, -11, -12, -12, -12, -11, -10, -9, -8, -6, -4, 0, 0];
+const JUMP_Y_NORMAL = [-2, -4, -6, -8, -9, -10, -10, -10, -9, -8, -6, -5, -3, -2, 0, 0];
 
 export type MoveKind =
   | 'walk'
   | 'run'
-  | 'jump' // ledge: 2 tiles
+  | 'runSlow' // PLAYER_RUN_*_SLOW (running up or down rock stairs)
+  | 'jump' // ledge (JUMP_2): 2 tiles
   | 'jump1' // jump_*: 1 tile
+  | 'jumpSpecial' // JUMP_SPECIAL(_WITH_EFFECT): 1 tile over 32 frames (getting off a surfing mon)
+  | 'jumpInPlace' // JUMP_IN_PLACE_*
   | 'slowest'
   | 'slower'
   | 'slow'
   | 'fast'
-  | 'faster';
+  | 'fast2' // MOVE_SPEED_FAST_2 (RIDE_WATER_CURRENT: currents and the bike)
+  | 'faster'
+  | 'spin' // SPIN_* (spinner tiles)
+  | 'inPlaceSlow' // WALK_IN_PLACE_SLOW (bumping into something on foot): 32 frames
+  | 'inPlaceNormal' // WALK_IN_PLACE_NORMAL (bumping on the bike, pushing a boulder): 16 frames
+  | 'inPlaceFast' // WALK_IN_PLACE_FAST (turning on the spot): 8 frames
+  | 'inPlaceFaster'; // 4 frames
 
 interface MoveSpec {
   tiles: number;
   frames: number;
-  anim: 'walk' | 'run' | 'none';
-  jump?: number;
+  anim: 'walk' | 'run' | 'spin' | 'none';
+  /** DoJumpSpriteMovement / DoJumpSpecialSpriteMovement: the y2 table and the timer's shift into it. */
+  jump?: { table: number[]; shift: number };
+  /** Pixels covered after each frame where the speed isn't constant (UpdateRunSlowAnim, DoJumpSpecialSpriteMovement). */
+  steps?: number[];
 }
 
 /** Frames per tile follow the GBA movement speeds (1px/frame = 16 frames for a normal step). */
@@ -69,10 +87,25 @@ const MOVES: Record<MoveKind, MoveSpec> = {
   slow: { tiles: 1, frames: 32, anim: 'walk' },
   walk: { tiles: 1, frames: 16, anim: 'walk' },
   fast: { tiles: 1, frames: 8, anim: 'walk' },
+  fast2: { tiles: 1, frames: 6, anim: 'walk' }, // sSpeedFast2StepFuncs: 2,3,3,2,3,3 px
   faster: { tiles: 1, frames: 4, anim: 'walk' },
   run: { tiles: 1, frames: 8, anim: 'run' },
-  jump: { tiles: 2, frames: 32, anim: 'none', jump: 8 },
-  jump1: { tiles: 1, frames: 16, anim: 'none', jump: 6 },
+  runSlow: { tiles: 1, frames: 11, anim: 'run', steps: [1, 3, 4, 6, 7, 9, 10, 12, 13, 15, 16] },
+  spin: { tiles: 1, frames: 8, anim: 'spin' },
+  jump: { tiles: 2, frames: 32, anim: 'none', jump: { table: JUMP_Y_HIGH, shift: 1 } },
+  jump1: { tiles: 1, frames: 16, anim: 'none', jump: { table: JUMP_Y_NORMAL, shift: 0 } },
+  jumpSpecial: {
+    tiles: 1,
+    frames: 32,
+    anim: 'none',
+    jump: { table: JUMP_Y_HIGH, shift: 1 },
+    steps: Array.from({ length: 32 }, (_, i) => (i >> 1) + 1), // Step1 on even timer values
+  },
+  jumpInPlace: { tiles: 0, frames: 16, anim: 'none', jump: { table: JUMP_Y_HIGH, shift: 0 } },
+  inPlaceSlow: { tiles: 0, frames: 32, anim: 'walk' },
+  inPlaceNormal: { tiles: 0, frames: 16, anim: 'walk' },
+  inPlaceFast: { tiles: 0, frames: 8, anim: 'walk' },
+  inPlaceFaster: { tiles: 0, frames: 4, anim: 'walk' },
 };
 
 export interface MoveOptions {
@@ -99,9 +132,28 @@ export class ObjectEvent {
   readonly sprite: Phaser.GameObjects.Sprite;
   /** The sprite's position without jump lift (sprite->x/y minus y2): what the camera follows (CameraObject_1). */
   readonly anchor = new Phaser.Math.Vector2();
+  /** The graphics info (ObjectEventSetGraphicsId changes it). */
+  info: SpriteInfo;
+  /** graphicsId: the OBJ_EVENT_GFX_* the info is for, as its spawner set it. */
+  graphicsId = '';
   tileX: number;
   tileY: number;
+  /** facingDirection */
   facing: Direction = 'down';
+  /** movementDirection: the direction of the last movement, which a locked facing doesn't follow. */
+  movementDirection: Direction = 'down';
+  /** facingDirectionLocked: steps don't turn the object (slide tiles, lock_facing_direction). */
+  facingDirectionLocked = false;
+  /** disableAnim: steps don't animate (sliding on ice and slide tiles). */
+  disableAnim = false;
+  /** enableAnim: TryEnableObjectEventAnim clears disableAnim on the next update. */
+  enableAnim = false;
+  /** heldMovementActive / heldMovementFinished / movementActionId (ObjectEventSetHeldMovement) */
+  heldMovementActive = false;
+  heldMovementFinished = false;
+  movementActionId = 0xff;
+  /** playerCopyableMovement (PlayerSetCopyableMovement): what copycat NPCs read. */
+  playerCopyableMovement = 0;
   /** Elevation used for collision; 0 (e.g. stairs) is compatible with every elevation. */
   currentElevation: number;
   /** The last non-zero elevation, which picks the sprite's priority. */
@@ -143,17 +195,19 @@ export class ObjectEvent {
   /** World pixel y of the sprite's top edge, including jump lift (oam.y before the camera offset). */
   private topY = 0;
   private movement?: Movement;
+  /** Frames left of a held MOVEMENT_ACTION_DELAY_*. */
+  private delayFrames = 0;
   private stepParity = 0;
-  readonly hasRunFrames: boolean;
 
   constructor(
     scene: Phaser.Scene,
-    readonly info: SpriteInfo,
+    info: SpriteInfo,
     tileX: number,
     tileY: number,
     private readonly field: ObjectEventField,
     elevation = 3,
   ) {
+    this.info = info;
     this.tileX = tileX;
     this.tileY = tileY;
     this.currentX = tileX;
@@ -163,10 +217,14 @@ export class ObjectEvent {
     this.currentElevation = elevation;
     this.previousElevation = elevation;
     this.priority = ELEVATION_TO_PRIORITY[elevation]; // InitObjectPriorityByElevation
-    this.hasRunFrames = info.frameCount >= 18;
     this.sprite = scene.add.sprite(0, 0, spriteTextureKey(info), 0).setOrigin(0.5, 1);
     this.syncSprite(0, 0, 0);
     this.showFacing();
+  }
+
+  /** The sheet has the player's run frames (sAnimTable_RedGreenNormal). */
+  get hasRunFrames(): boolean {
+    return this.info.frameCount >= 18;
   }
 
   get isMoving(): boolean {
@@ -203,22 +261,138 @@ export class ObjectEvent {
     return { x: this.tileX, y: this.tileY };
   }
 
+  /** SetObjectEventDirection: the facing follows unless it's locked; the movement direction always does. */
+  private setDirection(dir: Direction): void {
+    this.previousMovementDirection = this.facing;
+    if (!this.facingDirectionLocked) this.facing = dir;
+    this.movementDirection = dir;
+  }
+
+  /** ObjectEventTurn: face a direction (shown at once unless a step is animating). */
   face(dir: Direction): void {
-    this.facing = dir;
+    this.setDirection(dir);
     if (!this.movement) this.showFacing();
   }
 
+  /** ObjectEventSetGraphicsId: swap the sprite sheet (its texture must be loaded) and keep everything else. */
+  setGraphics(info: SpriteInfo, graphicsId: string): void {
+    this.graphicsId = graphicsId;
+    if (info === this.info) return;
+    this.info = info;
+    this.sprite.setTexture(spriteTextureKey(info), 0);
+    this.topY = this.feetY + this.lift - info.frameHeight;
+    this.showFacing();
+  }
+
+  // ------------------------------------------------------------------ held movements
+
+  /** ObjectEventIsMovementOverridden (single movements aren't modelled: scripts use MovementRunner). */
+  get movementOverridden(): boolean {
+    return this.heldMovementActive;
+  }
+
   /**
-   * Start a grid move. Logical position updates immediately (as on the GBA, where the
-   * object's currentCoords switch at the start of a step) so collision checks stay simple.
+   * ObjectEventSetHeldMovement: start a MOVEMENT_ACTION_* unless one is already held. Returns true when
+   * refused. The action's first frame (Step0) is set up now; `tick` runs the rest, so the object's tile
+   * changes here, as the GBA's currentCoords do before the other objects update.
+   */
+  setHeldMovement(actionId: number): boolean {
+    if (this.movementOverridden) return true;
+    this.movementActionId = actionId;
+    this.heldMovementActive = true;
+    this.heldMovementFinished = false;
+    const action = heldActionSpec(actionId);
+    switch (action.type) {
+      case 'face':
+        // FaceDirection: SetObjectEventDirection + ShiftStillObjectEventCoords; the action ends this frame.
+        this.setDirection(action.dir);
+        this.previousX = this.currentX;
+        this.previousY = this.currentY;
+        this.showFacing();
+        this.heldMovementFinished = true;
+        break;
+      case 'move':
+        this.beginMove(action.dir, action.kind, { inPlace: action.inPlace });
+        break;
+      case 'delay':
+        this.delayFrames = action.frames;
+        break;
+      default:
+        console.debug('[object] unported held movement action', actionId);
+        this.heldMovementFinished = true;
+    }
+    return false;
+  }
+
+  /** ObjectEventForceSetHeldMovement */
+  forceSetHeldMovement(actionId: number): void {
+    this.clearHeldMovementIfActive();
+    this.setHeldMovement(actionId);
+  }
+
+  /** ObjectEventClearHeldMovementIfActive */
+  clearHeldMovementIfActive(): void {
+    if (this.heldMovementActive) this.clearHeldMovement();
+  }
+
+  /**
+   * ObjectEventClearHeldMovement. An animation in place stops where it is (the GBA resets the sprite's
+   * action state); a step between tiles can't be cut short.
+   */
+  clearHeldMovement(): void {
+    this.movementActionId = movementActionNone();
+    this.heldMovementActive = false;
+    this.heldMovementFinished = false;
+    this.delayFrames = 0;
+    if (this.movement && this.movement.tiles === 0) {
+      this.movement = undefined;
+      this.syncSprite(0, 0, 0);
+      this.showFacing();
+    }
+  }
+
+  /** ObjectEventCheckHeldMovementStatus: 1 finished, 0 running, 16 when nothing is held. */
+  checkHeldMovementStatus(): number {
+    if (this.heldMovementActive) return this.heldMovementFinished ? 1 : 0;
+    return 16;
+  }
+
+  /** ObjectEventClearHeldMovementIfFinished: returns the status from before. */
+  clearHeldMovementIfFinished(): number {
+    const status = this.checkHeldMovementStatus();
+    if (status !== 0 && status !== 16) this.clearHeldMovementIfActive();
+    return status;
+  }
+
+  /** ObjectEventGetHeldMovementActionId */
+  get heldMovementActionId(): number {
+    return this.heldMovementActive ? this.movementActionId : movementActionNone();
+  }
+
+  // ------------------------------------------------------------------ movement
+
+  /**
+   * Start a grid move outside the held-movement system (movement scripts, trainer approach, doors).
+   * A script's movement replaces whatever the object held (ScriptMovement_TakeStep clears it first).
    */
   move(dir: Direction, kind: MoveKind = 'walk', opts: MoveOptions = {}): void {
+    this.clearHeldMovementIfActive();
+    this.beginMove(dir, kind, opts);
+  }
+
+  /**
+   * The Step0 of a movement action. Logical position updates immediately (as on the GBA, where the
+   * object's currentCoords switch at the start of a step) so collision checks stay simple.
+   */
+  private beginMove(dir: Direction, kind: MoveKind, opts: MoveOptions): void {
     const spec = MOVES[kind];
     const tiles = opts.inPlace ? 0 : spec.tiles;
     const { dx, dy } = DELTA[dir];
-    this.previousMovementDirection = this.facing; // SetObjectEventDirection
-    if (!opts.keepFacing) this.facing = dir;
-    this.movement = { dir: opts.keepFacing ? this.facing : dir, spec, tiles, elapsed: 0, fromX: this.tileX, fromY: this.tileY };
+    const locked = this.facingDirectionLocked;
+    if (opts.keepFacing) this.facingDirectionLocked = true;
+    this.setDirection(dir);
+    this.facingDirectionLocked = locked;
+    this.movement = { dir, spec, tiles, elapsed: 0, fromX: this.tileX, fromY: this.tileY };
     this.tileX += dx * tiles;
     this.tileY += dy * tiles;
     if (spec.jump) {
@@ -307,14 +481,22 @@ export class ObjectEvent {
   /** Advance one 60Hz frame. Returns true on the frame a move completes. */
   tick(): boolean {
     this.doGroundEffectsOnSpawn();
+    // TryEnableObjectEventAnim
+    if (this.enableAnim) {
+      this.disableAnim = false;
+      this.enableAnim = false;
+    }
+    if (this.delayFrames > 0 && --this.delayFrames === 0 && this.heldMovementActive) this.heldMovementFinished = true;
     const m = this.movement;
     if (!m) return false;
     m.elapsed++;
     const t = m.elapsed / m.spec.frames;
     const { dx, dy } = DELTA[m.dir];
-    const px = Math.floor(t * m.tiles * TILE);
-    const lift = m.spec.jump ? jumpLift(m.elapsed, m.spec.frames, m.spec.jump) : 0;
-    if (m.spec.jump && m.tiles === 2 && m.elapsed === m.spec.frames >> 1) {
+    const px = m.spec.steps ? m.spec.steps[m.elapsed - 1] * m.tiles : Math.floor(t * m.tiles * TILE);
+    let lift = 0;
+    const jump = m.spec.jump;
+    if (jump && m.elapsed < m.spec.frames) lift = jump.table[(m.elapsed - 1) >> jump.shift];
+    if (jump && m.tiles === 2 && m.elapsed === m.spec.frames >> 1) {
       // UpdateJumpAnim at JUMP_HALFWAY: a ledge jump (sJumpDisplacements[JUMP_DISTANCE_FAR]) shifts another tile.
       this.shiftCoords(this.tileX, this.tileY);
       this.triggerGroundEffectsOnMove = true;
@@ -323,24 +505,25 @@ export class ObjectEvent {
     const sx = this.tileX - m.fromX === 0 ? 0 : (m.fromX - this.tileX) * TILE + dx * px;
     const sy = this.tileY - m.fromY === 0 ? 0 : (m.fromY - this.tileY) * TILE + dy * px;
     this.syncSprite(sx, sy, lift);
-    this.showStepFrame(m, t);
+    this.showStepFrame(m);
     let finished = false;
     if (m.elapsed >= m.spec.frames) {
       this.movement = undefined;
       // ShiftStillObjectEventCoords + the trigger for DoGroundEffects_OnFinishStep (walking in place has
       // neither). A jump lands (landingJump) and its action clears hasShadow.
-      if (m.tiles > 0 || m.spec.jump) {
+      if (m.tiles > 0 || jump) {
         this.previousX = this.currentX;
         this.previousY = this.currentY;
         this.triggerGroundEffectsOnStop = true;
       }
-      if (m.spec.jump) {
+      if (jump) {
         this.landingJump = true;
         this.hasShadow = false;
       }
       this.stepParity ^= 1;
       this.syncSprite(0, 0, 0);
       this.showFacing();
+      if (this.heldMovementActive) this.heldMovementFinished = true;
       finished = true;
     }
     this.doGroundEffectsAfterMovement();
@@ -356,6 +539,7 @@ export class ObjectEvent {
     this.previousX = tileX;
     this.previousY = tileY;
     this.movement = undefined;
+    this.clearHeldMovement();
     this.triggerGroundEffectsOnMove = true;
     this.updateElevationAndPriority();
     this.syncSprite(0, 0, 0);
@@ -383,11 +567,18 @@ export class ObjectEvent {
     this.sprite.setFlipX(this.facing === 'right');
   }
 
-  private showStepFrame(m: Movement, t: number): void {
+  private showStepFrame(m: Movement): void {
     if (this.info.inanimate) return;
     const dir = this.facing;
+    const t = m.elapsed / m.spec.frames;
     let frame: number;
-    if (m.spec.anim === 'run' && this.hasRunFrames) {
+    let flip = dir === 'right';
+    if (this.disableAnim) {
+      // UpdateObjectEventSpriteAnimPause: the step's anim stays paused on its first (standing) frame
+      frame = FACE_FRAME[dir];
+    } else if (m.spec.anim === 'spin') {
+      [frame, flip] = SPIN_FRAMES[dir][((m.elapsed - 1) >> 1) & 3];
+    } else if (m.spec.anim === 'run' && this.hasRunFrames) {
       const [stand, a, b] = RUN_FRAMES[dir];
       frame = t < 0.5 ? (this.stepParity ? b : a) : stand;
     } else if (m.spec.anim === 'none') {
@@ -397,6 +588,6 @@ export class ObjectEvent {
       frame = t < 0.5 ? (this.stepParity ? b : a) : FACE_FRAME[dir];
     }
     this.sprite.setFrame(frame);
-    this.sprite.setFlipX(dir === 'right');
+    this.sprite.setFlipX(flip);
   }
 }
