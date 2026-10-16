@@ -42,9 +42,10 @@ Start options: `map`/`x`/`y`, `start: 'after-rival' | 'evolution'` (+ `starter`;
 `speed` (logic ticks per frame, default 8) and `textSpeed` (default fast). Every load starts with an empty save
 slot (localStorage) unless `keepSave: true`; with a save and no `map`/`start`, the game boots to the main menu, so
 pass `mainMenu: true` to wait for it instead of the field (see saveContinue.test.ts). The harness skips the title
-screen: it loads the game with `?skipIntro` (dev only), which boots to the main menu with a save and straight into
-the new game without one, as the game did before the title screen existed. Pass `title: true` to boot like the
-game does, through the title screen; `load()` then waits for it (see titleScreen.test.ts).
+screen and Oak's speech: it loads the game with `?skipIntro` (dev only), which boots to the main menu with a save
+and straight into the new game without one (NEW GAME on that main menu skips Oak's speech too), as the game did
+before the title screen existed. Pass `title: true` to boot like the game does, through the title screen (and
+Oak's speech on NEW GAME); `load()` then waits for the title screen (see titleScreen.test.ts).
 
 The game is driven through `window.__test` (`src/dev/testHooks.ts`, dev builds only). In a test,
 `game.eval((t, ...args) => ..., ...args)` runs a function in the page with `t` = `__test`. The function is
@@ -55,7 +56,7 @@ sent as source text, so it can't use the test file's variables: pass them as arg
 | **Input** | A virtual gamepad that the game samples with the keyboard, once per logic tick. `game.press('A')` taps a button for 2 ticks. `t.walk(dir, n)` / `t.walkTo(x, y)` (pathfinding) / `t.face(dir)` / `t.enterWarp()` (stairs, mats). |
 | **Mashing** | `game.mashUntil(t => cond)` presses A until `cond` holds. The check runs in the page at the start of every tick, so a press can't land on a menu that just opened. `answers: [[/nickname/, 'B']]` presses another button while the message matches. `trace: true` logs the messages it went through. |
 | **State** | `t.field()` (map, x, y, facing, script, …), `t.idle()`, `t.message()`, `t.party()`, `t.money()`, `t.itemCount('POTION')`, `t.flag(...)`, `t.var(...)`, `t.trainerDefeated('BUG_CATCHER_RICK')`, `t.battle()` (battlers, the player's `controller` function, the last battle `message`), `t.gbaScreen()` (e.g. `CB2_BuyMenu`, `CB2_NamingScreen`), `t.snapshot()` (every set flag and var), `t.state` (the GameState itself). |
-| **Events** | Milestones the game reports: `map`, `script`, `trainerApproach`, `battleTransition` (`transition`), `battleTransitionEnd` (`black`: share of black pixels in its last frame), `battleStart`, `battleEnd`, `whiteOut`, `evolution` (`from`, `to`, `stopped`), `mapTransition` (a cave's flash screen: `from`, `to`), `barnDoorWipe`, `titleScreen`, `mainMenu`. Use `game.mark()` then `game.waitForEvent(type, { since })`. |
+| **Events** | Milestones the game reports: `map`, `script`, `trainerApproach`, `battleTransition` (`transition`), `battleTransitionEnd` (`black`: share of black pixels in its last frame), `battleStart`, `battleEnd`, `whiteOut`, `evolution` (`from`, `to`, `stopped`), `mapTransition` (a cave's flash screen: `from`, `to`), `barnDoorWipe`, `titleScreen`, `mainMenu`, `oakSpeech`. Use `game.mark()` then `game.waitForEvent(type, { since })`. |
 | **Setup** | `t.setParty([...])`, `t.startWildBattle({ species, level })`, `t.forceBattleTransition('SWIRL')` (every battle uses B_TRANSITION_SWIRL), `t.seed(n)`, `t.state.bag.add(...)`. |
 | **Battle** | `game.chooseAction('FIGHT' \| 'BAG' \| 'POKEMON' \| 'RUN')` waits for the action menu. Pressing A at the menu picks FIGHT and then the first move, so `mashUntil(battleEnd)` fights a battle to the end. |
 

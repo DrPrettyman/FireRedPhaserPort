@@ -203,9 +203,9 @@ this is the next level down. When you add or change a subsystem, update its entr
   `menus/objectEventGraphics.ts` is CreateObjectGraphicsSprite for any GBA-layer screen that needs NPC sprites.
   Test: `?start=after-rival&map=PewterCity_Mart&x=4&y=3`, face left, A (TM layout: Celadon Dept. Store 2F, x=3 y=6).
 - **Naming screen:** `DoNamingScreen` (`menus/namingScreen.ts`) runs on any GBA host. From a script, use
-  `ScriptHost.doNamingScreen` (FieldMenuScene `naming`). Oak's speech (not ported) should call it with
-  NAMING_SCREEN_PLAYER (monSpecies = the player's gender) and NAMING_SCREEN_RIVAL, preloading
-  `namingScreenGfxSymbols` after `setObjectEventGraphicsInfo` (the icons are object event graphics).
+  `ScriptHost.doNamingScreen` (FieldMenuScene `naming`). Oak's speech calls it with NAMING_SCREEN_PLAYER
+  (monSpecies = the player's gender) and NAMING_SCREEN_RIVAL on MainMenuScene, preloading `namingScreenGfxSymbols`
+  after `setObjectEventGraphicsInfo` (the icons are object event graphics) and `loadMenusData` (the keyboard).
 - **Boot, title screen and soft reset:** `BootScene` loads the extracted data and starts `MainMenuScene` on the
   title screen (`entry: 'title'`). MainMenuScene is one GbaHostScene for the boot screens, which hand over through
   gMain like the C: `menus/titleScreen.ts` (title_screen.c: CB2_InitTitleScreen, the intro scenes, the run scene
@@ -213,7 +213,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   loadGameSave` (LoadGameSave) → CB2_InitMainMenu), `menus/clearSaveDataScreen.ts` (B+SELECT+UP on the title
   screen) and `menus/mainMenu.ts` (B goes back to CB2_InitTitleScreen). Dev starts (`?start=`, `?map=`) go
   straight to the field; dev `?skipIntro` boots like the port did before the title screen: MainMenuScene with
-  `entry: 'mainMenu'` when the slot holds something, else the new game. **Restarting the game** (DoSoftReset, e.g.
+  `entry: 'mainMenu'` (and `skipOakSpeech`: NEW GAME goes straight to the field) when the slot holds something,
+  else the new game. **Restarting the game** (DoSoftReset, e.g.
   after the credits): `softReset(scene)` from scenes/BootScene.ts stops every scene and starts BootScene again with
   `{ softReset: true }`, which ignores the URL's dev starts and shows the title screen (with `?skipIntro`: the main
   menu / new game). From a GbaHostScene, `stopHost()` and clear gMain's callbacks first (see MainMenuScene's
@@ -221,6 +222,19 @@ this is the next level down. When you add or change a subsystem, update its entr
   Probes: `t.titleScreen()` (scene INIT/FLASHSPRITE/FADEIN/RUN/RESTART/CRY, state, timer, pressStartShown,
   flames), `t.clearSaveData()`; events `titleScreen` (CB2_InitTitleScreen) and `mainMenu` (CB2_InitMainMenu).
   Tests: tests/e2e/titleScreen.test.ts (harness option `title: true`).
+- **Oak's speech (NEW GAME):** `menus/oakSpeech.ts` is oak_speech.c: StartNewGameScene, the controls guide, the
+  Pikachu intro, Oak with Nidoran♀ (`CreatePokeballSpriteToReleaseMon` / `CreateTradePokeballSprite`, now in
+  battle/gfx.ts's pokeball.c section), BOY / GIRL, the names (the naming screen, or the rival presets), "Let's go!"
+  and the shrink (BG2 is an affine BG in bg mode 1: `SetBgAffine`). MainMenuScene runs it when the main menu's NEW
+  GAME calls `startNewGame` (`startOakSpeech`): it builds a GameState for gSaveBlock1/2, gives it to the battle env
+  (StringExpandPlaceholders, mon pics and ball anims read it there) plus a no-op BattleUi, preloads
+  `oakSpeechGfxSymbols()` and the naming screen, and fills `oakSpeechEnv`. CB2_NewGame starts the overworld with
+  `newGameProfile` (names and gender; OverworldStart), applied to its fresh GameState before the map loads.
+  Charmap.decodePlain turns the naming screen's bytes into GameState's name strings. Helpers it brought:
+  `gba/topBarWindow.ts` (menu.c's top bar, also the Hall of Fame's), `gba/textCursor.ts` (text.c's
+  CreateTextCursorSprite). Probe: `t.oakSpeech()` (the main task's function name, page, `menu` 'gender' | 'names' |
+  'yesNo', fading, gMain.state, gender and names so far); event `oakSpeech`. Tests: tests/e2e/titleScreen.test.ts
+  (`title: true`; `?skipIntro`, the harness default, skips the speech).
 - **PC storage screens:** the PC's "Someone's/BILL's PC" runs `special ShowPokemonStorageSystemPC`: the storage menu
   (WITHDRAW / DEPOSIT / MOVE POKéMON / MOVE ITEMS / SEE YA!, Task_PCMainMenu) is a field overlay,
   `ui/StoragePcMenu.ts`, through `OverworldScene.openPokemonStoragePc`. An option fades out and runs the box screen
@@ -255,6 +269,11 @@ this is the next level down. When you add or change a subsystem, update its entr
 
 ## Battle
 
+- **Affine BGs:** the software PPU (`gba/ppu.ts`) draws bg modes 0-2: BG2 is affine in mode 1, BG2 and BG3 in
+  mode 2 (8bpp, u8 tilemap entries, BGxPA..PD and the 28-bit BGxX/Y reference point, wraparound; no mosaic).
+  bg.ts has bg.c's affine paths (the tilemap buffer stays a Uint16Array, read as bytes), `GetBgMetricAffineMode`,
+  `SetBgAffine` (bios.ts `BgAffineSet`, computed like mGBA's HLE BIOS) and ChangeBgX/Y writing BG2X/Y in affine
+  modes. resetHardware leaves PA = PD = 0x100 like RegisterRamReset. Used by Oak's speech's shrinking player pic.
 - **Battle architecture:** `src/gba` emulates the GBA video hardware; `src/battle` is a near line-for-line port of
   battle_main.c, battle_script_commands.c, battle_util.c, the controllers, battle_interface.c, battle_gfx_sfx_util.c,
   pokeball.c etc. on top of it. `BattleScene` runs CB2_InitBattle → CB2_HandleStartBattle → BattleMainCB1/CB2 +

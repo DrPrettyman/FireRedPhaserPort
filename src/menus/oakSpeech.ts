@@ -167,6 +167,7 @@ export const oakSpeechEnv = {
 };
 
 const INTRO_SPECIES = () => K.SPECIES_NIDORAN_F;
+const PALETTES_OBJECTS = 0xffff0000;
 const MALE = 0;
 const FEMALE = 1;
 const PLAYER_NAME_LENGTH = 7;
@@ -515,11 +516,9 @@ const Task_ControlsGuide_LoadPage: TaskFunc = (taskId) => {
     else CopyToBgTilemapBufferRect(1, gfx16('sControlsGuide_Tilemap_Page3'), 1, 3, 5, 16);
     CopyBgTilemapBufferToVram(1);
   }
-  BeginNormalPaletteFade(PALETTES_OBJECTS | 0xdfff, -1, 16, 0, GetTextWindowPalette(2)[15]);
+  BeginNormalPaletteFade((PALETTES_OBJECTS | 0xdfff) >>> 0, -1, 16, 0, GetTextWindowPalette(2)[15]);
   gTasks[taskId].func = Task_ControlsGuide_HandleInput;
 };
-
-const PALETTES_OBJECTS = 0xffff0000;
 
 const Task_ControlsGuide_HandleInput: TaskFunc = (taskId) => {
   if (gPaletteFade.active) return;
@@ -1206,8 +1205,7 @@ function CB2_ReturnFromNamingScreen(): void {
       else setRivalName(sNameBuffer);
       SetVBlankCallback(null);
       vram.fill(0);
-      gPlttBufferUnfaded.fill(RGB_BLACK, 1); // DmaFill16(3, RGB_BLACK, PLTT + 2, PLTT_SIZE - 2): the hardware palette
-      pltt.fill(RGB_BLACK, 1);
+      pltt.fill(RGB_BLACK, 1); // DmaFill16(3, RGB_BLACK, PLTT + 2, PLTT_SIZE - 2)
       ResetPaletteFade();
       ScanlineEffect_Stop();
       ResetSpriteData();

@@ -96,9 +96,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     the sound and region map zoom options. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
   - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the title screen; the
-    copyright screen and intro.c's Game Freak / Nidorino movie before it aren't ported. NEW GAME skips Oak's
-    speech. Dev starts (`?start=`, `?map=`) skip the title screen and the main menu; dev `?skipIntro` (the e2e
-    harness's default) skips the title screen: the main menu with a save, the new game without. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
+    copyright screen and intro.c's Game Freak / Nidorino movie before it aren't ported. Dev starts (`?start=`,
+    `?map=`) skip the title screen and the main menu; dev `?skipIntro` (the e2e harness's default) skips the title
+    screen and Oak's speech: the main menu with a save, the new game without. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
     before CONTINUE, no SE_SELECT. SAVE_STATUS_ERROR ("the previous save file will be loaded") can't happen: one
     slot, no backup; an unreadable slot is SAVE_STATUS_INVALID ("The save file has been deleted...").
   - Title screen (menus/titleScreen.ts): no MUS_TITLE, no Charizard cry (the cry scene still waits its 90
@@ -109,6 +109,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     Sapphire's berry clock) does nothing. The clear save data screen (B+SELECT+UP) empties the one localStorage
     slot (ClearSaveData erases every flash sector, incl. the Hall of Fame) and its soft reset (DoSoftReset) is
     `softReset` in scenes/BootScene.ts: the scenes restart, the extracted data stays loaded.
+  - Oak's speech (menus/oakSpeech.ts): no BGM (MUS_NEW_GAME_INSTRUCT / _INTRO / _EXIT, MUS_ROUTE24), cry or SEs
+    (the cry waits end at once), no help context (HELPCONTEXT_NEW_GAME). After the naming screen the C loads 48
+    colours past the background palette (out of the tiles after it) into palettes the player / rival pic overwrite
+    anyway; the port loads just the palette. The trainer id is still rolled when the game state is created (see the
+    RNG approximation), not by the naming screen's SeedRngAndSetTrainerId. CB2_NewGame hands only the names and the
+    gender to the field, whose new GameState is NewGameInitData's.
   - Save dialog (ui/SaveDialog.ts): SE_SAVE / SE_BOO / SE_SELECT are silent; no help context, no
     GAME_STAT_SAVED_GAME, no quest log data. A failed write shows the save error message without
     DoSaveFailedScreen. SaveMapView isn't ported: the map view isn't saved, so CONTINUE rebuilds the map from its
@@ -124,7 +130,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, Trainer Tower clock, cable club
     monitors, questionnaire/easy chat) start their scripts and hit the unimplemented-special warnings.
   - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link flags.
-  - Player names are "PLAYER"/"RIVAL" until Oak's intro exists.
+  - Player names are "PLAYER"/"RIVAL" in dev starts and with `?skipIntro` (the e2e harness), which skip Oak's speech.
 - **Approximations:**
   - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical; weather palettes ignored.
   - `showmonpic`: the sprite appears when its PNG has loaded; no cry.
