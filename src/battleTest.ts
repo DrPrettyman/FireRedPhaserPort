@@ -277,7 +277,7 @@ class Harness {
     }
     saveConfig(config);
     const d = this.defines;
-    const state = new GameState(d, this.assets.constants.newGameFlags, this.pokemon);
+    const state = new GameState(d, this.assets.constants.newGameFlags, this.pokemon, this.assets.strings);
     state.textSpeed = config.textSpeed;
     for (const [item, n] of config.bag ?? []) state.bag.add(d.require(item), n);
     let enemyParty: Pokemon[];

@@ -213,7 +213,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.charmap = new Charmap(this.assets.charmap);
     const a = this.assets;
     const pokemon = new PokemonData(readPokemonConstants(this.defines), a.species, a.moves, a.items, a.pokemonTables, this.charmap);
-    this.state = new GameState(this.defines, a.constants.newGameFlags, pokemon);
+    this.state = new GameState(this.defines, a.constants.newGameFlags, pokemon, a.strings);
   }
 
   async create(start: OverworldStart): Promise<void> {
@@ -1111,6 +1111,22 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   /** gSaveBlock2Ptr->playerGender as MALE / FEMALE */
   private playerGender(): number {
     return this.defines.require(this.state.playerGender === 'female' ? 'FEMALE' : 'MALE');
+  }
+
+  /**
+   * Before a save (state/saveData.ts): what gSaveBlock1Ptr->location / pos and the saved player object hold:
+   * the current map, the player's map-local tile, facing and avatar state (SaveObjectEvents).
+   */
+  storeLocationForSave(): void {
+    const cur = this.world.current;
+    const F = PLAYER_AVATAR_FLAG;
+    this.state.location = {
+      mapId: cur.data.id,
+      x: this.player.tileX - cur.originX,
+      y: this.player.tileY - cur.originY,
+      facing: this.player.facing,
+      avatarFlags: gPlayerAvatar.flags & (F.ON_FOOT | F.MACH_BIKE | F.ACRO_BIKE | F.SURFING),
+    };
   }
 
   /** Map entry sequence: templates reloaded, temps cleared, ON_TRANSITION, ON_LOAD, objects spawned, ON_WARP_INTO. */

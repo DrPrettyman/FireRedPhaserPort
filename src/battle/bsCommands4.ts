@@ -1229,8 +1229,18 @@ export function Cmd_givecaughtmon(): void {
   const idx = g.battlerPartyIndexes[g.battlerAttacker ^ K.BIT_SIDE];
   const mon = g.enemyParty[idx]!;
   if (state.giveMon(mon) !== K.MON_GIVEN_TO_PARTY) {
-    // SendMonToPC isn't implemented, so the box-full messages can't come up yet.
-    g.battleCommunication[K.MULTISTRING_CHOOSER] = K.B_MSG_SENT_SOMEONES_PC;
+    const boxName = (boxId: number) => state.storage.getBoxName(boxId) ?? []; // GetBoxNamePtr
+    if (!state.shouldShowBoxWasFullMessage()) {
+      g.battleCommunication[K.MULTISTRING_CHOOSER] = K.B_MSG_SENT_SOMEONES_PC;
+      state.stringVars[0] = [...boxName(state.getVar('VAR_PC_BOX_TO_SEND_MON'))];
+      state.stringVars[1] = [...mon.nickname];
+    } else {
+      state.stringVars[0] = [...boxName(state.getVar('VAR_PC_BOX_TO_SEND_MON'))]; // box the mon was sent to
+      state.stringVars[1] = [...mon.nickname];
+      state.stringVars[2] = [...boxName(state.getPCBoxToSendMon())]; // box the mon was going to be sent to
+      g.battleCommunication[K.MULTISTRING_CHOOSER] = K.B_MSG_SOMEONES_BOX_FULL;
+    }
+    // Change to B_MSG_SENT_BILLS_PC or B_MSG_BILLS_BOX_FULL
     if (state.getFlag('FLAG_SYS_NOT_SOMEONES_PC')) g.battleCommunication[K.MULTISTRING_CHOOSER]++;
   }
   g.battleResults.caughtMonSpecies = g.battleMons[g.battlerAttacker ^ K.BIT_SIDE].species;

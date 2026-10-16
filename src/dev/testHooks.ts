@@ -502,7 +502,9 @@ function createApi(game: Phaser.Game) {
       });
       // The player's controller function, e.g. HandleInputChooseAction while the action menu waits.
       const controller = g.battlerControllerFuncs[0]?.name;
-      return { typeFlags: g.battleTypeFlags, trainer: g.trainerBattleOpponent_A, mons, outcome: g.battleOutcome, controller };
+      // The battle message as last expanded (gDisplayedStringBattle), decoded.
+      const message = decode(g.displayedStringBattle);
+      return { typeFlags: g.battleTypeFlags, trainer: g.trainerBattleOpponent_A, mons, outcome: g.battleOutcome, controller, message };
     },
     /** The GBA layer's sprites in use (battle and GBA-hosted menus): template tags, position, visibility. */
     gbaSprites: () =>

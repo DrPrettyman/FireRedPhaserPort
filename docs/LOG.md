@@ -1097,3 +1097,27 @@ end to end.
   W-fieldmove's field move framework; `SetUpFieldMove_Flash` and `useFlash()` are ready for it.
 - Tests: tests/e2e/listMenuFlash.test.ts (elevator scrolling, B, riding to 5F; the badge list; Rock Tunnel dark,
   lit by Flash, lit on arrival with FLAG_SYS_FLASH_ACTIVE; Blur over the dark field, Clockwise Wipe once lit).
+### PC boxes and the save data model (W-state)
+
+- `state/PokemonStorage.ts`: struct PokemonStorage (14 boxes of 30 BoxPokemon, names, wallpapers, current box) with
+  pokemon_storage_system.c's accessors, ResetPokemonStorageSystem, GetFirstFreeBoxSpot, CountMonsInBox,
+  SeekToNextMonInBox, BoxMonToMon / MonRestorePP. `state.storage` replaces the default-box-name placeholders.
+- GameState: GiveMonToPlayer → SendMonToPC when the party is full (MON_GIVEN_TO_PC, VAR_MON_BOX_ID/POS,
+  VAR_PC_BOX_TO_SEND_MON, FLAG_SHOWN_BOX_WAS_FULL_MESSAGE), IsDestinationBoxFull, ShouldShowBoxWasFullMessage,
+  Get/SetPCBoxToSendMon, IsPlayerPartyAndPokemonStorageFull, CountPartyMons / NonEggMons / AliveNonEggMons*,
+  pcItems, play time (play_time.c, not ticked yet), escape / continue-game warps, `location`. The constructor
+  takes text/strings.json (for gText_Box).
+- `state/saveData.ts`: `toSaveData(state)` / `fromSaveData(data, state)` (versioned JSON, exact round trip) and the
+  localStorage slot (`writeSave` / `readSave` / `hasSave` / `clearSave`). `OverworldScene.storeLocationForSave()`
+  fills `state.location` before a save.
+- Outside state/: Cmd_givecaughtmon sets STR_VAR_1-3 and takes the box-full branch; the naming screen's
+  DisplaySentToPCMessage uses real box names and IsDestinationBoxFull (and GetPCBoxToSendMon for STR_VAR_3, which
+  read VAR_PC_BOX_TO_SEND_MON before); `bufferboxname`; specials ShouldShowBoxWasFullMessage, GetPCBoxToSendMon,
+  ChangeBoxPokemonNickname, CountPartyNonEggMons, CountPartyAliveNonEggMons_IgnoreVar0x8004Slot and a real
+  IsThereRoomInAnyBoxForMorePokemon; IsPlayerPartyAndPokemonStorageFull in the Safari ball action and ball item
+  use; `t.battle().message` probe.
+- No extractor changes (TOTAL_BOXES_COUNT etc. were already in the defines).
+- Deviations: removed the naming screen's "sent to PC" placeholder, ChangeBoxPokemonNickname and "Full party";
+  added PC boxes (no UI), save data (no flash/checksums/encryption; what isn't kept) and play time.
+- Tests: tests/unit/pcBoxes.test.ts, tests/unit/saveData.test.ts, tests/e2e/pcBoxes.test.ts (givemon and catches
+  with a full party, with and without a full current box, a nicknamed catch, the save slot in the browser).

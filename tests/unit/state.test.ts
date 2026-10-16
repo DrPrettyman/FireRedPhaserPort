@@ -120,10 +120,11 @@ describe('GameState', () => {
     for (const f of newGameFlags) expect(t.state.getFlag(f)).toBe(true);
   });
 
-  test('party holds six; a seventh mon has nowhere to go yet (no PC)', () => {
+  test('party holds six; a seventh mon goes to the PC', () => {
     const mk = () => t.pokemon.createMon(t.d('SPECIES_PIDGEY'), 3, { otId: 1, otName: 'RED', otGender: 'male', metLocation: 'MAPSEC_ROUTE_1' });
     for (let i = 0; i < 6; i++) expect(t.state.giveMon(mk())).toBe(t.d('MON_GIVEN_TO_PARTY'));
     expect(t.state.party).toHaveLength(6);
-    expect(t.state.giveMon(mk())).toBe(t.d('MON_CANT_GIVE'));
+    expect(t.state.giveMon(mk())).toBe(t.d('MON_GIVEN_TO_PC'));
+    expect(t.state.party).toHaveLength(6);
   });
 });
