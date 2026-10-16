@@ -107,6 +107,9 @@ import {
 import { GetPlayerSpeed } from '../world/bike';
 import { movementActionName } from '../entities/movementActions';
 import type { FieldMenuStart, NamingScreenRequest } from './FieldMenuScene';
+import { EnterHallOfFame } from '../menus/hallOfFame';
+import { HALL_OF_FAME_RECORD_GFX, setHallOfFameRecordHost } from '../world/hallOfFameRecord';
+import type { WarpData } from '../state/GameState';
 
 /** GBA runs at ~59.73Hz; we tick game logic at a fixed 60Hz regardless of display refresh. */
 const FRAME_MS = 1000 / 60;
@@ -336,6 +339,14 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     });
     registerFieldMoves();
     await loadGfx(fieldMoveGfxSymbols());
+    // FLDEFF_HALL_OF_FAME_RECORD (world/hallOfFameRecord.ts) draws at screen coordinates
+    setHallOfFameRecordHost({
+      scene: this,
+      screenOrigin: () => ({ x: this.cameras.main.scrollX, y: this.cameras.main.scrollY }),
+      cameraTop: () => this.field.cameraTop,
+      partyCount: () => this.state.party.length,
+    });
+    await loadGfx(HALL_OF_FAME_RECORD_GFX);
     this.cameras.main.startFollow(this.player.anchor, true, 1, 1, 0, CAMERA_FOLLOW_OFFSET_Y);
 
     if (start.continueGame) {
@@ -1509,9 +1520,13 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       pokemon: this.state.pokemon,
       charmap: this.charmap,
       mapBattleScene: d.get(this.world.current.data.battleScene ?? '') ?? d.require('MAP_BATTLE_SCENE_NORMAL'),
-      onExit: (openStartMenu: boolean) => {
+      onExit: (openStartMenu: boolean, warp?: WarpData) => {
         this.scene.stop('FieldMenu');
         this.scene.wake('Overworld');
+        if (warp) {
+          void this.warpFromScreen(warp); // DoWarp: CB2_LoadMap, not back to this map
+          return;
+        }
         this.resumeMap();
         onReturn(openStartMenu);
       },
@@ -1584,6 +1599,74 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     });
     this.overlay = menu;
     return () => menu.done;
+  }
+
+  /**
+   * EnterHallOfFame (special): post_battle_event_funcs.c's set-up, then CB2_DoHallOfFameScreen on the GBA layer
+   * (FieldMenuScene 'hallOfFame') from the black field. The screen saves the game (so the location is stored
+   * first) and leaves through SetWarpsToRollCredits' warp into Indigo Plateau (`warpFromScreen`).
+   */
+  enterHallOfFame(): void {
+    const pallet = this.assets.scripts.healLocations[this.defines.require('HEAL_LOCATION_PALLET_TOWN') - 1];
+    EnterHallOfFame(this.state, pallet, () => healPlayerParty(this.state));
+    this.messageBox.hide();
+    this.storeLocationForSave();
+    this.runFieldMenu({ menu: 'hallOfFame' }, () => {
+      // CB2_ReturnToField isn't one of the screen's exits; come back faded in anyway
+      this.screenFade.begin(this.defines.require('FADE_FROM_BLACK'));
+    });
+  }
+
+  /**
+   * HallOfFamePCBeginFade (hof_pc.c): fade to black, then CB2_InitHofPC (FieldMenuScene 'hallOfFamePc').
+   * ReturnFromHallOfFamePC comes back through ReshowPCMenuAfterHallOfFamePC: the PC menu and its prompt, and a
+   * fade in. The wait ends when that menu's choice is made (its ScriptContext_Enable), with the choice in `result`.
+   */
+  openHallOfFamePc(): { tick(): boolean; result: number } {
+    const d = this.defines;
+    const fade = this.fadeScreen(d.require('FADE_TO_BLACK')); // BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_BLACK)
+    let launched = false;
+    let menu: { tick(): boolean; result: number } | undefined;
+    return {
+      get result() {
+        return menu?.result ?? 0;
+      },
+      tick: () => {
+        if (!launched) {
+          if (!fade()) return false; // Task_WaitFadeAndSetCallback
+          launched = true;
+          this.messageBox.hide();
+          this.runFieldMenu({ menu: 'hallOfFamePc' }, () => {
+            // ReshowPCMenuAfterHallOfFamePC: CreatePCMenu, ScriptMenu_DisplayPCStartupPrompt, fade in
+            menu = this.openPcMenu();
+            this.messageBox.show(this.charmap.encode(this.assets.strings.Text_AccessWhichPC ?? '$'), 'neutral', false, true);
+            this.screenFade.begin(d.require('FADE_FROM_BLACK'));
+          });
+          return false;
+        }
+        return menu?.tick() ?? false;
+      },
+    };
+  }
+
+  /**
+   * DoWarp from a GBA screen (the Hall of Fame's SetWarpsToRollCredits): ResetInitialPlayerAvatarState, then
+   * CB2_LoadMap into the destination from the black screen and FieldCB_DefaultWarpExit's fade in.
+   */
+  private async warpFromScreen(w: WarpData): Promise<void> {
+    const name = this.assets.mapNameForId(w.mapId);
+    if (!name) {
+      console.warn('[warp] unknown map', w.mapId);
+      return;
+    }
+    this.busy = true;
+    ResetInitialPlayerAvatarState();
+    const isExit = await this.loadWarpedMap(name, w.warpId, w.x, w.y, false);
+    const arrival = this.world.tileAt(this.player.tileX, this.player.tileY);
+    if (this.behaviors.isDoor(arrival.behavior)) this.exitDoor(isExit);
+    else this.warpFadeInScreen(isExit);
+    await this.waitFrames(() => !this.screenFade.active);
+    this.busy = false;
   }
 
   /** CreatePokemartMenu: the shop menu runs as a field overlay while the script waits for it. */
@@ -1758,8 +1841,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     });
   }
 
-  fadeScreen(mode: number): Wait {
-    this.screenFade.begin(mode);
+  fadeScreen(mode: number, delay = 0): Wait {
+    this.screenFade.begin(mode, delay);
     return () => !this.screenFade.active;
   }
 
@@ -2429,20 +2512,27 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         const cur = this.world.current;
         this.setObjectTemplate(n.localId, { x: obj.tileX - cur.originX, y: obj.tileY - cur.originY, movementType });
       },
-      spawnCameraObject: () => {
-        // OBJ_EVENT_GFX_YOUNGSTER in the C; it's invisible, so any loaded sprite will do.
-        const cam = new ObjectEvent(this, this.player.info, this.player.tileX, this.player.tileY, this.field, 3);
-        cam.setVisible(false);
-        this.cameraObject = cam;
-        this.cameras.main.startFollow(cam.anchor, true, 1, 1, 0, CAMERA_FOLLOW_OFFSET_Y);
-        return cam;
-      },
+      spawnCameraObject: () => this.spawnCameraObject(),
       removeCameraObject: () => this.removeCameraObject(),
     };
   }
 
-  /** CameraObjectSetFollowedObjectId(player) + RemoveObjectEventByLocalIdAndMap(LOCALID_CAMERA) */
-  private removeCameraObject(): void {
+  /**
+   * SpawnCameraObject (field_specials.c): an invisible object (LOCALID_CAMERA) on the player's tile, elevation 3,
+   * that the camera follows instead of the player.
+   */
+  spawnCameraObject(): ObjectEvent {
+    this.removeCameraObject();
+    // OBJ_EVENT_GFX_YOUNGSTER in the C; it's invisible, so any loaded sprite will do.
+    const cam = new ObjectEvent(this, this.player.info, this.player.tileX, this.player.tileY, this.field, 3);
+    cam.setVisible(false);
+    this.cameraObject = cam;
+    this.cameras.main.startFollow(cam.anchor, true, 1, 1, 0, CAMERA_FOLLOW_OFFSET_Y);
+    return cam;
+  }
+
+  /** RemoveCameraObject: CameraObjectSetFollowedObjectId(player) + RemoveObjectEventByLocalIdAndMap(LOCALID_CAMERA) */
+  removeCameraObject(): void {
     if (!this.cameraObject) return;
     this.cameraObject.destroy();
     this.cameraObject = undefined;

@@ -1,6 +1,7 @@
 // The GBA-layer screens opened from the field: the party menu and bag from the start menu
 // (CB2_PartyMenuFromStartMenu / CB2_BagMenuFromStartMenu), the Poké Mart's buy menu and sell bag
-// (CB2_InitBuyMenu / CB2_GoToSellMenu) and the naming screen (DoNamingScreen from a special). The
+// (CB2_InitBuyMenu / CB2_GoToSellMenu), the naming screen (DoNamingScreen from a special) and the Hall of Fame
+// (CB2_DoHallOfFameScreen from EnterHallOfFame, CB2_InitHofPC from the PC). The
 // overworld isn't a GBA screen, so its return points (CB2_ReturnToFieldWithOpenMenu, CB2_ReturnToField,
 // CB2_ReturnToFieldContinueScriptPlayMapMusic) end this scene instead.
 
@@ -10,6 +11,7 @@ import { setBattleTextSpeed } from '../battle/battleWindow';
 import { g, initBattleEnv, setTextStrings } from '../battle/env';
 import { initBattleMessages } from '../battle/message';
 import { loadGfx } from '../gba/gfx';
+import { resetHardware } from '../gba/hw';
 import { gMain, SetMainCallback1, SetMainCallback2, SetVBlankCallback } from '../gba/main';
 import { initGbaText } from '../gba/window';
 import { CB2_ReturnToField, CB2_ReturnToFieldContinueScriptPlayMapMusic, fieldReturn } from '../menus/fieldCallbacks';
@@ -20,6 +22,10 @@ import { DoNamingScreen, NAMING_SCREEN_BOX, namingScreenGfxSymbols } from '../me
 import { EnterPokeStorage, pokemonStorageGfxSymbols } from '../menus/pokemonStorage';
 import { ItemPc_Init, itemPcGfxSymbols } from '../menus/itemPc';
 import { CB2_PartyMenuFromStartMenu } from '../menus/partyMenu';
+import { CB2_DoHallOfFameScreen, CB2_InitHofPC, hallOfFameGfxSymbols, hofEnv, partyHallOfFameTeam } from '../menus/hallOfFame';
+import type { WarpData } from '../state/GameState';
+import { gHofBuffer, LoadHallOfFameSave } from '../state/hallOfFame';
+import { SAVE_STATUS_OK, TrySavingData } from '../state/save';
 import { buyMenuGfxSymbols, CB2_GoToSellMenu, CB2_InitBuyMenu, LoadFieldTilesetsForShop, type ShopFieldView } from '../menus/shop';
 import type { PokemonData } from '../pokemon/Pokemon';
 import type { GameState } from '../state/GameState';
@@ -46,7 +52,7 @@ export interface NamingScreenRequest {
 }
 
 export interface FieldMenuStart {
-  menu: 'party' | 'bag' | 'buy' | 'sell' | 'naming' | 'storage' | 'itemPc' | 'itemPcDeposit';
+  menu: 'party' | 'bag' | 'buy' | 'sell' | 'naming' | 'storage' | 'itemPc' | 'itemPcDeposit' | 'hallOfFame' | 'hallOfFamePc';
   /** For 'storage': OPTION_WITHDRAW / OPTION_DEPOSIT / OPTION_MOVE_MONS / OPTION_MOVE_ITEMS */
   storageOption?: number;
   /** For 'buy': what the buy menu's map view reads from the field. */
@@ -58,8 +64,11 @@ export interface FieldMenuStart {
   charmap: Charmap;
   /** gMapHeader.battleType (MAP_BATTLE_SCENE_*): the evolution scene's backdrop reads it. */
   mapBattleScene: number;
-  /** Back to the field; `openStartMenu` for CB2_ReturnToFieldWithOpenMenu. */
-  onExit(openStartMenu: boolean): void;
+  /**
+   * Back to the field; `openStartMenu` for CB2_ReturnToFieldWithOpenMenu. With `warp` the screen left through
+   * DoWarp (the Hall of Fame's SetWarpsToRollCredits): CB2_LoadMap into that map instead of CB2_ReturnToField.
+   */
+  onExit(openStartMenu: boolean, warp?: WarpData): void;
 }
 
 export class FieldMenuScene extends GbaHostScene {
@@ -102,6 +111,15 @@ export class FieldMenuScene extends GbaHostScene {
       setObjectEventGraphicsInfo(assets.sprites);
       await loadGfx(namingScreenGfxSymbols(naming.templateNum, naming.monSpecies, naming.monPersonality));
     }
+    if (start.menu === 'hallOfFame' || start.menu === 'hallOfFamePc') {
+      // The screens draw the party's (or every saved team's) pics synchronously.
+      const teams = start.menu === 'hallOfFame' ? [partyHallOfFameTeam(start.state)] : LoadHallOfFameSave() === SAVE_STATUS_OK ? gHofBuffer.teams : [];
+      await loadGfx(hallOfFameGfxSymbols(teams, start.state.playerGender === 'female' ? K.FEMALE : K.MALE));
+      hofEnv.trySavingData = (saveType) => TrySavingData(saveType, start.state);
+      hofEnv.doWarp = (mapId, warpId, x, y) => this.exit(false, { mapId, warpId, x, y });
+      hofEnv.returnFromHallOfFamePC = () => this.exit(false);
+      resetHardware();
+    }
 
     fieldReturn.withOpenMenu = () => this.exit(true);
     fieldReturn.plain = () => this.exit(false);
@@ -116,6 +134,10 @@ export class FieldMenuScene extends GbaHostScene {
       SetMainCallback2(() => ItemPc_Init(0, CB2_ReturnToField)); // Task_WithdrawItem_WaitFadeAndGoToItemStorage
     } else if (start.menu === 'itemPcDeposit') {
       SetMainCallback2(() => GoToBagMenu(K.ITEMMENULOCATION_ITEMPC, K.OPEN_BAG_ITEMS, CB2_ReturnToField)); // Task_DepositItem_WaitFadeAndGoToBag
+    } else if (start.menu === 'hallOfFame') {
+      SetMainCallback2(CB2_DoHallOfFameScreen); // EnterHallOfFame
+    } else if (start.menu === 'hallOfFamePc') {
+      SetMainCallback2(CB2_InitHofPC); // Task_WaitFadeAndSetCallback
     } else if (start.menu === 'storage') {
       const option = start.storageOption!;
       SetMainCallback2(() => EnterPokeStorage(option));
@@ -126,10 +148,10 @@ export class FieldMenuScene extends GbaHostScene {
     this.startHost();
   }
 
-  private exit(openStartMenu: boolean): void {
+  private exit(openStartMenu: boolean, warp?: WarpData): void {
     this.stopHost();
     SetMainCallback2(null);
     SetVBlankCallback(null);
-    this.start.onExit(openStartMenu);
+    this.start.onExit(openStartMenu, warp);
   }
 }

@@ -156,9 +156,38 @@ export const SPECIALS: Record<string, Special> = {
     setWaitState(host.openPokemonStoragePc());
   },
 
-  /** HallOfFamePCBeginFade (hof_pc.c): the Hall of Fame screen isn't ported (only after the credits). */
-  HallOfFamePCBeginFade({ warnOnce }) {
-    warnOnce('HallOfFamePCBeginFade', '[special] Hall of Fame PC not implemented');
+  /**
+   * HallOfFamePCBeginFade (hof_pc.c): the Hall of Fame PC (menus/hallOfFame.ts CB2_InitHofPC). Its return
+   * (ReshowPCMenuAfterHallOfFamePC) puts the PC menu back up; the script's `waitstate` ends with that menu's
+   * choice in VAR_RESULT, which EventScript_ChoosePCMenu then switches on.
+   */
+  HallOfFamePCBeginFade({ state, host, setWaitState }) {
+    const pc = host.openHallOfFamePc();
+    setWaitState(() => {
+      if (!pc.tick()) return false;
+      state.setVar('VAR_RESULT', pc.result);
+      return true;
+    });
+  },
+
+  /**
+   * EnterHallOfFame (post_battle_event_funcs.c): SetMainCallback2(CB2_DoHallOfFameScreen). The screen ends in
+   * a warp to Indigo Plateau, so the script that called it never resumes.
+   */
+  EnterHallOfFame({ host, endScript }) {
+    endScript();
+    host.enterHallOfFame();
+    return 0;
+  },
+
+  /** SpawnCameraObject (field_specials.c): the camera stays where the player stands while scripts move them. */
+  SpawnCameraObject({ host }) {
+    host.spawnCameraObject();
+  },
+
+  /** RemoveCameraObject: the camera follows the player again. */
+  RemoveCameraObject({ host }) {
+    host.removeCameraObject();
   },
 
   /** EnterSafariMode (safari_zone.c; GAME_STAT_ENTERED_SAFARI_ZONE isn't kept) */
