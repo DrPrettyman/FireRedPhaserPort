@@ -6,20 +6,25 @@
 import { ArcTan2 } from '../../gba/bios';
 import { FillBgTilemapBufferRect, CopyBgTilemapBufferToVram, CopyToBgTilemapBuffer, LoadBgTiles, LoadBgTilemap } from '../../gba/bg';
 import { gfx, gfx16 } from '../../gba/gfx';
-import { BLDALPHA_BLEND, GetGpuReg, REG_OFFSET_BG0CNT, REG_OFFSET_BLDALPHA, REG_OFFSET_BLDCNT, SetGpuReg } from '../../gba/hw';
-import { BlendPalette, gPlttBufferFaded, gPlttBufferUnfaded, OBJ_PLTT_ID, PLTT_ID } from '../../gba/palette';
+import { BLDALPHA_BLEND, GetGpuReg, OBJ_VRAM0, REG_OFFSET_BG0CNT, REG_OFFSET_BLDALPHA, REG_OFFSET_BLDCNT, SetGpuReg, vram } from '../../gba/hw';
+import { BlendPalette, gPlttBufferFaded, gPlttBufferUnfaded, LoadCompressedPalette, OBJ_PLTT_ID, PLTT_ID, PLTT_SIZE_4BPP } from '../../gba/palette';
 import {
   AllocSpritePalette,
   CalcCenterToCornerVec,
   CopySprite,
   CreateInvisibleSprite,
+  CreateSprite,
   DestroySprite,
   FreeOamMatrix,
   FreeSpritePaletteByTag,
+  gDummySpriteAffineAnimTable,
+  gDummySpriteAnimTable,
   gOamMatrices,
   gSprites,
   IndexOfSpritePaletteTag,
+  LoadSpriteSheet,
   MAX_SPRITES,
+  oam,
   ObjAffineSet,
   SetCallbackToStoredInData6,
   SpriteCallbackDummy,
@@ -34,6 +39,7 @@ import {
   ST_OAM_OBJ_WINDOW,
   type AffineAnimCmd,
   type Sprite,
+  type SpriteTemplate,
 } from '../../gba/sprite';
 import { gTasks, type Task, type TaskFunc } from '../../gba/task';
 import { K } from '../constants';
@@ -49,10 +55,12 @@ import {
   GetBattlerSpriteCoord,
   GetBattlerSpriteFinal_Y,
   GetBattlerSpriteSubpriority,
+  GetMonSpritePalFromSpeciesAndPersonality,
   gMonSpritesGfxPtr,
   InitAnimLinearTranslation,
   IsBattlerSpritePresent,
   IsBattlerSpriteVisible,
+  LoadSpecialPokePic,
   StartAnimLinearTranslation,
 } from '../gfx';
 import { Cos, Sin } from '../trig';
@@ -1014,6 +1022,46 @@ export function SetAverageBattlerPositions(battlerId: number, respectMonPicOffse
   const px = IsDoubleBattle() ? GetBattlerSpriteCoord(BATTLE_PARTNER(battlerId), xType) : bx;
   const py = IsDoubleBattle() ? GetBattlerSpriteCoord(BATTLE_PARTNER(battlerId), yType) : by;
   return { x: Math.trunc((bx + px) / 2), y: Math.trunc((by + py) / 2) };
+}
+
+// battle_anim_mons.c's local tags for the two extra mon sprites a move anim can make
+const TAG_MOVE_EFFECT_MON_1 = 55125;
+const TAG_MOVE_EFFECT_MON_2 = 55126;
+const MON_PIC_SIZE = 0x800;
+
+let sSpriteTemplates_MoveEffectMons: SpriteTemplate[] | null = null;
+
+/** sSpriteTemplates_MoveEffectMons: 64x64 affine sprites with a dummy callback */
+function moveEffectMonTemplates(): SpriteTemplate[] {
+  return (sSpriteTemplates_MoveEffectMons ??= [TAG_MOVE_EFFECT_MON_1, TAG_MOVE_EFFECT_MON_2].map((tag) => ({
+    tileTag: tag,
+    paletteTag: tag,
+    oam: oam(bdata.animScripts.oam['gOamData_AffineNormal_ObjNormal_64x64']),
+    anims: gDummySpriteAnimTable,
+    images: null,
+    affineAnims: gDummySpriteAffineAnimTable,
+    callback: SpriteCallbackDummy,
+  })));
+}
+
+/**
+ * CreateAdditionalMonSpriteForMoveAnim (Role Play, Snatch): a sprite of `species`' front or back pic, with its
+ * own sheet and palette (templateId 0 or 1 picks the tag), at (x, y + the pic's y offset). The pic is
+ * preloaded with the battle (every party mon's front and back pics). Deoxys's forms aren't handled
+ * (LoadSpecialPokePic doesn't draw them), so ignoreDeoxys has no effect.
+ */
+export function CreateAdditionalMonSpriteForMoveAnim(species: number, isBackpic: boolean, templateId: number, x: number, y: number, subpriority: number, personality: number, trainerId: number, _battlerId: number, _ignoreDeoxys: boolean): number {
+  const template = moveEffectMonTemplates()[templateId];
+  // sSpriteSheets_MoveEffectMons: gMiscBlank_Gfx, overwritten with the pic below
+  const sheet = LoadSpriteSheet({ data: new Uint8Array(MON_PIC_SIZE), size: MON_PIC_SIZE, tag: template.tileTag });
+  const palette = AllocSpritePalette(template.paletteTag);
+  LoadCompressedPalette(GetMonSpritePalFromSpeciesAndPersonality(species, trainerId, personality), OBJ_PLTT_ID(palette), PLTT_SIZE_4BPP);
+  // gMonSpritesGfxPtr->multiUseBuffer, then RequestDma3Copy to the sheet's tiles
+  const buffer = new Uint8Array(MON_PIC_SIZE);
+  LoadSpecialPokePic(!isBackpic, species, personality, buffer);
+  vram.set(buffer, OBJ_VRAM0 + sheet * 0x20);
+  const coords = isBackpic ? bdata.tables.coords.monBack : bdata.tables.coords.monFront;
+  return CreateSprite(template, x, y + (coords[species]?.[1] ?? 0), subpriority);
 }
 
 /** CreateInvisibleSpriteCopy: an OBJ-window copy of a battler sprite */

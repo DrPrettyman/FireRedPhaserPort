@@ -925,7 +925,19 @@ export function HandleSpeciesGfxDataChange(battlerAtk: number, battlerDef: numbe
     UpdateNickInHealthbox(g.healthboxSpriteIds[battlerAtk], mon);
     TryAddPokeballIconToHealthbox(g.healthboxSpriteIds[battlerAtk], true);
   } else if (transformType) {
-    throw new Error('[battle] HandleSpeciesGfxDataChange: Castform form change not ported');
+    // Castform form change. gBattleStruct->castformPalette is Castform's decompressed palette (one 16-colour
+    // row per form) for the battler's own personality, as its sprite gfx loading decompresses it.
+    const form = sbd().animationData.animArg;
+    StartSpriteAnim(gSprites[spriteId], form);
+    const mon = (getBattlerSide(battlerAtk) === K.B_SIDE_PLAYER ? g.playerParty : g.enemyParty)[g.battlerPartyIndexes[battlerAtk]]!;
+    const castformPalette = GetMonSpritePalFromSpeciesAndPersonality(K.SPECIES_CASTFORM, mon.otId, mon.personality);
+    LoadPalette(castformPalette.subarray(form * 16), paletteOffset, PLTT_SIZE_4BPP);
+    g.battleMonForms[battlerAtk] = form;
+    if (sbd().battlerData[battlerAtk].transformSpecies !== K.SPECIES_NONE) {
+      BlendPalette(paletteOffset, 16, 6, RGB_WHITE);
+      gPlttBufferUnfaded.set(gPlttBufferFaded.subarray(paletteOffset, paletteOffset + 16), paletteOffset);
+    }
+    gSprites[spriteId].y = GetBattlerSpriteDefault_Y(battlerAtk);
   } else {
     const defParty = getBattlerSide(battlerDef) === K.B_SIDE_OPPONENT ? g.enemyParty : g.playerParty;
     const targetSpecies = defParty[g.battlerPartyIndexes[battlerDef]]!.species;

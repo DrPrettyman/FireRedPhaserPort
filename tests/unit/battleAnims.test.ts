@@ -130,10 +130,21 @@ const FULLY_PORTED: Record<string, string[]> = {
   ],
 
   // battle_anim_effects_3.c, first half (effects3.ts)
-  effects3: [],
+  effects3: [
+    'Move_BATON_PASS', 'Move_DEFENSE_CURL', 'Move_ENCORE', 'Move_FLAIL', 'Move_FOCUS_PUNCH', 'Move_FRUSTRATION',
+    'Move_HYPER_FANG', 'Move_LUSTER_PURGE', 'Move_MEAN_LOOK', 'Move_MEGA_KICK', 'Move_MEGA_PUNCH', 'Move_MIND_READER',
+    'Move_MORNING_SUN', 'Move_POISON_FANG', 'Move_PSYCHO_BOOST', 'Move_RAPID_SPIN', 'Move_SLEEP_TALK',
+    'Move_SMOKESCREEN', 'Move_SPIKES', 'Move_STOCKPILE', 'Move_SWALLOW', 'Move_SWEET_SCENT', 'Move_TORMENT',
+    'Move_TRI_ATTACK', 'Move_WISH', 'General_CastformChange', 'General_DoomDesireHit',
+  ],
 
   // battle_anim_effects_3.c, second half (effects3b.ts)
-  effects3b: [],
+  effects3b: [
+    'Move_BARRAGE', 'Move_ACID_ARMOR', 'Move_REVERSAL', 'Move_FORESIGHT', 'Move_RETURN', 'Move_FACADE',
+    'Move_SMELLING_SALT', 'Move_HELPING_HAND', 'Move_ROLE_PLAY', 'Move_ASSIST', 'Move_RECYCLE', 'Move_YAWN',
+    'Move_KNOCK_OFF', 'Move_ENDEAVOR', 'Move_REFRESH', 'Move_SLACK_OFF', 'Move_WEATHER_BALL', 'Move_ODOR_SLEUTH',
+    'Move_BLOCK', 'Move_HOWL', 'General_SmokeballEscape', 'General_FocusBand', 'General_SnatchMove',
+  ],
 };
 
 describe('battle anim coverage', () => {
