@@ -77,9 +77,10 @@ animated metatiles are redrawn from the GBA tile data (`world/TilesetVram.ts`).
 | Boot | `main.ts`, `scenes/BootScene.ts`, `data/assets.ts` | 240×160 game, loads indexes, lazy-loads maps/textures |
 | World | `world/World.ts`, `MapChunk.ts`, `TilesetPair.ts`, `behaviors.ts` | current map + connected neighbours in one world space; per-tile collision/elevation/behavior; `setmetatile` edits |
 | Map graphics | `world/TilesetVram.ts`, `tilesetAnims.ts`, `doors.ts` | the tilesets' GBA tiles as VRAM, tileset_anims.c, field_door.c |
-| Objects | `entities/ObjectEvent.ts`, `NpcBrain.ts` | grid movement at GBA speeds (walk/run/jump/slow/fast/in-place), NPC movement types |
+| Objects | `entities/ObjectEvent.ts`, `movementActions.ts`, `NpcBrain.ts` | grid movement at GBA speeds (walk/run/jump/slow/fast/in-place), held movement actions (MOVEMENT_ACTION_*), NPC movement types |
+| Player | `world/playerAvatar.ts`, `bike.ts` | field_player_avatar.c and bike.c: gPlayerAvatar, PlayerStep, collision, ledges, forced movement tiles, the bike, surfing, boulders |
 | Field effects | `entities/FieldEffects.ts`, `groundEffects.ts` | field effect sprites (field_effect_helpers.c, emote icons) and the ground effects objects trigger (grass, shadows, splashes, reflections, ...) |
-| Field | `scenes/OverworldScene.ts` | fixed 60 Hz tick; input order (START, A, then movement); warps; coord triggers; map scripts; object spawning (on map entry and as objects come into view) |
+| Field | `scenes/OverworldScene.ts` | fixed 60 Hz tick; FieldGetPlayerInput / ProcessPlayerFieldInput, then PlayerStep; warps; coord triggers; map scripts; object spawning (on map entry and as objects come into view) |
 | Input | `input/Input.ts` | GBA buttons sampled once per tick (`held` / `pressed`) |
 | Text | `text/charmap.ts`, `Font.ts`, `TextWindow.ts`, `TextPrinter.ts`, `MessageBox.ts`, `placeholders.ts` | port of `RenderText`; pixel-buffer windows; field message box |
 | Scripts | `script/ScriptEngine.ts`, `MovementRunner.ts`, `Defines.ts`, `specials.ts` | interpreter for decomp scripts at macro level; movement scripts; constant resolution; `special` table |

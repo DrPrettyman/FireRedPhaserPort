@@ -1031,3 +1031,38 @@ end to end.
 - BATTLE_ANIMS_PLAN.md "Done when": the unit test now asserts every one of the 397 scripts is fully ported
   (replacing the per-file label lists); STATUS.md item ticked; the anim placeholder in DEVIATIONS.md is down to
   the no-audio note; the healthbox corner-lines question moved to STATUS.md "Loose ends".
+
+### Player avatar (W-avatar): field_player_avatar.c and bike.c
+
+- `world/playerAvatar.ts` (field_player_avatar.c) and `world/bike.ts` (bike.c) replace OverworldScene's
+  hand-written movement (tap-to-turn timer, canMove/canOccupy, ledge and run checks). gPlayerAvatar is a module
+  global like the C; OverworldScene implements PlayerAvatarHost and runs DoCB1_Overworld's part each tick:
+  UpdatePlayerAvatarTransitionState, FieldGetPlayerInput, ProcessPlayerFieldInput (in the C's order: trainers,
+  ON_FRAME, step-based scripts with coord events before step warps, walk-into-sign, wild encounter, arrow/stair
+  warps, signs, A, doors, START), else PlayerStep.
+- ObjectEvent: held movements (`setHeldMovement(MOVEMENT_ACTION_*)`, ObjectEventClearHeldMovement(IfFinished),
+  status), movementDirection / facingDirectionLocked / disableAnim, `setGraphics` (ObjectEventSetGraphicsId), new
+  speeds (FAST_2, run slow, spin, special jump, in-place durations) and the sJumpY tables instead of a parabola.
+  `entities/movementActions.ts` maps action ids to them. A script `move()` clears the held movement first.
+  Fixed on the way: `lock_facing_direction` steps used the facing as the step direction.
+- Behaviour a player notices: turning on the spot is WALK_IN_PLACE_FAST (8 frames, as before); walking into a wall
+  or NPC now plays the slow walk-in-place bump; ledges no longer check the landing tile (the C doesn't); a turn
+  ending at a tile centre also runs the walk-into-sign / wild encounter checks (checkStandardWildEncounter);
+  A and START are taken at a tile centre while walking; after a warp the player faces the way
+  GetInitialPlayerAvatarState says (south out of doors, north off mats, kept on ladders, else south) instead of
+  keeping the old facing; NPCs use GetCollisionAtCoords (they also avoid the tile the player is leaving).
+- Forced movement (ice, spinners, currents, slides, waterfalls), the bike (Mach movement, Cycling Road slopes,
+  ForcePlayerOntoBike, FLAG_SYS_ON_CYCLING_ROAD, stair warps take you off it, the 80% encounter rate), the
+  surfing state (surf speed, CanStopSurfing → jump onto the shore, arriving on water surfs) and Strength boulders
+  (TryPushBoulder, Task_BumpBoulder, holes and switches). Warps carry the bike/surf state
+  (Store/GetInitialPlayerAvatarState); battles and menus rebuild it from the graphics.
+- Bag: FieldUseFunc_Bike + ItemUseOnFieldCB_Bicycle through a new `gFieldCallback` (menus/fieldCallbacks.ts),
+  "can't dismount" on Cycling Road, WALK in the key items menu while riding.
+- Scripts: `lock`/`lockall` wait with IsFreezePlayerFinished (and turn the player their way), `release` clears the
+  player's finished movement. Specials ForcePlayerOntoBike, GetPlayerAvatarBike, ForcePlayerToStartSurfing,
+  SeafoamIslandsB4F_CurrentDumpsPlayerOnLand, GetPlayerFacingDirection.
+- Extractor: include/global.fieldmap.h and include/bike.h added to the define headers (PLAYER_AVATAR_FLAG_*,
+  COLLISION_*, T_*, running states, BIKE_*); rerun `npm run extract`.
+- Not ported (DEVIATIONS.md): audio, warp arrow sprite, DoStairWarp's delay, fishing, teleport spin, the surf
+  blob (W-surf), quest log.
+- Tests: tests/e2e/playerAvatar.test.ts (13 scenarios), tests/unit/playerAvatar.test.ts.

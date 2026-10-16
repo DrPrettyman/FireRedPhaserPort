@@ -28,7 +28,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     here (badge checks are real); mail, Softboiled/Milk Drink, the move relearner, Union Room, minigames,
     Pokédude/Teachy TV demos are not ported.
   - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Bag uses that need overworld systems
-    (bike, rods, Escape Rope, Itemfinder, VS Seeker, Town Map, Fame Checker, Teachy TV, mail, TM case, berry pouch,
+    (rods, Escape Rope, Itemfinder, VS Seeker, Town Map, Fame Checker, Teachy TV, mail, TM case, berry pouch,
     registered SELECT items) log "not implemented" and return to the bag. Berry powder reads as 0; PC
     storage is never full for Poké Balls; the item PC / Pokémon storage give flows aren't ported.
   - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
@@ -39,7 +39,18 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     so GetBattleTransitionTypeByMap never picks TRANSITION_TYPE_FLASH (Blur / Grid squares in dark caves).
   - Map preview screens (Mt. Moon, Rock Tunnel, Viridian Forest...) aren't ported: warps into those sections fade
     to black like the GBA and go straight to the map, without the banner (or the flash that follows it).
-  - Wild encounters: no bike rate modifier (no bikes). GAME_STAT_* counters aren't kept.
+  - Wild encounters: GAME_STAT_* counters aren't kept.
+  - Player avatar (world/playerAvatar.ts, world/bike.ts): no audio (bump, ledge, spinner, bike bell, Strength
+    and fall sounds; Cycling Road and surf music). Not ported: the warp arrow sprite on arrow mats
+    (HandleWarpArrowSpriteHideShow), DoStairWarp's 12-frame delay when a stair warp takes the player off the
+    bike, fishing (rods), the teleport spin, the quest log's recordings, and the help context. The surf blob
+    (FLDEFF_SURF_BLOB, field_effect_helpers.c) comes with the Surf field move, so until then a surfing player
+    shows the RED_SURF sprite alone. Movement scripts (applymovement) still run through MovementRunner rather
+    than the player's held-movement actions, so `lock` waits for a scripted step to end by `isMoving`.
+    MetatileAtCoordsIsWaterTile / IsPlayerFacingSurfableFishableWater need the TILE_TERRAIN attribute, which
+    the extractor doesn't keep yet (for Surf and the rods).
+  - Object animations follow the step's progress (first half step frame, second half standing) instead of
+    sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
     GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
     Selling the TM case / berry pouch logs "not implemented" (those screens don't exist).
