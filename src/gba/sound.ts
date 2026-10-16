@@ -43,6 +43,9 @@ export function IsCryPlayingOrClearCrySongs(): boolean {
   return false;
 }
 
+/** PlayBGM: no BGM yet. */
+export function PlayBGM(_songId: number): void {}
+
 /** m4aSongNumStart: no BGM yet. */
 export function m4aSongNumStart(_songId: number): void {}
 

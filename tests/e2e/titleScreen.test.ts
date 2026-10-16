@@ -1,7 +1,9 @@
-// The title screen (title_screen.c) in front of the main menu: booting shows it, its intro plays through to the
-// run scene (PRESS START blinking, flames), START goes to the main menu with a save and to the new game without,
-// B on the main menu comes back to it, it restarts itself after 2700 frames, and B+SELECT+UP opens the clear
-// save data screen (clear_save_data_screen.c), which soft-resets back to the title screen.
+// The title screen (title_screen.c) in front of the main menu, and NEW GAME's Oak's speech (oak_speech.c). Booting
+// shows the title, its intro plays through to the run scene (PRESS START blinking, flames), START goes to the main
+// menu with a save and to Oak's speech without, B on the main menu comes back to it, it restarts itself after 2700
+// frames, and B+SELECT+UP opens the clear save data screen (clear_save_data_screen.c), which soft-resets back to the
+// title screen. Oak's speech: the gender and the names chosen through the naming screen (or a preset) end up in the
+// new game's GameState, and the game starts in the player's room.
 
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
@@ -24,7 +26,7 @@ async function saveNow(game: Game): Promise<void> {
 
 const titleEvents = async (game: Game, since = 0) => (await game.events(since)).filter((e) => e.type === 'titleScreen').length;
 
-test('boot shows the title screen; its intro plays to PRESS START; START with no save starts the new game', async () => {
+test("boot shows the title screen; its intro plays to PRESS START; START with no save starts Oak's speech", async () => {
   const game = await session.start({ title: true });
   // Watch the intro's scenes in the page: each lasts only a few dozen frames.
   const scenes = await game.eval(async (t) => {
@@ -60,10 +62,10 @@ test('boot shows the title screen; its intro plays to PRESS START; START with no
   const since = await game.mark();
   await game.press('START');
   await game.waitFor((t) => t.titleScreen()?.scene === 'CRY', { what: 'the cry scene' });
-  // No save: the main menu goes on to the new game at once
+  // No save: the main menu goes on to NEW GAME at once
   await game.waitForEvent('mainMenu', { since });
-  await game.waitForEvent('ready', { since, timeout: 60_000 });
-  expect(await game.eval((t) => t.field()!.map)).toBe('PalletTown_PlayersHouse_2F');
+  await game.waitForEvent('oakSpeech', { since, timeout: 60_000 });
+  await game.waitFor((t) => t.oakSpeech()?.task === 'Task_ControlsGuide_HandleInput', { what: 'the controls guide' });
 });
 
 test('A during the intro skips to PRESS START; START with a save opens the main menu, B there goes back to the title', async () => {
@@ -137,4 +139,87 @@ test('B+SELECT+UP: the clear save data screen; NO keeps the save, YES clears it;
     expect(await hasSave()).toBe(answer === 'NO');
     await titleRunning(game);
   }
+});
+
+/** Press A through the controls guide and the Pikachu intro (each page takes input once its fade is over). */
+async function throughIntroPages(game: Game): Promise<void> {
+  for (const task of ['Task_ControlsGuide_HandleInput', 'Task_PikachuIntro_HandleInput']) {
+    for (let page = 0; page < 3; page++) {
+      // (waits in the page: the functions are sent as source, so they get `task` as an argument)
+      await game.eval(
+        (t, task) => t.until(() => t.oakSpeech()?.task === task && !t.oakSpeech()!.fading && (task !== 'Task_PikachuIntro_HandleInput' || t.oakSpeech()!.pikachuState === 1)),
+        task,
+      );
+      await game.press('A');
+    }
+  }
+}
+
+/** The naming screen: type `n` "A"s (the cursor starts on A), then OK. */
+async function typeName(game: Game, n: number): Promise<void> {
+  await game.mashUntil((t) => t.gbaScreen() === 'CB2_NamingScreen', { what: 'the naming screen' });
+  await game.eval((t) => t.waitFrames(30)); // the screen fades in
+  await game.pressTimes('A', n);
+  await game.press('START'); // jump to OK
+  await game.press('A');
+}
+
+test("NEW GAME: Oak's speech, GIRL, both names from the naming screen; the game starts in the player's room", async () => {
+  const game = await session.start({ title: true });
+  await titleRunning(game);
+  await game.press('START');
+  // No save: the main menu goes on to NEW GAME → StartNewGameScene
+  await game.waitForEvent('oakSpeech', { timeout: 60_000 });
+  await throughIntroPages(game);
+  await game.mashUntil((t) => t.oakSpeech()?.menu === 'gender', { what: 'BOY / GIRL' });
+  await game.press('DOWN');
+  await game.press('A');
+  expect(await game.eval((t) => t.oakSpeech()!.playerGender)).toBe('female');
+
+  // "Your name, what is it?" → the naming screen at once (the player gets no preset list); "AAAA", YES
+  await typeName(game, 4);
+  await game.waitFor((t) => t.oakSpeech()?.menu === 'yesNo', { what: 'the name confirmation', timeout: 60_000 });
+  expect(await game.eval((t) => t.oakSpeech()!.playerName)).toBe('AAAA');
+  await game.screenshot('oak-speech-confirm-name');
+  await game.press('A');
+
+  // The rival: NEW NAME → the naming screen; "AA", YES
+  await game.mashUntil((t) => t.oakSpeech()?.menu === 'names', { what: "the rival's name list" });
+  await game.screenshot('oak-speech-rival-names');
+  await game.press('A');
+  await typeName(game, 2);
+  await game.waitFor((t) => t.oakSpeech()?.menu === 'yesNo', { what: "the rival's name confirmation", timeout: 60_000 });
+  await game.press('A');
+
+  // "Let's go!", the shrink, then CB2_NewGame
+  await game.mashUntil((t) => t.oakSpeech()?.task === 'Task_OakSpeech_ShrinkPlayerPic', { what: 'the shrinking pic' });
+  await game.waitForEvent('ready', { timeout: 60_000 });
+  const field = await game.eval((t) => ({ map: t.field()!.map, x: t.field()!.x, y: t.field()!.y, player: t.state!.playerName, rival: t.state!.rivalName, gender: t.state!.playerGender, avatar: t.field()!.avatar.graphicsId }));
+  expect(field).toMatchObject({ map: 'PalletTown_PlayersHouse_2F', x: 6, y: 6, player: 'AAAA', rival: 'AA', gender: 'female' });
+  expect(field.avatar).toMatch(/GREEN|LEAF|FEMALE/);
+});
+
+test("Oak's speech: B on NO renames; a preset rival name; BOY keeps the male avatar", async () => {
+  const game = await session.start({ title: true });
+  await titleRunning(game);
+  await game.press('START');
+  await game.waitForEvent('oakSpeech', { timeout: 60_000 });
+  await throughIntroPages(game);
+  await game.mashUntil((t) => t.oakSpeech()?.menu === 'gender', { what: 'BOY / GIRL' });
+  await game.press('A'); // BOY
+  await typeName(game, 1);
+  await game.waitFor((t) => t.oakSpeech()?.menu === 'yesNo', { what: 'the name confirmation', timeout: 60_000 });
+  // NO: the naming screen again (GetDefaultName first, so a blank name would keep a preset)
+  await game.press('B');
+  await typeName(game, 3);
+  await game.waitFor((t) => t.oakSpeech()?.menu === 'yesNo', { what: 'the second confirmation', timeout: 60_000 });
+  expect(await game.eval((t) => t.oakSpeech()!.playerName)).toBe('AAA');
+  await game.press('A');
+  await game.mashUntil((t) => t.oakSpeech()?.menu === 'names', { what: "the rival's name list" });
+  await game.pressTimes('DOWN', 2); // GARY
+  await game.press('A');
+  await game.waitFor((t) => t.oakSpeech()?.menu === 'yesNo', { what: "the rival's name confirmation", timeout: 60_000 });
+  await game.press('A');
+  await game.mashUntil((t) => t.events().some((e) => e.type === 'ready'), { what: 'the new game', timeout: 120_000 });
+  expect(await game.eval((t) => ({ player: t.state!.playerName, rival: t.state!.rivalName, gender: t.state!.playerGender }))).toEqual({ player: 'AAA', rival: 'GARY', gender: 'male' });
 });

@@ -615,6 +615,11 @@ export function ResetAllBgsCoordinatesAndBgCntRegs(): void {
   }
 }
 
+/** GetStdWindowBaseTileNum */
+export function GetStdWindowBaseTileNum(): number {
+  return STD_WINDOW_BASE_TILE_NUM;
+}
+
 /** ResetBgPositions (new_menu_helpers.c) */
 export function ResetBgPositions(): void {
   for (let bg = 0; bg < 4; bg++) ChangeBgX(bg, 0, 0);

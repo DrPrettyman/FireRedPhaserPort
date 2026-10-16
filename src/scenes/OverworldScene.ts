@@ -125,6 +125,8 @@ export interface OverworldStart {
   preset?: StartPreset;
   /** CONTINUE from the main menu: the save to load (CB2_ContinueSavedGame); map/x/y are unused then. */
   continueGame?: SaveData;
+  /** NEW GAME after Oak's speech: the names and gender it put in gSaveBlock1/2 (NewGameInitData keeps them). */
+  newGameProfile?: { playerName: string; rivalName: string; playerGender: 'male' | 'female' };
 }
 
 /** struct FieldInput: the parts ProcessPlayerFieldInput uses. */
@@ -245,6 +247,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   async create(start: OverworldStart): Promise<void> {
     if (start.continueGame) fromSaveData(start.continueGame, this.state); // LoadSerializedGame & co. (load_save.c)
+    if (start.newGameProfile) Object.assign(this.state, start.newGameProfile);
     const kb = this.input.keyboard!;
     this.buttons = new Input(this);
 

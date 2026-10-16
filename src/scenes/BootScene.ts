@@ -17,7 +17,8 @@ export interface BootStart {
  * Boot: load the extracted data, then the title screen (title_screen.c; the copyright screen and intro.c's
  * Game Freak / Nidorino movie before it aren't ported). Dev starts (`?start=`, `?map=`) go straight into the
  * field; `?skipIntro` (dev, used by the e2e harness) boots like the port did before the title screen existed:
- * into the main menu when the save slot holds something, else straight into the new game.
+ * into the main menu when the save slot holds something, else straight into the new game, and NEW GAME skips Oak's
+ * speech.
  */
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -47,7 +48,7 @@ export class BootScene extends Phaser.Scene {
       // The main menu with an empty slot goes on to the new game at once (Task_SetWin0BldRegsNoSaveFileCheck →
       // NEW GAME), so skip it then.
       if (gSave.fileStatus === SAVE_STATUS_EMPTY) this.scene.start('Overworld', NEW_GAME_START);
-      else this.scene.start('MainMenu', { entry: 'mainMenu', newGame: NEW_GAME_START } satisfies MainMenuStart);
+      else this.scene.start('MainMenu', { entry: 'mainMenu', newGame: NEW_GAME_START, skipOakSpeech: true } satisfies MainMenuStart);
     } else {
       this.scene.start('MainMenu', { entry: 'title', newGame: NEW_GAME_START } satisfies MainMenuStart);
     }

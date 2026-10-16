@@ -7,6 +7,7 @@
 // that isn't ported yet finishes immediately (see the per-animation notes below).
 
 import { gfx, gfx16 } from '../gba/gfx';
+import { PlaySE } from '../gba/sound';
 import { LaunchBattleAnimation, LaunchStatusAnimation } from './anim/battleAnim';
 import { AnimateBallOpenParticles, LaunchBallFadeMonTask } from './anim/special';
 import { anim } from './anim/state';
@@ -60,7 +61,7 @@ import { ui } from './battleUi';
 import { K } from './constants';
 import { bdata, g, pokemon } from './env';
 import { bufferBattlePartyCurrentOrderBySide } from './partyOrder';
-import { Sin } from './trig';
+import { gSineTable, Sin } from './trig';
 import { getBattlerAtPosition, getBattlerPosition, getBattlerSide } from './util';
 
 const isDoubleBattle = () => (g.battleTypeFlags & K.BATTLE_TYPE_DOUBLE) !== 0;
@@ -1316,6 +1317,141 @@ function HandleBallAnimEnd(sprite: Sprite): void {
     DestroySprite(sprite);
     if (sbd().healthBoxesData.every((h) => !h.ballAnimActive)) for (let i = 0; i < BALL_NAMES.length; i++) FreeBallGfx(i);
   }
+}
+
+// Pokeball in Oak's speech (and when receiving a mon by trade): sprite data
+const sMonSpriteId = 0;
+const sDelay = 1;
+const sMonPalNum = 2;
+const sFadePalsLo = 3;
+const sFadePalsHi = 4;
+const sFinalMonX = 5;
+const sFinalMonY = 6;
+const sTrigIdx = 7;
+const sTimer = 5;
+
+/** LoadCompressedSpriteSheetUsingHeap(&gBallSpriteSheets[ballId]) + its palette (without LoadBallGfx's open-ball tiles) */
+function LoadBallSheetAndPalette(ballId: number): void {
+  const tag = BALL_GFX_TAG(ballId);
+  LoadCompressedSpriteSheet({ data: gfx(`gBallGfx_${BALL_NAMES[ballId]}`), size: 384, tag });
+  LoadCompressedSpritePalette({ data: gfx16(`gBallPal_${BALL_NAMES[ballId]}`), tag });
+}
+
+/** CreatePokeballSpriteToReleaseMon: the mon flies out of a Poké Ball at (x, y) to where its sprite was. */
+export function CreatePokeballSpriteToReleaseMon(monSpriteId: number, monPalNum: number, x: number, y: number, oamPriority: number, subpriority: number, delay: number, fadePalettes: number): void {
+  LoadBallSheetAndPalette(K.BALL_POKE);
+  const spriteId = CreateSprite(gBallSpriteTemplates()[K.BALL_POKE], x, y, subpriority);
+  const ball = gSprites[spriteId];
+  const mon = gSprites[monSpriteId];
+  ball.data[sMonSpriteId] = monSpriteId;
+  ball.data[sFinalMonX] = mon.x;
+  ball.data[sFinalMonY] = mon.y;
+  mon.x = x;
+  mon.y = y;
+  ball.data[sDelay] = delay;
+  ball.data[sMonPalNum] = monPalNum;
+  ball.data[sFadePalsLo] = fadePalettes & 0xffff;
+  ball.data[sFadePalsHi] = fadePalettes >>> 16;
+  ball.oam.priority = oamPriority;
+  ball.callback = SpriteCB_PokeballReleaseMon;
+  mon.invisible = true;
+}
+
+const fadePals = (sprite: Sprite) => ((sprite.data[sFadePalsLo] & 0xffff) | ((sprite.data[sFadePalsHi] & 0xffff) << 16)) >>> 0;
+
+function SpriteCB_PokeballReleaseMon(sprite: Sprite): void {
+  if (sprite.data[sDelay] !== 0) {
+    sprite.data[sDelay]--;
+    return;
+  }
+  const spriteId = sprite.data[sMonSpriteId];
+  const subpriority = sprite.subpriority !== 0 ? sprite.subpriority - 1 : 0;
+  StartSpriteAnim(sprite, 1);
+  AnimateBallOpenParticles(sprite.x, sprite.y - 5, sprite.oam.priority, subpriority, K.BALL_POKE); // AnimateBallOpenParticlesForPokeball
+  sprite.data[sDelay] = LaunchBallFadeMonTask(true, sprite.data[sMonPalNum], fadePals(sprite), K.BALL_POKE); // LaunchBallFadeMonTaskForPokeball
+  sprite.callback = SpriteCB_ReleasedMonFlyOut;
+  gSprites[spriteId].invisible = false;
+  StartSpriteAffineAnim(gSprites[spriteId], K.BATTLER_AFFINE_EMERGE);
+  AnimateSprite(gSprites[spriteId]);
+  gSprites[spriteId].data[1] = 0x1000;
+  sprite.data[sTrigIdx] = 0;
+}
+
+function SpriteCB_ReleasedMonFlyOut(sprite: Sprite): void {
+  let emergeAnimFinished = false;
+  let atFinalPosition = false;
+  const mon = gSprites[sprite.data[sMonSpriteId]];
+  if (sprite.animEnded) sprite.invisible = true;
+  if (mon.affineAnimEnded) {
+    StartSpriteAffineAnim(mon, K.BATTLER_AFFINE_NORMAL);
+    emergeAnimFinished = true;
+  }
+  // u16 x, y: the C's s32 arithmetic, truncated
+  mon.x = (Math.trunc(((sprite.data[sFinalMonX] - sprite.x) * sprite.data[sTrigIdx]) / 128) + sprite.x) & 0xffff;
+  mon.y = (Math.trunc(((sprite.data[sFinalMonY] - sprite.y) * sprite.data[sTrigIdx]) / 128) + sprite.y) & 0xffff;
+  if (sprite.data[sTrigIdx] < 128) {
+    const sine = -Math.trunc(gSineTable(sprite.data[sTrigIdx] & 0xff) / 8);
+    sprite.data[sTrigIdx] += 4;
+    mon.x2 = sine;
+    mon.y2 = sine;
+  } else {
+    mon.x = sprite.data[sFinalMonX];
+    mon.y = sprite.data[sFinalMonY];
+    mon.x2 = 0;
+    mon.y2 = 0;
+    atFinalPosition = true;
+  }
+  if (sprite.animEnded && emergeAnimFinished && atFinalPosition) DestroySpriteAndFreeResources(sprite);
+}
+
+/** CreateTradePokeballSprite: the mon shrinks back into a Poké Ball at (x, y). */
+export function CreateTradePokeballSprite(monSpriteId: number, monPalNum: number, x: number, y: number, oamPriority: number, subPriority: number, delay: number, fadePalettes: number): number {
+  LoadBallSheetAndPalette(K.BALL_POKE);
+  const spriteId = CreateSprite(gBallSpriteTemplates()[K.BALL_POKE], x, y, subPriority);
+  const ball = gSprites[spriteId];
+  ball.data[sMonSpriteId] = monSpriteId;
+  ball.data[sDelay] = delay;
+  ball.data[sMonPalNum] = monPalNum;
+  ball.data[sFadePalsLo] = fadePalettes & 0xffff;
+  ball.data[sFadePalsHi] = fadePalettes >>> 16;
+  ball.oam.priority = oamPriority;
+  ball.callback = SpriteCB_TradePokeball;
+  return spriteId;
+}
+
+function SpriteCB_TradePokeball(sprite: Sprite): void {
+  if (sprite.data[sDelay] !== 0) {
+    sprite.data[sDelay]--;
+    return;
+  }
+  const mon = gSprites[sprite.data[sMonSpriteId]];
+  const subpriority = sprite.subpriority !== 0 ? sprite.subpriority - 1 : 0;
+  StartSpriteAnim(sprite, 1);
+  AnimateBallOpenParticles(sprite.x, sprite.y - 5, sprite.oam.priority, subpriority, K.BALL_POKE);
+  sprite.data[sDelay] = LaunchBallFadeMonTask(true, sprite.data[sMonPalNum], fadePals(sprite), K.BALL_POKE);
+  sprite.callback = SpriteCB_TradePokeballSendOff;
+  StartSpriteAffineAnim(mon, K.BATTLER_AFFINE_RETURN);
+  AnimateSprite(mon);
+  mon.data[1] = 0;
+}
+
+function SpriteCB_TradePokeballSendOff(sprite: Sprite): void {
+  sprite.data[sTimer]++;
+  if (sprite.data[sTimer] === 11) PlaySE(K.SE_BALL_TRADE);
+  const mon = gSprites[sprite.data[sMonSpriteId]];
+  if (mon.affineAnimEnded) {
+    StartSpriteAnim(sprite, 2);
+    mon.invisible = true;
+    sprite.data[sTimer] = 0;
+    sprite.callback = SpriteCB_TradePokeballEnd;
+  } else {
+    mon.data[1] += 96;
+    mon.y2 = -mon.data[1] >> 8;
+  }
+}
+
+function SpriteCB_TradePokeballEnd(sprite: Sprite): void {
+  if (sprite.animEnded) sprite.callback = SpriteCallbackDummy;
 }
 
 /** StartHealthboxSlideIn */

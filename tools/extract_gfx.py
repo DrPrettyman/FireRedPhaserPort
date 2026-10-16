@@ -20,7 +20,7 @@ from extract import read_jasc
 # anims, party menu, bag and item icons, summary screen and mon markings, the shop's buy menu, the naming
 # screen, the PC storage system and item PC, the evolution scene, the field's tilesets and object event pics, which the buy menu's map view draws from VRAM,
 # field effect pics, door animation tiles, the cave entrance transition, and the weather fog and palette that
-# Haze and Mist Ball load, the main menu's palettes and the title screen).
+# Haze and Mist Ball load, the main menu's palettes, the title screen and Oak's speech).
 GFX_PREFIXES = (
     "graphics/battle_interface/",
     "graphics/battle_terrain/",
@@ -49,6 +49,7 @@ GFX_PREFIXES = (
     "graphics/weather/",
     "graphics/main_menu/",
     "graphics/title_screen/",
+    "graphics/oak_speech/",
     "data/tilesets/",
 )
 # Footprints are 1bpp and unused so far.

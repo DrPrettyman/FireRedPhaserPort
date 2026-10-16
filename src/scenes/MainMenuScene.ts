@@ -2,8 +2,8 @@
 // like the C: the title screen (menus/titleScreen.ts, title_screen.c), its clear save data screen
 // (menus/clearSaveDataScreen.ts) and the main menu (menus/mainMenu.ts, main_menu.c). BootScene starts it on the
 // title screen (or, with the dev-only ?skipIntro, on the main menu). CONTINUE hands the save to the overworld
-// (CB2_ContinueSavedGame); NEW GAME starts the new game (Oak's speech isn't ported). The clear save data screen
-// ends with DoSoftReset (BootScene's `softReset`).
+// (CB2_ContinueSavedGame); NEW GAME runs Oak's speech (menus/oakSpeech.ts) here, then starts the new game. The
+// clear save data screen ends with DoSoftReset (BootScene's `softReset`).
 
 import { initConstants } from '../battle/constants';
 import type { Assets } from '../data/assets';
@@ -23,6 +23,18 @@ import { TEXT_SPEED } from '../text/TextPrinter';
 import { saveDataView } from '../ui/saveMenuUtil';
 import { initGbaText } from '../gba/window';
 import { softReset } from './BootScene';
+import { sharedBattleData } from './BattleScene';
+import { initBattleEnv, setTextStrings } from '../battle/env';
+import { setBattleUi } from '../battle/battleUi';
+import { configureMenuEnv } from '../menus/host';
+import { loadMenusData } from '../menus/data';
+import { setObjectEventGraphicsInfo } from '../menus/objectEventGraphics';
+import { NAMING_SCREEN_PLAYER, NAMING_SCREEN_RIVAL, namingScreenGfxSymbols } from '../menus/namingScreen';
+import { oakSpeechEnv, oakSpeechGfxSymbols, StartNewGameScene } from '../menus/oakSpeech';
+import { PokemonData, readPokemonConstants } from '../pokemon/Pokemon';
+import { GameState } from '../state/GameState';
+import { testHooks } from '../dev/testHooks';
+import { random } from '../util/random';
 import { GbaHostScene } from './GbaHostScene';
 import type { OverworldStart } from './OverworldScene';
 
@@ -33,6 +45,8 @@ export interface MainMenuStart {
   entry: 'title' | 'mainMenu';
   /** Where NEW GAME starts (new_game.c's warp into the player's room). */
   newGame: OverworldStart;
+  /** Dev (?skipIntro): NEW GAME goes straight into the new game, without Oak's speech. */
+  skipOakSpeech?: boolean;
 }
 
 export class MainMenuScene extends GbaHostScene {
@@ -72,7 +86,8 @@ export class MainMenuScene extends GbaHostScene {
       text,
       encode: (s: string) => [...charmap.encodePlain(s), EOS],
       continueSavedGame: () => this.exit({ ...start.newGame, continueGame: save }),
-      startNewGame: () => this.exit(start.newGame),
+      // StartNewGameScene; dev ?skipIntro skips Oak's speech too
+      startNewGame: () => (start.skipOakSpeech ? this.exit(start.newGame) : void this.startOakSpeech(start.newGame)),
     });
     Object.assign(titleScreenEnv, {
       define: (name: string) => defines.require(name),
@@ -99,6 +114,56 @@ export class MainMenuScene extends GbaHostScene {
     SetMainCallback1(null);
     SetMainCallback2(start.entry === 'title' ? CB2_InitTitleScreen : CB2_InitMainMenu);
     this.startHost();
+  }
+
+  /**
+   * NEW GAME: Oak's speech (menus/oakSpeech.ts) on this host. It writes the names and gender into a fresh GameState
+   * (gSaveBlock1/2), which the battle env also gets, for StringExpandPlaceholders and the Nidoran♀ / Poké Ball
+   * sprites; CB2_NewGame hands them to the overworld.
+   */
+  private async startOakSpeech(newGame: OverworldStart): Promise<void> {
+    SetMainCallback2(null); // black (the main menu faded out) while the graphics load
+    const assets: Assets = this.registry.get('assets');
+    const defines = new Defines(assets.scripts.defines);
+    const charmap = new Charmap(assets.charmap);
+    const pokemon = new PokemonData(readPokemonConstants(defines), assets.species, assets.moves, assets.items, assets.pokemonTables, charmap);
+    const state = new GameState(defines, assets.constants.newGameFlags, pokemon, assets.strings);
+    testHooks.applyTestOptions(state); // ?textSpeed=
+    initBattleEnv(await sharedBattleData(), assets.scripts.defines, pokemon, state, charmap);
+    setTextStrings(assets.strings);
+    // The ball-open particles call the battle's audio hooks (no audio yet) and nothing else
+    setBattleUi({
+      joyNew: () => false,
+      joyHeld: () => false,
+      anyNewKeys: () => false,
+      playSE: () => {},
+      playCry: () => {},
+      playBGM: () => {},
+      playFanfare: () => {},
+      addBagItem: () => {},
+      playerGender: () => oakSpeechEnv.getPlayerGender(),
+    });
+    configureMenuEnv(state);
+    initGbaText(this.fonts, this.buttons, TEXT_SPEED[state.textSpeed].scroll);
+    await loadMenusData('gen'); // the naming screen's keyboard
+    setObjectEventGraphicsInfo(assets.sprites); // the naming screen's player / rival icons
+    await loadGfx([
+      ...oakSpeechGfxSymbols(),
+      ...namingScreenGfxSymbols(NAMING_SCREEN_PLAYER, 0),
+      ...namingScreenGfxSymbols(NAMING_SCREEN_PLAYER, 1),
+      ...namingScreenGfxSymbols(NAMING_SCREEN_RIVAL),
+    ]);
+    const male = defines.require('MALE');
+    Object.assign(oakSpeechEnv, {
+      text: (label: string) => charmap.encode(assets.strings[label] ?? '?$'),
+      setPlayerGender: (gender: number) => (state.playerGender = gender === male ? 'male' : 'female'),
+      getPlayerGender: () => defines.require(state.playerGender === 'female' ? 'FEMALE' : 'MALE'),
+      setPlayerName: (name: number[]) => (state.playerName = charmap.decodePlain(name)),
+      setRivalName: (name: number[]) => (state.rivalName = charmap.decodePlain(name)),
+      random,
+      newGame: () => this.exit({ ...newGame, newGameProfile: { playerName: state.playerName, rivalName: state.rivalName, playerGender: state.playerGender } }),
+    });
+    StartNewGameScene();
   }
 
   /** Off the GBA layer and into the field. */

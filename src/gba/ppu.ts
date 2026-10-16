@@ -1,5 +1,6 @@
-// A software GBA PPU for mode 0: four text BGs (with BG mosaic), OBJ (normal and affine), WIN0/WIN1/OBJ
-// window and colour special effects (alpha blend, brighten, darken). OBJ mosaic is not implemented.
+// A software GBA PPU for modes 0-2: text BGs (with BG mosaic), affine BGs (BG2 in mode 1, BG2/BG3 in mode 2;
+// no mosaic), OBJ (normal and affine), WIN0/WIN1/OBJ window and colour special effects (alpha blend, brighten,
+// darken). OBJ mosaic is not implemented.
 // The HBlank callback, if any, runs before each line is drawn (REG_VCOUNT = that line), like the
 // HBlank DMA model in hblankRegs.
 
@@ -102,6 +103,58 @@ function bgPixel(x: number, line: number, cnt: number, hofs: number, vofs: numbe
   idx = fx & 1 ? b >> 4 : b & 0xf;
   if (!idx) return -1;
   return pltt[((entry >> 12) << 4) + idx];
+}
+
+/** An affine BG's parameters on one line: PA, PC and the line's reference point (BGxX/Y + PB/PD per line). */
+interface AffineLine {
+  pa: number;
+  pc: number;
+  refX: number;
+  refY: number;
+}
+
+const s16 = (v: number) => (v << 16) >> 16;
+/** BGxX/Y: 28-bit signed, 19.8 fixed point */
+const s28 = (lo: number, hi: number) => (((lo & 0xffff) | ((hi & 0x0fff) << 16)) << 4) >> 4;
+
+function affineLine(bg: number, line: number): AffineLine {
+  const base = bg === 2 ? 0x20 : 0x30;
+  const pb = s16(reg(base + 2, line));
+  const pd = s16(reg(base + 6, line));
+  const x = s28(reg(base + 8, line), reg(base + 10, line));
+  const y = s28(reg(base + 12, line), reg(base + 14, line));
+  return { pa: s16(reg(base, line)), pc: s16(reg(base + 4, line)), refX: x + pb * line, refY: y + pd * line };
+}
+
+/** Colour (BGR555) of an affine BG at screen x on the line `p` describes, or -1 if transparent. */
+function affinePixel(x: number, cnt: number, p: AffineLine): number {
+  const charBase = ((cnt >> 2) & 3) * 0x4000;
+  const screenBase = ((cnt >> 8) & 0x1f) * 0x800;
+  const size = 128 << ((cnt >> 14) & 3);
+  let tx = Math.floor((p.refX + p.pa * x) / 256);
+  let ty = Math.floor((p.refY + p.pc * x) / 256);
+  if (cnt & 0x2000) {
+    tx &= size - 1;
+    ty &= size - 1;
+  } else if (tx < 0 || ty < 0 || tx >= size || ty >= size) {
+    return -1;
+  }
+  const tile = vram[(screenBase + (ty >> 3) * (size >> 3) + (tx >> 3)) & 0xffff];
+  const idx = vram[(charBase + tile * 64 + (ty & 7) * 8 + (tx & 7)) & 0xffff];
+  return idx ? pltt[idx] : -1;
+}
+
+/** Whether BG `bg` exists in display mode `mode`, and whether it's affine there. */
+function bgKind(bg: number, mode: number): 'text' | 'affine' | undefined {
+  switch (mode) {
+    case 0:
+      return 'text';
+    case 1:
+      return bg < 2 ? 'text' : bg === 2 ? 'affine' : undefined;
+    case 2:
+      return bg >= 2 ? 'affine' : undefined;
+  }
+  return undefined;
 }
 
 function renderObjLine(line: number, dispcnt: number): void {
@@ -222,7 +275,9 @@ export function renderFrame(out: Uint32Array): void {
     const hofs = [0, 1, 2, 3].map((b) => reg(REG_OFFSET_BG0HOFS + b * 4, line) & 0x1ff);
     const vofs = [0, 1, 2, 3].map((b) => reg(REG_OFFSET_BG0VOFS + b * 4, line) & 0x1ff);
     // BGs in draw order: priority, then index
-    const order = [0, 1, 2, 3].filter((b) => dispcnt & (0x100 << b)).sort((a, b) => (cnt[a] & 3) - (cnt[b] & 3) || a - b);
+    const mode = dispcnt & 7;
+    const order = [0, 1, 2, 3].filter((b) => dispcnt & (0x100 << b) && bgKind(b, mode)).sort((a, b) => (cnt[a] & 3) - (cnt[b] & 3) || a - b);
+    const affine = [0, 1, 2, 3].map((b) => (bgKind(b, mode) === 'affine' ? affineLine(b, line) : undefined));
     const winOn = dispcnt & 0xe000;
     const win0h = reg(REG_OFFSET_WIN0H, line);
     const win0v = reg(REG_OFFSET_WIN0V, line);
@@ -254,7 +309,9 @@ export function renderFrame(out: Uint32Array): void {
         else mask = winout & 0x3f;
       }
       for (const b of order) {
+        const aff = affine[b];
         if (!(mask & (1 << b))) bgColor[b] = -1;
+        else if (aff) bgColor[b] = affinePixel(x, cnt[b], aff);
         else if (cnt[b] & 0x40) bgColor[b] = bgPixel(x - (x % mosaicH), mosaicLine, cnt[b], hofs[b], vofs[b]);
         else bgColor[b] = bgPixel(x, line, cnt[b], hofs[b], vofs[b]);
       }

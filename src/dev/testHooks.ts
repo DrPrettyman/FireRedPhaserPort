@@ -29,6 +29,7 @@ import { itemPcProbe } from '../menus/itemPc';
 import { mainMenuProbe } from '../menus/mainMenu';
 import { titleScreenProbe } from '../menus/titleScreen';
 import { clearSaveDataProbe } from '../menus/clearSaveDataScreen';
+import { oakSpeechProbe } from '../menus/oakSpeech';
 import { saveDialogProbe } from '../ui/SaveDialog';
 import { startMenuProbe } from '../ui/StartMenu';
 
@@ -462,6 +463,11 @@ function createApi(game: Phaser.Game) {
     titleScreen: () => (game.scene.isActive('MainMenu') ? titleScreenProbe() : undefined),
     /** The clear save data screen (B+SELECT+UP on the title screen) while it runs: whether its YES/NO takes input. */
     clearSaveData: () => (game.scene.isActive('MainMenu') ? clearSaveDataProbe() : undefined),
+    /** Oak's speech (NEW GAME) while it runs: the running task's function name, the page / shrink timer, the menu taking input ('gender' | 'names' | 'yesNo'), fading, the Pikachu intro's state, the gender and names so far. */
+    oakSpeech: () => {
+      const p = game.scene.isActive('MainMenu') ? oakSpeechProbe() : undefined;
+      return p && { ...p, playerName: decode(p.playerName), rivalName: decode(p.rivalName) };
+    },
     /** The field start menu while it's open: its items and cursor. */
     startMenu: () => startMenuProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */
