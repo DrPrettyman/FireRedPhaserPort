@@ -1208,12 +1208,18 @@ function AnimSweetScentPetal_Step(sprite: Sprite): void {
   if (getBattlerSide(anim.attacker) === K.B_SIDE_PLAYER) {
     sprite.x += 5;
     sprite.y -= 1;
-    if (sprite.x > DISPLAY_WIDTH) DestroyAnimSprite(sprite);
+    if (sprite.x > DISPLAY_WIDTH) {
+      DestroyAnimSprite(sprite); // the C goes on to set y2 on the freed sprite
+      return;
+    }
     sprite.y2 = Sin(sprite.data[0] & 0xff, 16);
   } else {
     sprite.x -= 5;
     sprite.y += 1;
-    if (sprite.x < 0) DestroyAnimSprite(sprite);
+    if (sprite.x < 0) {
+      DestroyAnimSprite(sprite); // the C goes on to set y2 on the freed sprite
+      return;
+    }
     sprite.y2 = Cos(sprite.data[0] & 0xff, 16);
   }
 }
