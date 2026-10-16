@@ -2004,7 +2004,8 @@ function AnimPerishSongMusicNote_Step2(sprite: Sprite): void {
     sprite.invisible = d[2] % 2 !== 0;
     DestroyAnimSprite(sprite);
   }
-  if (d[4] === 4) DestroyAnimSprite(sprite);
+  // Re-read: DestroySprite resets the sprite (data included), so this second destroy never happens.
+  if (sprite.data[4] === 4) DestroyAnimSprite(sprite);
 }
 
 /** AnimGuardRing (Safeguard): rises up the attacker (both battlers of its side in doubles). */
