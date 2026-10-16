@@ -3,7 +3,7 @@
 // the OBJ-window spotlight (Encore) and Castform's form change (HandleSpeciesGfxDataChange).
 
 import { expect, test } from 'vitest';
-import { animEvent, expectMovesRun, reseed, ROUTE1, useFirstMove, useMoveSlot } from './battleAnimHelpers';
+import { animEvent, expectMovesRun, reseedAfterAnims, ROUTE1, useFirstMove, useMoveSlot } from './battleAnimHelpers';
 import type { MonSpec } from '../../src/dev/testHooks';
 import { useGame, type Game } from './harness';
 
@@ -78,11 +78,8 @@ test('Doom Desire: two turns later the light beam flashes over the target', asyn
   await useMoveSlot(game, 0, 1);
   const turn3 = await useMoveSlot(game, 1, 1);
   // Reseed once both turn-3 Splashes are done, just before the delayed hit's accuracy roll, so the roll doesn't
-  // depend on how long the anims before it took.
-  for (let i = 0; i < 300 && (await game.events(turn3)).filter((e) => e.type === 'battleAnimEnd' && e.label === 'Move_SPLASH').length < 2; i++) {
-    await game.eval((t) => t.waitFrames(5));
-  }
-  await reseed(game);
+  // depend on how long the anims before it took. The wait runs in the page, so it's on time under load too.
+  await reseedAfterAnims(game, 'Move_SPLASH', 2, turn3);
   expect(await animEvent(game, 'battleAnim', 'General_DoomDesireHit', since)).toMatchObject({ ran: true });
   await animEvent(game, 'battleAnimEnd', 'General_DoomDesireHit', since);
   await game.waitForActionMenu();

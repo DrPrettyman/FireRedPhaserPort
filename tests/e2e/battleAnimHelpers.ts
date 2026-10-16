@@ -66,3 +66,21 @@ export async function expectMovesRun(session: ReturnType<typeof useGame>, moves:
   const mons = (await game.eval((t) => t.battle()))!.mons;
   expect(mons.map((m) => m.spriteInvisible)).toEqual([false, false]);
 }
+
+/**
+ * Reseeds the RNG inside the page as soon as `count` `label` anims have ended since `since`. Start it (without
+ * awaiting) before those anims play and await it later: the wait runs in the page, so the reseed lands within a
+ * frame of the anim's end even when the machine is busy, ahead of a later turn's accuracy roll.
+ */
+export function reseedAfterAnims(game: Game, label: string, count: number, since: number): Promise<void> {
+  return game.eval(async (t, l, n, s) => {
+    for (let i = 0; i < 20000; i++) {
+      if (t.events(s).filter((e) => e.type === 'battleAnimEnd' && e.label === l).length >= n) {
+        t.seed(1);
+        return;
+      }
+      await t.waitFrames(1);
+    }
+    throw new Error(`reseedAfterAnims: ${n} ${l} never ended`);
+  }, label, count, since);
+}

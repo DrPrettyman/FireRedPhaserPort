@@ -1066,3 +1066,10 @@ end to end.
 - Not ported (DEVIATIONS.md): audio, warp arrow sprite, DoStairWarp's delay, fishing, teleport spin, the surf
   blob (W-surf), quest log.
 - Tests: tests/e2e/playerAvatar.test.ts (13 scenarios), tests/unit/playerAvatar.test.ts.
+
+### E2e: reseed in the page for the Bounce and Doom Desire tests (merging `player-avatar`)
+
+- The Bounce test failed once in a full run under load: its reseed polled from Node for the foe's Splash to end,
+  and arrived after turn 2's accuracy roll. `reseedAfterAnims()` (tests/e2e/battleAnimHelpers.ts) waits and
+  reseeds inside the page; started before the anims play, it lands within a frame of the last one ending. Bounce
+  and Doom Desire use it. Passed twice in a row with the anim and avatar files running four at a time.
