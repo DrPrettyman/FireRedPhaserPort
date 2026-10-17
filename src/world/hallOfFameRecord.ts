@@ -70,7 +70,7 @@ function rgba(c: number): [number, number, number] {
 }
 
 /** Draw 4bpp 1D-mapped frames (`w` x `h` px each, stacked across) with `palette` into a canvas texture. */
-function drawFrames(tex: Phaser.Textures.CanvasTexture, tiles: Uint8Array, palette: ArrayLike<number>, w: number, h: number, frames: number): void {
+export function drawFrames(tex: Phaser.Textures.CanvasTexture, tiles: Uint8Array, palette: ArrayLike<number>, w: number, h: number, frames: number): void {
   const ctx = tex.context;
   const img = ctx.createImageData(w * frames, h);
   const tilesW = w / 8;
@@ -97,7 +97,7 @@ function drawFrames(tex: Phaser.Textures.CanvasTexture, tiles: Uint8Array, palet
   tex.refresh();
 }
 
-function canvasTexture(scene: Phaser.Scene, key: string, w: number, h: number, frames: number): Phaser.Textures.CanvasTexture {
+export function canvasTexture(scene: Phaser.Scene, key: string, w: number, h: number, frames: number): Phaser.Textures.CanvasTexture {
   let tex = scene.textures.exists(key) ? (scene.textures.get(key) as Phaser.Textures.CanvasTexture) : undefined;
   if (!tex) {
     tex = scene.textures.createCanvas(key, w * frames, h)!;

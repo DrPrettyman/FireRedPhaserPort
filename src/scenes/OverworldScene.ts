@@ -72,6 +72,7 @@ import {
 } from '../world/surf';
 import { setFieldItemsHost, type FieldItemsHost } from '../world/fieldItems';
 import { fishingProbe, registerFieldItems } from '../world/fishing';
+import { ITEMFINDER_GFX, itemfinderProbe, registerItemfinder, setItemfinderHost } from '../world/itemfinder';
 import { ClearRematchStateByTrainerId, registerVsSeeker, ResetMovementOfRematchableTrainers, setVsSeekerHost, vsSeekerBikeGraphicsId, vsSeekerProbe, type VsSeekerHost } from '../world/vsSeeker';
 import { FieldFlash, FldEff_UseFlash, IsMapTypeOutdoors, Overworld_GetFlashLevel, SetDefaultFlashLevel } from '../world/flash';
 import { fieldListMenuGfxSymbols, fieldListMenuProbe, type ListMenuHost } from '../ui/FieldListMenu';
@@ -353,6 +354,13 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     registerFieldItems();
     setVsSeekerHost(this.createVsSeekerHost());
     registerVsSeeker();
+    setItemfinderHost({
+      currentMap: () => this.world.current.data,
+      mapHeader: (mapId) => this.world.loaded.find((c) => c.data.id === mapId)?.data,
+      playerLocal: () => this.playerLocal(),
+    });
+    registerItemfinder();
+    await loadGfx(ITEMFINDER_GFX);
     setSurfHost({
       terrainAt: (x, y) => this.world.tileAt(x, y).terrain,
       createFieldEffectSprite: (fldEff, template, x, y, subpriority, callback) => this.fieldEffects.createSprite(fldEff, template, x, y, subpriority, callback),
@@ -417,6 +425,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       surfBlob: surfBlobProbe(),
       fishing: fishingProbe(),
       vsSeeker: vsSeekerProbe(),
+      itemfinder: itemfinderProbe(),
       avatar: {
         flags: Object.keys(this.assets.scripts.defines)
           .filter((k) => k.startsWith('PLAYER_AVATAR_FLAG_') && gPlayerAvatar.flags & this.defines.require(k))

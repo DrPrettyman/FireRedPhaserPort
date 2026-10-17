@@ -1,6 +1,6 @@
 // item_use.c: what Use does for each item, from the bag (tasks' data[3] == 0) and in battle. The
 // functions are looked up by the names in the item table (fieldUseFunc / battleUseFunc). Uses that
-// need overworld systems that don't exist yet (Itemfinder, Fame Checker, Teachy TV, mail) aren't in the
+// need overworld systems that don't exist yet (Fame Checker, Teachy TV, mail) aren't in the
 // tables; the bag logs them. Berries used from the berry pouch run these with the pouch's task, and hand
 // back to the pouch instead of the bag.
 
@@ -156,8 +156,9 @@ function ItemUseOnFieldCB_Bicycle(_taskId: number): void {
 }
 
 /**
- * The field side of the rods, the Escape Rope and the VS Seeker (world/fishing.ts, world/fieldMoves.ts,
- * world/fieldItems.ts, world/vsSeeker.ts), registered at boot (registerFieldItems, registerVsSeeker) like the
+ * The field side of the rods, the Escape Rope, the VS Seeker and the Itemfinder (world/fishing.ts,
+ * world/fieldMoves.ts, world/fieldItems.ts, world/vsSeeker.ts, world/itemfinder.ts), registered at boot
+ * (registerFieldItems, registerVsSeeker, registerItemfinder) like the
  * party menu's field moves, so the bag doesn't import the field's Phaser code. Each registers its part.
  */
 export interface ItemUseFieldFuncs {
@@ -175,6 +176,8 @@ export interface ItemUseFieldFuncs {
   GetCurrentMapId(): string;
   /** vs_seeker.c's Task_VsSeeker_0 */
   Task_VsSeeker_0(): void;
+  /** itemfinder.c's ItemUseOnFieldCB_Itemfinder */
+  ItemUseOnFieldCB_Itemfinder(): void;
 }
 
 const sFieldFuncs: Partial<ItemUseFieldFuncs> = {};
@@ -184,7 +187,7 @@ export function registerItemUseFieldFuncs(funcs: Partial<ItemUseFieldFuncs>): vo
 }
 
 function fieldFuncs(): ItemUseFieldFuncs {
-  if (!sFieldFuncs.CanFish || !sFieldFuncs.Task_VsSeeker_0) throw new Error('[item_use] the field items are not registered');
+  if (!sFieldFuncs.CanFish || !sFieldFuncs.Task_VsSeeker_0 || !sFieldFuncs.ItemUseOnFieldCB_Itemfinder) throw new Error('[item_use] the field items are not registered');
   return sFieldFuncs as ItemUseFieldFuncs;
 }
 
@@ -243,6 +246,13 @@ function FieldUseFunc_VsSeeker(taskId: number): void {
     sItemUseOnFieldCB = () => f.Task_VsSeeker_0();
     SetUpItemUseOnFieldCallback(taskId);
   }
+}
+
+/** ItemUseOutOfBattle_Itemfinder (IncrementGameStat(GAME_STAT_USED_ITEMFINDER): game stats aren't tracked yet) */
+function ItemUseOutOfBattle_Itemfinder(taskId: number): void {
+  const f = fieldFuncs();
+  sItemUseOnFieldCB = () => f.ItemUseOnFieldCB_Itemfinder();
+  SetUpItemUseOnFieldCallback(taskId);
 }
 
 /**
@@ -573,6 +583,7 @@ export const FIELD_USE_FUNCS: Record<string, TaskFunc> = {
   FieldUseFunc_Rod,
   ItemUseOutOfBattle_EscapeRope,
   FieldUseFunc_VsSeeker,
+  ItemUseOutOfBattle_Itemfinder,
   FieldUseFunc_TownMap,
   FieldUseFunc_TmCase,
   FieldUseFunc_BerryPouch,

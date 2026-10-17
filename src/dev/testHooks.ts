@@ -218,6 +218,11 @@ export interface FieldProbe {
   fishing: { step: number; animNum?: number; image?: number; x2?: number; y2?: number } | undefined;
   /** The VS Seeker's task (func 0..3 = Task_VsSeeker_0..3) and the player's VS Seeker anim (world/vsSeeker.ts) while it runs. */
   vsSeeker: { func: number; animNum?: number; image?: number } | undefined;
+  /**
+   * The Itemfinder (world/itemfinder.ts) while its task or sprites are out: `running` until its message closes, and
+   * each arrow / star's screen position, anim (0-3 arrows, 4 the star), affine anim (0 left, 1 down, 2 right, 3 up).
+   */
+  itemfinder: { running: boolean; sprites: { x: number; y: number; anim: number; affineAnim: number; image: number }[] } | undefined;
   /** gPlayerAvatar and the player's held movement (world/playerAvatar.ts). */
   avatar: {
     /** PLAYER_AVATAR_FLAG_* set, without the prefix (ON_FOOT, MACH_BIKE, SURFING, FORCED, ...). */
