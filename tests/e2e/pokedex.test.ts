@@ -1,7 +1,8 @@
 // The Pokédex screen (menus/pokedexScreen.ts, pokedex_screen.c) from the start menu: the top menu with its seen /
-// owned counts, the numerical lists (Kanto, and national with the National Dex), scrolling them, and closing back
-// to the start menu and the field. The screen is on the GBA layer: its state comes from `t.pokedex()`; `ready`
-// means its task takes input.
+// owned counts, the numerical lists (Kanto, and national with the National Dex), scrolling them, the mon page
+// (up/down through the seen mons, back to the list), the search lists (A TO Z, LIGHTEST), and closing back to the
+// start menu and the field. The screen is on the GBA layer: its state comes from `t.pokedex()`; `ready` means its
+// task takes input.
 
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
@@ -11,6 +12,8 @@ const session = useGame();
 // DEX_CATEGORY_COUNT + DEX_ORDER_*: the top menu's item indexes
 const DEX_MODE_NUMERICAL_KANTO = 9;
 const DEX_MODE_NUMERICAL_NATIONAL = 14;
+const DEX_MODE_ATOZ = 10;
+const DEX_MODE_LIGHTEST = 12;
 
 /** Replace the Pokédex flags with these national dex numbers; `national` turns on the National Dex (EnableNationalPokedex). */
 async function setDex(game: Game, seen: number[], caught: number[], national = false) {
@@ -143,4 +146,109 @@ test('POKéDEX does nothing before a mon has been seen (StartMenuPokedexSanityCh
   expect(await game.eval((t) => t.gbaScreen())).toBeUndefined();
   await game.press('B');
   await game.waitIdle();
+});
+
+/** Wait (in the page) until the mon page shows `species` and takes input. */
+async function waitMonPage(game: Game, species: number) {
+  await game.eval(
+    (t, species) => t.until(() => t.pokedex()?.task === 'Task_DexScreen_ShowMonPage' && !!t.pokedex()?.ready && t.pokedex()?.monPage?.species === species),
+    species,
+  );
+  return (await game.eval((t) => t.pokedex()))!.monPage!;
+}
+
+/** On the top menu: DOWN until `mode` is selected. */
+async function selectMode(game: Game, mode: number) {
+  for (let i = 0; i < 20; i++) {
+    if ((await game.eval((t) => t.pokedex()))!.modeSelect?.selected === mode) return;
+    await game.press('DOWN');
+  }
+  throw new Error(`mode ${mode} not reached`);
+}
+
+test('A on a seen mon shows its page; up/down go through the seen mons; B goes back to the list', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown', x: 12, y: 14 });
+  // Seen: Bulbasaur, Charmander, Squirtle, Pikachu, Geodude; caught: all but Squirtle.
+  await setDex(game, [1, 4, 7, 25, 74], [1, 4, 25, 74]);
+  await openPokedex(game);
+  await game.press('A');
+  await waitReady(game, 'Task_DexScreen_NumericalOrder');
+
+  // A on Bulbasaur (caught): the full page.
+  await game.press('A');
+  let page = await waitMonPage(game, 1);
+  expect(page).toMatchObject({ name: 'BULBASAUR', category: 'SEED POKéMON' });
+  // Imperial like the C prints it: 0.7 m = 2'04", 6.9 kg = 15.2 lbs.
+  expect(page.height).toMatch(/^HT +2.04.$/);
+  expect(page.weight).toMatch(/^WT +15\.2 lbs\.$/);
+  expect(page.flavorText).toContain('plant seed on its back');
+  expect(page.picPixels).toBeGreaterThan(500);
+  expect(page.footprintPixels).toBeGreaterThan(0);
+  await game.screenshot('pokedex-mon-page-bulbasaur');
+
+  // DOWN: Charmander (caught); DOWN again: Squirtle, seen but not caught, so the unknown fields.
+  await game.press('DOWN');
+  page = await waitMonPage(game, 4);
+  expect(page).toMatchObject({ name: 'CHARMANDER', category: 'LIZARD POKéMON' });
+  await game.press('DOWN');
+  page = await waitMonPage(game, 7);
+  expect(page).toMatchObject({ name: 'SQUIRTLE', category: '??????????? POKéMON', flavorText: '', footprintPixels: 0 });
+  expect(page.height).toMatch(/^HT +\?\?.\?\?.$/);
+  expect(page.weight).toMatch(/^WT\?\?\?\?\.\? lbs\.$/);
+  expect(page.picPixels).toBeGreaterThan(500);
+  await game.screenshot('pokedex-mon-page-squirtle');
+
+  // DOWN skips the unseen numbers 8-24 (Pikachu, then Geodude); at the last seen mon DOWN does nothing.
+  await game.press('DOWN');
+  page = await waitMonPage(game, 25);
+  expect(page).toMatchObject({ name: 'PIKACHU', category: 'MOUSE POKéMON' });
+  await game.press('DOWN');
+  page = await waitMonPage(game, 74);
+  await game.press('DOWN');
+  await game.eval((t) => t.waitFrames(10));
+  expect(await game.eval((t) => t.pokedex()!.state)).toBe(5);
+  expect((await game.eval((t) => t.pokedex()))!.monPage?.species).toBe(74);
+  // UP goes back to Pikachu.
+  await game.press('UP');
+  page = await waitMonPage(game, 25);
+
+  // B: the Kanto list (up to Geodude, 74) with the cursor on Pikachu, row 24: the C puts it 4 rows down the window.
+  await game.press('B');
+  const list = (await waitReady(game, 'Task_DexScreen_NumericalOrder')).orderedList!;
+  expect(list).toMatchObject({ species: 25, cursorPos: 20, itemsAbove: 4, count: 74 });
+  // ... and A on it shows Pikachu again.
+  await game.press('A');
+  await waitMonPage(game, 25);
+  await game.press('B');
+  await waitReady(game, 'Task_DexScreen_NumericalOrder');
+});
+
+test('the search lists: A TO Z lists the seen mons by name, LIGHTEST the caught ones by weight', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown', x: 12, y: 14 });
+  await setDex(game, [1, 4, 7, 25, 74], [1, 4, 25, 74]);
+  await openPokedex(game);
+
+  await selectMode(game, DEX_MODE_ATOZ);
+  await game.press('A');
+  let list = (await waitReady(game, 'Task_DexScreen_CharacteristicOrder')).orderedList!;
+  // BULBASAUR, CHARMANDER, GEODUDE, PIKACHU, SQUIRTLE
+  expect(list).toMatchObject({ order: 1, count: 5, cursorPos: 0, itemsAbove: 0, species: 1 });
+  expect(list.items).toEqual([1, 4, 74, 25, 7]);
+  await game.press('DOWN');
+  expect((await game.eval((t) => t.pokedex()))!.orderedList!.species).toBe(4);
+
+  // B: back to the top menu, still on A TO Z.
+  await game.press('B');
+  expect((await waitReady(game, 'Task_PokedexScreen')).modeSelect?.selected).toBe(DEX_MODE_ATOZ);
+
+  // LIGHTEST: Pikachu 6.0 kg, Bulbasaur 6.9, Charmander 8.5, Geodude 20.0 (Squirtle isn't caught); the cursor
+  // starts at the top again (the search lists share one saved cursor, reset when one opens).
+  await selectMode(game, DEX_MODE_LIGHTEST);
+  await game.press('A');
+  list = (await waitReady(game, 'Task_DexScreen_CharacteristicOrder')).orderedList!;
+  expect(list).toMatchObject({ order: 3, count: 4, cursorPos: 0, itemsAbove: 0, species: 25, caught: true });
+  expect(list.items).toEqual([25, 1, 4, 74]);
+  await game.screenshot('pokedex-lightest');
+  await game.press('B');
+  await waitReady(game, 'Task_PokedexScreen');
 });

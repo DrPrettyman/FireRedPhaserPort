@@ -554,8 +554,8 @@ function createApi(game: Phaser.Game) {
     },
     /**
      * The Pokédex screen while it's up (menus/pokedexScreen.ts): the task and its state, `ready` (input state, no
-     * fade), the seen/owned counts it computed, the top menu's list and the numerical list (order, rows, cursor,
-     * the selected row's species and its seen/caught bits).
+     * fade), the seen/owned counts it computed, the top menu's list, the numerical / search list (order, rows,
+     * cursor, the selected row's species and its seen/caught bits) and the mon page (what it printed).
      */
     pokedex: () => pokedexScreenProbe(),
     /** The item PC's list (WITHDRAW ITEM, item_pc.c) while it runs: its task, scroll/row and item count. */
