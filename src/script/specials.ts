@@ -580,6 +580,14 @@ export const SPECIALS: Record<string, Special> = {
  * Berry Forest's Hypno). Returns the wait for the script, which dowildbattle stops (ScriptContext_Stop) until
  * CB2_EndScriptedWildBattle is done; undefined (the script runs on) without a mon.
  */
+/**
+ * Add specials from field modules that draw with Phaser (world/vsSeeker.ts), registered at boot: this file is
+ * reached from screens the battle unit tests load (isNationalDexEnabled), so it can't import them.
+ */
+export function registerSpecials(table: Record<string, Special>): void {
+  Object.assign(SPECIALS, table);
+}
+
 export function StartScriptedWildBattle(env: SpecialEnv): (() => boolean) | undefined {
   const { state, host, warnOnce } = env;
   const enemy = state.enemyParty[0];

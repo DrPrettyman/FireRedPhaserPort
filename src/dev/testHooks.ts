@@ -216,6 +216,8 @@ export interface FieldProbe {
   surfBlob: { x: number; y: number; anim: number; bobState: number; invisible: boolean; playerY2: number } | undefined;
   /** Task_Fishing's tStep and the player's fishing anim (world/fishing.ts) while it runs. */
   fishing: { step: number; animNum?: number; image?: number; x2?: number; y2?: number } | undefined;
+  /** The VS Seeker's task (func 0..3 = Task_VsSeeker_0..3) and the player's VS Seeker anim (world/vsSeeker.ts) while it runs. */
+  vsSeeker: { func: number; animNum?: number; image?: number } | undefined;
   /** gPlayerAvatar and the player's held movement (world/playerAvatar.ts). */
   avatar: {
     /** PLAYER_AVATAR_FLAG_* set, without the prefix (ON_FOOT, MACH_BIKE, SURFING, FORCED, ...). */
@@ -240,6 +242,14 @@ export interface FieldObjectProbe {
   x: number;
   y: number;
   moving: boolean;
+  facing: Direction;
+  /** MOVEMENT_TYPE_* (its NpcBrain's) */
+  movementType: string;
+  /** The sprite sheet frame shown */
+  frame: number;
+  /** sprite->x2 / y2 of the raise-hand movement types */
+  x2: number;
+  y2: number;
 }
 
 /** The parts of OverworldScene the hooks use (`startWildBattle` is private there; reached by name). */

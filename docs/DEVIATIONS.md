@@ -12,7 +12,17 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Pokémon Center heal: the healing machine (`dofieldeffect FLDEFF_POKECENTER_HEAL`) and the nurse's bow
     (`nurse_joy_bow`) are skipped; the heal itself happens.
   - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
-  - VS Seeker: `state.trainerRematches` is never set, so no trainer is ever ready for a rematch.
+  - VS Seeker (world/vsSeeker.ts): silent (SE_CONTEST_MONS_TURN, SE_PIN); no quest log event. Task_VsSeeker_0
+    takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for
+    the Escape Rope). The movement scripts (Wait48, the trainers' emotes and step in place) run as MovementRunners
+    in their own field tasks; a frozen trainer still finishes them, so UnfreezeObjectEvent has nothing to do.
+    UseVsSeekerEffect_2/3 don't hold MOVEMENT_ACTION_START_ANIM_IN_DIRECTION on the player: Effect_3 waits for the
+    VS Seeker anim's end itself. ClearRematchStateByTrainerId leaves the movement type of a same-row trainer other
+    than the selected one alone (the C sets its `movementType` field to FACE_DOWN without changing its callback;
+    the port's NpcBrain has one value for both).
+  - Raise-hand movement types (entities/NpcBrain.ts, MOVEMENT_TYPE_RAISE_HAND_AND_*): leaving one zeroes the
+    sprite's x2/y2 (the GBA keeps them unless ResetMovementOfRematchableTrainers zeroes them); a frozen jumper
+    (any, not only `lock`'s selected object) lands before it holds still.
   - Battles: no audio (PlaySE/cries/BGM are no-ops, so anim SE waits and cry waits end at once).
   - Field sounds: doors (SE_DOOR / SE_SLIDING_DOOR) and puddle splashes (SE_PUDDLE) are silent.
   - Evolution scene: no audio, so cries and sound effects count as finished at once (the intro jingle and the SE_EXP
@@ -42,6 +52,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     follows. The show-mon banner's graphics load while the player's pose plays, so a very slow load would hold the
     banner back. Dig/Escape Rope with no escape warp saved (a dev start in a cave) go to the last heal location.
   - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Bag uses that need overworld systems
+    (Itemfinder, Fame Checker, Teachy TV, mail, TM case, berry pouch, registered SELECT items) log
     (rods, Escape Rope, Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail,
     registered SELECT items) log "not implemented" and return to the bag. Berry powder reads as 0.
     (Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail, TM case, berry pouch, registered SELECT items) log
@@ -50,9 +61,6 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     still held when the bag returns; here the field's overlay held the controls until then). RemoveUsedItem after
     the bag has closed skips the bag display's item counts (the GBA writes them through a freed NULL pointer). Berry powder reads as 0. The TM case
     and berry pouch can't be opened to give from (the PC box's GIVE, GoToTMCase_PCBox / GoToBerryPouch_PCBox).
-    (rods, Escape Rope, Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail, berry pouch,
-    registered SELECT items) log "not implemented" and return to the bag. Berry powder reads as 0. The berry
-    pouch can't be opened to give from (GoToBerryPouch_Give / _PCBox).
   - TM case (menus/tmCase.ts): silent (SE_SELECT, SE_SHOP); no quest log (RecordItemTransaction). Not ported:
     the Pokédude's Teachy TV demo (TMCASE_POKEDUDE), the Union Room's GIVE / EXIT menu (no link play) and opening
     it as a registered item from the field (Task_InitTMCaseFromField: there are no registered SELECT items yet).
@@ -109,8 +117,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
     GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
   - Field steps: eggs count down egg cycles, but the daycare (breeding,
-    its mons' steps) and the hatching scene (`special EggHatch`) aren't ported. A finished VS Seeker charge would
-    start EventScript_VsSeekerChargingDone, whose specials aren't ported; only the (unported) VS Seeker starts one.
+    its mons' steps) and the hatching scene (`special EggHatch`) aren't ported.
   - Safari Zone: the entrance's SE/fanfare are silent.
   - The money box and Safari stats window are Phaser MenuWindows (the field isn't on the GBA layer).
   - Pokémon Storage System (menus/pokemonStorage*.ts): silent (SE_PC_LOGIN / SE_PC_OFF and the menu SEs); no

@@ -1629,6 +1629,41 @@ end to end.
   battle redrawn); wildBattle, scriptedBattles, pcBoxes, mainPathLeftovers' Lugia (non-Kanto before the National
   Dex) and battleAnims' old man tutorial pass. Screenshots of the habitat page, the registered page and the battle
   after it look like FRLG's.
+### VS Seeker (W-fielditems unit 2, SCREENS_PLAN.md batch 1)
+
+- `world/vsSeeker.ts` (new): vs_seeker.c's Task_VsSeeker_0..3 (the charge check and its three messages,
+  GatherNearbyTrainerInfo, CanUseVsSeeker, GetVsSeekerResponseInArea with the trainers' "!" / "X" / "!!" movement
+  scripts and the 30% refusal roll, GetCurVsSeekerResponse, StartAllRespondantIdleMovements), FLDEFF_USE_VS_SEEKER
+  (field_effect.c's UseVsSeekerEffect_1..4) with StartPlayerAvatarVsSeekerAnim / GetPlayerAvatarVsSeekerGfxId (on
+  foot and on the bike), ClearRematchStateByTrainerId, ResetMovementOfRematchableTrainers and
+  EventScript_VsSeekerChargingDone's specials (VsSeekerFreezeObjectsAfterChargeComplete,
+  VsSeekerResetObjectMovementAfterChargeComplete).
+- `world/rematches.ts` (new, no Phaser): the sRematches lookups (GetRematchIdx, LookupVsSeekerOpponentInArray,
+  GetNextAvailableRematchTrainer, GetRematchTrainerId with TryGetRematchTrainerIdGivenGameState's tiers,
+  ShouldTryRematchBattle, HasRematchTrainerAlreadyBeenFought, IsTrainerReadyForRematch),
+  GetRandomFaceDirectionMovementType and GetRunningBehaviorFromGraphicsId. ScriptEngine's trainer specials and
+  `trainerbattle_rematch` use them (its own copy of GetRematchTrainerId is gone).
+- `entities/NpcBrain.ts`: MOVEMENT_TYPE_RAISE_HAND_AND_STOP / _JUMP / _SWIM with their movement actions
+  (ANIM_RAISE_HAND's frame 9, the jump's 3 px * sin hops, the swimmer's sway); `movementType` and
+  `singleMovementActive` for the VS Seeker.
+- `menus/itemUse.ts`: FieldUseFunc_VsSeeker (routes, towns and cities, not the four forest routes);
+  `registerItemUseFieldFuncs` now merges partial registrations. `script/specials.ts`: `registerSpecials` for
+  specials whose modules import Phaser (the first try imported world/vsSeeker.ts from specials.ts and ScriptEngine,
+  which pulled Phaser into the battle unit tests through pokedexScreen.ts → specials.ts; the battle-end hook is now
+  `ScriptHost.clearRematchStateByTrainerId`).
+- OverworldScene: preloads both VS Seeker graphics, sets the VS Seeker host, ResetMovementOfRematchableTrainers
+  after mapResetTrainerRematches, the `vsSeeker` probe and more fields on `__test.objects()`.
+- Found on the way: the VS Seeker's task must run before FLDEFF_USE_VS_SEEKER's each frame (the effect's task has
+  priority 0xFF), or Task_VsSeeker_2 sees the effect end in the same frame (a frame early) and a seeded roll misses.
+  The start menu remembers its cursor and the bag its pocket, so a second use from a test skips the DOWN / RIGHT.
+- Verified: typecheck; `npm test` (137, incl. tests/unit/rematches.test.ts: Ben's, Calvin's and Franklin's rows,
+  the tier fallbacks, the specials); e2e tests/e2e/vsSeeker.test.ts (new, 3 tests, run three times: beat Ben by
+  sight, use it charged at (17, 6): the VS Seeker graphics and anim, "!!" on Ben and "!" on Colton and Janice, Ben
+  stepping in place and jumping with his hand up, `trainerRematches[9]` = 1, talk → TRAINER_YOUNGSTER_BEN_2, then
+  the post-battle line; uncharged in Pallet Town after 3 steps → "… battery: 97", then charged with no trainers →
+  "turned off"; 100 charging steps → EventScript_VsSeekerChargingDone, Ben looks around again and talking gives the
+  post-battle line), fieldItems.test.ts, trainerBattle.test.ts, field.test.ts. Snapshots of the anim (the player
+  holding the VS Seeker) and of Ben mid-jump with his hand up looked right.
 ### Pokédex area page (W-dexarea unit 2, SCREENS_PLAN.md batch 1)
 
 - `menus/pokedexArea.ts`: pokedex_screen.c's DexScreen_DrawMonAreaPage (the frame on BG3 / BG0, the Kanto map and
