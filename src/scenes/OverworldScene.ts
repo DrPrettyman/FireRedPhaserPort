@@ -1500,6 +1500,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         else if (r === 'POKEMON') this.openFieldMenu('party');
         else if (r === 'BAG') this.openFieldMenu('bag');
         else if (r === 'OPTION') this.openFieldMenu('options'); // StartMenuOptionCallback
+        else if (r === 'PLAYER') this.openFieldMenu('trainerCard'); // StartMenuPlayerCallback
         else if (r === 'RETIRE') this.startFieldScript('SafariZone_EventScript_RetirePrompt'); // SafariZoneRetirePrompt
         else if (r === 'SAVE') this.openSaveDialog();
         else if (r !== 'close') this.showNotice(`${r} isn't implemented yet.`);
@@ -1545,12 +1546,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /**
    * StartMenu_FadeScreenIfLeavingOverworld + StartMenuPokedexCallback / StartMenuPokemonCallback /
-   * StartMenuBagCallback / StartMenuOptionCallback: fade to black, then hand over to the Pokédex, party menu, bag or
-   * option menu (FieldMenuScene). They
-   * come back through CB2_ReturnToFieldWithOpenMenu (start menu reopened while the field fades in) or
-   * CB2_ReturnToField.
+   * StartMenuBagCallback / StartMenuOptionCallback / StartMenuPlayerCallback: fade to black, then hand over to the
+   * Pokédex, party menu, bag, option menu or trainer card (FieldMenuScene). They come back through
+   * CB2_ReturnToFieldWithOpenMenu (start menu reopened while the field fades in) or CB2_ReturnToField.
    */
-  private openFieldMenu(menu: 'party' | 'bag' | 'pokedex' | 'options'): void {
+  private openFieldMenu(menu: 'party' | 'bag' | 'pokedex' | 'options' | 'trainerCard'): void {
     const d = this.defines;
     this.screenFade.begin(d.require('FADE_TO_BLACK'));
     let launched = false;

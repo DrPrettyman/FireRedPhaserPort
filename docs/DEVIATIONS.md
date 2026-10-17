@@ -197,6 +197,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     aren't kept; Spinda's spots aren't drawn anywhere). The anticheat's second and third copies of the seen flags
     aren't kept (one `dexSeen` set), so "caught" just needs "seen" too. The Pokédex keeps the field's DISPCNT,
     which the port sets in FieldMenuScene since the field isn't on the GBA layer.
+  - Trainer card (menus/trainerCard.ts): no audio (SE_CARD_OPEN / SE_CARD_FLIP); no help system context. The back
+    and the flip aren't ported yet (A on the front does nothing). The berry picking and Pokémon Jump records (a
+    star for 200 of each) and the link stats are always 0 (no link minigames); the easy chat profile isn't kept
+    (only a link card prints it).
   - Credits (menus/credits.ts): no audio (MUS_CREDITS, the cries). A map scene loads asynchronously, so it can start
     a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
     GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.

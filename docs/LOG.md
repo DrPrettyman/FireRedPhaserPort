@@ -1762,3 +1762,28 @@ end to end.
   cursor moves and a fresh START), plus saveContinue, pokedex, field, mapNamePopup, titleScreen, trainerBattle,
   wildBattle, fieldItems, fly and evolution. Screenshots of the option menu and of the help bar under the start menu
   looked right.
+
+### Trainer card front (W-tcard unit 1, SCREENS_PLAN.md batch 2)
+
+- `menus/trainerCard.ts`: trainer_card.c for the player's FRLG card: ShowPlayerTrainerCard,
+  TrainerCard_GenerateCardForLinkPlayer / SetPlayerCardData (stars, money, Pokédex count, play time, Hall of Fame
+  debut, stickers and mon icon vars for the back), CB2_InitTrainerCard (ResetGpuRegs, SetUpTrainerCardTask,
+  InitBgsAndWindows, LoadCardGfx, LoadStickerGfx, HandleGpuRegs, SetTrainerCardBgsAndPals), Task_TrainerCard's front
+  states (PrintAllOnCardFront, the trainer pic, DrawCardScreenBackground / DrawCardFrontOrBack,
+  DrawStarsAndBadgesOnCard, the fade in, the play time's blinking colon, B → CloseTrainerCard). A on the front is a
+  stub for unit 2 (the back and the flip).
+- Start menu: PLAYER opens it (OverworldScene `openFieldMenu('trainerCard')`, FieldMenuScene 'trainerCard') and it
+  comes back to the start menu on PLAYER.
+- menus/picSprites.ts: CreateTrainerCardTrainerPicSprite (CreateTrainerCardSprite, LoadPicPaletteBySlot) and
+  PlayerGenderToFrontTrainerPicId, moved there from menus/hallOfFame.ts (which re-exports it); battle/transition.ts
+  imports it instead of keeping its own copy.
+- Extractor: graphics/trainer_card/ in extract_gfx.py (rerun `npm run extract`). trainer_card.c's `sUnused_Pal`
+  shares its name with pokemon_storage_system_tasks.c's; the extractor keeps the first (unused by the port either way).
+- Found on the way: the VBlank after CloseTrainerCard still runs VBlankCB_TrainerCard (the C reads the freed
+  struct there), so BlinkTimeColon checks for a null pointer.
+- Verified: typecheck; `npm test` (150, incl. tests/unit/trainerCard.test.ts: no stars, the Hall of Fame star only
+  with GAME_STAT_ENTERED_HOF, HasAllKantoMons, HasAllMons, the 999:59:59 cap); e2e tests/e2e/trainerCard.test.ts
+  (new, 2 tests: a boy's card with money, Pokédex, three badges and one star on the green card, the colon blinking, A
+  staying on the front, B back to the start menu on PLAYER; a girl's blue card with the female background, no
+  badges / stars / Pokédex line), plus hallOfFame, pokedexArea and transitions' "every battle transition" (the
+  mugshots use PlayerGenderToFrontTrainerPicId). Screenshots of both cards match FRLG's layout.

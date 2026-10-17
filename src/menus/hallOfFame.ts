@@ -111,7 +111,7 @@ import { random } from '../util/random';
 import { charmap } from '../battle/env';
 import { FONT_NORMAL } from '../text/Font';
 import { EOS, GetMonNickname, gStringVar1, speciesName, StringExpandPlaceholders, text } from './common';
-import { CreateMonPicSprite_HandleDeoxys, CreateTrainerPicSprite, FreeAndDestroyMonPicSprite, FreeAndDestroyTrainerPicSprite, ResetAllPicSprites } from './picSprites';
+import { CreateMonPicSprite_HandleDeoxys, CreateTrainerPicSprite, FreeAndDestroyMonPicSprite, FreeAndDestroyTrainerPicSprite, PlayerGenderToFrontTrainerPicId, ResetAllPicSprites } from './picSprites';
 import { BeginPCScreenEffect_TurnOff, BeginPCScreenEffect_TurnOn, IsPCScreenEffectRunning_TurnOff, IsPCScreenEffectRunning_TurnOn } from './pcScreenEffect';
 import { CreateTopBarWindowLoadPalette, DestroyTopBarWindow, TopBarWindowPrintString, TopBarWindowPrintTwoStrings } from '../gba/topBarWindow';
 
@@ -218,10 +218,8 @@ export function partyHallOfFameTeam(gs: GameState): HallofFameTeam {
   return team;
 }
 
-/** PlayerGenderToFrontTrainerPicId(gender, TRUE): gFacilityClassToPicIndex[FACILITY_CLASS_RED / LEAF] */
-export function PlayerGenderToFrontTrainerPicId(gender: number): number {
-  return gender !== K.MALE ? K.TRAINER_PIC_LEAF : K.TRAINER_PIC_RED;
-}
+// PlayerGenderToFrontTrainerPicId is trainer_pokemon_sprites.c's (menus/picSprites.ts).
+export { PlayerGenderToFrontTrainerPicId };
 
 function playerGender(): number {
   return state.playerGender === 'female' ? K.FEMALE : K.MALE;

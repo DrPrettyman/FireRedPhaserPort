@@ -519,6 +519,26 @@ this is the next level down. When you add or change a subsystem, update its entr
   sStartMenuDescPointers text on open (DoDrawStartMenu case 5) and on cursor moves (StartCB_HandleInput) and
   destroys it with the menu, only when `optionsButtonMode == OPTIONS_BUTTON_MODE_HELP` (no link play or union room,
   so those checks always pass). Probe: `t.helpMessage()` (decoded, undefined when it's down).
+- **Trainer card:** `menus/trainerCard.ts` is trainer_card.c, CARD_TYPE_FRLG for the player only (the Hoenn and link
+  cards wait for link play). START → PLAYER (StartMenuPlayerCallback) fades out and runs ShowPlayerTrainerCard in
+  FieldMenuScene 'trainerCard' (which preloads `trainerCardGfxSymbols(gender)`: graphics/trainer_card/ by symbol plus
+  the player's front pic); B fades out and CloseTrainerCard hands over to CB2_ReturnToFieldWithOpenMenu. Structure as
+  in the C: `sTrainerCardDataPtr` (struct TrainerCardData, null while the card is down), CB2_InitTrainerCard's
+  gMain.state steps (LoadCardGfx / SetTrainerCardBgsAndPals copy the extracted tilemaps, tiles and palettes into the
+  struct's buffers and VRAM), one task (Task_TrainerCard, `mainState`; STATE_HANDLE_INPUT_FRONT = 10). The card data
+  comes from TrainerCard_GenerateCardForLinkPlayer, as ShowPlayerTrainerCard does: its FRLG stars (Hall of Fame,
+  HasAllKantoMons, HasAllMons, the berry picking / Pokémon Jump records, always 0) pick the card palette
+  (sKantoTrainerCardPals) and the star tiles; GetTrainerStarCount is unused in the game too. The front: the prints
+  (name, ID, money, Pokédex once FLAG_SYS_POKEDEX_GET is set, the live play time with BlinkTimeColon's colon, from
+  the VBlank callback), the badges (FLAG_BADGE01-08_GET) on BG3, the player's pic drawn into window 2
+  (`CreateTrainerCardTrainerPicSprite` in menus/picSprites.ts, which also has PlayerGenderToFrontTrainerPicId now).
+  Not yet (W-tcard unit 2): the back (PrintAllOnCardBack, BufferTextForCardBack, DrawCardBackStats, the stickers'
+  and mon icons' tiles: LoadMonIconGfx is a stub, LoadStickerGfx is ported) and the flip (A on the front does
+  nothing; the flip's HBlankCB_TrainerCard sets BG0VOFS per scanline, and the port doesn't run HBlank callbacks:
+  scanline effects go through gba/hw.ts's `hblankRegs`). Probe
+  `__test.trainerCard()` (mainState, `ready`, the stars and badges it has and the ones drawn on BG3, which card
+  palette is in the hardware palettes, the female background, the pic's pixel count, what the front printed,
+  decoded). Tests: tests/e2e/trainerCard.test.ts, tests/unit/trainerCard.test.ts (the stars).
 - **Evolution scene:** `menus/evolutionScene.ts` + `menus/evolutionGraphics.ts` run on whichever GBA host is up
   (BattleScene after TryEvolvePokemon, FieldMenuScene from the party menu) and hand back through
   `gCB2_AfterEvolution` (`setCB2_AfterEvolution`). It draws on the battle BG/window layout, so the field host
