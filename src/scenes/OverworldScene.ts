@@ -58,6 +58,7 @@ import { MenuWindow } from '../ui/MenuWindow';
 import { MapNamePopup } from '../ui/MapNamePopup';
 import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
 import { gFieldCallback, gFieldCallback2, type FieldCallbackHost } from '../menus/fieldCallbacks';
+import { UseRegisteredKeyItemOnField } from '../menus/registeredItem';
 import { activeFieldEffects, setFieldEffectScriptHost, setFieldEffectScripts } from '../world/fieldEffectScripts';
 import { fieldMoveGfxSymbols, prepareFieldMoveMenu, prepareRegionMap, registerFieldMoves, setFieldMoveHost, UpdateEscapeWarp, type FieldMoveHost } from '../world/fieldMoves';
 import {
@@ -148,6 +149,7 @@ export interface OverworldStart {
 interface FieldInput {
   pressedAButton: boolean;
   pressedStartButton: boolean;
+  pressedSelectButton: boolean;
   heldDirection: boolean;
   heldDirection2: boolean;
   tookStep: boolean;
@@ -274,6 +276,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     await this.assets.loadTextTextures(this);
     // The field shares pokemon.c functions with the battle engine (AdjustFriendship), which reads its tables.
     initBattleEnv(await sharedBattleData(), this.assets.scripts.defines, this.state.pokemon, this.state, this.charmap);
+    setTextStrings(this.assets.strings); // the gText_* the field items print (a registered item needs no bag first)
     await loadMenusData('gen'); // sTMHMMoves, for BufferTMHMMoveName
     await this.assets.loadFieldEffectTextures(this);
     const field = this.field;
@@ -408,6 +411,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       busy: this.busy,
       script: this.scripts.runningLabel,
       overlay: this.overlay !== undefined,
+      locked: this.controlsLocked > 0,
+      objectsFrozen: this.objectsFrozen,
       moving: this.player.isMoving,
       approaching: this.trainerApproach !== undefined,
       fading: this.screenFade.active,
@@ -619,6 +624,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const input: FieldInput = {
       pressedAButton: false,
       pressedStartButton: false,
+      pressedSelectButton: false,
       heldDirection: false,
       heldDirection2: false,
       tookStep: false,
@@ -629,7 +635,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       if (GetPlayerSpeed() !== K.PLAYER_SPEED_FASTEST) {
         const forced = gPlayerAvatar.flags & PLAYER_AVATAR_FLAG.FORCED;
         if (this.buttons.pressed('START') && !forced) input.pressedStartButton = true;
-        if (!forced && this.buttons.pressed('A')) input.pressedAButton = true; // (SELECT / B / R: no field use yet)
+        if (!forced && this.buttons.pressed('SELECT')) input.pressedSelectButton = true;
+        if (!forced && this.buttons.pressed('A')) input.pressedAButton = true; // (B / R: no field use yet)
       }
       if (input.dpadDirection) {
         input.heldDirection = true;
@@ -645,8 +652,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /**
    * ProcessPlayerFieldInput: trainers, ON_FRAME scripts, what a finished step starts (step-based scripts,
-   * walking into a sign, wild encounters), then arrow/stair warps, signs, A, doors and START, in the C's
-   * order. True when something took the controls; otherwise PlayerStep moves the player.
+   * walking into a sign, wild encounters), then arrow/stair warps, signs, A, doors, START and SELECT (the
+   * registered item), in the C's order. True when something took the controls; otherwise PlayerStep moves the
+   * player.
    */
   private processPlayerFieldInput(input: FieldInput): boolean {
     this.scripts.msgSetNotSignpost(); // ResetFacingNpcOrSignpostVars
@@ -675,7 +683,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       this.openStartMenu();
       return true;
     }
-    return false; // (SELECT: UseRegisteredKeyItemOnField isn't ported)
+    if (input.pressedSelectButton && UseRegisteredKeyItemOnField()) return true;
+    return false;
   }
 
   /** TryStartStepBasedScript */
@@ -1200,6 +1209,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.doors.clear();
     this.trainerApproach = undefined;
     this.removeCameraObject();
+    this.objectsFrozen = false; // the map's objects are created anew
     await this.world.load(name);
     const anims = this.assets.tilesetAnimInfo(this.world.current.data.tilesetPair);
     InitTilesetAnimations(anims.primary, anims.secondary);
@@ -2310,6 +2320,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    */
   private resumeMap(): void {
     ReturnPlayerAvatarToField(); // SpawnObjectEventsOnReturnToField
+    this.objectsFrozen = false; // FieldCB_ReturnToFieldNoScript's UnfreezeObjectEvents (a rod's bite froze them)
     this.player.clearHeldMovementIfFinished(); // (a finished step isn't processed again after a battle)
     const name = this.world.current.name;
     for (const type of ['MAP_SCRIPT_ON_RESUME', 'MAP_SCRIPT_ON_RETURN_TO_FIELD']) {
@@ -2542,9 +2553,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     return {
       openMessageBox: () => this.messageBox.open(),
       printMessage: (str, x, speed, fill) => this.messageBox.print(str, { x, speed, fill }),
-      showMessage: (str) => this.messageBox.show(str),
+      showMessage: (str, fontId) => this.messageBox.show(str, 'neutral', false, false, fontId),
       messagePrinting: () => this.messageBox.isPrinting,
       clearMessageBox: () => this.messageBox.hide(),
+      dismissMapNamePopup: () => this.mapNamePopup?.dismiss(),
       aButtonNew: () => this.buttons.pressed('A'),
       objectEventAnims: (table) => this.assets.fieldEffectObjects.objectEventAnims?.[table],
       doesCurrentMapHaveFishingMons: () => this.wild.doesCurrentMapHaveFishingMons(),
