@@ -3,6 +3,7 @@
 // spreads this table in. No Phaser here: specials that draw go through `registerSpecials` from their module.
 
 import { random } from '../util/random';
+import { GetStarterSpecies } from '../world/roamer';
 import type { Special } from './specials';
 
 /**
@@ -87,6 +88,14 @@ export const STORY_SPECIALS: Record<string, Special> = {
   },
   /** SetUsedPkmnCenterQuestLogEvent: the quest log isn't kept (like the other quest log specials). */
   SetUsedPkmnCenterQuestLogEvent() {},
+
+  /**
+   * GetStarterSpecies (field_specials.c): the starter's species, by VAR_STARTER_MON. Oak's congratulations in the
+   * Champion's room (`specialvar VAR_RESULT, GetStarterSpecies` + bufferspeciesname).
+   */
+  GetStarterSpecies({ state }) {
+    return GetStarterSpecies(state);
+  },
 
   /** SetVermilionTrashCans: VAR_0x8004 / VAR_0x8005 = the first / second switch can (VermilionCity_Gym). */
   SetVermilionTrashCans({ state }) {

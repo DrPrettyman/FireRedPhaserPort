@@ -35,12 +35,20 @@ function clearRoamerData(state: GameState): void {
   sLocationHistory.fill('');
 }
 
+/**
+ * GetStarterSpecies (field_specials.c): GetStarterSpeciesById(VAR_STARTER_MON), the first starter when the var
+ * is out of range.
+ */
+export function GetStarterSpecies(state: GameState): number {
+  let idx = state.getVar('VAR_STARTER_MON');
+  if (idx >= sStarterSpecies.length) idx = 0;
+  return state.defines.require(sStarterSpecies[idx]);
+}
+
 /** GetRoamerSpecies: Raikou, or Entei with Bulbasaur, Suicune with Charmander (GetStarterSpecies). */
 function getRoamerSpecies(state: GameState): number {
   const d = state.defines;
-  let idx = state.getVar('VAR_STARTER_MON');
-  if (idx >= sStarterSpecies.length) idx = 0; // GetStarterSpeciesById
-  switch (d.require(sStarterSpecies[idx])) {
+  switch (GetStarterSpecies(state)) {
     case d.require('SPECIES_BULBASAUR'):
       return d.require('SPECIES_ENTEI');
     case d.require('SPECIES_CHARMANDER'):
