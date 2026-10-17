@@ -1,5 +1,5 @@
-// menu_indicators.c: the bouncing scroll indicator arrow pairs (the red outline / red arrow list
-// cursors aren't used by the ported screens). The C's `u16 *scrollOffset` is a getter here, and the
+// menu_indicators.c: the bouncing scroll indicator arrow pairs (the red outline / red arrow list cursor
+// objects, ListMenuAddCursorObjectInternal & co., are in gba/listMenu.ts). The C's `u16 *scrollOffset` is a getter here, and the
 // pair's state lives in a table keyed by its task id instead of in the task data.
 
 import { animTable } from '../battle/gfx';

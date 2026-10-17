@@ -1,12 +1,18 @@
 // battle_script_commands.c, part 4: Cmd_trychoosesleeptalkmove (0xA9) .. Cmd_finishturn (0xF7).
 
-import { BeginFastPaletteFade, FAST_FADE_OUT_TO_BLACK, gPaletteFade } from '../gba/palette';
-import { gMain } from '../gba/main';
+import { IsDma3ManagerBusyWithBgCopy, ShowBg } from '../gba/bg';
+import { PALETTES_ALL, RGB_BLACK, RGB_WHITE, vram } from '../gba/hw';
+import { BeginFastPaletteFade, BeginNormalPaletteFade, FAST_FADE_OUT_TO_BLACK, gPaletteFade, gPlttBufferFaded } from '../gba/palette';
+import { gMain, SetVBlankCallback } from '../gba/main';
+import { gTasks } from '../gba/task';
 import { FreeAllWindowBuffers } from '../gba/window';
 import { DoNamingScreen } from '../menus/namingScreen';
+import { CreateMonPicSprite_HandleDeoxys } from '../menus/picSprites';
+import { DexScreen_RegisterMonToPokedex } from '../menus/pokedexScreen';
 import { random } from '../util/random';
 import { recordAbilityBattle } from './ai';
-import { BattleMainCB2 } from './battleCallbacks';
+import { InitBattleBgsVideo, LoadBattleTextboxAndBackground } from './battleBg';
+import { BattleMainCB2, VBlankCB_Battle } from './battleCallbacks';
 import { ui } from './battleUi';
 import { BattleCreateYesNoCursorAt, BattleDestroyYesNoCursorAt, BattlePutTextOnWindow, HandleBattleWindow } from './battleWindow';
 import { adv, b, isItemMail, w } from './bsCommands1';
@@ -1259,9 +1265,50 @@ export function Cmd_trysetcaughtmondexflags(): void {
   }
 }
 
+/** Cmd_displaydexinfo: the "registered in the Pokédex" page (menus/pokedexScreen.ts), then the battle redrawn */
 export function Cmd_displaydexinfo(): void {
-  // DexScreen_RegisterMonToPokedex: the Pokédex screen doesn't exist yet, so skip straight past it.
-  adv(1);
+  const species = g.enemyParty[0]!.species;
+  const mc = g.battleCommunication;
+  switch (mc[0]) {
+    case 0:
+      BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_WHITE);
+      mc[0]++;
+      break;
+    case 1:
+      if (!gPaletteFade.active) {
+        FreeAllWindowBuffers();
+        mc[K.TASK_ID] = DexScreen_RegisterMonToPokedex(species);
+        mc[0]++;
+      }
+      break;
+    case 2:
+      if (!gPaletteFade.active && gMain.callback2 === BattleMainCB2 && !gTasks[mc[K.TASK_ID]].isActive) {
+        vram.fill(0); // CpuFill32(0, (void *)VRAM, VRAM_SIZE)
+        SetVBlankCallback(VBlankCB_Battle);
+        mc[0]++;
+      }
+      break;
+    case 3:
+      InitBattleBgsVideo();
+      LoadBattleTextboxAndBackground();
+      g.battle_BG3_X = 256;
+      mc[0]++;
+      break;
+    case 4:
+      if (!IsDma3ManagerBusyWithBgCopy()) {
+        const opp = g.battleMons[K.B_POSITION_OPPONENT_LEFT];
+        CreateMonPicSprite_HandleDeoxys(species, opp.otId >>> 0, opp.personality >>> 0, true, 120, 64, 0, 0xffff);
+        gPlttBufferFaded.fill(0, 0, 0x100); // CpuFill32(0, gPlttBufferFaded, BG_PLTT_SIZE): the 256 BG colours
+        BeginNormalPaletteFade(0x1ffff, 0, 16, 0, RGB_BLACK);
+        ShowBg(0);
+        ShowBg(3);
+        mc[0]++;
+      }
+      break;
+    case 5:
+      if (!gPaletteFade.active) adv(1);
+      break;
+  }
 }
 
 export function Cmd_trygivecaughtmonnick(): void {

@@ -5,8 +5,29 @@ import { K } from '../battle/constants';
 import { menusData } from '../menus/data';
 import { GetMonIconPtr, GetValidMonIconPalettePtr } from '../menus/pokemonIcon';
 import { gfx, gfx16 } from './gfx';
-import { TILE_SIZE_4BPP } from './sprite';
-import { LoadPalette, PLTT_SIZE_4BPP } from './palette';
+import { animTable } from '../battle/gfx';
+import { gSineTable } from '../battle/trig';
+import {
+  CreateSprite,
+  DestroySprite,
+  FreeSpritePaletteByTag,
+  FreeSpriteTilesByTag,
+  gDummySpriteAffineAnimTable,
+  gDummySpriteTemplate,
+  gSprites,
+  LoadCompressedSpriteSheet,
+  LoadSpritePalette,
+  oam,
+  SetSubspriteTables,
+  SPRITE_SHAPE,
+  TAG_NONE,
+  TILE_SIZE_4BPP,
+  type Sprite,
+  type SpriteTemplate,
+  type Subsprite,
+  type SubspriteTable,
+} from './sprite';
+import { LoadPalette, OBJ_PLTT_ID, PLTT_SIZE_4BPP } from './palette';
 import { A_BUTTON, B_BUTTON, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT, DPAD_UP, gMain, JOY_NEW, L_BUTTON, R_BUTTON } from './main';
 import { GetMenuCursorDimensionByFont, menuEnv } from './menu';
 import { PlaySE } from './sound';
@@ -171,7 +192,7 @@ export function DestroyListMenuTask(listTaskId: number, out?: { cursorPos: numbe
     out.cursorPos = list.cursorPos;
     out.itemsAbove = list.itemsAbove;
   }
-  if (list.taskId !== TAIL_SENTINEL) console.warn('[list_menu] cursor objects (cursorKind 2/3) are not implemented');
+  if (list.taskId !== TAIL_SENTINEL) ListMenuRemoveCursorObject(list.taskId, list.template.cursorKind - 2);
   sListMenus.delete(listTaskId);
   DestroyTask(listTaskId);
 }
@@ -246,9 +267,12 @@ function ListMenuDrawCursor(list: ListMenu): void {
     case 1:
       break;
     case 2:
+      if (list.taskId === TAIL_SENTINEL) list.taskId = ListMenuAddCursorObject(list, 0);
+      ListMenuUpdateCursorObject(list.taskId, GetWindowAttribute(list.template.windowId, 'tilemapLeft') * 8 - 1, GetWindowAttribute(list.template.windowId, 'tilemapTop') * 8 + y - 1, 0);
+      break;
     case 3:
-      // ListMenuAddCursorObject (red outline / red arrow sprites): not used by the ported screens
-      if (list.taskId === TAIL_SENTINEL) console.warn('[list_menu] cursorKind 2/3 not implemented');
+      if (list.taskId === TAIL_SENTINEL) list.taskId = ListMenuAddCursorObject(list, 1);
+      ListMenuUpdateCursorObject(list.taskId, GetWindowAttribute(list.template.windowId, 'tilemapLeft') * 8 + x, GetWindowAttribute(list.template.windowId, 'tilemapTop') * 8 + y, 1);
       break;
   }
 }
@@ -413,4 +437,195 @@ export function ListMenuLoadStdPalAt(palOffset: number, palId: number): void {
 export function BlitMenuInfoIcon(windowId: number, iconId: number, x: number, y: number): void {
   const [width, height, offset] = menusData.menuInfoIcons[iconId];
   BlitBitmapRectToWindow(windowId, gfx('gMenuInfoElements_Gfx').subarray(offset * TILE_SIZE_4BPP), 0, 0, 128, 128, x, y, width, height);
+}
+
+/** ListMenuAddCursorObject: the list's red outline (cursorKind 2) or red arrow (3) sprite cursor */
+function ListMenuAddCursorObject(list: ListMenu, cursorKind: number): number {
+  const cursor: CursorStruct = {
+    left: 0,
+    top: 160,
+    rowWidth: GetWindowAttribute(list.template.windowId, 'width') * 8 + 2,
+    rowHeight: GetFontAttribute(list.template.fontId, FONTATTR_MAX_LETTER_HEIGHT) + 2,
+    tileTag: 0x4000,
+    palTag: TAG_NONE,
+    palNum: 15,
+  };
+  return ListMenuAddCursorObjectInternal(cursor, cursorKind);
+}
+
+// ------------------------------------------------------------------ menu_indicators.c: the cursor objects
+// The red outline (kind 0) and red arrow (kind 1) sprite cursors. Their state lives in a table keyed by the
+// cursor's task id instead of in the task data.
+
+/** struct CursorStruct (include/menu_indicators.h) */
+export interface CursorStruct {
+  left: number;
+  top: number;
+  rowWidth: number;
+  rowHeight: number;
+  tileTag: number;
+  palTag: number;
+  palNum: number;
+}
+
+interface CursorObject {
+  spriteId: number;
+  tileTag: number;
+  palTag: number;
+}
+
+const sCursorObjects = new Map<number, CursorObject>();
+
+/** ListMenuAddCursorObjectInternal */
+export function ListMenuAddCursorObjectInternal(cursor: CursorStruct, cursorKind: number): number {
+  switch (cursorKind) {
+    case 0:
+    default:
+      return ListMenuAddRedOutlineCursorObject(cursor);
+    case 1:
+      return ListMenuAddRedArrowCursorObject(cursor);
+  }
+}
+
+/** ListMenuUpdateCursorObject */
+export function ListMenuUpdateCursorObject(taskId: number, x: number, y: number, cursorKind: number): void {
+  switch (cursorKind) {
+    case 0:
+      ListMenuUpdateRedOutlineCursorObject(taskId, x, y);
+      break;
+    case 1:
+      ListMenuUpdateRedArrowCursorObject(taskId, x, y);
+      break;
+  }
+}
+
+/** ListMenuRemoveCursorObject */
+export function ListMenuRemoveCursorObject(taskId: number, cursorKind: number): void {
+  switch (cursorKind) {
+    case 0:
+    case 1:
+      // ListMenuRemoveRedOutlineCursorObject / ListMenuRemoveRedArrowCursorObject: the same steps (the outline's
+      // subsprite table is garbage collected)
+      ListMenuRemoveCursorObjectSprite(taskId);
+      break;
+  }
+}
+
+function Task_RedOutlineCursor(_taskId: number): void {}
+
+/** ListMenuGetRedOutlineCursorSpriteCount */
+function ListMenuGetRedOutlineCursorSpriteCount(rowWidth: number, rowHeight: number): number {
+  let count = 4;
+  if (rowWidth > 16) for (let i = 8; i < rowWidth - 8; i += 8) count += 2;
+  if (rowHeight > 16) for (let i = 8; i < rowHeight - 8; i += 8) count += 2;
+  return count;
+}
+
+/** sSubsprite_RedOutline1..8: 8x8 pieces, tiles 0-7 (corners, edges) */
+function redOutlinePiece(tileOffset: number, x: number, y: number): Subsprite {
+  const s8 = (v: number) => (((v & 0xff) ^ 0x80) - 0x80); // struct Subsprite's x / y are s8
+  return { x: s8(x), y: s8(y), shape: SPRITE_SHAPE['8x8'][0], size: SPRITE_SHAPE['8x8'][1], tileOffset, priority: 0 };
+}
+
+/** ListMenuSetUpRedOutlineCursorSpriteOamTable */
+function ListMenuSetUpRedOutlineCursorSpriteOamTable(rowWidth: number, rowHeight: number): Subsprite[] {
+  const subsprites = [
+    redOutlinePiece(0, 136, 136),
+    redOutlinePiece(1, rowWidth + 128, 136),
+    redOutlinePiece(6, 136, rowHeight + 128),
+    redOutlinePiece(7, rowWidth + 128, rowHeight + 128),
+  ];
+  if (rowWidth > 16) {
+    for (let i = 8; i < rowWidth - 8; i += 8) {
+      subsprites.push(redOutlinePiece(2, i - 120, 136));
+      subsprites.push(redOutlinePiece(5, i - 120, rowHeight + 128));
+    }
+  }
+  if (rowHeight > 16) {
+    for (let j = 8; j < rowHeight - 8; j += 8) {
+      subsprites.push(redOutlinePiece(3, 136, j - 120));
+      subsprites.push(redOutlinePiece(4, rowWidth + 128, j - 120));
+    }
+  }
+  return subsprites;
+}
+
+/** Loads the cursor's palette (sRedArrowPal) into its slot or under its tag. */
+function loadCursorPalette(cursor: CursorStruct): void {
+  if (cursor.palTag === TAG_NONE) LoadPalette(gfx16('sRedArrowPal'), OBJ_PLTT_ID(cursor.palNum), PLTT_SIZE_4BPP);
+  else LoadSpritePalette({ data: gfx16('sRedArrowPal'), tag: cursor.palTag });
+}
+
+/** ListMenuAddRedOutlineCursorObject: a rowWidth x rowHeight outline built from 8x8 subsprites */
+function ListMenuAddRedOutlineCursorObject(cursor: CursorStruct): number {
+  LoadCompressedSpriteSheet({ data: gfx('sSelectorOutlineGfx'), size: 0x100, tag: cursor.tileTag });
+  loadCursorPalette(cursor);
+  const taskId = CreateTask(Task_RedOutlineCursor, 0);
+  const subsprites = ListMenuSetUpRedOutlineCursorSpriteOamTable(cursor.rowWidth, cursor.rowHeight);
+  const subspriteTable: SubspriteTable = { subspriteCount: ListMenuGetRedOutlineCursorSpriteCount(cursor.rowWidth, cursor.rowHeight), subsprites };
+  const spriteTemplate: SpriteTemplate = { ...gDummySpriteTemplate, tileTag: cursor.tileTag, paletteTag: cursor.palTag };
+  const spriteId = CreateSprite(spriteTemplate, cursor.left + 120, cursor.top + 120, 0);
+  const sprite = gSprites[spriteId];
+  SetSubspriteTables(sprite, [subspriteTable]);
+  sprite.oam.priority = 0;
+  sprite.subpriority = 0;
+  sprite.subspriteTableNum = 0;
+  if (cursor.palTag === TAG_NONE) sprite.oam.paletteNum = cursor.palNum;
+  sCursorObjects.set(taskId, { spriteId, tileTag: cursor.tileTag, palTag: cursor.palTag });
+  return taskId;
+}
+
+/** ListMenuUpdateRedOutlineCursorObject: (x, y) is the outline's top left */
+function ListMenuUpdateRedOutlineCursorObject(taskId: number, x: number, y: number): void {
+  const sprite = gSprites[sCursorObjects.get(taskId)!.spriteId];
+  sprite.x = (x + 120) & 0xffff;
+  sprite.y = (y + 120) & 0xffff;
+}
+
+/** ListMenuRemoveRedOutlineCursorObject / ListMenuRemoveRedArrowCursorObject */
+function ListMenuRemoveCursorObjectSprite(taskId: number): void {
+  const data = sCursorObjects.get(taskId)!;
+  if (data.tileTag !== TAG_NONE) FreeSpriteTilesByTag(data.tileTag);
+  if (data.palTag !== TAG_NONE) FreeSpritePaletteByTag(data.palTag);
+  DestroySprite(gSprites[data.spriteId]);
+  sCursorObjects.delete(taskId);
+  DestroyTask(taskId);
+}
+
+/** SpriteCallback_RedArrowCursor: sways left and right */
+function SpriteCallback_RedArrowCursor(sprite: Sprite): void {
+  sprite.x2 = Math.trunc(gSineTable(sprite.data[0] & 0xff) / 64);
+  sprite.data[0] += 8;
+}
+
+function Task_RedArrowCursor(_taskId: number): void {}
+
+/** ListMenuAddRedArrowCursorObject */
+function ListMenuAddRedArrowCursorObject(cursor: CursorStruct): number {
+  LoadCompressedSpriteSheet({ data: gfx('sRedArrowGfx'), size: 0x80, tag: cursor.tileTag });
+  loadCursorPalette(cursor);
+  const taskId = CreateTask(Task_RedArrowCursor, 0);
+  const spriteTemplate: SpriteTemplate = {
+    tileTag: cursor.tileTag,
+    paletteTag: cursor.palTag,
+    oam: oam({ shape: SPRITE_SHAPE['16x16'][0], size: SPRITE_SHAPE['16x16'][1], priority: 0 }),
+    anims: animTable('menu_indicators.c', 'sSpriteAnimTable_RedArrowCursor'),
+    images: null,
+    affineAnims: gDummySpriteAffineAnimTable,
+    callback: SpriteCallback_RedArrowCursor,
+  };
+  const spriteId = CreateSprite(spriteTemplate, cursor.left, cursor.top, 0);
+  const sprite = gSprites[spriteId];
+  sprite.x2 = 8;
+  sprite.y2 = 8;
+  if (cursor.palTag === TAG_NONE) sprite.oam.paletteNum = cursor.palNum;
+  sCursorObjects.set(taskId, { spriteId, tileTag: cursor.tileTag, palTag: cursor.palTag });
+  return taskId;
+}
+
+/** ListMenuUpdateRedArrowCursorObject */
+function ListMenuUpdateRedArrowCursorObject(taskId: number, x: number, y: number): void {
+  const sprite = gSprites[sCursorObjects.get(taskId)!.spriteId];
+  sprite.x = x;
+  sprite.y = y;
 }

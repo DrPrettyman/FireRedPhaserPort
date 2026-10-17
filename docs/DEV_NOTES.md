@@ -469,20 +469,35 @@ this is the next level down. When you add or change a subsystem, update its entr
   LIGHTEST, SMALLEST), Task_DexScreen_ShowMonPage (the mon page from the numerical lists: DexScreen_DrawMonDexPage
   / RemoveDexPageWindows, DexScreen_DexPageZoomEffectFrame, up/down through the seen mons with
   DexScreen_TryScrollMonsVertical, which moves the order's saved list cursor so B lands on that mon), the
-  ordered-list helpers and printers, DexScreen_LookUpCategoryBySpecies. Mon graphics: the screen can show any
-  seen mon, so `DexScreen_LoadMonGfx(species)` fetches its front pic, palettes and footprint on demand (it
-  returns true once loaded; a task waits in its state until then; `dexMonGfxSymbols` lists them). Hooks left:
-  **habitats (W-dex unit 3)**: Task_PokedexScreen case 6's habitat branch (→ state 7, empty) and
-  Task_DexScreen_CharacteristicOrder case 6's A (→ state 7, which the C sends to Task_DexScreen_CategorySubmenu
-  with parentOfCategoryMenu = 1; both STUBs carry the C lines). The category page's mon page reuses
-  DexScreen_DrawMonDexPage / DexScreen_DexPageZoomEffectFrame / RemoveDexPageWindows (exported) and
-  DexScreen_LoadMonGfx. **Area page**: A on the mon page → states 7-12 → menus/pokedexArea.ts (see "Pokédex area
+  ordered-list helpers and printers, Task_DexScreen_CategorySubmenu (the habitat pages, from the top menu's
+  habitats with parentOfCategoryMenu = 0 and from A on a search list with 1, after DexScreen_LookUpCategoryBySpecies
+  picked the page and slot; the unlock rules DexScreen_IsPageUnlocked / IsCategoryUnlocked /
+  CreateCategoryPageSpeciesList / GetPageLimitsForCategory / PageNumberToRenderablePages; left / right move the
+  cursor and flip to the next unlocked page at the edges (or leave the habitat past the first / last), L / R flip
+  with BUTTON MODE LR (DexScreen_InputHandler_GetShoulderInput); the page turn is DexScreen_FlipCategoryPageInDirection
+  over a copy of BG1-3's tilemaps; A zooms into the mon page (states 14-20), whose A opens the area page (states
+  21-26)), and registering a catch: the battle's Cmd_displaydexinfo (battle/bsCommands4.ts) fades to white and calls
+  `DexScreen_RegisterMonToPokedex(species)`, which runs DexScreen_LoadResources inside the battle (callback2 stays
+  BattleMainCB2, which runs the task) with Task_DexScreen_RegisterMonToPokedex: the habitat page with the mon
+  selected for 30 frames, its page zooming in with "A NEXT", A / B → DoClosePokedex; the command then clears VRAM,
+  redraws the battle BGs and the mon's pic (CreateMonPicSprite_HandleDeoxys) and fades in to the nickname prompt. A
+  non-Kanto mon before the National Dex only gets a task that ends at once (the battle still redraws). BattleScene
+  preloads the data and `dexRegisterGfxSymbols(species)` for a wild battle's uncaught species. The page cursor is
+  list_menu.c's red outline cursor object (`ListMenuAddCursorObjectInternal` / `ListMenuUpdateCursorObject` /
+  `ListMenuRemoveCursorObject` in gba/listMenu.ts, menu_indicators.c's red outline and red arrow; list menus with
+  cursorKind 2 / 3 use them too), its colour pulsed by DexScreen_CreateCategoryPageSelectionCursor. Mon graphics: the
+  screen can show any seen mon, so `DexScreen_LoadMonGfx(species)` fetches its front pic, palettes and footprint on
+  demand (it returns true once loaded; a task waits in its state until then; `dexMonGfxSymbols` lists them); the
+  habitat pages wait on all of a page's mons (`DexScreen_LoadCategoryPageGfx`) before drawing or flipping to it.
+  The area page: A on the mon page (ShowMonPage states 7-12, CategorySubmenu states 21-26) calls
+  DexScreen_DrawMonAreaPage / DexScreen_DestroyAreaScreenResources from menus/pokedexArea.ts (see "Pokédex area
   markers"). list_menu.c's ListMenuInitInRect and window.c's
   PutWindowRectTilemapOverridePalette came with it. Probe: `__test.pokedex()` (task, state, `ready`, the counts,
   unlocked categories, the top menu's and the ordered list's cursor, selected entry and every row's species,
-  the mon page's species, printed strings and pic / footprint pixel counts). Tests:
-  tests/e2e/pokedex.test.ts (Pallet Town with FLAG_SYS_POKEDEX_GET and the dex sets written through `t.state`),
-  tests/unit/pokedex.test.ts.
+  `categoryPage` (category, page, unlocked page range, shown species, cursor slot, pic pixel counts), the mon page's
+  species, printed strings and pic / footprint pixel counts; it also works in battle while the registered page is
+  up). Tests: tests/e2e/pokedex.test.ts (Pallet Town with FLAG_SYS_POKEDEX_GET and the dex sets written through
+  `t.state`; the registered page from a Master Ball catch on Route 1), tests/unit/pokedex.test.ts.
 - **Evolution scene:** `menus/evolutionScene.ts` + `menus/evolutionGraphics.ts` run on whichever GBA host is up
   (BattleScene after TryEvolvePokemon, FieldMenuScene from the party menu) and hand back through
   `gCB2_AfterEvolution` (`setCB2_AfterEvolution`). It draws on the battle BG/window layout, so the field host

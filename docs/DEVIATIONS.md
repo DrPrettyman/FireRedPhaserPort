@@ -180,16 +180,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     FLDEFF_HALL_OF_FAME_RECORD's SE_BALL is silent. Other game stats than GAME_STAT_ENTERED_HOF and
     GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted. `special Script_UpdateTrainerFanClubGameClear` is a no-op (the Trainer
     Fan Club isn't kept).
-  - Pokédex screen (menus/pokedexScreen.ts): no audio (SE_SELECT, the SE_DEX_* sounds, the mon page's cries and
-    START = CRY; the BGM volume calls are no-ops); no help system context. Not ported yet: the habitat categories
-    (picking one logs a warning and does nothing), so A on a mon in a search list (A TO Z, TYPE, LIGHTEST,
-    SMALLEST), which opens its habitat page, also only logs a warning. The mon page loads the shown mon's pic,
-    palettes, footprint and icon (for the area page) when it's first drawn (they're
-    fetched on demand, not preloaded), so the first view of a mon can take a frame or two longer. Unown and Spinda
-    are drawn with personality 0 (the save's unownPersonality / spindaPersonality aren't kept; Spinda's spots
-    aren't drawn anywhere). The anticheat's second and third copies of the seen flags aren't
-    kept (one `dexSeen` set), so "caught" just needs "seen" too. The Pokédex keeps the field's DISPCNT, which the
-    port sets in FieldMenuScene since the field isn't on the GBA layer.
+  - Pokédex screen (menus/pokedexScreen.ts, menus/pokedexArea.ts): no audio (SE_SELECT, the SE_DEX_* sounds, the
+    mon page's cries and START = CRY, the page turn's SE_BALL_TRAY_ENTER and the cry after registering a catch; the
+    BGM volume calls are no-ops); no help system context. The mon page and the habitat pages load the shown mons'
+    pics, palettes, footprints and icons (for the area page) when they're first drawn (fetched on demand, not
+    preloaded; the battle preloads the registered page's), so the first view of a mon or a page can take a frame or
+    two longer. Unown and Spinda are drawn with personality 0 (the save's unownPersonality / spindaPersonality
+    aren't kept; Spinda's spots aren't drawn anywhere). The anticheat's second and third copies of the seen flags
+    aren't kept (one `dexSeen` set), so "caught" just needs "seen" too. The Pokédex keeps the field's DISPCNT,
+    which the port sets in FieldMenuScene since the field isn't on the GBA layer.
   - Credits (menus/credits.ts): no audio (MUS_CREDITS, the cries). A map scene loads asynchronously, so it can start
     a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
     GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.

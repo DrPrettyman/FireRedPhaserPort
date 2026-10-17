@@ -35,6 +35,8 @@ import {
 import { initGbaText } from '../gba/window';
 import { prepareMenus } from '../menus/host';
 import { NAMING_SCREEN_CAUGHT_MON, namingScreenGfxSymbols } from '../menus/namingScreen';
+import { loadPokedexData } from '../menus/pokedex';
+import { dexRegisterGfxSymbols } from '../menus/pokedexScreen';
 import type { Pokemon, PokemonData } from '../pokemon/Pokemon';
 import type { GameState } from '../state/GameState';
 import type { Charmap } from '../text/charmap';
@@ -147,6 +149,12 @@ export class BattleScene extends GbaHostScene implements BattleUi {
     // So does the naming screen for a caught mon (Cmd_trygivecaughtmonnick).
     if (!(start.battleTypeFlags & K.BATTLE_TYPE_TRAINER)) {
       await loadGfx((start.enemyParty ?? []).flatMap((mon) => namingScreenGfxSymbols(NAMING_SCREEN_CAUGHT_MON, mon.species, mon.personality)));
+      // ... and before it the Pokédex's registered page for a new species (Cmd_displaydexinfo).
+      const newSpecies = (start.enemyParty ?? []).filter((mon) => !start.state.dexCaught.has(start.pokemon.nationalDex(mon.species)));
+      if (newSpecies.length) {
+        await loadPokedexData('gen');
+        await loadGfx(newSpecies.flatMap((mon) => dexRegisterGfxSymbols(mon.species)));
+      }
     }
     initBattleMessages();
     const speed = TEXT_SPEED[start.state.textSpeed];
