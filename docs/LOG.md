@@ -1575,3 +1575,23 @@ end to end.
   menu's ITEM → GIVE and the PC's MOVE ITEMS → GIVE through the pouch; selling three Oran Berries at the Pewter Mart;
   the battle bag's OPEN → USE an Oran Berry on the battler), screenshots of the list, context menu, toss and sell
   boxes; tmCase, pokemart, pcStorage, wildBattle, evolution, listMenuFlash e2e files and the unit tests still pass.
+### Pokédex mon page and search lists (W-dex unit 2, SCREENS_PLAN.md batch 1)
+
+- `menus/pokedexScreen.ts`: Task_DexScreen_ShowMonPage (A on a seen mon in a numerical list; up/down to the
+  previous / next seen mon through DexScreen_TryScrollMonsVertical; B back to the list on that mon; START = cry,
+  silent), DexScreen_DrawMonDexPage (the zoom frame at full size, the front pic, No. and name, category, HT / WT in
+  feet and pounds as the C converts them, the footprint and the flavour text; "???????????" / ??'??" / ????.? and
+  no footprint or text until caught), RemoveDexPageWindows, DexScreen_DexPageZoomEffectFrame (exported for the
+  category pages), Task_DexScreen_CharacteristicOrder + DexScreen_CreateCharacteristicListMenu (the top menu's
+  SEARCH entries; Task_PokedexScreen state 8), DexScreen_LookUpCategoryBySpecies. States 7-12 of the mon page (the
+  area page) are ported around two placeholders; A on the mon page and A on a search list (which the C sends to
+  the habitat page, not the mon page) are STUBs for W-dexarea unit 2 and W-dex unit 3.
+- The category follows REVISION 0: it's cut at the first space, so a caught Squirtle (TINY TURTLE) prints
+  "TINY POKéMON", like FireRed 1.0.
+- Mon graphics load on demand (`DexScreen_LoadMonGfx`): the pic, palettes and footprint of the mon being shown;
+  started when A / up / down picks it and awaited in the page's draw state.
+- `gba/sound.ts`: PlayCry_NormalNoDucking (a no-op like the other cries).
+- Verified: typecheck; unit tests; tests/e2e/pokedex.test.ts (new: Bulbasaur's page with its strings, pic and
+  footprint, Squirtle seen-only with the unknown fields, up/down skipping unseen numbers and stopping at the last
+  seen mon, B back to the list on the mon shown last; A TO Z and LIGHTEST orders, back to the top menu), run
+  twice. Screenshots of the mon page (caught and seen-only) and the LIGHTEST list match FRLG's layout.
