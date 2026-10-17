@@ -198,13 +198,13 @@ this is the next level down. When you add or change a subsystem, update its entr
   DoSafariBattle + CB2_EndSafariBattle. To skip the dice in tests:
   `s.startWildBattle(s.state.pokemon.createMonWithNature(species, level, 32, nature, {...}))` on the Overworld scene.
   `state.currentMapId` is the MAP_* id (`currentMap` is the folder name).
-- **Field items (rods, Escape Rope, VS Seeker):** the bag's half is `menus/itemUse.ts` (FieldUseFunc_Rod,
+- **Field items (rods, Escape Rope, VS Seeker, Itemfinder):** the bag's half is `menus/itemUse.ts` (FieldUseFunc_Rod,
   ItemUseOutOfBattle_EscapeRope, their ItemUseOnFieldCB_* through gFieldCallback = FieldCB_FadeInFromBlack, like the
   Bicycle). itemUse.ts must stay free of Phaser imports (battle unit tests load it), so the field functions it calls
   (CanFish, StartFishing, CanUseEscapeRopeOnCurrMap, LockPlayerFieldControls, DisplayItemMessageOnField,
   Task_UseDigEscapeRopeOnField, ...) are registered at boot: `registerFieldItems()` (world/fishing.ts) fills
-  `registerItemUseFieldFuncs` (which merges: `registerVsSeeker()` adds its part). Add the Itemfinder's field
-  functions to that interface the same way.
+  `registerItemUseFieldFuncs` (which merges: `registerVsSeeker()` and `registerItemfinder()` add their parts;
+  `fieldFuncs()` checks one function of each is there).
   `world/fieldItems.ts` is the field host for item uses (OverworldScene.createFieldItemsHost): the field message box
   as window 0 (`openMessageBox` = LoadMessageBoxAndFrameGfx, `printMessage` = AddTextPrinterParameterized(2) at an x
   and speed, `showMessage` + `DisplayItemMessageOnField(str, callback)`), JOY_NEW(A), the object event anim tables
@@ -252,6 +252,25 @@ this is the next level down. When you add or change a subsystem, update its entr
     `t.seedWhen(() => f.vsSeeker?.func === 2 && !f.fieldEffects.includes('FLDEFF_USE_VS_SEEKER'), seed)` (the
     first roll is the first beaten trainer in range's; seed 1 → 38, a rematch). Tests: tests/e2e/vsSeeker.test.ts
     (Route 3's Ben from (16, 6); Pallet Town for the messages), tests/unit/rematches.test.ts.
+  - **Itemfinder:** `world/itemfinder.ts` is itemfinder.c's field side: ItemUseOnFieldCB_Itemfinder (the
+    ItemUseOnFieldCB ItemUseOutOfBattle_Itemfinder sets; registered with `registerItemfinder()`), the response /
+    underfoot tasks (a ding every 25 frames: 4 within 3 tiles along the longer axis, else 2; 3 for an underfoot
+    item), their messages and clean-ups, and EventScript_ItemfinderDigUpUnderfootItem for an underfoot item. The
+    search is `world/itemfinderSearch.ts` (no Phaser): HiddenItemIsWithinRangeOfPlayer over gMapHeader's hidden
+    items within 7 across / 5 up and down, FindHiddenItemsInConnectedMaps with fieldmap.c's GetMapConnectionAtPos
+    in the C's MAP_OFFSET coordinates, RegisterHiddenItemRelativeCoordsIfCloser's tie-breaks and
+    GetPlayerDirectionTowardsHiddenItem (whose DIR_* names don't match where the arrows go: see its comment). The
+    host (OverworldScene: `setItemfinderHost`) gives the current map's data and the loaded neighbours' headers
+    (`world.loaded`). FRLG's Itemfinder doesn't turn the player. The arrows and stars are screen-fixed
+    FieldEffectSprites at the camera's corner plus (120, 76), run by the item's own field task (task func, then
+    each sprite's callback and anim, like RunTasks + AnimateSprites), rotated by sAffineAnim_Left/Down/Right/Up;
+    their tiles (`sArrowAndStarSpriteTiles`, extract_gfx's `graphics/itemfinder/`) are drawn in
+    gObjectEventPal_Player (OBJ palette 0 in the field). Probes / events: `field().itemfinder` (`running`, each
+    sprite's screen `x` / `y`, `anim` 0-3 arrows / 4 star, `affineAnim` 0 left 1 down 2 right 3 up), events
+    `itemfinder` (`result`: none / response / underfoot, `itemX`, `itemY`, `dings`, `direction`),
+    `itemfinderArrow` (`anim`, `affineAnim`, `deltaX`, `deltaY`), `itemfinderStar`, `itemfinderEnd`. Tests:
+    tests/e2e/itemfinder.test.ts (Route 3's Oran Berry (26, 9) from (24, 9); Cape Brink's underfoot PP Max at
+    (16, 28); Pallet Town for none; Route 13 (62, 1) for Route 12's Rare Candy), tests/unit/itemfinder.test.ts.
 - **Scripted battles:** specials that start a battle (StartOldManTutorialBattle, StartMarowakBattle,
   StartLegendaryBattle in `script/specials.ts`) call `host.startScriptedBattle(flags, enemyParty, transition)` and
   block the script with `setWaitState` until the field has faded back in (their CB2_End* sets VAR_RESULT; a loss

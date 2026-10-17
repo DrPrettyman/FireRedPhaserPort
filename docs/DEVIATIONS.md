@@ -20,6 +20,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     VS Seeker anim's end itself. ClearRematchStateByTrainerId leaves the movement type of a same-row trainer other
     than the selected one alone (the C sets its `movementType` field to FACE_DOWN without changing its callback;
     the port's NpcBrain has one value for both).
+  - Itemfinder (world/itemfinder.ts): silent (SE_ITEMFINDER); GAME_STAT_USED_ITEMFINDER isn't counted (no game
+    stats). ItemUseOnFieldCB_Itemfinder takes the field controls lock itself, as the VS Seeker's task does. The
+    arrows and stars are Phaser sprites at the camera's corner plus their GBA screen position, drawn in the
+    player's palette as it is at load (the GBA's OBJ palette 0, faded with the field); DestroyArrowAndStarTiles
+    frees nothing (the texture stays; no sprite is out by then). Before EventScript_ItemfinderDigUpUnderfootItem,
+    ScriptContext_SetupScript hands the task's lock to the running script instead of locking again.
   - Raise-hand movement types (entities/NpcBrain.ts, MOVEMENT_TYPE_RAISE_HAND_AND_*): leaving one zeroes the
     sprite's x2/y2 (the GBA keeps them unless ResetMovementOfRematchableTrainers zeroes them); a frozen jumper
     (any, not only `lock`'s selected object) lands before it holds still.
@@ -52,14 +58,11 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     follows. The show-mon banner's graphics load while the player's pose plays, so a very slow load would hold the
     banner back. Dig/Escape Rope with no escape warp saved (a dev start in a cave) go to the last heal location.
   - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Bag uses that need overworld systems
-    (Itemfinder, Fame Checker, Teachy TV, mail, TM case, berry pouch, registered SELECT items) log
-    (rods, Escape Rope, Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail,
-    registered SELECT items) log "not implemented" and return to the bag. Berry powder reads as 0.
-    (Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail, TM case, berry pouch, registered SELECT items) log
-    "not implemented" and return to the bag. The Escape Rope's quest log event (ItemUse_SetQuestLogEvent) isn't
+    (Fame Checker, Teachy TV, mail, registered SELECT items) log "not implemented" and return to the bag. Berry
+    powder reads as 0. The Escape Rope's quest log event (ItemUse_SetQuestLogEvent) isn't
     recorded; ItemUseOnFieldCB_EscapeRope takes the field controls lock itself (on the GBA the start menu's lock is
     still held when the bag returns; here the field's overlay held the controls until then). RemoveUsedItem after
-    the bag has closed skips the bag display's item counts (the GBA writes them through a freed NULL pointer). Berry powder reads as 0. The TM case
+    the bag has closed skips the bag display's item counts (the GBA writes them through a freed NULL pointer). The TM case
     and berry pouch can't be opened to give from (the PC box's GIVE, GoToTMCase_PCBox / GoToBerryPouch_PCBox).
   - TM case (menus/tmCase.ts): silent (SE_SELECT, SE_SHOP); no quest log (RecordItemTransaction). Not ported:
     the Pokédude's Teachy TV demo (TMCASE_POKEDUDE), the Union Room's GIVE / EXIT menu (no link play) and opening

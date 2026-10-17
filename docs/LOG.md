@@ -1652,3 +1652,34 @@ end to end.
   Island unlocked Pidgey's 16 markers and the map at the top), plus pokedex, tmCase, titleScreen and the
   transitions test's every-transition case (for the extractor fix). Screenshots of the area page (caught, seen-only,
   area unknown, with islands) match FRLG's layout.
+### Itemfinder (W-fielditems unit 3, SCREENS_PLAN.md batch 1)
+
+- `world/itemfinderSearch.ts` (new, no Phaser): itemfinder.c's HiddenItemIsWithinRangeOfPlayer (the current map's
+  hidden items within 7 across and 5 up / down; underfoot items only from on top), FindHiddenItemsInConnectedMaps /
+  HiddenItemInConnectedMapAtPos / HiddenItemAtPos with fieldmap.c's GetMapConnectionAtPos and IsPosInConnectingMap,
+  RegisterHiddenItemRelativeCoordsIfCloser, SetNormalHiddenItem / SetUnderfootHiddenItem's ding counts and
+  GetPlayerDirectionTowardsHiddenItem, in the C's MAP_OFFSET coordinates.
+- `world/itemfinder.ts` (new): ItemUseOnFieldCB_Itemfinder, Task_ItemfinderResponseSoundsAndAnims /
+  Task_ItemfinderUnderfootSoundsAndAnims, the messages ("‥ ‥ ‥ ‥Nope! There's no response.", "Huh? The
+  ITEMFINDER's responding!", "Oh! The ITEMFINDER's shaking wildly!") and clean-ups, Task_ItemfinderUnderfootDigUpItem
+  → EventScript_ItemfinderDigUpUnderfootItem, and the arrow / star sprites (CreateArrowSprite, CreateStarSprite,
+  SpriteCallback_Arrow / _Star, the four rotations) as screen-fixed FieldEffectSprites. FRLG's Itemfinder doesn't
+  turn the player (only Emerald's does), so neither does the port.
+- `menus/itemUse.ts`: ItemUseOutOfBattle_Itemfinder, `ItemUseFieldFuncs.ItemUseOnFieldCB_Itemfinder` (registered by
+  `registerItemfinder()` from OverworldScene.create; `fieldFuncs()` checks it too). The bag no longer logs "not
+  implemented" for the Itemfinder.
+- `tools/extract_gfx.py`: `graphics/itemfinder/` (sArrowAndStarSpriteTiles), drawn in gObjectEventPal_Player.
+  `world/hallOfFameRecord.ts` exports `canvasTexture` / `drawFrames` for it.
+- OverworldScene: the Itemfinder host (current map, loaded neighbours' headers, player position), its graphics
+  preloaded, the `itemfinder` probe; events `itemfinder`, `itemfinderArrow`, `itemfinderStar`, `itemfinderEnd`.
+- DEVIATIONS: the item-use entry's duplicated "not implemented" lists (left by union merges) are one list again,
+  without the items that are in now (rods, Escape Rope, VS Seeker, Itemfinder, TM case, berry pouch).
+- Verified: typecheck; `npm test` (148, incl. tests/unit/itemfinder.test.ts: Route 3's Oran Berry at 2 / 6 tiles
+  and the edges of the box, standing on it, its flag set; Route 12's underfoot Leftovers; Route 12's Rare Candy from
+  Route 13 through the connection; the tie-breaks; the directions); e2e tests/e2e/itemfinder.test.ts (new, 4 tests,
+  run three times: Route 3 from (24, 9): 4 arrows (anims 0-3) moving right from (120, 76) to x 133, two out at a
+  time, "responding", the player still facing up; picking the berry up, then "no response"; Cape Brink's underfoot
+  PP Max: 3 stars rising from y 75 to 60, "shaking wildly", the item dug up and its flag set, then no response;
+  Pallet Town: no response; Route 13 (62, 1): Route 12's Rare Candy, 2 arrows moving up), fieldItems, vsSeeker,
+  field and hallOfFame e2e files. Screenshots of the arrows (left, right, up) and the star around the player
+  looked right.
