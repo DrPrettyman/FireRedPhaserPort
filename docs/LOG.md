@@ -1576,3 +1576,25 @@ end to end.
   footprint, Squirtle seen-only with the unknown fields, up/down skipping unseen numbers and stopping at the last
   seen mon, B back to the list on the mon shown last; A TO Z and LIGHTEST orders, back to the top menu), run
   twice. Screenshots of the mon page (caught and seen-only) and the LIGHTEST list match FRLG's layout.
+### Pokédex area page (W-dexarea unit 2, SCREENS_PLAN.md batch 1)
+
+- `menus/pokedexArea.ts`: pokedex_screen.c's DexScreen_DrawMonAreaPage (the frame on BG3 / BG0, the Kanto map and
+  the unlocked Sevii islands' map windows with kantoMapVoff, the icon, number and name, "SIZE" / "AREA", the type
+  icons and the size comparison for caught mons: the mon's and the player's pics in sPalette_Silhouette with affine
+  matrices scaled by pokemonScale / trainerScale and the y2 offsets, the markers, "AREA UNKNOWN" over the wide
+  ellipse, the control bar) and DexScreen_DestroyAreaScreenResources. Wired into Task_DexScreen_ShowMonPage: A on
+  the mon page → the area page; B back to the mon page, A back to the list (the placeholders are gone).
+- `gba/listMenu.ts`: ListMenu_LoadMonIconPalette / ListMenu_DrawMonIconGraphics. `menus/hallOfFame.ts` exports
+  PlayerGenderToFrontTrainerPicId. Graphics: `pokedexAreaGfxSymbols()` joins `pokedexScreenGfxSymbols()`, the mon's
+  icon joins `dexMonGfxSymbols` (loaded with the mon page). Probe `__test.pokedexArea()`.
+- Fixed on the way: tools/extract_gfx.py didn't invert greyscale PNGs for 4bpp / 8bpp tiles like gbagfx does
+  (ConvertToTiles4Bpp's invertColors when the PNG has no palette), so their colour indices were 15 - the real ones.
+  "AREA UNKNOWN"'s ellipse had an orange box round it; it also fixes the title screen's border BG (the teal band was
+  grey), the TM case's disc (its background was index 15, not transparent), the battle transitions' grid square
+  and mugshot banner, and a few unused symbols. Rerun `npm run extract`.
+- Verified: typecheck; unit tests (131); tests/e2e/pokedexArea.test.ts (new: Bulbasaur caught with AREA UNKNOWN,
+  its types and both silhouettes at 356 / 256 with y2 16 / -2; B back to the mon page; Pidgey's 13 markers and
+  scale 492; Rattata seen-only with markers but no types or silhouettes; A back to the list; with Three and Five
+  Island unlocked Pidgey's 16 markers and the map at the top), plus pokedex, tmCase, titleScreen and the
+  transitions test's every-transition case (for the extractor fix). Screenshots of the area page (caught, seen-only,
+  area unknown, with islands) match FRLG's layout.

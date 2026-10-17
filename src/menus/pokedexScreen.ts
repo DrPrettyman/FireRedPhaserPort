@@ -86,6 +86,8 @@ import { encodeRaw, speciesName, text } from './common';
 import { CB2_ReturnToFieldWithOpenMenu } from './fieldCallbacks';
 import { RemoveScrollIndicatorArrowPair, AddScrollIndicatorArrowPair, type ScrollArrowsTemplate } from './menuIndicators';
 import { DexScreen_GetSetPokedexFlag, FLAG_GET_CAUGHT, FLAG_GET_SEEN, NationalPokedexNumToSpecies, pokedexData } from './pokedex';
+import { DexScreen_DestroyAreaScreenResources, DexScreen_DrawMonAreaPage, pokedexAreaGfxSymbols } from './pokedexArea';
+import { GetIconSpecies, monIconSymbol } from './pokemonIcon';
 
 // include/pokedex_screen.h
 const DEX_CATEGORY_COUNT = 9;
@@ -405,6 +407,7 @@ export function pokedexScreenGfxSymbols(): string[] {
     'sRedArrowPal',
   ]);
   for (const [tiles, pal] of sTopMenuSelectionIconGfxPtrs) syms.add(tiles).add(pal);
+  for (const sym of pokedexAreaGfxSymbols()) syms.add(sym); // the area page (menus/pokedexArea.ts)
   return [...syms];
 }
 
@@ -1062,10 +1065,10 @@ function Task_DexScreen_ShowMonPage(taskId: number): void {
       break;
     case 5:
       if (JOY_NEW(A_BUTTON)) {
-        // STUB / TODO(W-dexarea unit 2): the area page (DexScreen_DrawMonAreaPage) isn't ported, so A stays inert.
-        // Wire it like the C: RemoveDexPageWindows(); FillBgTilemapBufferRect_Palette0(1, 0x000, 0, 2, 30, 16);
-        // CopyBgTilemapBufferToVram(1); d.state = 7;  (states 7-12 below are ported and call the area page's
-        // DexScreen_DrawMonAreaPage / DexScreen_DestroyAreaScreenResources.)
+        RemoveDexPageWindows();
+        FillBgTilemapBufferRect_Palette0(1, 0x000, 0, 2, 30, 16);
+        CopyBgTilemapBufferToVram(1);
+        d.state = 7;
       } else if (JOY_NEW(B_BUTTON)) {
         RemoveDexPageWindows();
         BeginNormalPaletteFade(~0x8000 >>> 0, 0, 0, 16, RGB_WHITEALPHA);
@@ -1090,7 +1093,7 @@ function Task_DexScreen_ShowMonPage(taskId: number): void {
       d.dexSpecies = d.characteristicMenuInput & 0xffff;
       d.state = 2;
       break;
-    // The area page (W-dexarea unit 2 provides DexScreen_DrawMonAreaPage / DexScreen_DestroyAreaScreenResources).
+    // The area page (menus/pokedexArea.ts: DexScreen_DrawMonAreaPage / DexScreen_DestroyAreaScreenResources).
     case 7:
       DexScreen_DrawMonAreaPage();
       d.state = 8;
@@ -1137,16 +1140,6 @@ function Task_DexScreen_ShowMonPage(taskId: number): void {
       d.state = 1;
       break;
   }
-}
-
-/** DexScreen_DrawMonAreaPage: TODO(W-dexarea unit 2), replace with the area page (menus/pokedexArea.ts). */
-function DexScreen_DrawMonAreaPage(): number {
-  return 1;
-}
-
-/** DexScreen_DestroyAreaScreenResources: TODO(W-dexarea unit 2), replace with the area page's. */
-function DexScreen_DestroyAreaScreenResources(): number {
-  return 0;
 }
 
 /**
@@ -1266,13 +1259,15 @@ export function DexScreen_DexPageZoomEffectFrame(bg: number, scale: number): voi
 }
 
 /** DexScreen_GetDefaultPersonality: the save's Unown / Spinda personalities aren't kept (see DEVIATIONS), so 0. */
-function DexScreen_GetDefaultPersonality(_species: number): number {
+export function DexScreen_GetDefaultPersonality(_species: number): number {
   return 0;
 }
 
 /** The graphics the mon page draws for `species`: its front pic, its palettes and its footprint. */
 export function dexMonGfxSymbols(species: number): string[] {
   const syms = [monPicSymbol(true, species, DexScreen_GetDefaultPersonality(species)), ...monPalSymbols(species)];
+  // The area page's icon (ListMenu_DrawMonIconGraphics)
+  syms.push(monIconSymbol(GetIconSpecies(species, DexScreen_GetDefaultPersonality(species))));
   const footprint = pokedexData.footprints[species];
   if (footprint && hasGfx(footprint)) syms.push(footprint);
   return syms;

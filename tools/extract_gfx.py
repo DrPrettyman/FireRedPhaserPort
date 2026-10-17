@@ -112,14 +112,16 @@ class MakeRules:
 
 
 class GrayIndices:
-    """gbagfx reads greyscale PNGs' raw samples as colour indices; PIL scales them to 0..255."""
+    """gbagfx reads greyscale PNGs' raw samples as colour indices (PIL scales them to 0..255) and inverts them:
+    ConvertBitDepth keeps the sample's low bits, then ConvertToTiles4Bpp / 8Bpp take 15 - pixel / 255 - pixel.
+    `~sample` masked to the output depth (png_tiles does that) is the same."""
 
     def __init__(self, img, bit_depth):
         self.px = img.load()
         self.scale = 255 // ((1 << bit_depth) - 1)
 
     def __getitem__(self, xy):
-        return self.px[xy] // self.scale
+        return ~(self.px[xy] // self.scale) & 0xFF
 
 
 def open_indexed(png):
