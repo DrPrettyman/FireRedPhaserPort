@@ -211,3 +211,103 @@ test('Cinnabar Gym: a wrong quiz answer brings out the trainer, beating him open
   expect(await game.eval((t) => [t.flag('FLAG_BADGE07_GET'), t.flag('FLAG_DEFEATED_BLAINE'), t.flag('FLAG_GOT_TM38_FROM_BLAINE')])).toEqual([true, true, true]);
   expect(await game.eval((t) => t.itemCount('TM38'))).toBe(1);
 }, 180_000);
+
+// ---------------------------------------------------------------- Giovanni (Viridian Gym)
+
+/**
+ * A walking route over spinner tiles (map-local): breadth-first over single steps, where a step onto an
+ * MB_SPIN_* tile carries the player on as TryUpdatePlayerSpinDirection does (on in the last spin tile's
+ * direction until an MB_STOP_SPINNING tile or a wall). Returns the steps to press.
+ */
+function spinnerRoute(game: Game, x: number, y: number) {
+  return game.eval((t, x, y) => {
+    const s = (window as any).game.scene.getScene('Overworld');
+    const b = s.behaviors;
+    const f = t.field()!;
+    const ox = f.worldX - f.x;
+    const oy = f.worldY - f.y;
+    const D = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] } as Record<string, [number, number]>;
+    const SPIN: [string, string][] = [['SPIN_RIGHT', 'right'], ['SPIN_LEFT', 'left'], ['SPIN_UP', 'up'], ['SPIN_DOWN', 'down']];
+    const occupied = new Set((t.objects() as { x: number; y: number }[]).map((o) => `${o.x},${o.y}`));
+    const open = (cx: number, cy: number) => s.world.tileAt(ox + cx, oy + cy).collision === 0 && !occupied.has(`${cx},${cy}`);
+    const spinDir = (cx: number, cy: number) => {
+      const beh = s.world.tileAt(ox + cx, oy + cy).behavior;
+      return SPIN.find(([name]) => b.is(beh, name))?.[1];
+    };
+    const prev = new Map<string, { from: string; dir: string } | null>([[`${f.x},${f.y}`, null]]);
+    const queue: [number, number][] = [[f.x, f.y]];
+    for (let i = 0; i < queue.length; i++) {
+      const [cx, cy] = queue[i];
+      if (cx === x && cy === y) {
+        const steps: string[] = [];
+        for (let k = `${cx},${cy}`, p = prev.get(k); p; k = p.from, p = prev.get(k)) steps.unshift(p.dir);
+        return steps;
+      }
+      for (const dir of Object.keys(D)) {
+        let nx = cx + D[dir][0];
+        let ny = cy + D[dir][1];
+        if (!open(nx, ny)) continue;
+        let spin = spinDir(nx, ny);
+        for (let n = 0; spin && n < 64; n++) {
+          const sx = nx + D[spin][0];
+          const sy = ny + D[spin][1];
+          if (!open(sx, sy)) break;
+          nx = sx;
+          ny = sy;
+          if (b.is(s.world.tileAt(ox + nx, oy + ny).behavior, 'STOP_SPINNING')) break;
+          spin = spinDir(nx, ny) ?? spin;
+        }
+        const k = `${nx},${ny}`;
+        if (prev.has(k)) continue;
+        prev.set(k, { from: `${cx},${cy}`, dir });
+        queue.push([nx, ny]);
+      }
+    }
+    return undefined;
+  }, x, y);
+}
+
+const VIRIDIAN_GYM_TRAINERS = ['TAMER_JASON', 'TAMER_COLE', 'BLACK_BELT_ATSUSHI', 'BLACK_BELT_KIYO', 'BLACK_BELT_TAKASHI', 'COOLTRAINER_SAMUEL', 'COOLTRAINER_YUJI', 'COOLTRAINER_WARREN'];
+
+test('Viridian Gym: locked until the seventh badge; over the spinner tiles to Giovanni, the Earth Badge and TM26', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'ViridianCity', x: 37, y: 11, party: [MEWTWO] });
+  await setFlags(game, badgesBefore(7)); // no Volcano Badge yet
+  await game.eval((t) => t.state!.setVar('VAR_MAP_SCENE_VIRIDIAN_CITY_OLD_MAN', 2));
+  await warp(game, 'MAP_VIRIDIAN_CITY', 37, 11);
+  // ViridianCity_EventScript_GymDoorLocked (the coord event at (36, 11), in front of the door): "The GYM's
+  // doors are locked…", and the player jumps back down the ledge.
+  await game.walk('left');
+  await game.mashUntil((t) => t.idle() && !t.field()!.script && t.field()!.y > 11, { what: 'the locked gym doors' });
+  expect(await game.eval((t) => t.field())).toMatchObject({ x: 36, y: 13 });
+  expect(await game.eval((t) => t.var('VAR_MAP_SCENE_VIRIDIAN_CITY_GYM_DOOR'))).toBe(0);
+
+  // With all seven: ViridianCity_EventScript_TryUnlockGym on the map's transition.
+  await setFlags(game, ['FLAG_BADGE07_GET']);
+  await warp(game, 'MAP_VIRIDIAN_CITY', 37, 11);
+  expect(await game.eval((t) => t.var('VAR_MAP_SCENE_VIRIDIAN_CITY_GYM_DOOR'))).toBe(1);
+  await takeWarp(game, 36, 10, 'ViridianCity_Gym');
+  await game.waitIdle();
+  await beatTrainers(game, VIRIDIAN_GYM_TRAINERS);
+
+  // A spinner: (13, 21) is MB_SPIN_LEFT; stepping on it carries the player left to the MB_STOP_SPINNING tile at
+  // (5, 21).
+  expect(await game.eval((t) => t.walkTo(14, 21))).toMatchObject({ arrived: true });
+  await game.eval((t) => t.walk('left', 1));
+  await game.waitFor((t) => t.idle() && !t.field()!.moving, { what: 'the spin to end' });
+  expect(await game.eval((t) => t.field())).toMatchObject({ x: 5, y: 21 });
+
+  // Giovanni at (2, 2), along a route that allows for the spinners.
+  const steps = await spinnerRoute(game, 2, 3);
+  expect(steps, 'a route to Giovanni').toBeDefined();
+  for (const dir of steps!) {
+    await game.eval((t, d) => t.walk(d as 'up', 1), dir);
+    await game.waitFor((t) => t.idle() && !t.field()!.moving, { what: `a step ${dir}` });
+  }
+  expect(await game.eval((t) => t.field())).toMatchObject({ x: 2, y: 3 });
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await winBattle(game, 'Giovanni');
+  expect(await trainerDefeated(game, 'LEADER_GIOVANNI')).toBe(true);
+  expect(await game.eval((t) => [t.flag('FLAG_BADGE08_GET'), t.flag('FLAG_DEFEATED_LEADER_GIOVANNI'), t.flag('FLAG_GOT_TM26_FROM_GIOVANNI')])).toEqual([true, true, true]);
+  expect(await game.eval((t) => [t.itemCount('TM26'), t.var('VAR_MAP_SCENE_ROUTE22')])).toEqual([1, 3]);
+}, 180_000);
