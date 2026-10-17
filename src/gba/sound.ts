@@ -26,6 +26,9 @@ export function PlayCry_ByMode(_species: number, _pan: number, _mode: number): v
 /** PlayCry_Normal: no cries yet. */
 export function PlayCry_Normal(_species: number, _pan: number): void {}
 
+/** PlayCry_NormalNoDucking: no cries yet. */
+export function PlayCry_NormalNoDucking(_species: number, _pan: number, _volume: number, _priority: number): void {}
+
 /** IsCryFinished: TRUE once the cry has stopped (no cries yet, so always). */
 export function IsCryFinished(): boolean {
   return true;

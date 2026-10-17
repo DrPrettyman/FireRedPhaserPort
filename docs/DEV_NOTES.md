@@ -365,11 +365,24 @@ this is the next level down. When you add or change a subsystem, update its entr
   PokedexScreenData is `sPokedexScreenData` (null while the screen is down); one task whose func is swapped like
   the C's (`gTasks[taskId].func = Task_DexScreen_X; d.state = 0`), each a `switch (d.state)`. Ported: DexScreen_
   LoadResources, Task_PokedexScreen (top menu, the selection icons, the counts), Task_DexScreen_NumericalOrder
-  (Kanto; national with the National Dex), the ordered-list helpers and printers. To add a page (the mon page,
-  the characteristic lists, the habitats), fill in the STUB branches in Task_PokedexScreen case 6 (states 7 / 8)
-  and Task_DexScreen_NumericalOrder case 6 (state 7). list_menu.c's ListMenuInitInRect and window.c's
+  (Kanto; national with the National Dex), Task_DexScreen_CharacteristicOrder (the SEARCH entries: A TO Z, TYPE,
+  LIGHTEST, SMALLEST), Task_DexScreen_ShowMonPage (the mon page from the numerical lists: DexScreen_DrawMonDexPage
+  / RemoveDexPageWindows, DexScreen_DexPageZoomEffectFrame, up/down through the seen mons with
+  DexScreen_TryScrollMonsVertical, which moves the order's saved list cursor so B lands on that mon), the
+  ordered-list helpers and printers, DexScreen_LookUpCategoryBySpecies. Mon graphics: the screen can show any
+  seen mon, so `DexScreen_LoadMonGfx(species)` fetches its front pic, palettes and footprint on demand (it
+  returns true once loaded; a task waits in its state until then; `dexMonGfxSymbols` lists them). Hooks left:
+  **habitats (W-dex unit 3)**: Task_PokedexScreen case 6's habitat branch (→ state 7, empty) and
+  Task_DexScreen_CharacteristicOrder case 6's A (→ state 7, which the C sends to Task_DexScreen_CategorySubmenu
+  with parentOfCategoryMenu = 1; both STUBs carry the C lines). The category page's mon page reuses
+  DexScreen_DrawMonDexPage / DexScreen_DexPageZoomEffectFrame / RemoveDexPageWindows (exported) and
+  DexScreen_LoadMonGfx. **Area page (W-dexarea unit 2)**: Task_DexScreen_ShowMonPage case 5's A branch is a STUB
+  holding the C lines (RemoveDexPageWindows, clear BG1, state 7); states 7-12 are ported and call the local
+  placeholders DexScreen_DrawMonAreaPage / DexScreen_DestroyAreaScreenResources: replace them with the real ones
+  (menus/pokedexArea.ts) and un-stub the A. list_menu.c's ListMenuInitInRect and window.c's
   PutWindowRectTilemapOverridePalette came with it. Probe: `__test.pokedex()` (task, state, `ready`, the counts,
-  unlocked categories, the top menu's and the numerical list's cursor and selected entry). Tests:
+  unlocked categories, the top menu's and the ordered list's cursor, selected entry and every row's species,
+  the mon page's species, printed strings and pic / footprint pixel counts). Tests:
   tests/e2e/pokedex.test.ts (Pallet Town with FLAG_SYS_POKEDEX_GET and the dex sets written through `t.state`),
   tests/unit/pokedex.test.ts.
 - **Evolution scene:** `menus/evolutionScene.ts` + `menus/evolutionGraphics.ts` run on whichever GBA host is up
