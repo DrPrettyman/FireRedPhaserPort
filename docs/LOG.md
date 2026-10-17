@@ -1463,3 +1463,7 @@ end to end.
 - `/get-on` (`.claude/skills/get-on/SKILL.md`, WORKFLOW.md section 0): the user's session as main coordinator,
   one background sub-coordinator per batch (plan, workers, merge, docs), workers under it. Agents can start agents
   (checked: a subagent's subagent ran).
+- Long workers (batch 3's W-fly: ~60 minutes, ~700k tokens): the plan splits workstreams into ~1-hour units, a
+  worker does one unit and hands back, continuation workers carry the branch on; the coordinator runs a watchdog
+  (a background timer, then a "Checkpoint" SendMessage to a worker past 60 minutes or 45 minutes without a commit).
+  Worker rules for keeping the context small.

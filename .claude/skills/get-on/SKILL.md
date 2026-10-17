@@ -55,7 +55,8 @@ A permission a sub-coordinator or worker was denied is never yours to retry: sto
 > 2. Pick the next step from STATUS.md "Next up" (or the focus), check it against the decomp and the port, and write
 >    the batch into a plan doc (continue the current plan, or start a new `<NAME>_PLAN.md` at the root like
 >    MAIN_PATH_PLAN.md) as a docs-only PR, and merge it.
-> 3. Start up to four workers (section 2) in the background and wait for their reports. Workers don't start agents
+> 3. Start up to four workers (section 2) in the background, one unit each, and run section 2's watchdog. When a
+>    worker hands back with units left, start a continuation worker on the same branch. Workers don't start agents
 >    of their own.
 > 4. Merge their PRs (section 4), then the docs-only STATUS/LOG PR, then pull the main checkout if it's clean.
 >

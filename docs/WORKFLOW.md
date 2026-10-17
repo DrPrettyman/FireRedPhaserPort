@@ -30,13 +30,17 @@ batch is run by hand.
    - Grep the scripts for the commands and specials the item uses, and check `script/ScriptEngine.ts` and
      `script/specials.ts` for each one (unknown ones log once at runtime).
    - `?map=Name&x=&y=` to try it in the browser.
-3. **Split it into workstreams**, at most four per batch, each owning distinct files. One worker can take two or
-   three PRs in a row (e.g. a screen, then the feature built on it).
-4. **Give each shared building block one owner.** Grep the C files each workstream will port for the helpers
+3. **Split it into workstreams**, at most four per batch, each owning distinct files.
+4. **Split each workstream into units** a fresh worker can finish in about an hour: roughly 1,000-1,500 lines of C
+   ported plus its tests and docs, each leaving the branch green (typecheck, unit tests, its e2e cases). List the
+   units in order in the plan. A worker does one unit (or a few small ones) and hands back; the next unit goes to a
+   continuation worker on the same branch (section 2). Batch 3's W-fly took region_map.c (4k lines) and Fly in one
+   worker and ran to ~60 minutes and ~700k tokens of context; that should have been three units.
+5. **Give each shared building block one owner.** Grep the C files each workstream will port for the helpers
    they call outside themselves (menu.c windows, bg.c affine BGs, SoftReset, palette helpers, ...). If two
    workstreams need the same one, the plan names the owner; the others leave it out and reuse it once it merges, or
    wait a batch. (Batch 3 got three duplicates without this: affine BGs, the top bar window and SoftReset.)
-5. **Write the batch into the plan doc** (workstreams, owners, what's shared, what's left out). The coordinator
+6. **Write the batch into the plan doc** (workstreams, their units, owners, what's shared, what's left out). The coordinator
    can't push to master (auto mode blocks it), so plan and STATUS updates go in as small docs-only PRs. Merge them
    with `gh pr merge --squash --delete-branch` after a look at the diff; they need no test run.
 
@@ -56,7 +60,21 @@ done
 ```
 
 Then launch each worker as a background agent with the prompt template below. The e2e dev server falls back to a
-free port, so parallel runs don't clash. Don't poll workers; their report arrives when they finish.
+free port, so parallel runs don't clash.
+
+### While the workers run
+
+- **A report with units left** (a hand-back): start a continuation worker in the same worktree and branch, with the
+  same prompt plus "You continue W-name: units 1-k are done (see the PR and `git log`); do unit k+1" and the
+  hand-back's notes. One workstream can go through several workers this way.
+- **A watchdog** for workers that run long: when the workers start, start a background timer
+  (`sleep 1800`, run in the background, so its exit wakes you). On each wake, for each worker still running, look
+  at its worktree (`git log -1 --format='%cr %s'`, `git status -s | head`). If it has run for over 60 minutes, send
+  it a checkpoint with SendMessage (the agent id the Agent tool returned):
+  "Checkpoint: finish the step you're on, get the branch green, commit, push, open or update the PR, and hand
+  back with what's left." Then restart the timer. A worker with no new commit in 45 minutes gets the same message
+  with "say what you're stuck on". Stop the timer once every workstream has handed back its last unit.
+- Otherwise don't poll: reports and hand-backs arrive by themselves.
 
 ### Worker prompt template
 
@@ -68,8 +86,9 @@ free port, so parallel runs don't clash. Don't poll workers; their report arrive
 > tests/README.md, and the docs/DEV_NOTES.md entries for *(the subsystems this touches)*. Search docs/LOG.md for
 > *(related history)*.
 >
-> Your task: *(what to port, C files and function names, what "done" looks like, what to do if there's no room
-> for all of it)*.
+> Your task: *(the workstream, then the unit(s) this worker does: C files and function names, what "done"
+> looks like)*. Units after yours go to a continuation worker: don't start them. *(For a continuation: units
+> 1-k are done, see PR #n and `git log`; notes from the last worker: …)*
 >
 > You own *(files)*. Shared building blocks: *(what you build for others / what you reuse from whom)*. Other
 > workers running now: *(one line each)*; avoid their areas.
@@ -77,8 +96,10 @@ free port, so parallel runs don't clash. Don't poll workers; their report arrive
 > Tests: typecheck, `npm test`, your own e2e file `tests/e2e/<name>.test.ts` covering *(scenarios)*, plus
 > *(the e2e files your shared changes touch)*.
 >
-> When done: push, open the PR with `gh pr create` (summary, shared files touched, what's not done). Your final
-> message: the PR URL(s), what was done, what wasn't, test results with counts, shared files touched.
+> When your unit is done: push, open the PR with `gh pr create --draft` (or update it), summary, shared files
+> touched, what's not done. If you get a "Checkpoint" message, follow it. Your final message: the PR URL, the
+> units done and left, a hand-back for the next worker (what's next, where you stopped, gotchas), test results
+> with counts, shared files touched.
 
 ## 3. Worker rules
 
@@ -98,12 +119,20 @@ free port, so parallel runs don't clash. Don't poll workers; their report arrive
 - **A second PR stacked on your first:** give it its own branch and worktree from your first branch (not a branch
   switch in the same worktree), set the PR's base to your first branch, and say so in both PR bodies.
 - Scratch files: prefix them with your workstream name and keep them out of commits.
-- If you run low on context: commit, push, open the PR with what's done and say what's left.
+- **One unit, then hand back.** Don't start the plan's next unit; a fresh worker does it with a clean context. Hand
+  back early, at the next green point, if the conversation has been summarized once (a sign the context is
+  full) or you've worked for about an hour.
+- **A "Checkpoint" message from the coordinator:** finish the step you're on, get the branch green (or revert the
+  half-done step), commit, push, update the PR, and hand back with what's left.
+- **Keep the context small:** read big C files in parts (`sed -n`, `grep -n`), not whole; pipe test output through
+  `grep -E "×|FAIL|Tests "` and look at the failures only; send full e2e output to a file; don't re-read files you
+  just edited.
+- **The PR is a draft until the workstream's last unit**; the last worker marks it ready (`gh pr ready`).
 
 ## 4. Merger
 
-Follow CLAUDE.md's "Merging PRs" (smallest first, merge `origin/master` in, tests, push, squash, clean up). On top
-of that:
+Follow CLAUDE.md's "Merging PRs" (smallest first, merge `origin/master` in, tests, push, squash, clean up), for
+the PRs whose workstream is finished (not drafts). On top of that:
 
 - **Re-extract after merging master in** if either side changed `tools/` (`npm run extract`, ~20 s).
 - **Check the merge brought in only master's changes:** `git diff <PR head before the merge> --stat` should match
