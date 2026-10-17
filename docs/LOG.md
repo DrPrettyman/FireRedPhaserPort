@@ -1853,3 +1853,23 @@ end to end.
   staying on the front, B back to the start menu on PLAYER; a girl's blue card with the female background, no
   badges / stars / Pokédex line), plus hallOfFame, pokedexArea and transitions' "every battle transition" (the
   mugshots use PlayerGenderToFrontTrainerPicId). Screenshots of both cards match FRLG's layout.
+
+### Registered items: the Town Map, TM case and berry pouch from the field (W-select unit 2, SCREENS_PLAN.md batch 2)
+
+- `menus/itemUse.ts`: the SELECT branches of FieldUseFunc_TownMap / _TmCase / _BerryPouch (were
+  `RegisteredItemFromFieldNotPorted`, removed): FadeScreen(FADE_TO_BLACK, 0), then Task_UseTownMapFromField /
+  Task_InitTMCaseFromField / Task_InitBerryPouchFromField wait for the fade, SetFieldCallback2ForItemUse and open
+  the screen with CB2_ReturnToField (InitTMCase(..., TRUE) / InitBerryPouch(..., 1): SELECT closes them).
+  FieldCB2_UseItemFromField + Task_ItemUseWaitForFade: freeze and lock while the field fades in, then release.
+  StopPokemonLeagueLightingEffectTask is skipped (no league lighting in the port).
+- Field side: `world/fieldItems.ts` FadeScreen / IsFieldPaletteFadeActive / OpenScreenFromField (FieldItemsHost,
+  registered with the other item field funcs in world/fishing.ts); OverworldScene.openItemScreenFromField
+  (CleanupOverworldWindowsAndTilemaps, prepareFieldMoveMenu, FieldMenuScene `itemFromField` with the screen's init
+  and graphics). The start menu's RunFieldCallback code moved into `OverworldScene.runFieldCallback`, shared by both.
+- The C's return path from a TM taught / a berry used in a screen opened from the field is the same as from the bag
+  (the party menu reopens the TM case / pouch, which keeps its CB2_ReturnToField exit); checked for the TM case.
+- Verified: typecheck; `npm test` (155); e2e registeredItems (9, 3 new: the Town Map opened on Pallet Town and B
+  back to the field; the TM case with HM01 taught and back to it, SELECT closes it; the berry pouch and B; each
+  checks the bag never shows, the objects frozen / controls locked on return, then released, and a step works; run
+  3 times), tmCase, berryPouch, fly, fieldItems, trainerCard (33 in all). Screenshots of the three screens opened
+  from the field match the bag's.

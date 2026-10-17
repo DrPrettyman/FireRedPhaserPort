@@ -1,7 +1,9 @@
 // Registered key items used with SELECT on the field (item_menu.c's UseRegisteredKeyItemOnField from
 // field_control_avatar.c's ProcessPlayerFieldInput): the item's field func runs as a task with data[3] = 1
 // (menus/registeredItem.ts, the from-the-field branches in menus/itemUse.ts). `field().locked` is
-// LockPlayerFieldControls, `field().objectsFrozen` FreezeObjectEvents.
+// LockPlayerFieldControls, `field().objectsFrozen` FreezeObjectEvents. The Town Map, TM case and berry pouch open
+// their screens from the field (Task_UseTownMapFromField, Task_InitTMCaseFromField, Task_InitBerryPouchFromField)
+// and come back to the field (CB2_ReturnToField, FieldCB2_UseItemFromField), not to the bag.
 
 import { expect, test } from 'vitest';
 import { useGame, type Game, type StartOptions } from './harness';
@@ -204,4 +206,97 @@ test('SELECT with the VS Seeker, the Itemfinder and the Poké Flute: their field
   await game.eval((t) => t.walk('left', 1));
   await game.waitIdle();
   expect(await game.eval((t) => t.field()!.x)).toBe(11);
+});
+
+/**
+ * Close a screen opened with SELECT with `button`: back on the field (never through the bag), the objects frozen
+ * and the controls locked while it fades in (FieldCB2_UseItemFromField), then both given back
+ * (Task_ItemUseWaitForFade). The press is made in the page, after the watch has started: the screen's fade out
+ * can be over before a round trip from here.
+ */
+async function closeBackToField(game: Game, button: 'B' | 'SELECT', what: string) {
+  const r = await game.eval(async (t, button) => {
+    let bag = false;
+    let onReturn: { locked: boolean; objectsFrozen: boolean } | undefined;
+    const ok = t.until(() => {
+      if (t.gbaScreen() === 'CB2_BagMenuRun') bag = true;
+      const f = t.field();
+      if (!f || t.gbaScreen() !== undefined) return false;
+      onReturn ??= { locked: f.locked, objectsFrozen: f.objectsFrozen };
+      return t.idle() && !f.locked && !f.message;
+    });
+    void t.press(button);
+    return { ok: await ok, bag, onReturn, objectsFrozen: t.field()?.objectsFrozen };
+  }, button);
+  expect(r.ok, what).toBe(true);
+  expect(r.bag).toBe(false);
+  expect(r.onReturn).toEqual({ locked: true, objectsFrozen: true });
+  expect(r.objectsFrozen).toBe(false);
+}
+
+/** The player can walk again: one step left. */
+async function walkLeft(game: Game) {
+  const x = await game.eval((t) => t.field()!.x);
+  await game.eval((t) => t.walk('left', 1));
+  await game.waitIdle();
+  expect(await game.eval((t) => t.field()!.x)).toBe(x - 1);
+}
+
+test('SELECT with the Town Map opens the region map from the field; B closes it back to the field', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown', x: 12, y: 14, party: [MEWTWO] });
+  await setUp(game, ['ITEM_TOWN_MAP'], 'ITEM_TOWN_MAP');
+  await game.press('SELECT');
+  await game.eval((t) => t.until(() => !!t.regionMap()?.ready));
+  // REGIONMAP_TYPE_NORMAL with the cursor and the player icon on Pallet Town (sMapSectionTopLeftCorners (4, 11))
+  expect(await game.eval((t) => t.regionMap())).toMatchObject({ type: 0, cursor: { x: 4, y: 11 }, player: { x: 4, y: 11 }, mapName: 'PALLET TOWN' });
+  await closeBackToField(game, 'B', 'the Town Map closed back to the field');
+  expect(await game.eval((t) => t.regionMap())).toBeUndefined();
+  await walkLeft(game);
+});
+
+test('SELECT with the TM case opens it from the field; a TM taught comes back to it, and SELECT closes it to the field', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown', x: 12, y: 14, party: [{ species: 'CHARMANDER', level: 10, moves: ['SCRATCH', 'GROWL'] }] });
+  await setUp(game, ['ITEM_HM01'], 'ITEM_TM_CASE');
+  const hm01 = await game.eval((t) => t.define('ITEM_HM01'));
+  const waitForList = () =>
+    game.waitFor(
+      (t) => {
+        const c = t.tmCase();
+        return c && c.task === 'Task_HandleListInput' && !c.fading ? c : undefined;
+      },
+      { what: 'the TM case list' },
+    );
+  await game.press('SELECT');
+  // TMCASE_FIELD, and SELECT closes it (InitTMCase(TMCASE_FIELD, CB2_ReturnToField, TRUE))
+  expect(await waitForList()).toMatchObject({ menuType: 0, items: [hm01], selectClose: true });
+
+  // HM01 → USE → CHARMANDER learns CUT, then back to the TM case (CB2_ReturnToTMCaseMenu keeps the exit callback)
+  await game.press('A');
+  await game.waitFor((t) => t.tmCase()?.task === 'Task_ContextMenu_HandleInput', { what: 'the USE / GIVE / EXIT menu' });
+  await game.press('A'); // USE
+  await game.waitForPartyMenu();
+  await game.mashUntil((t) => t.tmCase() !== undefined, { what: 'the TM case after teaching' });
+  expect((await game.eval((t) => t.party()))[0].moves).toEqual(['SCRATCH', 'GROWL', 'CUT']);
+  expect(await waitForList()).toMatchObject({ menuType: 0, selectClose: true });
+
+  await closeBackToField(game, 'SELECT', 'the TM case closed back to the field');
+  await walkLeft(game);
+});
+
+test('SELECT with the berry pouch opens it from the field; B closes it back to the field', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown', x: 12, y: 14, party: [MEWTWO] });
+  await setUp(game, ['ITEM_BERRY_POUCH', 'ITEM_ORAN_BERRY'], 'ITEM_BERRY_POUCH');
+  const oran = await game.eval((t) => t.define('ITEM_ORAN_BERRY'));
+  await game.press('SELECT');
+  const pouch = await game.waitFor(
+    (t) => {
+      const p = t.berryPouch();
+      return p && p.task === 'Task_BerryPouchMain' && !p.fading ? p : undefined;
+    },
+    { what: 'the berry pouch list' },
+  );
+  // BERRYPOUCH_FROMFIELD, and SELECT closes it (InitBerryPouch(BERRYPOUCH_FROMFIELD, CB2_ReturnToField, 1))
+  expect(pouch).toMatchObject({ type: 0, items: [oran], allowSelect: 1 });
+  await closeBackToField(game, 'B', 'the berry pouch closed back to the field');
+  await walkLeft(game);
 });

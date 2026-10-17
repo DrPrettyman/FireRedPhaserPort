@@ -42,8 +42,6 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Party menu: mail, the move relearner, Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
     field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
   - Region map / Fly (menus/regionMap.ts, world/fly.ts): no audio (SE_DEX_SCROLL, SE_CARD_OPEN, SE_M_FLY, ...).
-    The Town Map's registered (SELECT) use, Task_UseTownMapFromField, isn't ported yet (it logs and gives the
-    controls back; SCREENS_PLAN.md W-select unit 2).
     The bird of Fly always uses the extracted bird sheet's own palette (Red's), where the GBA draws it in OBJ
     palette 0, the player's (Leaf's frames would use hers). gExitStairsMovementDisabled isn't kept (no stair
     walk-out). The dungeon previews' third palette is zero-filled: the C loads 3 palettes from 2-palette data,
@@ -72,16 +70,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     Task_VsSeeker_0 / ItemUseOnFieldCB_Itemfinder carry on as the item's task). The Fame Checker and Teachy TV
     from SELECT log and give the controls back (no screens). ChangeBgY(0, 0, 0) is a no-op (the field's message
     box isn't on a scrolled BG); InUnionRoom is always FALSE. No quest log events (ItemUse_SetQuestLogEvent).
+    The Town Map, TM case and berry pouch from SELECT skip StopPokemonLeagueLightingEffectTask (the league rooms'
+    lighting isn't ported), and their screen starts once the map headers the region map / party menu read have
+    loaded (prepareFieldMoveMenu), a frame or more after the fade instead of in the same frame.
   - TM case (menus/tmCase.ts): silent (SE_SELECT, SE_SHOP); no quest log (RecordItemTransaction). Not ported:
-    the Pokédude's Teachy TV demo (TMCASE_POKEDUDE), the Union Room's GIVE / EXIT menu (no link play) and opening
-    it as a registered item from the field (Task_InitTMCaseFromField logs and gives the controls back; W-select
-    unit 2).
+    the Pokédude's Teachy TV demo (TMCASE_POKEDUDE) and the Union Room's GIVE / EXIT menu (no link play).
   - Berry pouch (menus/berryPouch.ts): silent (SE_BAG_CURSOR, SE_SELECT, SE_SHOP); no quest log
     (RecordItemTransaction). Not ported: Berry Crush (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room context
     menus (GIVE / EXIT, EXIT) and IsHoldingItemAllowed's Enigma Berry check there (always TRUE: neither can be
-    entered), opening it as a registered item from the field (Task_InitBerryPouchFromField logs and gives the
-    controls back; W-select unit 2), and
-    AbortBerryPouchLoading (for a failed Alloc).
+    entered) and AbortBerryPouchLoading (for a failed Alloc).
   - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
     overworld's ScreenFade.
   - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;

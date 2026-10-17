@@ -34,6 +34,17 @@ export interface FieldItemsHost {
   doesCurrentMapHaveFishingMons(): boolean;
   /** FishingWildEncounter: generates the mon and starts the wild battle. */
   fishingWildEncounter(rod: number): void;
+  /** FadeScreen(mode, delay) on the field */
+  fadeScreen(mode: number, delay: number): void;
+  /** gPaletteFade.active: the field's screen fade is running */
+  paletteFadeActive(): boolean;
+  /**
+   * CleanupOverworldWindowsAndTilemaps, then a GBA screen from the black field (FieldMenuScene 'itemFromField'):
+   * `init` is the C's call that sets the screen's main callback (InitTMCase, InitBerryPouch,
+   * InitRegionMapWithExitCB), `gfxSymbols` what it draws. Its CB2_ReturnToField runs the field callbacks
+   * (RunFieldCallback: gFieldCallback2, e.g. item_use.c's FieldCB2_UseItemFromField).
+   */
+  openScreenFromField(init: () => void, gfxSymbols: string[]): void;
 }
 
 let host: FieldItemsHost | undefined;
@@ -70,4 +81,19 @@ export function ClearDialogWindowAndFrame(): void {
 /** DismissMapNamePopup */
 export function DismissMapNamePopup(): void {
   fieldItemsHost().dismissMapNamePopup();
+}
+
+/** FadeScreen (field_screen_effect.c) */
+export function FadeScreen(mode: number, delay: number): void {
+  fieldItemsHost().fadeScreen(mode, delay);
+}
+
+/** gPaletteFade.active on the field */
+export function IsFieldPaletteFadeActive(): boolean {
+  return fieldItemsHost().paletteFadeActive();
+}
+
+/** CleanupOverworldWindowsAndTilemaps + the screen `init` starts (see FieldItemsHost.openScreenFromField). */
+export function OpenScreenFromField(init: () => void, gfxSymbols: string[]): void {
+  fieldItemsHost().openScreenFromField(init, gfxSymbols);
 }
