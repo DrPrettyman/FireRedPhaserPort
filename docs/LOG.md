@@ -1758,7 +1758,7 @@ end to end.
   only worked after the bag had been opened once; OverworldScene.create sets it now. Script `release` /
   `releaseall` didn't unfreeze objects (ClearPlayerHeldMovementAndUnfreezeObjectEvents); now they do. A frozen
   field (a rod's bite into a battle, a map load) is unfrozen when the map is resumed or loaded.
-- Probes: `field().locked`, `field().objectsFrozen`, `__test.gbaTasks()`, `__test.gbaFading()`.
+- Probes: `field().locked`, `field().objectsFrozen`, `__test.gbaTasks()`, `__test.paletteFadeActive()`.
 - Verified: typecheck; `npm test` (148); e2e tests/e2e/registeredItems.test.ts (new, 6 tests: registering the
   Bicycle through the bag's REGISTER and SELECT on / off with a step each way; Cycling Road's "can't dismount";
   the Old Rod facing away (Oak's message) and facing the water (cast, no bite, put away, a step); the Coin Case's

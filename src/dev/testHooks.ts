@@ -16,7 +16,6 @@ import { gMain } from '../gba/main';
 import { gPaletteFade } from '../gba/palette';
 import { gSprites } from '../gba/sprite';
 import { gTasks } from '../gba/task';
-import { gPaletteFade } from '../gba/palette';
 import type { Button } from '../input/Input';
 import type { Pokemon } from '../pokemon/Pokemon';
 import type { GameState } from '../state/GameState';
@@ -620,8 +619,6 @@ function createApi(game: Phaser.Game) {
     },
     /** The GBA task list's active tasks (gTasks), by function name: e.g. the bag's Task_BagMenu_HandleInput. */
     gbaTasks: () => gTasks.filter((t) => t.isActive).map((t) => t.func.name),
-    /** gPaletteFade.active: a GBA screen's palette fade is running (its input tasks wait for it). */
-    gbaFading: () => gPaletteFade.active,
     /** Quantity of the first stack of ITEM_<name> in the bag (0 if none). */
     itemCount: (name: string) => {
       const id = define(`ITEM_${name}`);

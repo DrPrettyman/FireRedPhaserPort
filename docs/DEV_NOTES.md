@@ -288,7 +288,7 @@ this is the next level down. When you add or change a subsystem, update its entr
     unfreeze objects (ClearPlayerHeldMovementAndUnfreezeObjectEvents), and a map load or a battle's return clears the
     freeze. Probes: `field().locked` (LockPlayerFieldControls held), `field().objectsFrozen`, `__test.gbaTasks()`
     (active gTasks by function name, e.g. `Task_BagMenu_HandleInput`, `Task_FieldItemContextMenuHandleInput`),
-    `__test.gbaFading()`. Tests: tests/e2e/registeredItems.test.ts (registering the Bicycle in the bag and SELECT on /
+    `__test.paletteFadeActive()`. Tests: tests/e2e/registeredItems.test.ts (registering the Bicycle in the bag and SELECT on /
     off, Cycling Road, the Old Rod, the Coin Case, the VS Seeker / Itemfinder / Poké Flute messages, nothing
     registered; Pallet Town's pond at (8, 16), (12, 13) for no trainers or hidden items).
 - **Scripted battles:** specials that start a battle (StartOldManTutorialBattle, StartMarowakBattle,

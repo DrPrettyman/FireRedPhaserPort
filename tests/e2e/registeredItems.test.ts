@@ -30,7 +30,7 @@ async function setUp(game: Game, items: string[], registered?: string) {
 
 /** The bag's list is taking input: the bag task, no fade, no window animation. */
 async function waitForBagList(game: Game, what: string) {
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_BagMenuRun' && !t.gbaFading() && t.gbaTasks().includes('Task_BagMenu_HandleInput') && !t.gbaTasks().includes('Task_AnimateWin0v'), { what });
+  await game.waitFor((t) => t.gbaScreen() === 'CB2_BagMenuRun' && !t.paletteFadeActive() && t.gbaTasks().includes('Task_BagMenu_HandleInput') && !t.gbaTasks().includes('Task_AnimateWin0v'), { what });
 }
 
 /** SELECT, then wait for the field to be free again: no script, overlay or message, the controls unlocked. */
