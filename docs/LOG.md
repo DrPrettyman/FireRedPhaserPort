@@ -1823,3 +1823,31 @@ end to end.
   staying on the front, B back to the start menu on PLAYER; a girl's blue card with the female background, no
   badges / stars / Pokédex line), plus hallOfFame, pokedexArea and transitions' "every battle transition" (the
   mugshots use PlayerGenderToFrontTrainerPicId). Screenshots of both cards match FRLG's layout.
+
+### Story checks Erika to Sabrina (W-story unit 3)
+
+- Extractor: `split_args` splits macro arguments like gas (macro.c's get_any_string ends an argument at a blank
+  between two operands; the scrubber keeps blanks only between symbol characters), so the two decomp lines without
+  a comma now extract as three arguments: Rocket Hideout B1F's `call_if_not_defeated TRAINER_TEAM_ROCKET_GRUNT_12
+  RocketHideout_B1F_EventScript_SetBarrier` and the nurse's `case 1 EventScript_PkmnCenterNurse_Goodbye` (NO at a
+  Pokémon Center nurse now says goodbye instead of ending on a missing label). Expressions (`(MAX_COINS + 1) - 500`,
+  `A | B`, battle script flags) stay one argument. Checked by diffing the whole of public/gen before and after: only
+  those two instructions in scripts.json changed.
+- ScriptEngine: `call_if_defeated` / `call_if_not_defeated` (event.inc: checktrainerflag + call_if TRUE / FALSE).
+  Rocket Hideout B4F's barrier to Giovanni opens once both door grunts are beaten (was a BLOCKER), and B1F's OnLoad
+  barrier is set until grunt 12 is beaten. Both gap entries removed.
+- Fixed on the way: `special GetQuestLogState` returned 0 instead of writing VAR_RESULT (quest_log.c sets
+  gSpecialVar_Result; `special` drops return values), so EventScript_DoNoIntroTrainerBattle read a stale VAR_RESULT
+  and, when it was 2, went to EventScript_EndQuestLogBattle: no battle, the script ended and talking again restarted
+  it. Hit by Giovanni in Rocket Hideout B4F after the two grunt battles (a BLOCKER); any `trainerbattle_no_intro`
+  could hit it (every rival battle after Oak's lab, Blaine, the Elite Four, Silph Co.'s Giovanni, Mt. Moon's
+  Miguel), depending on what VAR_RESULT last held.
+- e2e `tests/e2e/storyCeladonSaffron.test.ts` (new, 10 tests): Erika (Cut tree, badge, TM19); the Game Corner grunt,
+  poster switch and stair warp to the hideout; B1F's barrier with and without grunt 12; the hideout lift B1F → B4F;
+  B4F's door grunts, the barrier, Giovanni and the Silph Scope, and the barrier staying open on reload; Mr. Fuji's
+  warp home and the Poké Flute; the Tea, the Route 5 gate guard turning the player back without it and letting
+  them through with it; Silph Co. 7F's rival trigger battle; 11F's Giovanni and the president's Master Ball;
+  Saffron Gym's teleport pads to Sabrina, the badge and TM04. Nothing else on this stretch blocked.
+- Verified: typecheck; `npm test` (17 files, 155 tests, incl. the coverage test); e2e storyCeladonSaffron (10,
+  twice), field, trainerBattle, mainPathLeftovers, pokemonTower, scriptedBattles (24).
+

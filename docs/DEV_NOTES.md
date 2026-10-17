@@ -672,6 +672,19 @@ this is the next level down. When you add or change a subsystem, update its entr
   a new gap (it prints a ready-made entry with the maps; pick the tag from the decomp scripts) and on a fixed one
   (take it off the list). Porting a special in a Phaser module: register it with `registerSpecials({ ... })` as an
   object literal so the test can read its keys.
+- **Story checks (Erika to Sabrina):** `tests/e2e/storyCeladonSaffron.test.ts` plays each required story event
+  from a `?map=` start with the state the story would have (badges and hide flags with `setFlag`, the area's
+  trainers marked beaten with the TRAINER_FLAGS_START offset, a level-100 Mewtwo with PSYCHIC + CUT) and checks what
+  the player gets: Celadon Gym (the Cut tree, Erika, the badge, TM19), the Game Corner grunt and poster switch
+  (FLAG_OPENED_ROCKET_HIDEOUT, the stair warp to B1F), Rocket Hideout B1F / B4F's barriers, the hideout lift,
+  Giovanni and the Silph Scope, Mr. Fuji → the Poké Flute, the Tea and the Route 5 gate guard, Silph Co. 7F's rival
+  and 11F's Giovanni + Master Ball, Saffron Gym's pads and Sabrina. The ghost Marowak (pokemonTower.test.ts),
+  Snorlax with the flute (scriptedBattles.test.ts) and the card key doors (mainPathLeftovers.test.ts) have their own
+  files. Helpers in the file: `warp` (OverworldScene.warp, to reload a map after changing flags its ON_LOAD reads),
+  `talkFrom(x, y, dir)`, `winBattle` (A through a trainer battle; mashUntil's predicate runs in the page, so the
+  start mark goes through `window.__storySince`). Stair warps (MB_*_STAIR_WARP) and gate exits need
+  `t.enterWarp()` after `walkTo`; walking onto them doesn't warp. A `special` whose C sets gSpecialVar_Result must
+  set VAR_RESULT itself in specials.ts: `special` drops the function's return value (only `specialvar` stores it).
 - **Bugs that depend on world position:** `?map=` always loads at origin 0, so maps that are far from the origin in
   a real playthrough (e.g. Viridian at y = -80 after walking up from Pallet) need either a real walk or
   `await s.world.load(name, ox, oy)`, then `s.player.setPosition(...)` and `await s.onMapLoaded(false)`.
