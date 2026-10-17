@@ -1576,3 +1576,37 @@ end to end.
   footprint, Squirtle seen-only with the unknown fields, up/down skipping unseen numbers and stopping at the last
   seen mon, B back to the list on the mon shown last; A TO Z and LIGHTEST orders, back to the top menu), run
   twice. Screenshots of the mon page (caught and seen-only) and the LIGHTEST list match FRLG's layout.
+
+### Pokédex habitat pages and registering a catch (W-dex unit 3, SCREENS_PLAN.md batch 1)
+
+- `menus/pokedexScreen.ts`: Task_DexScreen_CategorySubmenu (the habitat pages: from the top menu's habitats,
+  Task_PokedexScreen case 6 → 7, and from A on a search list, Task_DexScreen_CharacteristicOrder case 6 → 7 with
+  parentOfCategoryMenu = 1), DexScreen_CreateCategoryListGfx, DexScreen_DrawMonPicInCategoryPage,
+  DexScreen_DestroyCategoryPageMonIconAndInfoWindows, DexScreen_PrintCategoryPageNumbers,
+  DexScreen_CreateCategoryPageSelectionCursor (the selected slot's pulsing frame), DexScreen_UpdateCategoryPageCursorObject,
+  DexPage_TileBuffer_*, DexScreen_TurnCategoryPage_BgEffect, DexScreen_FlipCategoryPageInDirection (incl. the
+  non-BUGFIX step 7 at the end of a right flip), DexScreen_CreateCategoryMenuScrollArrows,
+  DexScreen_InputHandler_GetShoulderInput (L / R only with BUTTON MODE LR, R + left/right with L=A, nothing with
+  HELP, the default), the unlock rules (CreateCategoryPageSpeciesList, GetPageLimitsForCategory,
+  PageNumberToRenderablePages), the habitat's mon page (zoom in / out from the selected box) and its area-page
+  states around the existing placeholders. DexScreen_RegisterMonToPokedex,
+  Task_DexScreen_RegisterNonKantoMonBeforeNationalDex, Task_DexScreen_RegisterMonToPokedex.
+- `battle/bsCommands4.ts`: Cmd_displaydexinfo ported (it used to skip): the white fade, the registered page, then
+  VRAM cleared, the battle BGs and textbox reloaded, the caught mon's pic and the fade in before "Give a nickname
+  to...?". `scenes/BattleScene.ts` preloads the Pokédex data and the registered page's graphics
+  (`dexRegisterGfxSymbols`) for a wild battle's species that aren't caught yet.
+- `gba/listMenu.ts`: list_menu.c's cursor objects: ListMenuAddCursorObject and menu_indicators.c's
+  ListMenuAddCursorObjectInternal / ListMenuUpdateCursorObject / ListMenuRemoveCursorObject (the red outline built
+  from 8x8 subsprites with s8 offsets, and the swaying red arrow); list menus with cursorKind 2 / 3 now draw and
+  remove them instead of warning.
+- Habitat pages and the registered page wait for their mons' graphics (`DexScreen_LoadCategoryPageGfx`) before
+  drawing a page or starting a flip.
+- Probe: `__test.pokedex().categoryPage`; `ready` covers the habitat page (5), its mon page (17) and the registered
+  page (11); `monPage` is reported for any task with the page's windows up.
+- Verified: typecheck; `npm test` (131); tests/e2e/pokedex.test.ts (8, new: Forest's pages with left/right flips
+  past the locked Hoenn pages, L / R with BUTTON MODE LR, A zooms into Butterfree's page and B back, B back to the
+  top menu; A TO Z's A on Butterfree opens Forest's page on it and B returns to the list; a Master Ball catch of
+  Pidgey shows Forest's page 5 [Pidgey, Pidgeotto] and Pidgey's page, then A → the nickname prompt with the
+  battle redrawn); wildBattle, scriptedBattles, pcBoxes, mainPathLeftovers' Lugia (non-Kanto before the National
+  Dex) and battleAnims' old man tutorial pass. Screenshots of the habitat page, the registered page and the battle
+  after it look like FRLG's.
