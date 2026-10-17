@@ -1736,3 +1736,39 @@ end to end.
   fixed fly.test.ts's `useTownMap` the same way.
 - Verified: typecheck, unit tests and the full e2e suite on each PR after merging master in; the final run is in
   this PR: on master after #40, typecheck, 148 unit tests and 269 e2e tests (39 files) pass.
+### Script coverage check and e2e bag / party waits (W-story unit 1)
+
+- `tests/unit/scriptCoverage.test.ts`: every script command, special / specialvar, std script, movement action and
+  scripted `dofieldeffect` the decomp's scripts use, checked against the port's own tables (ScriptEngine's command
+  table, SPECIALS + TRAINER_SPECIALS + `registerSpecials` blocks read from the source, MovementRunner's dispatch on
+  a stub object, `registerFieldEffectNatives` blocks). Known gaps in `tests/unit/scriptCoverageGaps.ts` (184:
+  17 main, 68 side, 55 postgame, 44 link), each with the maps that reach it (a reachability walk from every map's
+  scripts). The rough check's false positives (ShowTrainerIntroSpeech, SetUpTrainerMovement: trainer specials in
+  ScriptEngine; VsSeekerFreezeObjectsAfterChargeComplete: registered by world/vsSeeker.ts) aren't gaps.
+- Extractor: scripts.json gets `macros` (event.inc + trainer_tower.inc, movement.inc, map.inc macro names) so the
+  test tells commands from movement actions and map data. ScriptEngine exports TRAINER_SPECIALS and has a
+  `commandNames` getter.
+- Found on the main path: `call_if_defeated` / `call_if_not_defeated` aren't commands in the port, so Rocket
+  Hideout B4F's barrier to Giovanni never opens (BLOCKER); SetVermilionTrashCans (BLOCKER for Lt. Surge's gym).
+  SetSeenMon, which the plan had as main, is only used by optional scripts (side). Two decomp lines have no comma
+  between macro arguments, which GAS accepts and the extractor's split_args doesn't: `call_if_not_defeated
+  TRAINER_TEAM_ROCKET_GRUNT_12 RocketHideout_B1F_...` and `case 1 EventScript_PkmnCenterNurse_Goodbye` (NO at a
+  Pokémon Center nurse skips the goodbye). Left for W-story unit 2.
+- e2e: `game.waitForBag()` / `waitForPartyMenu()` / `waitForScreen(cb2)` in harness.ts wait for the screen's main
+  callback and the end of its palette fade (new probe `t.paletteFadeActive()`), replacing fixed `waitFrames(60)` /
+  CB2-then-30/40-frame waits in 19 files (local `waitForBag` copies in berryPouch / tmCase removed). Waits that
+  give a refusal time to show with the menu already up (fieldItems, fieldMoves, surf, strength, fly,
+  playerAvatar), the PC / shop field menus and saveContinue's clock window stay fixed.
+- Races fixed on the way (each failed once with three other workers running, load average ~150, and passed on a
+  rerun): `t.until` resolved with `pred()` evaluated again after the frame's batch of ticks, so a short-lived state
+  could be gone (surf's jump watcher got undefined); it now returns the result from the tick it held in. The
+  tap-turn test and surf's `watchAction` read the field inside the predicate; playerAvatar's boulder test holds UP
+  with the new `t.holdWhile` (released any later, the player walked on into the hole to B1F again).
+- Not fixed, failed once under that load and passed on reruns: fieldEffects.test.ts "water and flower tiles
+  animate" (same tile bytes 40 frames apart) and "leaving a house, the player walks out of the opening door" (the
+  600-frame `until` for the hidden arrival ran out).
+- Verified: typecheck; `npm test` (16 files, 152 tests); e2e, a few files at a time: every file whose waits
+  changed (battleAnims, berryPouch, evolution, fieldItems, fieldMoves, fly, itemfinder, mainPathLeftovers, pcBoxes,
+  pcStorage, playerAvatar, pokedex, saveContinue, scriptedBattles, strength, surf, tmCase, vsSeeker, wildBattle)
+  and, after the `until` change, every file that uses it (also fieldEffects, mapNamePopup, pokedexArea, hallOfFame,
+  titleScreen, pokemart, transitions).
