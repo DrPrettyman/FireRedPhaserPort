@@ -11,6 +11,7 @@
 - menuInfoIcons: sMenuInfoIcons (list_menu.c) as [width, height, tile offset]
 - namingKeyboardChars: sKeyboardChars (naming_screen.c) by KEYBOARD_* page, four raw `__()` rows each
 - regionMap: region_map.c's tables (see region_map_data)
+- pokedexArea: wild_pokemon_area.c's and pokedex_area_markers.c's tables (see pokedex_area_data)
 """
 
 import json
@@ -146,6 +147,57 @@ def region_map_data(decomp, defines):
     }
 
 
+def pokedex_area_data(decomp, defines):
+    """The Pokédex area page's tables: wild_pokemon_area.c's sDexAreas_Kanto and sDexAreas_Sevii1..7
+    ([mapsec, DEX_AREA_*] rows, in order: a mapsec may repeat) and sRoamerPairs ([roamer, starter]
+    species); pokedex_area_markers.c's sAreaMarkers ([MARKER_*, x, y] by DEX_AREA_*) and sSubsprites
+    ([shape, size, priority, tileOffset] by MARKER_*); mapSecs: every map header's regionMapSectionId by
+    MAP_* id (what Overworld_GetMapHeaderByGroupAndId(...)->regionMapSectionId gives); firstMap: the MAP_*
+    id of group 0 / num 0 (where an EWRAM map location that was never set points)."""
+    src = decomp / "src"
+    wpa = (src / "wild_pokemon_area.c").read_text()
+    pam = (src / "pokedex_area_markers.c").read_text()
+
+    def pairs(name):
+        body = c_array_body(wpa, name)
+        return [[eval_const_expr(a, defines), eval_const_expr(b, defines)] for a, b in re.findall(r"\{\s*(\w+)\s*,\s*(\w+)\s*\}", body)]
+
+    sevii_names = re.findall(r"\{\s*(sDexAreas_Sevii\d)\s*,", c_array_body(wpa, "sSeviiDexAreas"))
+
+    known = dict(defines)
+    enum = re.search(r"enum\s*\{([^}]*MARKER_CIRCULAR[^}]*)\}", pam).group(1)
+    for i, name in enumerate(re.findall(r"\b(MARKER_\w+)", enum)):
+        known[name] = i
+    subsprite_defs = {}
+    for name, body in re.findall(r"Subsprite\s+(\w+)\s*=\s*\{(.*?)\};", pam, re.S):
+        f = dict(re.findall(r"\.(\w+)\s*=\s*([^,\n]+)", body))
+        size = defines["SPRITE_SIZE_" + re.fullmatch(r"SPRITE_SIZE\((\w+)\)", f["size"].strip()).group(1)]
+        shape = defines["SPRITE_SIZE_" + re.fullmatch(r"SPRITE_SHAPE\((\w+)\)", f["shape"].strip()).group(1)]
+        subsprite_defs[name] = [shape & 3, size >> 2, eval_const_expr(f["priority"], known), eval_const_expr(f["tileOffset"], known)]
+    subsprites = by_index(designated_entries(c_array_body(pam, "sSubsprites")), known, lambda v: subsprite_defs[v.lstrip("&").strip()])
+
+    flat = c_numeric_table(pam, "sAreaMarkers", known)
+    markers = [flat[i : i + 3] for i in range(0, len(flat), 3)]
+
+    groups = json.loads((decomp / "data/maps/map_groups.json").read_text())
+    map_secs, first_map = {}, None
+    for group in groups["group_order"]:
+        for folder in groups[group]:
+            m = json.loads((decomp / "data/maps" / folder / "map.json").read_text())
+            first_map = first_map or m["id"]
+            map_secs[m["id"]] = defines[m["region_map_section"]]
+
+    return {
+        "dexAreasKanto": pairs("sDexAreas_Kanto"),
+        "dexAreasSevii": [pairs(n) for n in sevii_names],
+        "roamerPairs": pairs("sRoamerPairs"),
+        "areaMarkers": markers,
+        "subsprites": subsprites,
+        "mapSecs": map_secs,
+        "firstMap": first_map,
+    }
+
+
 def extract_menus(decomp, out):
     defines = parse_defines(decomp)
     src = decomp / "src"
@@ -207,6 +259,7 @@ def extract_menus(decomp, out):
         "evolutions": evolutions,
         "namingKeyboardChars": naming_keyboard_chars(decomp),
         "regionMap": region_map_data(decomp, defines),
+        "pokedexArea": pokedex_area_data(decomp, defines),
     }
     (out / "menus.json").write_text(json.dumps(data, separators=(",", ":")))
     print(f"  {len([s for s in mon_icons if s])} mon icons, {len([s for s in item_icons if s])} item icons, "
