@@ -1556,6 +1556,25 @@ end to end.
   Magikarp by rod only, no areas, Slugma only once One Island is unlocked, Altering Cave's sets, the roamer at its
   location / the unpaired roamers / inactive, the markers' OBJ-window OAM). typecheck, `npm test` (100) and
   mapNamePopup e2e pass. The e2e (tests/e2e/pokedexArea.test.ts) comes with the area page in unit 2.
+
+### Berry pouch (SCREENS_PLAN.md batch 1, W-tmcase unit 2)
+
+- `menus/berryPouch.ts` ports berry_pouch.c: InitBerryPouch for BERRYPOUCH_FROMFIELD (the bag's KEY ITEMS → BERRY
+  POUCH → OPEN: FieldUseFunc_BerryPouch / InitBerryPouchFromBag), BERRYPOUCH_FROMBATTLE (the battle bag's OPEN:
+  BattleUseFunc_BerryPouch / InitBerryPouchFromBattle), BERRYPOUCH_FROMPARTYGIVE / FROMPOKEMONSTORAGEPC /
+  FROMMARTSELL (GoToBerryPouch_Give / _PCBox / _Sell, which logged "not implemented") and BERRYPOUCH_NA
+  (CB2_ReturnToBerryPouchMenu, which fell back to the bag). The list ("No01 CHERI BERRY ×n", CLOSE), the item icon
+  and description, the pouch sprite's wobble, the context menus (USE / GIVE / TOSS / EXIT; USE / TOSS / EXIT in
+  battle), the toss flow (how many, YES/NO, "Threw away"), the sell flow (how many, the money box, YES/NO).
+- Berry use goes through the existing item_use.c functions with the pouch's task: SetUpItemUseCallback,
+  ItemUse_SwitchToPartyMenuInBattle and FieldUseFunc_OakStopsYou now hand back to the pouch instead of logging.
+- Graphics: `graphics/berry_pouch/` in extract_gfx.py (gBerryPouch*); `menuGfxSymbols` preloads them, which covers
+  BattleScene's preload too. `CreateBerryPouchItemIcon` added to menus/itemMenuIcons.ts.
+- Verified: tests/e2e/berryPouch.test.ts (from the bag: an Oran Berry restores 10 HP and comes back to the pouch,
+  GIVE from the pouch's menu, tossing two Cheri Berries; a Razz Berry's "This isn't the time to use that!"; the party
+  menu's ITEM → GIVE and the PC's MOVE ITEMS → GIVE through the pouch; selling three Oran Berries at the Pewter Mart;
+  the battle bag's OPEN → USE an Oran Berry on the battler), screenshots of the list, context menu, toss and sell
+  boxes; tmCase, pokemart, pcStorage, wildBattle, evolution, listMenuFlash e2e files and the unit tests still pass.
 ### Pokédex mon page and search lists (W-dex unit 2, SCREENS_PLAN.md batch 1)
 
 - `menus/pokedexScreen.ts`: Task_DexScreen_ShowMonPage (A on a seen mon in a numerical list; up/down to the
@@ -1610,3 +1629,25 @@ end to end.
   battle redrawn); wildBattle, scriptedBattles, pcBoxes, mainPathLeftovers' Lugia (non-Kanto before the National
   Dex) and battleAnims' old man tutorial pass. Screenshots of the habitat page, the registered page and the battle
   after it look like FRLG's.
+### Pokédex area page (W-dexarea unit 2, SCREENS_PLAN.md batch 1)
+
+- `menus/pokedexArea.ts`: pokedex_screen.c's DexScreen_DrawMonAreaPage (the frame on BG3 / BG0, the Kanto map and
+  the unlocked Sevii islands' map windows with kantoMapVoff, the icon, number and name, "SIZE" / "AREA", the type
+  icons and the size comparison for caught mons: the mon's and the player's pics in sPalette_Silhouette with affine
+  matrices scaled by pokemonScale / trainerScale and the y2 offsets, the markers, "AREA UNKNOWN" over the wide
+  ellipse, the control bar) and DexScreen_DestroyAreaScreenResources. Wired into Task_DexScreen_ShowMonPage: A on
+  the mon page → the area page; B back to the mon page, A back to the list (the placeholders are gone).
+- `gba/listMenu.ts`: ListMenu_LoadMonIconPalette / ListMenu_DrawMonIconGraphics. `menus/hallOfFame.ts` exports
+  PlayerGenderToFrontTrainerPicId. Graphics: `pokedexAreaGfxSymbols()` joins `pokedexScreenGfxSymbols()`, the mon's
+  icon joins `dexMonGfxSymbols` (loaded with the mon page). Probe `__test.pokedexArea()`.
+- Fixed on the way: tools/extract_gfx.py didn't invert greyscale PNGs for 4bpp / 8bpp tiles like gbagfx does
+  (ConvertToTiles4Bpp's invertColors when the PNG has no palette), so their colour indices were 15 - the real ones.
+  "AREA UNKNOWN"'s ellipse had an orange box round it; it also fixes the title screen's border BG (the teal band was
+  grey), the TM case's disc (its background was index 15, not transparent), the battle transitions' grid square
+  and mugshot banner, and a few unused symbols. Rerun `npm run extract`.
+- Verified: typecheck; unit tests (131); tests/e2e/pokedexArea.test.ts (new: Bulbasaur caught with AREA UNKNOWN,
+  its types and both silhouettes at 356 / 256 with y2 16 / -2; B back to the mon page; Pidgey's 13 markers and
+  scale 492; Rattata seen-only with markers but no types or silhouettes; A back to the list; with Three and Five
+  Island unlocked Pidgey's 16 markers and the map at the top), plus pokedex, tmCase, titleScreen and the
+  transitions test's every-transition case (for the extractor fix). Screenshots of the area page (caught, seen-only,
+  area unknown, with islands) match FRLG's layout.

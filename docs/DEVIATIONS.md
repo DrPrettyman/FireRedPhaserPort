@@ -42,6 +42,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     follows. The show-mon banner's graphics load while the player's pose plays, so a very slow load would hold the
     banner back. Dig/Escape Rope with no escape warp saved (a dev start in a cave) go to the last heal location.
   - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Bag uses that need overworld systems
+    (rods, Escape Rope, Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail,
+    registered SELECT items) log "not implemented" and return to the bag. Berry powder reads as 0.
     (Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail, TM case, berry pouch, registered SELECT items) log
     "not implemented" and return to the bag. The Escape Rope's quest log event (ItemUse_SetQuestLogEvent) isn't
     recorded; ItemUseOnFieldCB_EscapeRope takes the field controls lock itself (on the GBA the start menu's lock is
@@ -54,6 +56,11 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - TM case (menus/tmCase.ts): silent (SE_SELECT, SE_SHOP); no quest log (RecordItemTransaction). Not ported:
     the Pokédude's Teachy TV demo (TMCASE_POKEDUDE), the Union Room's GIVE / EXIT menu (no link play) and opening
     it as a registered item from the field (Task_InitTMCaseFromField: there are no registered SELECT items yet).
+  - Berry pouch (menus/berryPouch.ts): silent (SE_BAG_CURSOR, SE_SELECT, SE_SHOP); no quest log
+    (RecordItemTransaction). Not ported: Berry Crush (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room context
+    menus (GIVE / EXIT, EXIT) and IsHoldingItemAllowed's Enigma Berry check there (always TRUE: neither can be
+    entered), opening it as a registered item from the field (Task_InitBerryPouchFromField), and
+    AbortBerryPouchLoading (for a failed Alloc).
   - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
     overworld's ScreenFade.
   - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;
@@ -101,7 +108,6 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
     GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
-    Selling from the berry pouch logs "not implemented" (that screen doesn't exist yet).
   - Field steps: eggs count down egg cycles, but the daycare (breeding,
     its mons' steps) and the hatching scene (`special EggHatch`) aren't ported. A finished VS Seeker charge would
     start EventScript_VsSeekerChargingDone, whose specials aren't ported; only the (unported) VS Seeker starts one.
@@ -164,17 +170,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     FLDEFF_HALL_OF_FAME_RECORD's SE_BALL is silent. Other game stats than GAME_STAT_ENTERED_HOF and
     GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted. `special Script_UpdateTrainerFanClubGameClear` is a no-op (the Trainer
     Fan Club isn't kept).
-  - Pokédex screen (menus/pokedexScreen.ts): no audio (SE_SELECT, the SE_DEX_* sounds, the mon page's cries and
-    START = CRY, the page turn's SE_BALL_TRAY_ENTER and the cry after registering a catch; the BGM volume calls
-    are no-ops); no help system context. Not ported yet: A on the mon page (the area page) does nothing from the
-    numerical lists, and from a habitat page it shows an empty page (the area page's functions are placeholders).
-    The mon page and the habitat pages load the shown mons' pics, palettes and footprints when they're first drawn
-    (fetched on demand, not preloaded; the battle preloads the registered page's), so the first view of a mon or a
-    page can take a frame or two longer. Unown and Spinda
-    are drawn with personality 0 (the save's unownPersonality / spindaPersonality aren't kept; Spinda's spots
-    aren't drawn anywhere). The anticheat's second and third copies of the seen flags aren't
-    kept (one `dexSeen` set), so "caught" just needs "seen" too. The Pokédex keeps the field's DISPCNT, which the
-    port sets in FieldMenuScene since the field isn't on the GBA layer.
+  - Pokédex screen (menus/pokedexScreen.ts, menus/pokedexArea.ts): no audio (SE_SELECT, the SE_DEX_* sounds, the
+    mon page's cries and START = CRY, the page turn's SE_BALL_TRAY_ENTER and the cry after registering a catch; the
+    BGM volume calls are no-ops); no help system context. The mon page and the habitat pages load the shown mons'
+    pics, palettes, footprints and icons (for the area page) when they're first drawn (fetched on demand, not
+    preloaded; the battle preloads the registered page's), so the first view of a mon or a page can take a frame or
+    two longer. Unown and Spinda are drawn with personality 0 (the save's unownPersonality / spindaPersonality
+    aren't kept; Spinda's spots aren't drawn anywhere). The anticheat's second and third copies of the seen flags
+    aren't kept (one `dexSeen` set), so "caught" just needs "seen" too. The Pokédex keeps the field's DISPCNT,
+    which the port sets in FieldMenuScene since the field isn't on the GBA layer.
   - Credits (menus/credits.ts): no audio (MUS_CREDITS, the cries). A map scene loads asynchronously, so it can start
     a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
     GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.

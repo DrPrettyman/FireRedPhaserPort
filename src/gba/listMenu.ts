@@ -3,6 +3,7 @@
 
 import { K } from '../battle/constants';
 import { menusData } from '../menus/data';
+import { GetMonIconPtr, GetValidMonIconPalettePtr } from '../menus/pokemonIcon';
 import { gfx, gfx16 } from './gfx';
 import { animTable } from '../battle/gfx';
 import { gSineTable } from '../battle/trig';
@@ -34,6 +35,7 @@ import { CreateTask, DestroyTask } from './task';
 import {
   AddTextPrinterParameterized4,
   BlitBitmapRectToWindow,
+  BlitBitmapToWindow,
   COPYWIN_GFX,
   CopyWindowToVram,
   FillWindowPixelBuffer,
@@ -414,6 +416,16 @@ export function ListMenuSetTemplateField(taskId: number, field: number, value: n
   // Only the field the ported screens set (LISTFIELD_CURSORKIND) is needed.
   if (field === LISTFIELD_CURSORKIND) data.template.cursorKind = value;
   else console.warn(`[list_menu] ListMenuSetTemplateField(${field}) not implemented`);
+}
+
+/** ListMenu_LoadMonIconPalette: the species' icon palette into the BG palettes at palOffset */
+export function ListMenu_LoadMonIconPalette(palOffset: number, speciesId: number): void {
+  LoadPalette(GetValidMonIconPalettePtr(speciesId), palOffset, PLTT_SIZE_4BPP);
+}
+
+/** ListMenu_DrawMonIconGraphics: the icon's first frame (32x32) into a window. Preload its graphics (monIconSymbol). */
+export function ListMenu_DrawMonIconGraphics(windowId: number, speciesId: number, personality: number, x: number, y: number): void {
+  BlitBitmapToWindow(windowId, GetMonIconPtr(speciesId, personality, true), x, y, 32, 32);
 }
 
 /** ListMenuLoadStdPalAt: the caught-ball palette (0) or the type icons' palette (1). */
