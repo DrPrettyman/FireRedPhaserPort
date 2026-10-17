@@ -98,16 +98,10 @@ Overlap to watch: W-fieldmove and W-avatar both touch `OverworldScene.ts`. W-ava
 W-fieldmove only adds field-effect hooks. If they collide at merge, W-avatar's version wins and the hook is
 re-added.
 
-## Rules (same as the battle anims, plus)
+## Rules
 
-- Follow CLAUDE.md. Port from the decomp, cite C function names.
-- Only change what your workstream owns; keep shared changes small and list them in the PR.
-- Tests: typecheck, `npm test`, and your own e2e file (`tests/e2e/<workstream>.test.ts`). W-avatar also runs the
-  full e2e suite. The merger runs the full suite once per batch.
-- Docs: a docs/LOG.md entry, new deviations in docs/DEVIATIONS.md, a docs/DEV_NOTES.md entry for a new
-  subsystem. Don't tick STATUS.md items; the merger does.
-- Scratch files: prefix with your workstream name.
-- If you run low on context, commit, push, open the PR with what's done and say what's left.
+Worker and merger rules: docs/WORKFLOW.md sections 3 and 4. Each worker's e2e file is
+`tests/e2e/<workstream>.test.ts`.
 
 ## Decisions (agreed 2026-10-16)
 

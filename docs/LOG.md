@@ -1450,3 +1450,13 @@ end to end.
   - battleAnimHelpers `expectMovesRun`: a move that can miss (SING, DISABLE, THUNDER, WILL_O_WISP, ...) played no
     anim when the roll missed; a miss now uses the move again, reseeding with another seed each time (the same seed
     rolled the same miss).
+
+### docs/WORKFLOW.md: the coordinator / worker / merger procedure
+
+- New docs/WORKFLOW.md writes down how batches have been run: planning (checking each item against the decomp
+  and the port, one owner per shared building block), worktree setup with cloned node_modules and public/gen, the
+  worker prompt template, the worker rules (moved here from MAIN_PATH_PLAN.md), and the merger's extras (the merge
+  diff check, stacked PRs after a squash, flaky tests are races to fix, the docs-only PRs for plan and STATUS).
+- From batch 3's lessons: duplicated building blocks (affine BGs, top bar window, SoftReset), workers dismissing
+  flakes as load, a stacked branch in the same worktree, the ~10-minute full suite.
+- CLAUDE.md and STATUS.md point to it.

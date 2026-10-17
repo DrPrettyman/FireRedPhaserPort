@@ -5,6 +5,7 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
 - [docs/DEV_NOTES.md](docs/DEV_NOTES.md): how each subsystem fits together, where to hook in, how to test it.
 - [docs/DEVIATIONS.md](docs/DEVIATIONS.md): placeholders and approximations (so they aren't mistaken for ports), and
   deliberate QOL changes.
+- [docs/WORKFLOW.md](docs/WORKFLOW.md): how a batch of parallel workers is planned, run and merged.
 - [docs/LOG.md](docs/LOG.md): one entry per change, newest at the bottom. Search it (`grep -n`) for the history of
   a subsystem; don't read it end to end.
 
