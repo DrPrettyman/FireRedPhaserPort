@@ -57,11 +57,12 @@ test('Cut: talking to a cut tree with the badge and a mon that knows CUT cuts it
   const since = await game.mark();
   await game.press('A');
   // "This tree looks like it can be CUT down! Would you like to CUT it?" → YES, "FARFETCH'D used CUT!"
-  await game.mashUntil((t) => t.events().some((e) => e.type === 'fieldMoveShowMon'), { what: 'the show-mon banner' });
+  // The player holds the field move pose until the banner is over: read it in the tick the banner starts (a read
+  // from node after the mash can land after the banner under load).
+  const pose = await game.mashUntil((t) => t.events().some((e) => e.type === 'fieldMoveShowMon') && t.field()!.avatar.graphicsId, { what: 'the show-mon banner' });
   const banner = await game.waitForEvent('fieldMoveShowMon', { since });
   expect(banner).toMatchObject({ species: await game.eval((t) => t.define('SPECIES_FARFETCHD')), outdoors: true });
-  // The player holds the field move pose until the banner is over.
-  expect(await game.eval((t) => t.field()!.avatar.graphicsId)).toBe('OBJ_EVENT_GFX_RED_FIELD_MOVE');
+  expect(pose).toBe('OBJ_EVENT_GFX_RED_FIELD_MOVE');
   await waitFieldFree(game, 'the tree to be cut');
   expect(await objectAt(game, 19, 24)).toBeUndefined();
   expect(await game.eval((t) => t.flag('FLAG_TEMP_12'))).toBe(true);

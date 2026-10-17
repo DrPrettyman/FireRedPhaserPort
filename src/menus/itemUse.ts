@@ -1,7 +1,8 @@
-// item_use.c: what Use does for each item, from the bag (tasks' data[3] == 0) and in battle. The
-// functions are looked up by the names in the item table (fieldUseFunc / battleUseFunc). Uses that
-// need overworld systems that don't exist yet (Fame Checker, Teachy TV, mail) aren't in the
-// tables; the bag logs them. Berries used from the berry pouch run these with the pouch's task, and hand
+// item_use.c: what Use does for each item, from the bag (tasks' data[3] == 0), from the field with SELECT
+// (a registered key item: UseRegisteredKeyItemOnField in menus/registeredItem.ts runs the field func as a task
+// with data[3] == 1) and in battle. The functions are looked up by the names in the item table (fieldUseFunc /
+// battleUseFunc). Uses that need overworld systems that don't exist yet (Fame Checker, Teachy TV, mail) aren't
+// in the tables; the bag logs them. Berries used from the berry pouch run these with the pouch's task, and hand
 // back to the pouch instead of the bag.
 
 import { K } from '../battle/constants';
@@ -10,7 +11,7 @@ import { Battle_PrintStatBoosterEffectMessage, ExecuteTableBasedItemEffect } fro
 import type { MainCallback } from '../gba/main';
 import { A_BUTTON, B_BUTTON, JOY_NEW } from '../gba/main';
 import { IsSEPlaying, PlayFanfareByFanfareNum, PlaySE, WaitFanfare } from '../gba/sound';
-import { gTasks, type TaskFunc } from '../gba/task';
+import { DestroyTask, gTasks, TASK_NONE, type TaskFunc } from '../gba/task';
 import {
   CalculatePlayerPartyCount,
   ConvertIntToDecimalStringN,
@@ -30,7 +31,7 @@ import {
 } from './common';
 import { CB2_ReturnToField, gFieldCallback, type FieldCallbackHost } from './fieldCallbacks';
 import { GetOnOffBike, IsBikingDisallowedByPlayer } from '../world/bike';
-import { avatarField, ClearPlayerHeldMovement, PLAYER_AVATAR_FLAG } from '../world/playerAvatar';
+import { avatarField, ClearPlayerHeldMovement, PLAYER_AVATAR_FLAG, TestPlayerAvatarFlags } from '../world/playerAvatar';
 import {
   Bag_BeginCloseWin0Animation,
   CB2_BagMenuFromBattle,
@@ -92,7 +93,7 @@ function SetUpItemUseCallback(taskId: number): void {
 function DisplayItemMessageInCurrentContext(taskId: number, inField: boolean, fontId: number, str: number[]): void {
   ExpandToStringVar4(str);
   if (!inField) DisplayItemMessageInBag(taskId, fontId, gStringVar4, Task_ReturnToBagFromContextMenu);
-  else console.warn('[item_use] using registered items from the field is not implemented');
+  else DisplayItemMessageOnField(taskId, fontId, gStringVar4, Task_ItemUse_CloseMessageBoxAndReturnToField);
 }
 
 function PrintNotTheTimeToUseThat(taskId: number, inField: boolean): void {
@@ -112,16 +113,24 @@ function ItemIdFieldFuncIs(itemId: number, name: string): boolean {
 
 const inField = (taskId: number) => gTasks[taskId].data[3] !== 0;
 
-/** sItemUseOnFieldCB: what an item does once the bag has closed and the field is back. */
+/**
+ * sItemUseOnFieldCB: what an item does on the field, once the bag has closed and the field is back, or at once
+ * for a registered item. Its taskId is the item's task with SELECT; after the bag it's TASK_NONE (the port's
+ * FieldCB_FadeInFromBlack runs it from the field's overlay, not from a Task_WaitFadeIn_CallItemUseOnFieldCB task).
+ */
 let sItemUseOnFieldCB: (taskId: number) => void = () => {};
 
 /**
  * SetUpItemUseOnFieldCallback: from the bag, close it (CB2_ReturnToField) with gFieldCallback set to
- * FieldCB_FadeInFromBlack. (Registered items used with SELECT, data[3] == 1, aren't ported.)
+ * FieldCB_FadeInFromBlack; with SELECT (data[3] == 1), run sItemUseOnFieldCB at once.
  */
 function SetUpItemUseOnFieldCallback(taskId: number): void {
-  gFieldCallback.fn = FieldCB_FadeInFromBlack;
-  SetUpItemUseCallback(taskId);
+  if (gTasks[taskId].data[3] !== 1) {
+    gFieldCallback.fn = FieldCB_FadeInFromBlack;
+    SetUpItemUseCallback(taskId);
+  } else {
+    sItemUseOnFieldCB(taskId);
+  }
 }
 
 /** FieldCB_FadeInFromBlack + Task_WaitFadeIn_CallItemUseOnFieldCB */
@@ -129,9 +138,55 @@ function FieldCB_FadeInFromBlack(field: FieldCallbackHost): () => boolean {
   const faded = field.fadeInFromBlack();
   return () => {
     if (!faded()) return false;
-    sItemUseOnFieldCB(0);
+    sItemUseOnFieldCB(TASK_NONE);
     return true;
   };
+}
+
+/** DestroyTask for an sItemUseOnFieldCB's task (TASK_NONE after the bag: there is none). */
+function DestroyItemUseTask(taskId: number): void {
+  if (taskId !== TASK_NONE) DestroyTask(taskId);
+}
+
+/**
+ * DisplayItemMessageOnField (new_menu_helpers.c) for an item's task: the field's message box (window 0, the
+ * dialogue frame) at the player's text speed; once it has printed, `callback` becomes the task's func
+ * (Task_ContinueTaskAfterMessagePrints).
+ */
+function DisplayItemMessageOnField(taskId: number, fontId: number, str: number[], callback: TaskFunc): void {
+  gTasks[taskId].func = Task_ContinueTaskAfterMessagePrints;
+  fieldFuncs().DisplayItemMessageOnField(str.slice(), () => {
+    if (gTasks[taskId].isActive && gTasks[taskId].func === Task_ContinueTaskAfterMessagePrints) gTasks[taskId].func = callback;
+  }, fontId);
+}
+
+/** Task_ContinueTaskAfterMessagePrints: the field's DisplayItemMessageOnField (world/fieldItems.ts) watches the printer. */
+function Task_ContinueTaskAfterMessagePrints(_taskId: number): void {}
+
+/** Task_ItemUse_CloseMessageBoxAndReturnToField */
+export function Task_ItemUse_CloseMessageBoxAndReturnToField(taskId: number): void {
+  const f = fieldFuncs();
+  f.ClearDialogWindowAndFrame();
+  DestroyTask(taskId);
+  ClearPlayerHeldMovementAndUnfreezeObjectEvents();
+  f.UnlockPlayerFieldControls();
+}
+
+/** ClearPlayerHeldMovementAndUnfreezeObjectEvents (event_object_movement.c) */
+function ClearPlayerHeldMovementAndUnfreezeObjectEvents(): void {
+  ClearPlayerHeldMovement();
+  avatarField().unfreezeObjectEvents();
+}
+
+/**
+ * A registered item's field func whose from-the-field branch isn't ported yet (the Town Map, TM case and berry
+ * pouch open their screens from the field: SCREENS_PLAN.md W-select unit 2): log it and give the controls back.
+ */
+function RegisteredItemFromFieldNotPorted(taskId: number, what: string): void {
+  console.warn(`[item_use] ${what} from the field (SELECT) is not implemented yet`);
+  DestroyTask(taskId);
+  ClearPlayerHeldMovementAndUnfreezeObjectEvents();
+  fieldFuncs().UnlockPlayerFieldControls();
 }
 
 /**
@@ -149,10 +204,17 @@ function FieldUseFunc_Bike(taskId: number): void {
   }
 }
 
-/** ItemUseOnFieldCB_Bicycle (SE_BIKE_BELL: no audio). The field's overlay ends with it (UnlockPlayerFieldControls). */
-function ItemUseOnFieldCB_Bicycle(_taskId: number): void {
+/**
+ * ItemUseOnFieldCB_Bicycle. After the bag, the field's overlay holds the controls until this has run (the
+ * UnlockPlayerFieldControls here then has nothing to release); with SELECT, it gives back the lock
+ * UseRegisteredKeyItemOnField took.
+ */
+function ItemUseOnFieldCB_Bicycle(taskId: number): void {
+  if (!TestPlayerAvatarFlags(PLAYER_AVATAR_FLAG.MACH_BIKE | PLAYER_AVATAR_FLAG.ACRO_BIKE)) PlaySE(K.SE_BIKE_BELL);
   GetOnOffBike(PLAYER_AVATAR_FLAG.MACH_BIKE | PLAYER_AVATAR_FLAG.ACRO_BIKE);
-  ClearPlayerHeldMovement(); // ClearPlayerHeldMovementAndUnfreezeObjectEvents
+  ClearPlayerHeldMovementAndUnfreezeObjectEvents();
+  fieldFuncs().UnlockPlayerFieldControls();
+  DestroyItemUseTask(taskId);
 }
 
 /**
@@ -166,9 +228,16 @@ export interface ItemUseFieldFuncs {
   StartFishing(rod: number): void;
   CanUseEscapeRopeOnCurrMap(): boolean;
   LockPlayerFieldControls(): void;
+  UnlockPlayerFieldControls(): void;
   Overworld_ResetStateAfterDigEscRope(): void;
-  /** DisplayItemMessageOnField(taskId, FONT_NORMAL, str, callback) */
-  DisplayItemMessageOnField(str: number[], callback: () => void): void;
+  /** DisplayItemMessageOnField(taskId, fontId (default FONT_NORMAL), str, callback) */
+  DisplayItemMessageOnField(str: number[], callback: () => void, fontId?: number): void;
+  /** ClearDialogWindowAndFrame(0, TRUE): the field's message box */
+  ClearDialogWindowAndFrame(): void;
+  /** DismissMapNamePopup */
+  DismissMapNamePopup(): void;
+  /** ScriptContext_SetupScript */
+  ScriptContext_SetupScript(label: string): void;
   Task_UseDigEscapeRopeOnField(): void;
   /** gMapHeader.mapType */
   GetCurrentMapType(): number;
@@ -186,7 +255,7 @@ export function registerItemUseFieldFuncs(funcs: Partial<ItemUseFieldFuncs>): vo
   Object.assign(sFieldFuncs, funcs);
 }
 
-function fieldFuncs(): ItemUseFieldFuncs {
+export function fieldFuncs(): ItemUseFieldFuncs {
   if (!sFieldFuncs.CanFish || !sFieldFuncs.Task_VsSeeker_0 || !sFieldFuncs.ItemUseOnFieldCB_Itemfinder) throw new Error('[item_use] the field items are not registered');
   return sFieldFuncs as ItemUseFieldFuncs;
 }
@@ -202,8 +271,9 @@ function FieldUseFunc_Rod(taskId: number): void {
 }
 
 /** ItemUseOnFieldCB_Rod: Task_Fishing takes over the field (world/fishing.ts). */
-function ItemUseOnFieldCB_Rod(_taskId: number): void {
+function ItemUseOnFieldCB_Rod(taskId: number): void {
   fieldFuncs().StartFishing(ItemId_GetSecondaryId(SpecialVar.ItemId));
+  DestroyItemUseTask(taskId);
 }
 
 /**
@@ -243,7 +313,12 @@ function FieldUseFunc_VsSeeker(taskId: number): void {
   ) {
     PrintNotTheTimeToUseThat(taskId, inField(taskId));
   } else {
-    sItemUseOnFieldCB = () => f.Task_VsSeeker_0();
+    // Task_VsSeeker_0 is the item's task on the GBA (it goes on as Task_VsSeeker_1..3); world/vsSeeker.ts runs
+    // its own field task, so the item's task ends here.
+    sItemUseOnFieldCB = (id) => {
+      f.Task_VsSeeker_0();
+      DestroyItemUseTask(id);
+    };
     SetUpItemUseOnFieldCallback(taskId);
   }
 }
@@ -251,17 +326,25 @@ function FieldUseFunc_VsSeeker(taskId: number): void {
 /** ItemUseOutOfBattle_Itemfinder (IncrementGameStat(GAME_STAT_USED_ITEMFINDER): game stats aren't tracked yet) */
 function ItemUseOutOfBattle_Itemfinder(taskId: number): void {
   const f = fieldFuncs();
-  sItemUseOnFieldCB = () => f.ItemUseOnFieldCB_Itemfinder();
+  // (world/itemfinder.ts runs its own field task, as for the VS Seeker)
+  sItemUseOnFieldCB = (id) => {
+    f.ItemUseOnFieldCB_Itemfinder();
+    DestroyItemUseTask(id);
+  };
   SetUpItemUseOnFieldCallback(taskId);
 }
 
 /**
  * FieldUseFunc_TownMap: from the bag, the region map, which returns to the bag. (Its registered-item branch,
- * Task_UseTownMapFromField, waits for SELECT on the field, which the port doesn't have yet.)
+ * Task_UseTownMapFromField, isn't ported yet: SCREENS_PLAN.md W-select unit 2.)
  */
 function FieldUseFunc_TownMap(taskId: number): void {
-  ItemMenu_SetExitCallback(UseTownMapFromBag);
-  ItemMenu_StartFadeToExitCallback(taskId);
+  if (gTasks[taskId].data[3] === 0) {
+    ItemMenu_SetExitCallback(UseTownMapFromBag);
+    ItemMenu_StartFadeToExitCallback(taskId);
+  } else {
+    RegisteredItemFromFieldNotPorted(taskId, 'Task_UseTownMapFromField (the TOWN MAP)');
+  }
 }
 
 /** UseTownMapFromBag */
@@ -271,14 +354,14 @@ function UseTownMapFromBag(): void {
 
 /**
  * FieldUseFunc_TmCase: from the bag, the TM case, which returns to the bag. (Its registered-item branch,
- * Task_InitTMCaseFromField, opens it from the field with SELECT, which the port doesn't have yet.)
+ * Task_InitTMCaseFromField, isn't ported yet: SCREENS_PLAN.md W-select unit 2.)
  */
 function FieldUseFunc_TmCase(taskId: number): void {
   if (!inField(taskId)) {
     ItemMenu_SetExitCallback(InitTMCaseFromBag);
     ItemMenu_StartFadeToExitCallback(taskId);
   } else {
-    console.warn('[item_use] using registered items from the field is not implemented');
+    RegisteredItemFromFieldNotPorted(taskId, 'Task_InitTMCaseFromField (the TM CASE)');
   }
 }
 
@@ -289,14 +372,14 @@ function InitTMCaseFromBag(): void {
 
 /**
  * FieldUseFunc_BerryPouch: from the bag, the berry pouch, which returns to the bag. (Its registered-item branch,
- * Task_InitBerryPouchFromField, opens it from the field with SELECT, which the port doesn't have yet.)
+ * Task_InitBerryPouchFromField, isn't ported yet: SCREENS_PLAN.md W-select unit 2.)
  */
 function FieldUseFunc_BerryPouch(taskId: number): void {
   if (gTasks[taskId].data[3] === 0) {
     ItemMenu_SetExitCallback(InitBerryPouchFromBag);
     ItemMenu_StartFadeToExitCallback(taskId);
   } else {
-    console.warn('[item_use] using registered items from the field is not implemented');
+    RegisteredItemFromFieldNotPorted(taskId, 'Task_InitBerryPouchFromField (the BERRY POUCH)');
   }
 }
 
@@ -320,6 +403,7 @@ function FieldUseFunc_CoinCase(taskId: number): void {
   gStringVar1.set(ConvertIntToDecimalStringN(state.coins, STR_CONV_MODE_LEFT_ALIGN, 4)); // GetCoins
   ExpandToStringVar4(text('gText_CoinCase'));
   if (!inField(taskId)) DisplayItemMessageInBag(taskId, K.FONT_NORMAL, gStringVar4, Task_ReturnToBagFromContextMenu);
+  else DisplayItemMessageOnField(taskId, K.FONT_NORMAL, gStringVar4, Task_ItemUse_CloseMessageBoxAndReturnToField);
 }
 
 function FieldUseFunc_PowderJar(taskId: number): void {
@@ -327,6 +411,7 @@ function FieldUseFunc_PowderJar(taskId: number): void {
   gStringVar1.set(ConvertIntToDecimalStringN(0, STR_CONV_MODE_LEFT_ALIGN, 5));
   ExpandToStringVar4(text('gText_PowderQty'));
   if (!inField(taskId)) DisplayItemMessageInBag(taskId, K.FONT_NORMAL, gStringVar4, Task_ReturnToBagFromContextMenu);
+  else DisplayItemMessageOnField(taskId, K.FONT_NORMAL, gStringVar4, Task_ItemUse_CloseMessageBoxAndReturnToField);
 }
 
 function FieldUseFunc_PokeFlute(taskId: number): void {
@@ -334,8 +419,14 @@ function FieldUseFunc_PokeFlute(taskId: number): void {
   for (let i = 0; i < CalculatePlayerPartyCount(); i++) {
     if (!ExecuteTableBasedItemEffect(state.party[i], K.ITEM_AWAKENING, i, 0)) wokeSomeoneUp = true;
   }
-  if (wokeSomeoneUp) DisplayItemMessageInBag(taskId, K.FONT_NORMAL, text('gText_PlayedPokeFlute'), Task_PlayPokeFlute);
-  else DisplayItemMessageInBag(taskId, K.FONT_NORMAL, text('gText_PlayedPokeFluteCatchy'), Task_ReturnToBagFromContextMenu);
+  // (ItemUse_SetQuestLogEvent: no quest log)
+  if (wokeSomeoneUp) {
+    if (!inField(taskId)) DisplayItemMessageInBag(taskId, K.FONT_NORMAL, text('gText_PlayedPokeFlute'), Task_PlayPokeFlute);
+    else DisplayItemMessageOnField(taskId, K.FONT_NORMAL, ExpandToStringVar4(text('gText_PlayedPokeFlute')), Task_PlayPokeFlute);
+  } else {
+    if (!inField(taskId)) DisplayItemMessageInBag(taskId, K.FONT_NORMAL, text('gText_PlayedPokeFluteCatchy'), Task_ReturnToBagFromContextMenu);
+    else DisplayItemMessageOnField(taskId, K.FONT_NORMAL, ExpandToStringVar4(text('gText_PlayedPokeFluteCatchy')), Task_ItemUse_CloseMessageBoxAndReturnToField);
+  }
 }
 
 function Task_PlayPokeFlute(taskId: number): void {
@@ -344,7 +435,10 @@ function Task_PlayPokeFlute(taskId: number): void {
 }
 
 function Task_DisplayPokeFluteMessage(taskId: number): void {
-  if (WaitFanfare(false)) DisplayItemMessageInBag(taskId, K.FONT_NORMAL, text('gText_PokeFluteAwakenedMon'), Task_ReturnToBagFromContextMenu);
+  if (WaitFanfare(false)) {
+    if (!inField(taskId)) DisplayItemMessageInBag(taskId, K.FONT_NORMAL, text('gText_PokeFluteAwakenedMon'), Task_ReturnToBagFromContextMenu);
+    else DisplayItemMessageOnField(taskId, K.FONT_NORMAL, ExpandToStringVar4(text('gText_PokeFluteAwakenedMon')), Task_ItemUse_CloseMessageBoxAndReturnToField);
+  }
 }
 
 function FieldUseFunc_Medicine(taskId: number): void {

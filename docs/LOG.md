@@ -1736,6 +1736,36 @@ end to end.
   fixed fly.test.ts's `useTownMap` the same way.
 - Verified: typecheck, unit tests and the full e2e suite on each PR after merging master in; the final run is in
   this PR: on master after #40, typecheck, 148 unit tests and 269 e2e tests (39 files) pass.
+
+### Registered SELECT items (W-select unit 1, SCREENS_PLAN.md batch 2)
+
+- `menus/registeredItem.ts` (new): UseRegisteredKeyItemOnField (item_menu.c): DismissMapNamePopup,
+  LockPlayerFieldControls, FreezeObjectEvents, HandleEnforcedLookDirectionOnPlayerStopMoving, StopPlayerAvatar,
+  the item's field func as a GBA task with data[3] = 1 (stepped by a field task), the registration cleared when the
+  item is gone, EventScript_BagItemCanBeRegistered when nothing is registered.
+- OverworldScene: FieldGetPlayerInput reads SELECT (pressedSelectButton) and ProcessPlayerFieldInput ends with
+  `if (pressedSelectButton && UseRegisteredKeyItemOnField())`, as in field_control_avatar.c.
+- `menus/itemUse.ts`: the data[3] == 1 branches: SetUpItemUseOnFieldCallback's direct sItemUseOnFieldCB call,
+  DisplayItemMessageOnField + Task_ItemUse_CloseMessageBoxAndReturnToField, DisplayItemMessageInCurrentContext /
+  PrintNotTheTimeToUseThat on the field (FONT_MALE for Oak), and the items: Bicycle (incl. "You can't dismount your
+  BIKE here."; ItemUseOnFieldCB_Bicycle now unfreezes / unlocks / destroys its task like the C), the rods, the VS
+  Seeker, the Itemfinder, Coin Case, Powder Jar, Poké Flute. The Town Map, TM case and berry pouch from SELECT log
+  and give the controls back (unit 2 ports them).
+- `world/fieldItems.ts`: DisplayItemMessageOnField takes a font; the host dismisses the map name popup;
+  ClearDialogWindowAndFrame / DismissMapNamePopup / UnlockPlayerFieldControls / ScriptContext_SetupScript are
+  registered for itemUse.ts (registerFieldItems). `text/MessageBox.ts`: `show` takes an optional font.
+- Fixes on the way: the field never set the strings.c table itself (setTextStrings), so the field items' gText_*
+  only worked after the bag had been opened once; OverworldScene.create sets it now. Script `release` /
+  `releaseall` didn't unfreeze objects (ClearPlayerHeldMovementAndUnfreezeObjectEvents); now they do. A frozen
+  field (a rod's bite into a battle, a map load) is unfrozen when the map is resumed or loaded.
+- Probes: `field().locked`, `field().objectsFrozen`, `__test.gbaTasks()`, `__test.paletteFadeActive()`.
+- Verified: typecheck; `npm test` (148); e2e tests/e2e/registeredItems.test.ts (new, 6 tests: registering the
+  Bicycle through the bag's REGISTER and SELECT on / off with a step each way; Cycling Road's "can't dismount";
+  the Old Rod facing away (Oak's message) and facing the water (cast, no bite, put away, a step); the Coin Case's
+  "Your COINS: 123" with the controls locked and objects frozen until it closes; the VS Seeker / Itemfinder / Poké
+  Flute messages; nothing registered and a registered item no longer in the bag), plus fieldItems, vsSeeker,
+  itemfinder, tmCase, berryPouch, fieldMoves, strength, surf, playerAvatar, mapNamePopup and field. Screenshots of
+  Oak's message and the Coin Case's in the field message box looked right.
 ### Script coverage check and e2e bag / party waits (W-story unit 1)
 
 - `tests/unit/scriptCoverage.test.ts`: every script command, special / specialvar, std script, movement action and
@@ -1851,3 +1881,50 @@ end to end.
 - Verified: typecheck; `npm test` (17 files, 155 tests, incl. the coverage test); e2e storyCeladonSaffron (10,
   twice), field, trainerBattle, mainPathLeftovers, pokemonTower, scriptedBattles (24).
 
+### Four e2e races fixed (W-flaky, SCREENS_PLAN.md batch 2)
+
+Each failed once with other workers' e2e runs on the machine and passed alone; tests only, no game changes.
+- battleAnims.3e3a "Baton Pass": read `spriteInvisible` from Node after the `battleAnimEnd` poll, by when the party
+  screen (openpartyscreen, right after waitanimation) could have replaced the battle sprites (it read false). Now an
+  in-page `t.until` started before the move reads it in the tick after the anim ends.
+- mainPathLeftovers "Field_AskSaveTheGame: YES": `mashUntil(battle mode menu opened)` then `press('A')` for SINGLE
+  BATTLE. The battle mode menu has no sDelay and takes input in the tick it opens (as on the GBA: the multichoice
+  task runs in the frame the script creates it), and the mash's last A landed on that tick in 7 of 9 traced runs,
+  so the mash picked SINGLE BATTLE itself and the extra A went to the save prompt: harmless while it was still
+  printing, YES once under load it came after the YES/NO was up. Now it mashes A until the save window is up.
+- fieldEffects "water and flower tiles animate": the two tile reads were separate evals 40 ticks apart plus the
+  round trip; at 80 ticks (a whole 5-frame flower cycle) or 128 (the 8-frame water cycle) they matched. Now both
+  reads are in one `until` predicate, exactly 40 ticks apart.
+- fieldEffects "leaving a house": the 600-tick limits for the hidden arrival and the door ran out. The game keeps
+  ticking while the next map loads: ~185 ticks to the arrival on an idle machine, 1,221 under load (reproduced with
+  six CPU hogs and two other e2e files). Limits raised to 20000.
+- Same kinds fixed in transitions.test.ts (not seen failing): the Mt. Moon exit's fade-in watcher had a 600-tick
+  limit across Route 4's load, started only after a Node poll saw the flash, and read `fadeWhite` in a later eval;
+  the walk into Mt. Moon read `fadeWhite` after its `until` resolved, with a 120-tick limit across the map load that
+  comes before the fade out. Both now start before the warp, read the colour in the predicate, limit 20000.
+- tests/README.md "Writing a new scenario": comparing two reads n ticks apart and reading inside the predicate
+  (5), a mash press picking from a menu in the tick it opens (6), tick limits across loads (7).
+- Verified: typecheck; `npm test` (17 files, 155 tests); e2e battleAnims.3e3a, mainPathLeftovers, fieldEffects and
+  transitions (30 tests) three times, once under load (load average ~170).
+### Trainer card back and flip (W-tcard unit 2, SCREENS_PLAN.md batch 2)
+
+- `menus/trainerCard.ts`: the card back (BufferTextForCardBack and its Buffer* functions, PrintAllOnCardBack: the
+  name, the Hall of Fame debut, the link battle / trade / Berry Crush / Union Room lines, which FRLG prints only when
+  not 0, so never for the port's player; DrawCardBackStats; PrintPokemonIconsOnCard / LoadMonIconGfx with the photo's
+  tints; PrintStickersOnCard), the flip (FlipTrainerCard, Task_DoCardFlipTask and its six steps, UpdateCardFlipRegs,
+  VBlankCB_TrainerCard's buffer copy) and Task_TrainerCard states 11-13. As in the C, A on the front flips to the
+  back, B on the back flips back and A on the back closes the card (B on the front closes it).
+  MailSpeciesToIconSpecies is ported for the photo vars (Unown is stored as 30000 + its letter);
+  trainerCardGfxSymbols preloads the photo's icons.
+- HBlankCB_TrainerCard's per-line BG0VOFS goes through gba/hw.ts `hblankRegs` (an HBlank DMA table on
+  gScanlineEffectRegBuffers[1]) rather than SetHBlankCallback: the PPU does run HBlank callbacks, but only for the
+  frames the host draws, so with several ticks per drawn frame the register could be left at a mid-flip offset when
+  the flip ends.
+- gba/palette.ts: TintPalette_CustomTone (moved from menus/regionMap.ts, which imports it now) and
+  TintPalette_SepiaTone.
+- Verified: typecheck; `npm test` (150); e2e tests/e2e/trainerCard.test.ts (3 tests: the boy's card flips to the
+  back (name, Hall of Fame debut 12:34:56, no link / trade lines, no icons or stickers), back to the front (badges,
+  stars, pic), to the back again and A closes it; each flip watched in the page: steps 1/2/4, the card closing to
+  77, BLDY up to 11 and back to 0, BG0VOFS offsets per line, nothing left per line afterwards; the girl's card; a
+  photo in sepia (Pikachu, Bulbasaur, Unown C in slot 4) and two stickers on the back), fly.test.ts (the region
+  map's tint). Screenshots of the back, the photo back and mid-flip frames look like FRLG's.
