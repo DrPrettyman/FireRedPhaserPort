@@ -1772,3 +1772,54 @@ end to end.
   pcStorage, playerAvatar, pokedex, saveContinue, scriptedBattles, strength, surf, tmCase, vsSeeker, wildBattle)
   and, after the `until` change, every file that uses it (also fieldEffects, mapNamePopup, pokedexArea, hallOfFame,
   titleScreen, pokemart, transitions).
+### Option menu and start menu help window (W-options, SCREENS_PLAN.md batch 2)
+
+- option_menu.c as `menus/optionMenu.ts` on the GBA layer: CB2_OptionsMenuFromStartMenu → CB2_OptionMenu's load
+  states (BGs 0-2, the windows, sOptionMenuPalette, the header's std frame and the settings' user frame) →
+  Task_OptionMenu (fade in, OptionMenu_ProcessInput with key repeat, the frame's tiles and palette reloaded as it
+  changes, the selected row as WIN0 outside the BLDY lightening, fade out) → CloseAndSaveOptionMenu. START → OPTION
+  opens it (OverworldScene's start menu dispatch, FieldMenuScene 'options') and it returns to the start menu
+  (CB2_ReturnToFieldWithOpenMenu). The strings, sOptionMenuPalette and the help window graphics were already
+  extracted (no extractor change).
+- `optionsSound` in GameState and the save (SAVE_VERSION 3; `upgradeSave` gives version 2 saves MONO).
+  `battle/battleBg.ts` reads the frame type from the state instead of frame 1.
+- Field windows that use the user frame now follow the FRAME option: the start menu and its Safari stats window
+  pass it, and `MenuWindow`'s default frame comes from `setUserFrameTypeSource` (the YES/NO box, the mon pic box);
+  before, they always drew TYPE 1.
+- help_message.c as `ui/HelpMessageWindow.ts` (a Phaser window over the field like the start menu) and
+  start_menu.c's sStartMenuDescPointers in `ui/StartMenu.ts`: the description on open and on cursor moves, gone on
+  close, only in the HELP button mode.
+- Fixed on the way: `TextWindow.drawGlyph` wrote colour 0 (TEXT_COLOR_TRANSPARENT) background pixels over the
+  window; GLYPH_COPY skips them, so text with a transparent background now prints over what's there (the help bar).
+- Verified: typecheck; `npm test` (149, incl. the save round-trip with the sound option and a version 2 save
+  loading as MONO); e2e tests/e2e/options.test.ts (new, 2 tests: text speed FAST → MID and FRAME wrapping 1 → 10 →
+  1 → 2, cursor wrapping, back to the start menu on OPTION, reopened with both kept, saved in the slot; the help
+  text on open and after UP / DOWN (incl. the wrap to EXIT), gone after B, and gone after BUTTON MODE → LR, also on
+  cursor moves and a fresh START), plus saveContinue, pokedex, field, mapNamePopup, titleScreen, trainerBattle,
+  wildBattle, fieldItems, fly and evolution. Screenshots of the option menu and of the help bar under the start menu
+  looked right.
+
+### Trainer card front (W-tcard unit 1, SCREENS_PLAN.md batch 2)
+
+- `menus/trainerCard.ts`: trainer_card.c for the player's FRLG card: ShowPlayerTrainerCard,
+  TrainerCard_GenerateCardForLinkPlayer / SetPlayerCardData (stars, money, Pokédex count, play time, Hall of Fame
+  debut, stickers and mon icon vars for the back), CB2_InitTrainerCard (ResetGpuRegs, SetUpTrainerCardTask,
+  InitBgsAndWindows, LoadCardGfx, LoadStickerGfx, HandleGpuRegs, SetTrainerCardBgsAndPals), Task_TrainerCard's front
+  states (PrintAllOnCardFront, the trainer pic, DrawCardScreenBackground / DrawCardFrontOrBack,
+  DrawStarsAndBadgesOnCard, the fade in, the play time's blinking colon, B → CloseTrainerCard). A on the front is a
+  stub for unit 2 (the back and the flip).
+- Start menu: PLAYER opens it (OverworldScene `openFieldMenu('trainerCard')`, FieldMenuScene 'trainerCard') and it
+  comes back to the start menu on PLAYER.
+- menus/picSprites.ts: CreateTrainerCardTrainerPicSprite (CreateTrainerCardSprite, LoadPicPaletteBySlot) and
+  PlayerGenderToFrontTrainerPicId, moved there from menus/hallOfFame.ts (which re-exports it); battle/transition.ts
+  imports it instead of keeping its own copy.
+- Extractor: graphics/trainer_card/ in extract_gfx.py (rerun `npm run extract`). trainer_card.c's `sUnused_Pal`
+  shares its name with pokemon_storage_system_tasks.c's; the extractor keeps the first (unused by the port either way).
+- Found on the way: the VBlank after CloseTrainerCard still runs VBlankCB_TrainerCard (the C reads the freed
+  struct there), so BlinkTimeColon checks for a null pointer.
+- Verified: typecheck; `npm test` (150, incl. tests/unit/trainerCard.test.ts: no stars, the Hall of Fame star only
+  with GAME_STAT_ENTERED_HOF, HasAllKantoMons, HasAllMons, the 999:59:59 cap); e2e tests/e2e/trainerCard.test.ts
+  (new, 2 tests: a boy's card with money, Pokédex, three badges and one star on the green card, the colon blinking, A
+  staying on the front, B back to the start menu on PLAYER; a girl's blue card with the female background, no
+  badges / stars / Pokédex line), plus hallOfFame, pokedexArea and transitions' "every battle transition" (the
+  mugshots use PlayerGenderToFrontTrainerPicId). Screenshots of both cards match FRLG's layout.

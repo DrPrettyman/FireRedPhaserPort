@@ -139,7 +139,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail, the daycare mons,
     Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, the fame
     checker, Trainer Tower and minigame records, the enigma berry, mystery gift, easy chat, link records and
-    the sound and region map zoom options. The player's position is stored only when the field writes it before
+    the region map zoom option. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
   - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the title screen; the
     copyright screen and intro.c's Game Freak / Nidorino movie before it aren't ported. Dev starts (`?start=`,
@@ -166,6 +166,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     DoSaveFailedScreen. SaveMapView isn't ported: the map view isn't saved, so CONTINUE rebuilds the map from its
     header and ON_LOAD script (metatiles a script changed later aren't restored). `special Field_AskSaveTheGame`
     (task50_save_game) doesn't switch to HELPCONTEXT_SAVE.
+  - Option menu (menus/optionMenu.ts): no help context (HELPCONTEXT_OPTIONS); SOUND (MONO / STEREO) is stored and
+    saved but changes nothing (no audio, so no SetPokemonCryStereo). The L=A button mode applies on the GBA-layer
+    screens (GbaHostScene's ReadKeys) but not on the field, whose input reads the buttons directly (on the GBA,
+    ReadKeys turns L into A everywhere). The field isn't on the GBA layer, so FieldMenuScene sets the backdrop
+    (BG palette 0 colour 0, black as LoadTilesetPalette leaves it) the option menu doesn't load itself.
+  - Start menu help window (ui/HelpMessageWindow.ts): a Phaser window like the start menu, not a BG0 window; the
+    start menu (and its help window) goes away as soon as an item that leaves the field is chosen, before the fade
+    (on the GBA both stay up under the fade).
   - CONTINUE (OverworldScene.continueSavedGame): the map's objects spawn from its templates (object events aren't
     saved, see Save data); gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
@@ -189,6 +197,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     aren't kept; Spinda's spots aren't drawn anywhere). The anticheat's second and third copies of the seen flags
     aren't kept (one `dexSeen` set), so "caught" just needs "seen" too. The Pokédex keeps the field's DISPCNT,
     which the port sets in FieldMenuScene since the field isn't on the GBA layer.
+  - Trainer card (menus/trainerCard.ts): no audio (SE_CARD_OPEN / SE_CARD_FLIP); no help system context. The back
+    and the flip aren't ported yet (A on the front does nothing). The berry picking and Pokémon Jump records (a
+    star for 200 of each) and the link stats are always 0 (no link minigames); the easy chat profile isn't kept
+    (only a link card prints it).
   - Credits (menus/credits.ts): no audio (MUS_CREDITS, the cries). A map scene loads asynchronously, so it can start
     a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
     GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.

@@ -1,10 +1,11 @@
 // trainer_pokemon_sprites.c: front/back pic sprites outside battle (summary screen, Hall of Fame,
 // trainer card). ignoreDeoxys has no effect: FireRed's Deoxys pic is its Normal form either way.
 
+import { K } from '../battle/constants';
 import { bdata } from '../battle/env';
 import { animTable, DecompressPicFromTable, GetMonSpritePalFromSpeciesAndPersonality, GetMonSpritePalStructFromOtIdPersonality, LoadSpecialPokePic } from '../battle/gfx';
 import { gfx16 } from '../gba/gfx';
-import { LoadPalette, OBJ_PLTT_ID, PLTT_SIZE_4BPP } from '../gba/palette';
+import { BG_PLTT_ID, LoadPalette, OBJ_PLTT_ID, PLTT_SIZE_4BPP } from '../gba/palette';
 import {
   CreateSprite,
   DestroySprite,
@@ -20,6 +21,7 @@ import {
   type SpriteFrameImage,
   type SpriteTemplate,
 } from '../gba/sprite';
+import { BlitBitmapRectToWindow } from '../gba/window';
 
 interface PicData {
   frames: Uint8Array | null;
@@ -116,4 +118,35 @@ export function CreateTrainerPicSprite(species: number, isFrontPic: boolean, x: 
 
 export function FreeAndDestroyTrainerPicSprite(spriteId: number): number {
   return FreeAndDestroyPicSpriteInternal(spriteId);
+}
+
+/** LoadPicPaletteBySlot: the pic's palette into BG palette `paletteSlot`. */
+function LoadPicPaletteBySlot(species: number, otId: number, personality: number, paletteSlot: number, isTrainer: boolean): void {
+  if (!isTrainer) LoadPalette(GetMonSpritePalFromSpeciesAndPersonality(species, otId, personality), BG_PLTT_ID(paletteSlot), PLTT_SIZE_4BPP);
+  else LoadPalette(gfx16(bdata.anims.trainerFrontPalettes[species]!), BG_PLTT_ID(paletteSlot), PLTT_SIZE_4BPP);
+}
+
+/** CreateTrainerCardSprite: the 64x64 pic drawn into a window's pixels at (destX, destY), its palette into BG palette `paletteSlot`. */
+function CreateTrainerCardSprite(species: number, otId: number, personality: number, isFrontPic: boolean, destX: number, destY: number, paletteSlot: number, windowId: number, isTrainer: boolean): number {
+  if (isTrainer && !isFrontPic) {
+    console.warn('[trainer_pokemon_sprites] trainer back pics are not implemented');
+    return 0xffff;
+  }
+  const framePics = new Uint8Array(4 * 0x800);
+  // DecompressPic_HandleDeoxys
+  if (isTrainer) DecompressPicFromTable(bdata.anims.trainerFrontPics[species]!.pic, framePics);
+  else LoadSpecialPokePic(isFrontPic, species, personality, framePics);
+  BlitBitmapRectToWindow(windowId, framePics, 0, 0, 0x40, 0x40, destX, destY, 0x40, 0x40);
+  LoadPicPaletteBySlot(species, otId, personality, paletteSlot, isTrainer);
+  return 0;
+}
+
+/** CreateTrainerCardTrainerPicSprite: `species` is the TRAINER_PIC_* id. */
+export function CreateTrainerCardTrainerPicSprite(species: number, isFrontPic: boolean, destX: number, destY: number, paletteSlot: number, windowId: number): number {
+  return CreateTrainerCardSprite(species, 0, 0, isFrontPic, destX, destY, paletteSlot, windowId, true);
+}
+
+/** PlayerGenderToFrontTrainerPicId(gender, TRUE): gFacilityClassToPicIndex[FACILITY_CLASS_RED / LEAF] */
+export function PlayerGenderToFrontTrainerPicId(gender: number): number {
+  return gender !== K.MALE ? K.TRAINER_PIC_LEAF : K.TRAINER_PIC_RED;
 }

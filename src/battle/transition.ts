@@ -100,6 +100,7 @@ import {
   type SpriteTemplate,
 } from '../gba/sprite';
 import { CreateTask, DestroyTask, FindTaskIdByFunc, gTasks, TASK_NONE, type Task } from '../gba/task';
+import { PlayerGenderToFrontTrainerPicId } from '../menus/picSprites';
 import { random } from '../util/random';
 import { K } from './constants';
 import { bdata, state } from './env';
@@ -1338,11 +1339,6 @@ function HBlankCB_Mugshots(): void {
 /** gSaveBlock2Ptr->playerGender */
 function playerGender(): number {
   return state.playerGender === 'female' ? K.FEMALE : K.MALE;
-}
-
-/** PlayerGenderToFrontTrainerPicId(gender, TRUE): gFacilityClassToPicIndex[FACILITY_CLASS_RED / LEAF] */
-function PlayerGenderToFrontTrainerPicId(gender: number): number {
-  return gender !== K.MALE ? K.TRAINER_PIC_LEAF : K.TRAINER_PIC_RED;
 }
 
 /** sNewGameOakOamAttributes */
