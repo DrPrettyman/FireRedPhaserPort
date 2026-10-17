@@ -238,6 +238,20 @@ this is the next level down. When you add or change a subsystem, update its entr
   and exit callback). `SortPocketAndPlaceHMsFirst` / `SortAndCompactBagPocket` (item.c) live there too. Probe
   `__test.tmCase()` (TMCASE_* type, the screen task's name, `fading`, scroll/row, the pocket's item ids in list
   order). Tests: tests/e2e/tmCase.test.ts.
+- **Berry pouch:** `menus/berryPouch.ts` is berry_pouch.c, built like the TM case (static vs per-open resources,
+  `rebuildList` after a toss / sale). `InitBerryPouch(type, savedCallback, allowSelect)` runs on whichever GBA host
+  has the bag: FieldMenuScene, or BattleScene for the battle bag (`menuGfxSymbols` preloads `BERRY_POUCH_GFX` for
+  both). Ways in: the bag's KEY ITEMS → BERRY POUCH → OPEN (`FieldUseFunc_BerryPouch` → BERRYPOUCH_FROMFIELD), the
+  battle bag's OPEN (`BattleUseFunc_BerryPouch` → BERRYPOUCH_FROMBATTLE, back to CB2_BagMenuFromBattle), the bag's
+  GIVE from the party menu / PC box and the Poké Mart's SELL (`GoToBerryPouch_Give` / `_PCBox` / `_Sell` in
+  menus/itemMenu.ts). USE runs the berry's own item_use.c function with the pouch's task (looked up in
+  `FIELD_USE_FUNCS` / `BATTLE_USE_FUNCS`); item_use.c checks `GetPocketByItemId(...) == POCKET_BERRY_POUCH` to hand
+  back through `BerryPouch_SetExitCallback` + `BerryPouch_StartFadeToExitCallback` (SetUpItemUseCallback,
+  ItemUse_SwitchToPartyMenuInBattle) or `DisplayItemMessageInBerryPouch` (FieldUseFunc_OakStopsYou). The party
+  menu comes back through CB2_ReturnToBerryPouchMenu (BERRYPOUCH_NA: same type, list position and callback).
+  Item icons: `CreateBerryPouchItemIcon` (menus/itemMenuIcons.ts). Probe `__test.berryPouch()` (BERRYPOUCH_* type,
+  the screen task's name, `fading`, scroll/row, the pocket's berries in list order). Tests:
+  tests/e2e/berryPouch.test.ts.
 - **Naming screen:** `DoNamingScreen` (`menus/namingScreen.ts`) runs on any GBA host. From a script, use
   `ScriptHost.doNamingScreen` (FieldMenuScene `naming`). Oak's speech calls it with NAMING_SCREEN_PLAYER
   (monSpecies = the player's gender) and NAMING_SCREEN_RIVAL on MainMenuScene, preloading `namingScreenGfxSymbols`

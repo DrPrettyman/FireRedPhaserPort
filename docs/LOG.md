@@ -1508,3 +1508,22 @@ end to end.
   Magikarp by rod only, no areas, Slugma only once One Island is unlocked, Altering Cave's sets, the roamer at its
   location / the unpaired roamers / inactive, the markers' OBJ-window OAM). typecheck, `npm test` (100) and
   mapNamePopup e2e pass. The e2e (tests/e2e/pokedexArea.test.ts) comes with the area page in unit 2.
+
+### Berry pouch (SCREENS_PLAN.md batch 1, W-tmcase unit 2)
+
+- `menus/berryPouch.ts` ports berry_pouch.c: InitBerryPouch for BERRYPOUCH_FROMFIELD (the bag's KEY ITEMS → BERRY
+  POUCH → OPEN: FieldUseFunc_BerryPouch / InitBerryPouchFromBag), BERRYPOUCH_FROMBATTLE (the battle bag's OPEN:
+  BattleUseFunc_BerryPouch / InitBerryPouchFromBattle), BERRYPOUCH_FROMPARTYGIVE / FROMPOKEMONSTORAGEPC /
+  FROMMARTSELL (GoToBerryPouch_Give / _PCBox / _Sell, which logged "not implemented") and BERRYPOUCH_NA
+  (CB2_ReturnToBerryPouchMenu, which fell back to the bag). The list ("No01 CHERI BERRY ×n", CLOSE), the item icon
+  and description, the pouch sprite's wobble, the context menus (USE / GIVE / TOSS / EXIT; USE / TOSS / EXIT in
+  battle), the toss flow (how many, YES/NO, "Threw away"), the sell flow (how many, the money box, YES/NO).
+- Berry use goes through the existing item_use.c functions with the pouch's task: SetUpItemUseCallback,
+  ItemUse_SwitchToPartyMenuInBattle and FieldUseFunc_OakStopsYou now hand back to the pouch instead of logging.
+- Graphics: `graphics/berry_pouch/` in extract_gfx.py (gBerryPouch*); `menuGfxSymbols` preloads them, which covers
+  BattleScene's preload too. `CreateBerryPouchItemIcon` added to menus/itemMenuIcons.ts.
+- Verified: tests/e2e/berryPouch.test.ts (from the bag: an Oran Berry restores 10 HP and comes back to the pouch,
+  GIVE from the pouch's menu, tossing two Cheri Berries; a Razz Berry's "This isn't the time to use that!"; the party
+  menu's ITEM → GIVE and the PC's MOVE ITEMS → GIVE through the pouch; selling three Oran Berries at the Pewter Mart;
+  the battle bag's OPEN → USE an Oran Berry on the battler), screenshots of the list, context menu, toss and sell
+  boxes; tmCase, pokemart, pcStorage, wildBattle, evolution, listMenuFlash e2e files and the unit tests still pass.
