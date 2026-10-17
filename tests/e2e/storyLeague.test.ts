@@ -321,6 +321,45 @@ test('Viridian Gym: locked until the seventh badge; over the spinner tiles to Gi
   expect(await game.eval((t) => [t.itemCount('TM26'), t.var('VAR_MAP_SCENE_ROUTE22')])).toEqual([1, 3]);
 }, 180_000);
 
+// ---------------------------------------------------------------- The rival on Route 22, Route 23's badge guards
+
+test('Route 22: with the Earth Badge, the rival stops the player on the way to the League', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'Route22', x: 35, y: 5, party: [MEWTWO] });
+  await setFlags(game, badgesBefore(9));
+  await game.eval((t) => t.state!.setVar('VAR_MAP_SCENE_ROUTE22', 3)); // ViridianCity_Gym_EventScript_DefeatedGiovanni
+  await repel(game);
+  await game.walk('left');
+  await game.walk('left'); // Route22_EventScript_LateRivalTriggerMid at (33, 5)
+  await winBattle(game, 'the rival');
+  expect(await game.eval((t) => ['SQUIRTLE', 'BULBASAUR', 'CHARMANDER'].some((s) => t.trainerDefeated(`RIVAL_ROUTE22_LATE_${s}`)))).toBe(true);
+  expect(await game.eval((t) => t.var('VAR_MAP_SCENE_ROUTE22'))).toBe(4);
+  expect(await game.eval((t) => t.objects().some((o) => o.graphicsId === 'OBJ_EVENT_GFX_BLUE'))).toBe(false);
+}, 120_000);
+
+test('Route 23: the badge guards turn the player back without the badge and let them on with it', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'Route22_NorthEntrance', x: 7, y: 4, party: [MEWTWO] });
+  await setFlags(game, badgesBefore(9).filter((f) => f !== 'FLAG_BADGE02_GET'));
+  // The gate's Boulder Badge check (Route22_NorthEntrance_EventScript_BoulderBadgeGuardTrigger at (7, 2)).
+  await game.walk('up');
+  await game.walk('up');
+  await scriptDone(game, 'the Boulder Badge check');
+  expect(await game.eval((t) => [t.var('VAR_MAP_SCENE_ROUTE23'), t.field()!.y])).toEqual([1, 2]);
+  await takeWarp(game, 7, 1, 'Route23');
+  await game.waitIdle();
+  await repel(game);
+
+  // No Cascade Badge: Route23_EventScript_MissingBadgeTrigger walks the player back down.
+  expect(await game.eval((t) => t.walkTo(13, 150))).toMatchObject({ arrived: true });
+  await game.walk('up');
+  await scriptDone(game, 'the Cascade Badge guard');
+  expect(await game.eval((t) => [t.var('VAR_MAP_SCENE_ROUTE23'), t.field()!.y])).toEqual([1, 150]);
+
+  await setFlags(game, ['FLAG_BADGE02_GET']);
+  await game.walk('up');
+  await scriptDone(game, 'the Cascade Badge guard again');
+  expect(await game.eval((t) => [t.var('VAR_MAP_SCENE_ROUTE23'), t.field()!.y])).toEqual([2, 149]);
+}, 120_000);
+
 // ---------------------------------------------------------------- The Elite Four and the Champion
 
 /** Heal the party for the next battle (a fresh Lv. 100 Mewtwo: full HP and PP). */
