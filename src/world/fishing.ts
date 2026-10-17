@@ -19,7 +19,7 @@ import { encodeRaw, text } from '../menus/common';
 import { random } from '../util/random';
 import type { Direction } from './direction';
 import { registerItemUseFieldFuncs } from '../menus/itemUse';
-import { ClearDialogWindowAndFrame, DismissMapNamePopup, DisplayItemMessageOnField, fieldItemsHost } from './fieldItems';
+import { ClearDialogWindowAndFrame, DismissMapNamePopup, DisplayItemMessageOnField, FadeScreen, fieldItemsHost, IsFieldPaletteFadeActive, OpenScreenFromField } from './fieldItems';
 import {
   CanUseEscapeRopeOnCurrMap,
   CreateTask,
@@ -438,5 +438,8 @@ export function registerFieldItems(): void {
     DismissMapNamePopup,
     ScriptContext_SetupScript,
     Task_UseDigEscapeRopeOnField,
+    FadeScreen,
+    IsFieldPaletteFadeActive,
+    OpenScreenFromField,
   });
 }

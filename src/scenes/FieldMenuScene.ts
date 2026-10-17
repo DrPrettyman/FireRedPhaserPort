@@ -69,7 +69,13 @@ export interface NamingScreenRequest {
 }
 
 export interface FieldMenuStart {
-  menu: 'party' | 'bag' | 'buy' | 'sell' | 'naming' | 'storage' | 'itemPc' | 'itemPcDeposit' | 'hallOfFame' | 'hallOfFamePc' | 'townMap' | 'pokedex' | 'options' | 'trainerCard';
+  menu: 'party' | 'bag' | 'buy' | 'sell' | 'naming' | 'storage' | 'itemPc' | 'itemPcDeposit' | 'hallOfFame' | 'hallOfFamePc' | 'townMap' | 'pokedex' | 'options' | 'trainerCard' | 'itemFromField';
+  /**
+   * For 'itemFromField': a registered item's screen from the field (item_use.c's Task_UseTownMapFromField,
+   * Task_InitTMCaseFromField, Task_InitBerryPouchFromField). `init` sets the screen's main callback; `gfxSymbols`
+   * is what it draws beyond what prepareMenus loads.
+   */
+  itemScreen?: { init(): void; gfxSymbols: string[] };
   /** For 'storage': OPTION_WITHDRAW / OPTION_DEPOSIT / OPTION_MOVE_MONS / OPTION_MOVE_ITEMS */
   storageOption?: number;
   /** For 'buy': what the buy menu's map view reads from the field. */
@@ -131,6 +137,7 @@ export class FieldMenuScene extends GbaHostScene {
       await loadGfx(pokedexScreenGfxSymbols());
     }
     if (start.menu === 'options') await loadGfx(optionMenuGfxSymbols());
+    if (start.menu === 'itemFromField') await loadGfx(start.itemScreen!.gfxSymbols);
     // The trainer card (StartMenuPlayerCallback): its graphics and the player's pic.
     if (start.menu === 'trainerCard') await loadGfx(trainerCardGfxSymbols(start.state.playerGender === 'female' ? K.FEMALE : K.MALE));
     // The item PC's list (WITHDRAW ITEM) draws the PC's items' icons.
@@ -181,6 +188,8 @@ export class FieldMenuScene extends GbaHostScene {
       LoadPalette([0], BG_PLTT_ID(0), 2);
       SetMainCallback2(CB2_OptionsMenuFromStartMenu); // StartMenuOptionCallback
       gMain.savedCallback = CB2_ReturnToFieldWithOpenMenu;
+    } else if (start.menu === 'itemFromField') {
+      start.itemScreen!.init(); // InitRegionMapWithExitCB / InitTMCase / InitBerryPouch(..., CB2_ReturnToField, ...)
     } else if (start.menu === 'trainerCard') {
       ShowPlayerTrainerCard(CB2_ReturnToFieldWithOpenMenu); // StartMenuPlayerCallback
     } else if (start.menu === 'storage') {

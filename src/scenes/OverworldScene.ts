@@ -1574,32 +1574,51 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         if (launched || this.screenFade.active || !ready) return false;
         launched = true;
         if (menu === 'pokedex') this.state.incrementGameStat(d.require('GAME_STAT_CHECKED_POKEDEX'));
-        this.runFieldMenu({ menu }, (openStartMenu) => {
-          // RunFieldCallback: gFieldCallback2 (a field move's FieldCallback_PrepareFadeInFromMenu) before gFieldCallback
-          const fieldCallback = gFieldCallback2.fn ?? gFieldCallback.fn;
-          gFieldCallback.fn = undefined;
-          gFieldCallback2.fn = undefined;
-          if (fieldCallback) {
-            // gFieldCallback (e.g. item_use.c's FieldCB_FadeInFromBlack for the Bicycle) fades in itself.
-            const tick = fieldCallback({
-              fadeInFromBlack: () => {
-                this.screenFade.begin(d.require('FADE_FROM_BLACK'));
-                return () => !this.screenFade.active;
-              },
-            } satisfies FieldCallbackHost);
-            this.overlay = { tick };
-            return;
-          }
-          this.screenFade.begin(d.require('FADE_FROM_BLACK'));
-          if (openStartMenu) {
-            this.openStartMenu(true);
-          } else {
-            this.overlay = { tick: () => !this.screenFade.active };
-          }
-        });
+        this.runFieldMenu({ menu }, (openStartMenu) => this.runFieldCallback(openStartMenu));
         return false;
       },
     };
+  }
+
+  /**
+   * RunFieldCallback after a field menu's CB2_ReturnToField(WithOpenMenu), with the screen still black:
+   * gFieldCallback2 (a field move's FieldCallback_PrepareFadeInFromMenu, item_use.c's FieldCB2_UseItemFromField)
+   * before gFieldCallback, which fade in themselves; without one, fade in (and reopen the start menu).
+   */
+  private runFieldCallback(openStartMenu: boolean): void {
+    const d = this.defines;
+    const fieldCallback = gFieldCallback2.fn ?? gFieldCallback.fn;
+    gFieldCallback.fn = undefined;
+    gFieldCallback2.fn = undefined;
+    if (fieldCallback) {
+      // gFieldCallback (e.g. item_use.c's FieldCB_FadeInFromBlack for the Bicycle) fades in itself.
+      const tick = fieldCallback({
+        fadeInFromBlack: () => {
+          this.screenFade.begin(d.require('FADE_FROM_BLACK'));
+          return () => !this.screenFade.active;
+        },
+      } satisfies FieldCallbackHost);
+      this.overlay = { tick };
+      return;
+    }
+    this.screenFade.begin(d.require('FADE_FROM_BLACK'));
+    if (openStartMenu) {
+      this.openStartMenu(true);
+    } else {
+      this.overlay = { tick: () => !this.screenFade.active };
+    }
+  }
+
+  /**
+   * item_use.c's Task_*FromField for a registered item (SELECT): CleanupOverworldWindowsAndTilemaps, then the
+   * screen `init` starts (FieldMenuScene 'itemFromField') from the black field. It comes back through
+   * CB2_ReturnToField and RunFieldCallback (FieldCB2_UseItemFromField). The controls stay locked meanwhile
+   * (UseRegisteredKeyItemOnField's LockPlayerFieldControls).
+   */
+  private openItemScreenFromField(init: () => void, gfxSymbols: string[]): void {
+    this.messageBox.hide(); // CleanupOverworldWindowsAndTilemaps
+    // The Town Map reads the player's location; the TM case's and the pouch's party menu, the map headers.
+    void prepareFieldMoveMenu().then(() => this.runFieldMenu({ menu: 'itemFromField', itemScreen: { init, gfxSymbols } }, (openStartMenu) => this.runFieldCallback(openStartMenu)));
   }
 
   /**
@@ -1607,7 +1626,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * CB2_ReturnToField(WithOpenMenu), the field runs its return-to-field map scripts and calls `onReturn`
    * with the screen still black.
    */
-  private runFieldMenu(start: Pick<FieldMenuStart, 'menu' | 'shopField' | 'naming' | 'storageOption'>, onReturn: (openStartMenu: boolean) => void): void {
+  private runFieldMenu(start: Pick<FieldMenuStart, 'menu' | 'shopField' | 'naming' | 'storageOption' | 'itemScreen'>, onReturn: (openStartMenu: boolean) => void): void {
     const d = this.defines;
     const launch: FieldMenuStart = {
       ...start,
@@ -2566,6 +2585,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       objectEventAnims: (table) => this.assets.fieldEffectObjects.objectEventAnims?.[table],
       doesCurrentMapHaveFishingMons: () => this.wild.doesCurrentMapHaveFishingMons(),
       fishingWildEncounter: (rod) => this.wild.fishingWildEncounter(rod),
+      fadeScreen: (mode, delay) => this.screenFade.begin(mode, delay),
+      paletteFadeActive: () => this.screenFade.active,
+      openScreenFromField: (init, gfxSymbols) => this.openItemScreenFromField(init, gfxSymbols),
     };
   }
 
