@@ -21,7 +21,8 @@ from extract import read_jasc
 # screen, the PC storage system and item PC, the evolution scene, the field's tilesets and object event pics, which the buy menu's map view draws from VRAM,
 # field effect pics, door animation tiles, the cave entrance transition, and the weather fog and palette that
 # Haze and Mist Ball load, the main menu's palettes, the title screen and Oak's speech, the Hall of Fame and the
-# credits, and the region map (town map / fly map) with the dungeon map previews it shows).
+# credits, the region map (town map / fly map) with the dungeon map previews it shows, and the Pokédex
+# (pokedex_screen.c, the area page's maps and pokedex_area_markers.c's markers).
 GFX_PREFIXES = (
     "graphics/battle_interface/",
     "graphics/battle_terrain/",
@@ -55,6 +56,7 @@ GFX_PREFIXES = (
     "graphics/credits/",
     "graphics/region_map/",
     "graphics/map_preview/",
+    "graphics/pokedex/",
     "data/tilesets/",
 )
 # Footprints are 1bpp and unused so far.
@@ -76,7 +78,8 @@ class MakeRules:
 
     def __init__(self, decomp):
         text = "\n".join((decomp / f).read_text() for f in RULE_FILES).replace("\\\n", " ")
-        self.vars = dict(re.findall(r"^(\w+)\s*:=\s*(\S+)", text, re.M))
+        # (whole values: a list such as POKEDEXAREAMARKERFILES spans continued lines)
+        self.vars = {k: v.strip() for k, v in re.findall(r"^(\w+)\s*:=[ \t]*(.*)$", text, re.M)}
         self.flags = {}  # target -> gbagfx flags
         self.cats = {}  # target -> [deps]
         lines = text.split("\n")
@@ -96,7 +99,10 @@ class MakeRules:
                     self.cats[t] = self.expand(rest).split()
 
     def expand(self, s):
-        return re.sub(r"\$\((\w+)\)", lambda m: self.vars.get(m.group(1), ""), s)
+        """$(VAR) references, recursively (a list variable's entries name other variables)."""
+        while (t := re.sub(r"\$\((\w+)\)", lambda m: self.vars.get(m.group(1), ""), s)) != s:
+            s = t
+        return s
 
     @staticmethod
     def parse_flags(recipe):
