@@ -2038,3 +2038,19 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Found on the way (test only): mashing A until the field is free after a battle restarted the leader's
   post-battle script when a press landed in the first free tick (Bruno's looped). The file's `scriptDone` presses B.
 - Verified: typecheck; `npm test` (156); e2e storyLeague (8, twice), story, storyCeladonSaffron, hallOfFame.
+
+### SCREENS_PLAN.md batch 2 merged (PRs #42-#53)
+
+- Merged one PR per unit as each went green: #42 (plan), #43 / #47 trainer card front, then back and flip; #44
+  option menu and start menu help window; #45 / #49 registered SELECT items, then the Town Map / TM case / berry
+  pouch from the field; #46 script coverage test and e2e bag/party waits; #51 / #50 / #52 story checks Brock to
+  Lt. Surge, Erika to Sabrina, Koga to the Hall of Fame; #48 / #53 e2e race fixes.
+- Conflict resolutions: #44 vs #43 in FieldMenuScene / OverworldScene (both added a start menu entry, a menu
+  mode and an import: kept both); #51 vs #50 in `tests/unit/scriptCoverageGaps.ts` (each removed different
+  entries: kept both removals).
+- Duplicated building block: #45's `__test.gbaFading()` and #46's `__test.paletteFadeActive()` were the same probe;
+  kept `paletteFadeActive`, moved registeredItems.test.ts and the docs onto it (also dropped a duplicate import).
+- Races found in merge runs (load averages 150-300 while workers tested): Cut's field-move pose read from node
+  after the banner (fixed in #47: read in the mash predicate); the rest went to the W-flaky workers (#48, #53).
+- Verified: each PR after merging master in: typecheck, `npm test`, full e2e. Last run (#53 on top of everything):
+  typecheck clean, 156 unit, 308 e2e in 45 files.

@@ -171,7 +171,8 @@ onto the export if convenient).
    badges, the trainer pic), CloseTrainerCard back to the start menu. A on the front can stay a stub for unit 2.
    E2E `tests/e2e/trainerCard.test.ts`: open from PLAYER, the badges and money shown, close.
 2. **The card back and the flip.** PrintAllOnCardBack (name, Hall of Fame debut, the link stats as zero),
-   DrawCardBackStats, FlipTrainerCard / Task_DoCardFlipTask (the HBlank squash), A flips both ways, B closes.
+   DrawCardBackStats, FlipTrainerCard / Task_DoCardFlipTask (the HBlank squash). (As in the C: A on the front
+   flips, B closes; on the back B flips back and A closes.)
 
 ### W-story: script coverage and headless story checks
 
@@ -225,7 +226,7 @@ bag / party openers), and the specials / commands it adds for blockers it finds 
 | Batch | Workers | Why together |
 |---|---|---|
 | 1 (done, PRs #31-#40) | W-dex (units 1-3, one after another), W-dexarea (1, then 2 once W-dex 2 is in), W-tmcase (1, then 2), W-fielditems (1-3) | Different files; the Pokédex is the focus, the TM case unblocks HMs in a real playthrough |
-| 2 | W-select (1, then 2), W-options (1), W-tcard (1, then 2), W-story (1-4, one after another; what's left goes to batch 3) | Different files; the start menu screens are the focus, the story checks find the unknown main-path blockers |
+| 2 (done, PRs #42-#53) | W-select (1, then 2), W-options (1), W-tcard (1, then 2), W-story (1, then 2 and 3 side by side, then 4), W-flaky (two rounds of e2e race fixes) | Different files; the start menu screens are the focus, the story checks find the unknown main-path blockers |
 
 ## Rules
 
@@ -248,6 +249,13 @@ Worker and merger rules: docs/WORKFLOW.md sections 3 and 4. Each worker's e2e fi
    fails both on a new gap and on a fixed one, so the list stays the current backlog of unported script features.
 6. **The trainer card is FRLG only** (coordinator, revisit if you disagree): the Hoenn and link card types
    (about a third of trainer_card.c) wait for link play.
+
+7. **W-story's units 2 and 3 ran side by side** (coordinator, revisit if you disagree): they touch different
+   stretches, so each got its own e2e file (`story.test.ts`, `storyCeladonSaffron.test.ts`) and the gap list /
+   specials edits merged with one trivial conflict.
+8. **A W-flaky workstream for e2e races** (coordinator, revisit if you disagree): merge runs at load averages of
+   150-300 (four workers testing at once) turned up races in existing tests; two one-unit workers fixed eight of
+   them in the tests (PRs #48, #53) instead of each merger rerunning (the merger fixed a ninth, Cut's pose, in #47).
 
 ## Not in this plan
 

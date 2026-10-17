@@ -16,35 +16,37 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
   (picture box, YES/NO, nickname prompt → naming screen) → rival picks → the rival battle → rival leaves. Mom heals
   the party. Route 1 clerk Potion.
 - **Story checked headless:** the Viridian Mart parcel scene, Oak's parcel → Pokédex scene, the Viridian old man's
-  catching tutorial, Viridian Forest trainers, Brock; the ending (Hall of Fame room → Hall of Fame → credits →
-  reset → CONTINUE in Pallet Town).
+  catching tutorial, Viridian Forest trainers, Brock; every gym and required story event after it, as e2e tests
+  (`story.test.ts`, `storyCeladonSaffron.test.ts`, `storyLeague.test.ts`: Misty to Giovanni, Bill, the S.S. Anne,
+  the Rocket Hideout, Pokémon Tower, Silph Co., the Safari Zone, Cinnabar, Route 22/23, the Elite Four and the
+  Champion); the ending (Hall of Fame room → Hall of Fame → credits → reset → CONTINUE in Pallet Town).
 
 ## Next up
 
-[MAIN_PATH_PLAN.md](MAIN_PATH_PLAN.md) is done. Batch 1 of [SCREENS_PLAN.md](SCREENS_PLAN.md) is in: the Pokédex
-screen (lists, mon page, habitats, area page, the registered page after a catch), the TM case and berry pouch, and
-the rods, Escape Rope, VS Seeker and Itemfinder.
+[MAIN_PATH_PLAN.md](MAIN_PATH_PLAN.md) is done. [SCREENS_PLAN.md](SCREENS_PLAN.md) batches 1 and 2 are in: the
+Pokédex, TM case, berry pouch, field items, registered SELECT items, the option menu and start menu help window,
+the trainer card, and headless story checks from Brock to the Hall of Fame.
 
-The TM case was a main-path blocker (every TM and HM lives in it, so HMs couldn't be taught); no other known
-main-path blockers are left. Next: find the unknown ones, e.g. headless story checks gym by gym (the ones above
-stop at Brock) and a check that each story script's commands and specials are implemented (unknown ones log once).
-Biggest missing pieces a player notices: registered SELECT items, the options and trainer card screens, audio (SE,
-cries and BGM are no-ops; see DEVIATIONS for what waits on them).
+No known main-path blockers are left: the story checks found and fixed four (Lt. Surge's trash cans, the Rocket
+Hideout's `call_if_defeated` barrier, `GetQuestLogState` leaving VAR_RESULT stale so `trainerbattle_no_intro`
+could skip its battle, every nurse's YES/NO throwing on a constant expression). `tests/unit/scriptCoverageGaps.ts`
+lists what the scripts use that isn't ported: 2 main (both visual: the Elite Four lighting, the S.S. Anne
+departure), 68 side, 55 postgame, 44 link. Next: the side gaps a player meets on the way (in-game trades and
+ChoosePartyMon, the move deleter / relearner / tutors, the Game Corner's coins box and slot machine, the fossil
+revival, the Name Rater, the Route 5 daycare, DoFallWarp holes), then audio (SE, cries and BGM are no-ops; see
+DEVIATIONS for what waits on them).
 
 Other open work:
 
 - The intro movie (intro.c) before the title screen.
-- Start menu screens: options, trainer card (PLAYER); the start menu help window.
-- Registered items (the bag's REGISTER exists; SELECT on the field → UseRegisteredKeyItemOnField and the items'
-  from-field variants don't).
+- The L/R help system (help_system.c) behind OPTIONS_BUTTON_MODE_HELP.
 - Map preview screens (map_preview_screen.c): TryDoMapTransition already knows where they'd run.
 - Other bag items that need field systems: Fame Checker, Teachy TV, mail.
 - Daycare and egg hatching.
 - Link play (the cable club's link specials are stand-ins that never find a partner), the event tickets for Navel
   Rock / Birth Island, `special ShakeScreen`.
-- More e2e scenarios (see the checklist's Tests section). Many e2e helpers still open the bag or party menu with a
-  fixed `waitFrames(60)`; the screens load their graphics asynchronously, so under load that can be too short
-  (fixed in the field item tests: wait for `CB2_BagMenuRun`, then the fade).
+- More e2e scenarios (see the checklist's Tests section). story.test.ts and storyCeladonSaffron.test.ts mash A
+  after battles, which can restart a leader's post-battle script (storyLeague.test.ts presses B instead).
 
 Loose ends:
 
@@ -135,17 +137,17 @@ Loose ends:
   away from them, the signpost message frame, and closing a script's last message with a direction/L/R/START/SELECT
   (replayed as field input). PC: CreatePCMenu + AnimatePcTurnOn/Off, the item PC, Pokémon Storage System and Hall
   of Fame PC; GetInteractedWaterScript (Surf/Waterfall)
-- [~] Start menu shell: items by flags, wrap-around cursor, remembered position, B/START close. POKéDEX, POKéMON,
-  BAG and SAVE open the real screens; PLAYER (trainer card) and OPTION show a "not implemented" notice
-- [ ] Start menu help/description window
+- [x] Start menu shell: items by flags, wrap-around cursor, remembered position, B/START close; every entry opens
+  its real screen
+- [x] Start menu help window (help_message.c, start_menu.c's descriptions) in HELP button mode
 - [x] Tile animations (tileset_anims.c): General water/sand/flowers, Celadon fountain, Silph Co. fountain, Mt. Ember
   steam, Vermilion Gym door, Celadon Gym flowers
 - [x] Door animations (field_door.c), Task_DoorWarp / Task_ExitDoor, `opendoor`/`closedoor`/`waitdooranim`/
   `setdooropen`/`setdoorclosed`
 - [~] Field effects: ground effects (tall grass, jump landings: grass/splashes/dust, shadows, ripples, puddle
   splashes, feet in shallow water, sand footprints/bike tracks, hot springs, water/ice reflections). Not yet: the
-  field move effects (Cut, Surf blob, Strength, Rock Smash, Fly bird, ...), the warp arrow, Pokémon Center heal,
-  `dofieldeffect` in general
+  field move effects (Cut, Surf blob, Strength, Rock Smash, Fly bird, ...), the warp arrow,
+  `dofieldeffect` in general (Pokémon Center heal is done; the coverage test lists the unported field effects)
 - [x] Map name popup (map_name_popup.c): on warps into maps with show_map_name, on connections into another
   region map section (reshown if still up), floor numbers / ROOFTOP, dismissed when field input starts something
 - [x] Save/load: SAVE dialog, main menu + CONTINUE, play time, one localStorage slot (state/saveData.ts), game stats,
@@ -163,10 +165,12 @@ Loose ends:
   pokedex_area_markers.c, the Sevii islands, the size comparison) and the "registered" page after a catch
 - [x] TM case (tm_case.c) and berry pouch (berry_pouch.c): from the bag, GIVE (party, PC box), SELL, back from
   teaching / using; the berry pouch from the battle bag too
-- [ ] Options (option_menu.c), trainer card (trainer_card.c)
+- [x] Options (option_menu.c; SOUND is stored only) and trainer card (trainer_card.c: front, back, flip; the
+  player's FRLG card only, no link cards)
 - [~] Field items: rods and fishing (Task_Fishing, FishingWildEncounter), Escape Rope, VS Seeker (vs_seeker.c:
   rematches, the raise-hand trainers, the charge), Itemfinder (itemfinder.c); Bike, Town Map, flutes, Repel, Coin
-  Case, Powder Jar. Not yet: registered SELECT items, Fame Checker, Teachy TV, mail
+  Case, Powder Jar; registered items with SELECT (UseRegisteredKeyItemOnField: every key item's from-field
+  variant, incl. the Town Map, TM case and berry pouch from the field). Not yet: Fame Checker, Teachy TV, mail
 - [~] Wild encounters: grass/water step encounters (wild_encounter.c: cooldown, rate buff, flutes, Cleanse Tag,
   Stench/Illuminate, repel + EventScript_RepelWoreOff, Altering Cave, Tanoby/Unown), StartWildBattle (standard,
   Pokémon Tower ghosts with the ghost pic, roamers, Safari Zone), CB2_EndWildBattle / CB2_EndSafariBattle.
@@ -215,6 +219,8 @@ Loose ends:
   in grass, running, Master Ball catch + nickname, Poké Mart purchase, walking/doors/stairs/talking, evolution
   (after a battle, learning a move with a full moveset, stopping it with B, Rare Candy and Fire Stone from the bag),
   the Pokédex (lists, mon page, habitats, area page, registering a catch), TM case / berry pouch, rods, Escape
-  Rope, VS Seeker, Itemfinder
+  Rope, VS Seeker, Itemfinder, registered items, options, trainer card, the story gym by gym
+- [x] Script coverage unit test: every script command, special, std script, movement action and field effect the
+  scripts use, against the port's tables; known gaps tagged in `tests/unit/scriptCoverageGaps.ts`
 - [ ] More scenarios: party menu from the start menu, items in battle, level-up move learning, the Old Man
   tutorial, Viridian parcel → Pokédex, elevators, item balls, PCs
