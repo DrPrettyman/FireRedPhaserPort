@@ -30,7 +30,6 @@ export const KNOWN_GAPS: KnownGap[] = [
   { kind: 'special', name: 'DoSSAnneDepartureCutscene', tag: 'main', where: "SSAnne_Exterior", note: "the S.S. Anne sails off after Cut; its waitstate passes, so the script runs on without the cutscene" },
   { kind: 'special', name: 'GetStarterSpecies', tag: 'main', where: "PokemonLeague_ChampionsRoom", note: "Oak's congratulations in the Champion's room buffers the starter's name from it (VAR_RESULT 0 without it)" },
   { kind: 'special', name: 'Script_TryGainNewFanFromCounter', tag: 'main', where: "PokemonLeague_LancesRoom", note: "after Lance (trainer fan club); no effect on the path" },
-  { kind: 'special', name: 'SetWalkingIntoSignVars', tag: 'main', where: "PalletTown", note: "Pallet Town's sign lady (script.c: gWalkAwayFromSignInhibitTimer, sMsgBoxIsCancelable)" },
   // ---------------------------------------------------------------- side: optional content before the Hall of Fame (NPCs, trades, the Game Corner, the daycare, the Sevii 1-3 trip).
   { kind: 'command', name: 'adddecoration', tag: 'side', where: "(Std_ObtainDecoration)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
   { kind: 'command', name: 'bufferdecorationname', tag: 'side', where: "(EventScript_ObtainDecorMessage)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },

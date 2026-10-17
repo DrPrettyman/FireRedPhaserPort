@@ -30,6 +30,8 @@ export interface SpecialEnv {
   warnOnce(key: string, message: string): void;
   /** DisableMsgBoxWalkaway (script.c) */
   disableMsgBoxWalkaway(): void;
+  /** SetWalkingIntoSignVars (script.c) */
+  setWalkingIntoSignVars(): void;
   /** The extracted text `label` (e.g. gText_Ghost), encoded without the terminator. */
   encodeText(label: string): number[];
   /** The field's buttons (gMain.newKeys / heldKeys for specials' tasks). */

@@ -281,6 +281,7 @@ export class ScriptEngine {
         this.start(label);
       },
       disableMsgBoxWalkaway: () => (this.msgBoxWalkawayDisabled = true),
+      setWalkingIntoSignVars: () => this.setWalkingIntoSignVars(),
       input,
       hideFieldMessageBox: () => this.messageBox.hide(),
       encodeText: (label) => this.charmap.encodePlain(this.strings[label] ?? ''),

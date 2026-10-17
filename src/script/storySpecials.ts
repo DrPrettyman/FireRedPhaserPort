@@ -68,6 +68,11 @@ export function SetVermilionTrashCans(rand: () => number = random): { first: num
 }
 
 export const STORY_SPECIALS: Record<string, Special> = {
+  /** SetWalkingIntoSignVars (script.c; Pallet Town's sign lady): the next message can be walked away from. */
+  SetWalkingIntoSignVars({ setWalkingIntoSignVars }) {
+    setWalkingIntoSignVars();
+  },
+
   // ------------------------------------------------ the Pokémon Center nurse (EventScript_PkmnCenterNurse)
   /** IsPlayerNotInTrainerTowerLobby (field_specials.c) */
   IsPlayerNotInTrainerTowerLobby({ state }) {
