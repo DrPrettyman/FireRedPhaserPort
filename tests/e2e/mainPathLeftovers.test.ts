@@ -273,7 +273,7 @@ test('seteventmon (CreateEnemyEventMon): Navel Rock\'s Lugia, caught with a Mast
   await game.waitForActionMenu();
   expect(await game.eval((t) => t.battle()!.mons[1])).toMatchObject({ species: 'LUGIA', level: 70 });
   await game.chooseAction('BAG');
-  await game.eval((t) => t.waitFrames(60));
+  await game.waitForBag();
   await game.pressTimes('RIGHT', 2);
   await game.pressTimes('A', 2);
   await game.mashUntil((t) => /nickname/.test(t.battle()?.message ?? ''), { what: '"Give a nickname...?"' });

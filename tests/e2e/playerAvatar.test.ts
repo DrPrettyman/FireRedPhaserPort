@@ -133,7 +133,7 @@ async function useFirstKeyItem(game: Game, again = false) {
   await game.eval((t) => t.waitFrames(10));
   if (!again) await game.press('DOWN');
   await game.press('A');
-  await game.eval((t) => t.waitFrames(60)); // the bag fades in
+  await game.waitForBag();
   if (!again) {
     await game.press('RIGHT');
     await game.eval((t) => t.waitFrames(20));

@@ -28,9 +28,7 @@ async function useItemfinder(game: Game, again = false) {
   await game.eval((t) => t.waitFrames(10));
   if (!again) await game.press('DOWN');
   await game.press('A');
-  // The bag's graphics load asynchronously, so a fixed wait can end before it's up on a loaded machine.
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_BagMenuRun', { what: 'the bag' });
-  await game.eval((t) => t.waitFrames(30)); // the bag's fade in
+  await game.waitForBag();
   if (!again) {
     await game.press('RIGHT');
     await game.eval((t) => t.waitFrames(20));

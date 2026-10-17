@@ -13,6 +13,7 @@ import { g } from '../battle/env';
 import { getBattlerSide } from '../battle/util';
 import { GetGpuReg } from '../gba/hw';
 import { gMain } from '../gba/main';
+import { gPaletteFade } from '../gba/palette';
 import { gSprites } from '../gba/sprite';
 import type { Button } from '../input/Input';
 import type { Pokemon } from '../pokemon/Pokemon';
@@ -478,6 +479,8 @@ function createApi(game: Phaser.Game) {
     scenes: () => game.scene.getScenes(true).map((s) => s.scene.key),
     /** The GBA-layer screen running (gMain.callback2's name, e.g. BattleMainCB2, CB2_NamingScreen), if any. */
     gbaScreen: () => (game.scene.isActive('Battle') || game.scene.isActive('FieldMenu') || game.scene.isActive('MainMenu') ? gMain.callback2?.name : undefined),
+    /** gPaletteFade.active: a GBA-layer screen fading in or out (menus ignore input until it's done). */
+    paletteFadeActive: () => gPaletteFade.active,
     /** The main menu while it takes input: menu type (0 NEW GAME only, 1 CONTINUE / NEW GAME), cursor, fading, the CONTINUE values. */
     mainMenu: () => {
       const p = game.scene.isActive('MainMenu') ? mainMenuProbe() : undefined;

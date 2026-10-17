@@ -21,12 +21,6 @@ async function addItems(game: Game, items: [string, number][]) {
   }, items);
 }
 
-/** The bag is up and takes input (its list task). */
-async function waitForBag(game: Game) {
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_BagMenuRun', { what: 'the bag' });
-  await game.eval((t) => t.waitFrames(30)); // the bag's fade in
-}
-
 /** In the bag: KEY ITEMS, down to the berry pouch, A. */
 async function selectBerryPouchInBag(game: Game) {
   await game.press('RIGHT'); // ITEMS → KEY ITEMS
@@ -70,7 +64,7 @@ test('from the bag: an Oran Berry heals a hurt mon and comes back to the pouch; 
   await game.eval((t) => t.waitFrames(10));
   await game.press('DOWN'); // POKéMON → BAG
   await game.press('A');
-  await waitForBag(game);
+  await game.waitForBag();
   await selectBerryPouchInBag(game);
   await game.eval((t) => t.waitFrames(10));
   await game.press('A'); // OPEN
@@ -83,8 +77,7 @@ test('from the bag: an Oran Berry heals a hurt mon and comes back to the pouch; 
   await openContextMenu(game);
   await game.screenshot('berryPouch-context');
   await game.press('A'); // USE
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu', { what: 'the party menu' });
-  await game.eval((t) => t.waitFrames(40));
+  await game.waitForPartyMenu();
   await game.mashUntil((t) => t.berryPouch() !== undefined, { what: 'the berry pouch after the berry' });
   expect(await game.eval((t) => t.state!.party[0].hp)).toBe(15);
   expect(await game.eval((t) => t.itemCount('ORAN_BERRY'))).toBe(2);
@@ -95,8 +88,7 @@ test('from the bag: an Oran Berry heals a hurt mon and comes back to the pouch; 
   await openContextMenu(game);
   await game.press('DOWN'); // GIVE
   await game.press('A');
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu', { what: 'the party menu' });
-  await game.eval((t) => t.waitFrames(40));
+  await game.waitForPartyMenu();
   await game.mashUntil((t) => t.berryPouch() !== undefined, { what: 'the berry pouch after GIVE' });
   expect(await game.eval((t) => t.state!.party[0].heldItem)).toBe(oran);
   expect(await game.eval((t) => t.itemCount('ORAN_BERRY'))).toBe(1);
@@ -119,7 +111,7 @@ test('from the bag: an Oran Berry heals a hurt mon and comes back to the pouch; 
 
   // CLOSE (B) → the bag → the field.
   await game.press('B');
-  await waitForBag(game);
+  await game.waitForBag();
   await game.press('B');
   await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the field' });
 });
@@ -132,7 +124,7 @@ test("a berry with no field use: OAK's \"This isn't the time to use that!\", the
   await game.eval((t) => t.waitFrames(10));
   await game.press('DOWN'); // POKéMON → BAG
   await game.press('A');
-  await waitForBag(game);
+  await game.waitForBag();
   await selectBerryPouchInBag(game);
   await game.eval((t) => t.waitFrames(10));
   await game.press('A'); // OPEN
@@ -154,15 +146,14 @@ test("the party menu's ITEM → GIVE → the bag → the berry pouch", async () 
   await game.press('START');
   await game.eval((t) => t.waitFrames(10));
   await game.press('A');
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu', { what: 'the party menu' });
-  await game.eval((t) => t.waitFrames(40));
+  await game.waitForPartyMenu();
   await game.press('A'); // CHARMANDER: SUMMARY / ITEM / CANCEL (no SWITCH with one mon)
   await game.eval((t) => t.waitFrames(10));
   await game.press('DOWN');
   await game.press('A'); // ITEM: GIVE / TAKE / CANCEL
   await game.eval((t) => t.waitFrames(10));
   await game.press('A'); // GIVE
-  await waitForBag(game);
+  await game.waitForBag();
   await selectBerryPouchInBag(game);
   await waitForPouchList(game, 1 /* BERRYPOUCH_FROMPARTYGIVE */);
 
@@ -207,7 +198,7 @@ test("the PC's MOVE ITEMS → GIVE → the bag → the berry pouch", async () =>
   await game.press('A');
   await storageAt(game, 'Task_OnSelectedMon', 2);
   await game.press('A'); // GIVE
-  await waitForBag(game);
+  await game.waitForBag();
   await selectBerryPouchInBag(game);
   await waitForPouchList(game, 3 /* BERRYPOUCH_FROMPOKEMONSTORAGEPC */);
 
@@ -231,7 +222,7 @@ test('selling berries at a Poké Mart through the berry pouch', async () => {
   await game.eval((t) => t.waitFrames(60));
   await game.press('DOWN');
   await game.press('A');
-  await waitForBag(game);
+  await game.waitForBag();
   await selectBerryPouchInBag(game);
   await waitForPouchList(game, BERRYPOUCH_FROMMARTSELL);
 
@@ -249,7 +240,7 @@ test('selling berries at a Poké Mart through the berry pouch', async () => {
   // "Turned over…" → A → the list again, then out: the bag, the shop menu, the field.
   await game.mashUntil((t) => t.berryPouch()?.task === 'Task_BerryPouchMain', { what: 'the list after the sale' });
   await game.press('B');
-  await waitForBag(game);
+  await game.waitForBag();
   await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the shop to close' });
   expect(await game.eval((t) => t.field())).toMatchObject({ map: 'PewterCity_Mart', x: 4, y: 3 });
 });
@@ -261,7 +252,7 @@ test('in battle: the bag\'s OPEN → the berry pouch → USE an Oran Berry on th
   await game.eval((t) => t.startWildBattle({ species: 'MAGIKARP', level: 2 }));
 
   await game.chooseAction('BAG');
-  await game.eval((t) => t.waitFrames(60)); // the bag fades in
+  await game.waitForBag();
   await selectBerryPouchInBag(game);
   await game.eval((t) => t.waitFrames(10));
   await game.press('A'); // OPEN (ITEMMENUACTION_OPEN_BERRIES)
@@ -270,8 +261,7 @@ test('in battle: the bag\'s OPEN → the berry pouch → USE an Oran Berry on th
   // ORAN BERRY → USE / TOSS / EXIT → USE → the party menu → MEWTWO.
   await openContextMenu(game);
   await game.press('A'); // USE
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu', { what: 'the party menu' });
-  await game.eval((t) => t.waitFrames(40));
+  await game.waitForPartyMenu();
   await game.mashUntil((t) => t.itemCount('ORAN_BERRY') === 1, { what: 'the berry used' });
   // The berry takes the turn: back in the battle (Magikarp's Splash), then the next action menu.
   await game.mashUntil((t) => t.battle()?.controller?.startsWith('HandleInputChooseAction') ?? false, { what: 'the next turn' });

@@ -47,7 +47,7 @@ test('catching a wild Pokémon with a Master Ball and nicknaming it', async () =
 
   // BAG → the POKé BALLS pocket (two to the right of ITEMS) → MASTER BALL → throw it.
   await game.chooseAction('BAG');
-  await game.eval((t) => t.waitFrames(60)); // the bag fades in
+  await game.waitForBag();
   await game.pressTimes('RIGHT', 2);
   await game.pressTimes('A', 2);
 

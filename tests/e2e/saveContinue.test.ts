@@ -160,8 +160,8 @@ test('the play time counts every frame, in the field and on GBA screens, and the
   const menu = await game.waitFor((t) => t.startMenu(), { what: 'the start menu' });
   await game.pressTimes('DOWN', (menu.items.indexOf('BAG') - menu.cursor + menu.items.length) % menu.items.length);
   await game.press('A');
-  await game.waitFor((t) => t.gbaScreen(), { what: 'the bag' });
-  await game.eval((t) => t.waitFrames(60));
+  await game.waitForBag();
+  await game.eval((t) => t.waitFrames(60)); // a while in the bag, for the clock check below
   await game.press('B');
   await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the field' });
   const b = await clock();
