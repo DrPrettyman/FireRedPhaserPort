@@ -236,3 +236,17 @@ test('The S.S. Anne: the ticket check, the rival on 2F, the captain gives HM01, 
   expect(await game.eval((t) => t.flag('FLAG_TEMP_12'))).toBe(true);
   await takeWarp(game, 14, 25, 'VermilionCity_Gym');
 });
+
+// ------------------------------------------------------------------ Movement actions the story's NPCs use
+
+test('face_original_direction: the Pewter house Nidoran turns to the player, then back to its own direction', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PewterCity_House1', x: 7, y: 5 });
+  const nidoran = () => game.eval((t) => t.objects().find((o) => o.graphicsId === 'OBJ_EVENT_GFX_NIDORAN_M')!);
+  expect(await nidoran()).toMatchObject({ x: 6, y: 3, facing: 'left' });
+  await approach(game, 6, 3, 'right');
+  // faceplayer, the cry's text, then Common_Movement_FaceOriginalDirection (MOVEMENT_TYPE_FACE_LEFT → DIR_WEST).
+  await game.press('A');
+  await game.mashUntil((t) => t.objects().find((o) => o.graphicsId === 'OBJ_EVENT_GFX_NIDORAN_M')!.facing === 'right', { what: 'the Nidoran to face the player' });
+  await game.mashUntil((t) => t.idle(), { what: 'the script to end' });
+  expect(await nidoran()).toMatchObject({ facing: 'left' });
+});

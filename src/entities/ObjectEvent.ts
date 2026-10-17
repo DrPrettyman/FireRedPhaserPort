@@ -140,6 +140,11 @@ export class ObjectEvent {
   tileY: number;
   /** facingDirection */
   facing: Direction = 'down';
+  /**
+   * gInitialMovementTypeFacingDirections[movementType] (face_original_direction). The player's
+   * MOVEMENT_TYPE_PLAYER faces south; NpcBrain sets an NPC's from its movement type.
+   */
+  originalFacing: Direction = 'down';
   /** movementDirection: the direction of the last movement, which a locked facing doesn't follow. */
   movementDirection: Direction = 'down';
   /** facingDirectionLocked: steps don't turn the object (slide tiles, lock_facing_direction). */

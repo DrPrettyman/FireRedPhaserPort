@@ -1292,8 +1292,14 @@ def extract_constants(decomp, out):
     behaviors = dict(
         (name, int(val, 0)) for name, val in re.findall(r"#define (MB_\w+)\s+(0x[0-9A-Fa-f]+|\d+)", (decomp / "include/constants/metatile_behaviors.h").read_text())
     )
-    (out / "constants.json").write_text(json.dumps({"newGameFlags": flags, "metatileBehaviors": behaviors}, indent=1))
-    print(f"  {len(flags)} new-game flags, {len(behaviors)} behaviors")
+    # gInitialMovementTypeFacingDirections (event_object_movement.c): MOVEMENT_TYPE_* -> DIR_*
+    eom = (decomp / "src/event_object_movement.c").read_text()
+    m = re.search(r"gInitialMovementTypeFacingDirections\[\w*\] = \{(.*?)\};", eom, re.S)
+    facing = dict(re.findall(r"\[(MOVEMENT_TYPE_\w+)\] = (DIR_\w+)", m.group(1))) if m else {}
+    (out / "constants.json").write_text(
+        json.dumps({"newGameFlags": flags, "metatileBehaviors": behaviors, "initialMovementTypeFacing": facing}, indent=1)
+    )
+    print(f"  {len(flags)} new-game flags, {len(behaviors)} behaviors, {len(facing)} initial facings")
 
 
 def extract_wild_encounters(decomp, out):

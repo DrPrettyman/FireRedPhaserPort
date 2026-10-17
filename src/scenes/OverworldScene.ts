@@ -11,7 +11,7 @@ import { expandPlaceholders } from '../text/placeholders';
 import { FieldEffects } from '../entities/FieldEffects';
 import { GroundEffects } from '../entities/groundEffects';
 import { FieldPoisonEffect } from '../entities/FieldPoisonEffect';
-import { NpcBrain } from '../entities/NpcBrain';
+import { NpcBrain, setInitialMovementTypeFacing } from '../entities/NpcBrain';
 import { applyStartPreset, type StartPreset } from '../dev/startPresets';
 import { ObjectEvent, type ObjectEventField } from '../entities/ObjectEvent';
 import { healPlayerParty } from '../script/specials';
@@ -259,6 +259,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const a = this.assets;
     const pokemon = new PokemonData(readPokemonConstants(this.defines), a.species, a.moves, a.items, a.pokemonTables, this.charmap);
     this.state = new GameState(this.defines, a.constants.newGameFlags, pokemon, a.strings);
+    setInitialMovementTypeFacing(a.constants.initialMovementTypeFacing);
   }
 
   async create(start: OverworldStart): Promise<void> {

@@ -116,6 +116,9 @@ export class MovementRunner {
       case 'face_player':
         obj.face(towards(obj, this.player));
         return false;
+      case 'face_original_direction': // MovementAction_FaceOriginalDirection_Step0
+        obj.face(obj.originalFacing);
+        return false;
       case 'face_away_player':
         obj.face(OPPOSITE[towards(obj, this.player)]);
         return false;
