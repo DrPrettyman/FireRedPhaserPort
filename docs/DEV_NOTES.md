@@ -616,7 +616,21 @@ this is the next level down. When you add or change a subsystem, update its entr
   `mash:game.scene.getScene("Overworld").state.getVar("VAR_MAP_SCENE_PALLET_TOWN_PROFESSOR_OAKS_LAB")===2`.
   Build step lists as a bash array (`args+=(...)`) so JS with spaces survives word splitting.
 - **How to find what a script needs:** unimplemented script commands and specials log once to the browser console
-  as `[script] unimplemented command ...`.
+  as `[script] unimplemented command ...`. The whole list, without running anything: see "Script coverage".
+- **Script coverage:** `tests/unit/scriptCoverage.test.ts` reads `scripts/scripts.json` and finds every script
+  command, special / specialvar, std script (callstd / gotostd / msgbox type), movement action and `dofieldeffect`
+  FLDEFF_* the decomp's scripts use that the port doesn't handle, against the port's own tables: ScriptEngine's
+  command table (`commandNames`), `SPECIALS` + `TRAINER_SPECIALS` + the specials other modules add with
+  `registerSpecials` (read from the source text: those modules import Phaser), MovementRunner's dispatch (each
+  action run on a stub object; unhandled ones log `[movement] unimplemented`), the field effect script's
+  `callnative`s against `registerFieldEffectNatives` (also read from the source). The extractor's `macros` key
+  (asm/macros/event.inc + trainer_tower.inc, movement.inc, map.inc) tells commands from movement actions and map
+  data; an op in none of them fails the test. The known gaps are `tests/unit/scriptCoverageGaps.ts`, each tagged
+  `main` / `side` / `postgame` / `link` with the maps that reach it (from each map's map scripts, object, coord and
+  bg event scripts, following every label argument) and a note (BLOCKER = the story stops there). The test fails on
+  a new gap (it prints a ready-made entry with the maps; pick the tag from the decomp scripts) and on a fixed one
+  (take it off the list). Porting a special in a Phaser module: register it with `registerSpecials({ ... })` as an
+  object literal so the test can read its keys.
 - **Bugs that depend on world position:** `?map=` always loads at origin 0, so maps that are far from the origin in
   a real playthrough (e.g. Viridian at y = -80 after walking up from Pallet) need either a real walk or
   `await s.world.load(name, ox, oy)`, then `s.player.setPosition(...)` and `await s.onMapLoaded(false)`.
