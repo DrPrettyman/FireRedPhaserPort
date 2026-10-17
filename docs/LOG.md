@@ -1901,3 +1901,38 @@ Each failed once with other workers' e2e runs on the machine and passed alone; t
   77, BLDY up to 11 and back to 0, BG0VOFS offsets per line, nothing left per line afterwards; the girl's card; a
   photo in sepia (Pikachu, Bulbasaur, Unown C in slot 4) and two stickers on the back), fly.test.ts (the region
   map's tint). Screenshots of the back, the photo back and mid-flip frames look like FRLG's.
+
+### Four more e2e races fixed (W-flaky 2, SCREENS_PLAN.md batch 2)
+
+Each failed once in a merge run at load average ~276 and passed alone. No game changes; one test hook event.
+- battleAnims "the Silph Scope unveils the ghost Marowak" (`expected 'MAROWAK' to be 'GHOST'`): the name was read
+  from Node after `mashUntil(General_SilphScoped started)`; AnimTask_TransformMon(255) renames the mon ~50 ticks into
+  the anim, and under load the read came after. The mash's predicate now returns the name, read in the tick after
+  the anim starts.
+- battleAnims "Reflect" (timed out waiting for the foe drawn on a BG): `waitFor(spriteInvisible)` polled from Node
+  while the foe is on the anim BG only as long as the wall is up. Now `game.watch` (new in harness.ts: an in-page
+  `until` started before the move, awaited after) reads it tick by tick.
+- battleAnims.3e2 "Attract, Soft-Boiled, Sweet Kiss and Lovely Kiss" (no Move_SWEET_KISS anim: it missed):
+  VBlankCB_Battle calls Random() every tick (as in the C), and `useMoveSlot` / `useFirstMove` seeded in one eval
+  and pressed the move in the next, so the rolls were as many calls apart as ticks ran between the two round trips:
+  none on an idle machine, dozens under load. Measured: seeding at the action menu and reading Random() 0, 10 and
+  60 ticks later gave three different values; a stack trace showed VBlankCB_Battle as the only caller. New
+  `pressSeeded` (battleAnimHelpers.ts) seeds and queues the press in one eval, so the press is sampled in the tick
+  right after the seed, as it was on an idle machine; the substitute test uses it too.
+- mapNamePopup "crossing into another map section" (`expected undefined to be 24`): the counting `until` had a
+  900-tick limit that spans Route 1's load (over 1,000 ticks under load), so it ran out before the popup was up.
+  Limit 20000.
+- Same kinds fixed in these files (not seen failing): Node polls of short-lived anim state moved to `game.watch`
+  started before the move: Tackle's hit splat, the ball's open burst, the old man's ball in flight, the shiny
+  sparkles, the Safari bait, Transform's full mosaic, Surf's wave blend; battleAnims.3e2's Sketch HBlank scroll (600
+  Node round trips, now one in-page `until`). mapNamePopup: the popup after a load (~150 ticks) was polled from Node
+  right after the `ready` poll; the hooks now log each printed name as a `mapNamePopupText` event (testHooks.ts
+  onTick), and the tests wait for that. "field input ... dismisses the popup" waited for the load's popup fully shown
+  from Node (120 ticks), then pressed START: it now crosses into Route 1 and does the wait, START and the count to
+  the popup being gone (still at most 4 ticks after the start menu opens) in one eval.
+- tests/README.md "Writing a new scenario": `game.watch`, the popup event, `pressSeeded` and the per-tick battle RNG
+  (5), returning the value from a `mashUntil` predicate.
+- Verified: typecheck; `npm test` (17 files, 155 tests); e2e battleAnims, battleAnims.3e2 and mapNamePopup (35
+  tests) four times: twice alone, once with 8 CPU hogs and two other e2e files (load ~106), once with 16 hogs and
+  four other e2e files (load up to ~314); the other battleAnims files that use the changed helpers (2a, 2b, 2c, 2d,
+  3e1, 3e3a, 3e3b: 67 tests) once.
