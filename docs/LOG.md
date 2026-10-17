@@ -1737,6 +1737,98 @@ end to end.
 - Verified: typecheck, unit tests and the full e2e suite on each PR after merging master in; the final run is in
   this PR: on master after #40, typecheck, 148 unit tests and 269 e2e tests (39 files) pass.
 
+### Registered SELECT items (W-select unit 1, SCREENS_PLAN.md batch 2)
+
+- `menus/registeredItem.ts` (new): UseRegisteredKeyItemOnField (item_menu.c): DismissMapNamePopup,
+  LockPlayerFieldControls, FreezeObjectEvents, HandleEnforcedLookDirectionOnPlayerStopMoving, StopPlayerAvatar,
+  the item's field func as a GBA task with data[3] = 1 (stepped by a field task), the registration cleared when the
+  item is gone, EventScript_BagItemCanBeRegistered when nothing is registered.
+- OverworldScene: FieldGetPlayerInput reads SELECT (pressedSelectButton) and ProcessPlayerFieldInput ends with
+  `if (pressedSelectButton && UseRegisteredKeyItemOnField())`, as in field_control_avatar.c.
+- `menus/itemUse.ts`: the data[3] == 1 branches: SetUpItemUseOnFieldCallback's direct sItemUseOnFieldCB call,
+  DisplayItemMessageOnField + Task_ItemUse_CloseMessageBoxAndReturnToField, DisplayItemMessageInCurrentContext /
+  PrintNotTheTimeToUseThat on the field (FONT_MALE for Oak), and the items: Bicycle (incl. "You can't dismount your
+  BIKE here."; ItemUseOnFieldCB_Bicycle now unfreezes / unlocks / destroys its task like the C), the rods, the VS
+  Seeker, the Itemfinder, Coin Case, Powder Jar, Poké Flute. The Town Map, TM case and berry pouch from SELECT log
+  and give the controls back (unit 2 ports them).
+- `world/fieldItems.ts`: DisplayItemMessageOnField takes a font; the host dismisses the map name popup;
+  ClearDialogWindowAndFrame / DismissMapNamePopup / UnlockPlayerFieldControls / ScriptContext_SetupScript are
+  registered for itemUse.ts (registerFieldItems). `text/MessageBox.ts`: `show` takes an optional font.
+- Fixes on the way: the field never set the strings.c table itself (setTextStrings), so the field items' gText_*
+  only worked after the bag had been opened once; OverworldScene.create sets it now. Script `release` /
+  `releaseall` didn't unfreeze objects (ClearPlayerHeldMovementAndUnfreezeObjectEvents); now they do. A frozen
+  field (a rod's bite into a battle, a map load) is unfrozen when the map is resumed or loaded.
+- Probes: `field().locked`, `field().objectsFrozen`, `__test.gbaTasks()`, `__test.paletteFadeActive()`.
+- Verified: typecheck; `npm test` (148); e2e tests/e2e/registeredItems.test.ts (new, 6 tests: registering the
+  Bicycle through the bag's REGISTER and SELECT on / off with a step each way; Cycling Road's "can't dismount";
+  the Old Rod facing away (Oak's message) and facing the water (cast, no bite, put away, a step); the Coin Case's
+  "Your COINS: 123" with the controls locked and objects frozen until it closes; the VS Seeker / Itemfinder / Poké
+  Flute messages; nothing registered and a registered item no longer in the bag), plus fieldItems, vsSeeker,
+  itemfinder, tmCase, berryPouch, fieldMoves, strength, surf, playerAvatar, mapNamePopup and field. Screenshots of
+  Oak's message and the Coin Case's in the field message box looked right.
+### Script coverage check and e2e bag / party waits (W-story unit 1)
+
+- `tests/unit/scriptCoverage.test.ts`: every script command, special / specialvar, std script, movement action and
+  scripted `dofieldeffect` the decomp's scripts use, checked against the port's own tables (ScriptEngine's command
+  table, SPECIALS + TRAINER_SPECIALS + `registerSpecials` blocks read from the source, MovementRunner's dispatch on
+  a stub object, `registerFieldEffectNatives` blocks). Known gaps in `tests/unit/scriptCoverageGaps.ts` (184:
+  17 main, 68 side, 55 postgame, 44 link), each with the maps that reach it (a reachability walk from every map's
+  scripts). The rough check's false positives (ShowTrainerIntroSpeech, SetUpTrainerMovement: trainer specials in
+  ScriptEngine; VsSeekerFreezeObjectsAfterChargeComplete: registered by world/vsSeeker.ts) aren't gaps.
+- Extractor: scripts.json gets `macros` (event.inc + trainer_tower.inc, movement.inc, map.inc macro names) so the
+  test tells commands from movement actions and map data. ScriptEngine exports TRAINER_SPECIALS and has a
+  `commandNames` getter.
+- Found on the main path: `call_if_defeated` / `call_if_not_defeated` aren't commands in the port, so Rocket
+  Hideout B4F's barrier to Giovanni never opens (BLOCKER); SetVermilionTrashCans (BLOCKER for Lt. Surge's gym).
+  SetSeenMon, which the plan had as main, is only used by optional scripts (side). Two decomp lines have no comma
+  between macro arguments, which GAS accepts and the extractor's split_args doesn't: `call_if_not_defeated
+  TRAINER_TEAM_ROCKET_GRUNT_12 RocketHideout_B1F_...` and `case 1 EventScript_PkmnCenterNurse_Goodbye` (NO at a
+  Pokémon Center nurse skips the goodbye). Left for W-story unit 2.
+- e2e: `game.waitForBag()` / `waitForPartyMenu()` / `waitForScreen(cb2)` in harness.ts wait for the screen's main
+  callback and the end of its palette fade (new probe `t.paletteFadeActive()`), replacing fixed `waitFrames(60)` /
+  CB2-then-30/40-frame waits in 19 files (local `waitForBag` copies in berryPouch / tmCase removed). Waits that
+  give a refusal time to show with the menu already up (fieldItems, fieldMoves, surf, strength, fly,
+  playerAvatar), the PC / shop field menus and saveContinue's clock window stay fixed.
+- Races fixed on the way (each failed once with three other workers running, load average ~150, and passed on a
+  rerun): `t.until` resolved with `pred()` evaluated again after the frame's batch of ticks, so a short-lived state
+  could be gone (surf's jump watcher got undefined); it now returns the result from the tick it held in. The
+  tap-turn test and surf's `watchAction` read the field inside the predicate; playerAvatar's boulder test holds UP
+  with the new `t.holdWhile` (released any later, the player walked on into the hole to B1F again).
+- Not fixed, failed once under that load and passed on reruns: fieldEffects.test.ts "water and flower tiles
+  animate" (same tile bytes 40 frames apart) and "leaving a house, the player walks out of the opening door" (the
+  600-frame `until` for the hidden arrival ran out).
+- Verified: typecheck; `npm test` (16 files, 152 tests); e2e, a few files at a time: every file whose waits
+  changed (battleAnims, berryPouch, evolution, fieldItems, fieldMoves, fly, itemfinder, mainPathLeftovers, pcBoxes,
+  pcStorage, playerAvatar, pokedex, saveContinue, scriptedBattles, strength, surf, tmCase, vsSeeker, wildBattle)
+  and, after the `until` change, every file that uses it (also fieldEffects, mapNamePopup, pokedexArea, hallOfFame,
+  titleScreen, pokemart, transitions).
+### Option menu and start menu help window (W-options, SCREENS_PLAN.md batch 2)
+
+- option_menu.c as `menus/optionMenu.ts` on the GBA layer: CB2_OptionsMenuFromStartMenu → CB2_OptionMenu's load
+  states (BGs 0-2, the windows, sOptionMenuPalette, the header's std frame and the settings' user frame) →
+  Task_OptionMenu (fade in, OptionMenu_ProcessInput with key repeat, the frame's tiles and palette reloaded as it
+  changes, the selected row as WIN0 outside the BLDY lightening, fade out) → CloseAndSaveOptionMenu. START → OPTION
+  opens it (OverworldScene's start menu dispatch, FieldMenuScene 'options') and it returns to the start menu
+  (CB2_ReturnToFieldWithOpenMenu). The strings, sOptionMenuPalette and the help window graphics were already
+  extracted (no extractor change).
+- `optionsSound` in GameState and the save (SAVE_VERSION 3; `upgradeSave` gives version 2 saves MONO).
+  `battle/battleBg.ts` reads the frame type from the state instead of frame 1.
+- Field windows that use the user frame now follow the FRAME option: the start menu and its Safari stats window
+  pass it, and `MenuWindow`'s default frame comes from `setUserFrameTypeSource` (the YES/NO box, the mon pic box);
+  before, they always drew TYPE 1.
+- help_message.c as `ui/HelpMessageWindow.ts` (a Phaser window over the field like the start menu) and
+  start_menu.c's sStartMenuDescPointers in `ui/StartMenu.ts`: the description on open and on cursor moves, gone on
+  close, only in the HELP button mode.
+- Fixed on the way: `TextWindow.drawGlyph` wrote colour 0 (TEXT_COLOR_TRANSPARENT) background pixels over the
+  window; GLYPH_COPY skips them, so text with a transparent background now prints over what's there (the help bar).
+- Verified: typecheck; `npm test` (149, incl. the save round-trip with the sound option and a version 2 save
+  loading as MONO); e2e tests/e2e/options.test.ts (new, 2 tests: text speed FAST → MID and FRAME wrapping 1 → 10 →
+  1 → 2, cursor wrapping, back to the start menu on OPTION, reopened with both kept, saved in the slot; the help
+  text on open and after UP / DOWN (incl. the wrap to EXIT), gone after B, and gone after BUTTON MODE → LR, also on
+  cursor moves and a fresh START), plus saveContinue, pokedex, field, mapNamePopup, titleScreen, trainerBattle,
+  wildBattle, fieldItems, fly and evolution. Screenshots of the option menu and of the help bar under the start menu
+  looked right.
+
 ### Trainer card front (W-tcard unit 1, SCREENS_PLAN.md batch 2)
 
 - `menus/trainerCard.ts`: trainer_card.c for the player's FRLG card: ShowPlayerTrainerCard,

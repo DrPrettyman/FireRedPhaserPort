@@ -116,7 +116,7 @@ test('Mewtwo caught with a Master Ball: CeruleanCave_B1F_OnResume removes it (B_
   expect((await game.waitForEvent('battleTransition', { since })).transition).toBe(await game.eval((t) => t.define('B_TRANSITION_BLUR')));
   // BAG → the POKé BALLS pocket → MASTER BALL → throw it; no nickname.
   await game.chooseAction('BAG');
-  await game.eval((t) => t.waitFrames(60));
+  await game.waitForBag();
   await game.pressTimes('RIGHT', 2);
   await game.pressTimes('A', 2);
   await game.mashUntil((t) => /nickname/.test(t.battle()?.message ?? ''), { what: '"Give a nickname...?"' });

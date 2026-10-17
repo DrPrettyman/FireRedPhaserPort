@@ -2,7 +2,8 @@
 // (CB2_PartyMenuFromStartMenu / CB2_BagMenuFromStartMenu), the Poké Mart's buy menu and sell bag
 // (CB2_InitBuyMenu / CB2_GoToSellMenu), the naming screen (DoNamingScreen from a special), the Hall of Fame
 // (CB2_DoHallOfFameScreen from EnterHallOfFame, CB2_InitHofPC from the PC), the wall maps' region map
-// (`special ShowTownMap`), the Pokédex (CB2_OpenPokedexFromStartMenu) and the trainer card (ShowPlayerTrainerCard). The
+// (`special ShowTownMap`), the Pokédex (CB2_OpenPokedexFromStartMenu), the options (CB2_OptionsMenuFromStartMenu)
+// and the trainer card (ShowPlayerTrainerCard). The
 // overworld isn't a GBA screen, so its return points (CB2_ReturnToFieldWithOpenMenu, CB2_ReturnToField,
 // CB2_ReturnToFieldContinueScriptPlayMapMusic) end this scene instead.
 
@@ -38,6 +39,8 @@ import { gHofBuffer, LoadHallOfFameSave } from '../state/hallOfFame';
 import { SAVE_STATUS_OK, TrySavingData } from '../state/save';
 import { loadPokedexData } from '../menus/pokedex';
 import { CB2_OpenPokedexFromStartMenu, pokedexScreenGfxSymbols } from '../menus/pokedexScreen';
+import { CB2_OptionsMenuFromStartMenu, optionMenuGfxSymbols } from '../menus/optionMenu';
+import { BG_PLTT_ID, LoadPalette } from '../gba/palette';
 import { ShowPlayerTrainerCard, trainerCardGfxSymbols } from '../menus/trainerCard';
 import { InitRegionMapWithExitCB, REGIONMAP_TYPE_WALL, regionMapGfxSymbols } from '../menus/regionMap';
 import { buyMenuGfxSymbols, CB2_GoToSellMenu, CB2_InitBuyMenu, LoadFieldTilesetsForShop, type ShopFieldView } from '../menus/shop';
@@ -66,7 +69,7 @@ export interface NamingScreenRequest {
 }
 
 export interface FieldMenuStart {
-  menu: 'party' | 'bag' | 'buy' | 'sell' | 'naming' | 'storage' | 'itemPc' | 'itemPcDeposit' | 'hallOfFame' | 'hallOfFamePc' | 'townMap' | 'pokedex' | 'trainerCard';
+  menu: 'party' | 'bag' | 'buy' | 'sell' | 'naming' | 'storage' | 'itemPc' | 'itemPcDeposit' | 'hallOfFame' | 'hallOfFamePc' | 'townMap' | 'pokedex' | 'options' | 'trainerCard';
   /** For 'storage': OPTION_WITHDRAW / OPTION_DEPOSIT / OPTION_MOVE_MONS / OPTION_MOVE_ITEMS */
   storageOption?: number;
   /** For 'buy': what the buy menu's map view reads from the field. */
@@ -127,6 +130,7 @@ export class FieldMenuScene extends GbaHostScene {
       await loadPokedexData('gen');
       await loadGfx(pokedexScreenGfxSymbols());
     }
+    if (start.menu === 'options') await loadGfx(optionMenuGfxSymbols());
     // The trainer card (StartMenuPlayerCallback): its graphics and the player's pic.
     if (start.menu === 'trainerCard') await loadGfx(trainerCardGfxSymbols(start.state.playerGender === 'female' ? K.FEMALE : K.MALE));
     // The item PC's list (WITHDRAW ITEM) draws the PC's items' icons.
@@ -171,6 +175,12 @@ export class FieldMenuScene extends GbaHostScene {
       // WIN0/WIN1, which it turns off while it's up): the overworld isn't on the GBA layer, so set it here.
       SetGpuReg(REG_OFFSET_DISPCNT, DISPCNT_MODE_0 | DISPCNT_OBJ_1D_MAP | DISPCNT_OBJ_ON | DISPCNT_WIN0_ON | DISPCNT_WIN1_ON);
       SetMainCallback2(CB2_OpenPokedexFromStartMenu); // StartMenuPokedexCallback
+    } else if (start.menu === 'options') {
+      // The option menu doesn't load BG palette 0, whose colour 0 is the backdrop: the field's (LoadTilesetPalette
+      // forces the primary tileset's first colour to black). The overworld isn't on the GBA layer, so set it here.
+      LoadPalette([0], BG_PLTT_ID(0), 2);
+      SetMainCallback2(CB2_OptionsMenuFromStartMenu); // StartMenuOptionCallback
+      gMain.savedCallback = CB2_ReturnToFieldWithOpenMenu;
     } else if (start.menu === 'trainerCard') {
       ShowPlayerTrainerCard(CB2_ReturnToFieldWithOpenMenu); // StartMenuPlayerCallback
     } else if (start.menu === 'storage') {

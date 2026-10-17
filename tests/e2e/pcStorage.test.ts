@@ -396,8 +396,7 @@ test('move items: put a held item in the bag, then give one from the bag', async
   // GIVE: the bag opens on its ITEMS pocket; pick the LEFTOVERS
   expect(await openMonMenu(game)).toEqual(['GIVE', 'CANCEL']);
   await chooseMenuItem(game, 0);
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_BagMenuRun', { what: 'the bag' });
-  await game.eval((t) => t.waitFrames(30));
+  await game.waitForBag();
   await game.press('A');
   await waitStorage(game, 'Task_PokeStorageMain', 0);
   expect(await game.eval((t) => [t.state!.storage.getBoxedMon(0, 0)!.heldItem === t.define('ITEM_LEFTOVERS'), t.itemCount('LEFTOVERS')])).toEqual([true, 0]);
@@ -512,8 +511,7 @@ test("the player's PC: withdraw the new game's Potion, then deposit it again", a
   await game.eval((t) => t.waitFrames(4));
   expect(await game.message()).toMatch(/Store items in the PC\./);
   await game.press('A');
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_BagMenuRun', { what: 'the bag' });
-  await game.eval((t) => t.waitFrames(40));
+  await game.waitForBag();
   await game.press('A');
   await game.eval((t) => t.waitFrames(10));
   if (potions + 1 > 1) await game.press('A'); // how many: one
@@ -542,8 +540,7 @@ test("the player's PC: give a stored item to a party mon", async () => {
   await game.waitFor((t) => t.itemPc()?.task === 'Task_ItemPcSubmenuRun', { what: 'the item menu' });
   await game.press('DOWN'); // GIVE
   await game.press('A');
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu', { what: 'the party menu' });
-  await game.eval((t) => t.waitFrames(30));
+  await game.waitForPartyMenu();
   await game.press('A'); // MEWTWO
   // "MEWTWO was given the LEFTOVERS to hold.", then back to the item PC's list
   await game.mashUntil((t) => t.itemPc()?.task === 'Task_ItemPcMain', { what: 'the item PC again' });

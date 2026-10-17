@@ -79,7 +79,7 @@ async function catchPidgey(game: Game): Promise<void> {
   await game.eval((t) => t.startWildBattle({ species: 'PIDGEY', level: 2 }));
   // BAG → the POKé BALLS pocket (two to the right of ITEMS) → MASTER BALL → throw it.
   await game.chooseAction('BAG');
-  await game.eval((t) => t.waitFrames(60)); // the bag fades in
+  await game.waitForBag();
   await game.pressTimes('RIGHT', 2);
   await game.pressTimes('A', 2);
   await game.mashUntil((t) => /nickname/.test(t.battle()?.message ?? ''), { what: '"Give a nickname...?"' });

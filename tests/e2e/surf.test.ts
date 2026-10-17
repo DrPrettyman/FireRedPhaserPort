@@ -29,8 +29,7 @@ async function useFieldMove(game: Game, action = 1, mon = 0) {
   await game.press('START');
   await game.eval((t) => t.waitFrames(10));
   await game.press('A'); // POKéMON
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu', { what: 'the party menu' });
-  await game.eval((t) => t.waitFrames(40));
+  await game.waitForPartyMenu();
   for (let i = 0; i < mon; i++) {
     await game.press('DOWN');
     await game.eval((t) => t.waitFrames(4));
@@ -55,7 +54,12 @@ async function waitFieldMoveDone(game: Game, what: string) {
  * can miss an action that lasts a few ticks when the machine is busy.
  */
 function watchAction(game: Game, action: string) {
-  return game.eval(async (t, a) => ((await t.until(() => t.field()?.avatar.action === a, 3600)) ? t.field()! : undefined), action);
+  // the field as it was in that tick: by the time the promise settles (the frame's batch of ticks is over) the
+  // action can be done
+  return game.eval(async (t, a) => {
+    let f = t.field();
+    return (await t.until(() => (f = t.field())?.avatar.action === a, 3600)) ? f : undefined;
+  }, action);
 }
 
 /** The world pixel centre the blob sits at under a player on world tile (x, y): the sprite's y + 8. */

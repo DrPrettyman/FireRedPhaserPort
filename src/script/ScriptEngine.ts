@@ -1,4 +1,4 @@
-import { ClearPlayerHeldMovement, IsFreezePlayerFinished } from '../world/playerAvatar';
+import { avatarField, ClearPlayerHeldMovement, IsFreezePlayerFinished } from '../world/playerAvatar';
 import type { ObjectEvent } from '../entities/ObjectEvent';
 import type { Button, Input } from '../input/Input';
 import type { NamingScreenRequest } from '../scenes/FieldMenuScene';
@@ -593,6 +593,11 @@ export class ScriptEngine {
     return m ? Number(m[1]) - 1 : (this.defines.get(token) ?? 0);
   }
 
+  /** The script commands this interpreter handles (tests/unit/scriptCoverage.test.ts). */
+  get commandNames(): string[] {
+    return Object.keys(this.commands);
+  }
+
   private callSpecial(name: string): number | void {
     if (TRAINER_SPECIALS.has(name)) return this.trainerSpecial(name);
     const special = SPECIALS[name];
@@ -830,15 +835,18 @@ export class ScriptEngine {
     },
     /**
      * ScrCmd_release / ScrCmd_releaseall: both hide the field message box, and
-     * ClearPlayerHeldMovementAndUnfreezeObjectEvents lets go of the player's finished movement.
+     * ClearPlayerHeldMovementAndUnfreezeObjectEvents lets go of the player's finished movement and unfreezes
+     * the objects a field task froze (FreezeObjectEvents: e.g. a registered Itemfinder's underfoot script).
      */
     release(this: ScriptEngine) {
       this.messageBox.hide();
       ClearPlayerHeldMovement();
+      avatarField().unfreezeObjectEvents();
     },
     releaseall(this: ScriptEngine) {
       this.messageBox.hide();
       ClearPlayerHeldMovement();
+      avatarField().unfreezeObjectEvents();
     },
     faceplayer(this: ScriptEngine) {
       const obj = this.host.selectedObject;
@@ -1461,8 +1469,8 @@ export class ScriptEngine {
   }
 }
 
-/** Specials handled by ScriptEngine.trainerSpecial (some return nothing). */
-const TRAINER_SPECIALS = new Set([
+/** Specials handled by ScriptEngine.trainerSpecial (some return nothing). Exported for tests/unit/scriptCoverage. */
+export const TRAINER_SPECIALS: ReadonlySet<string> = new Set([
   'Script_HasTrainerBeenFought',
   'SetBattledTrainerFlag',
   'GetTrainerBattleMode',

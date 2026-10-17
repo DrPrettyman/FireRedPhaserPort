@@ -42,7 +42,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Party menu: mail, the move relearner, Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
     field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
   - Region map / Fly (menus/regionMap.ts, world/fly.ts): no audio (SE_DEX_SCROLL, SE_CARD_OPEN, SE_M_FLY, ...).
-    The Town Map's registered (SELECT) use, Task_UseTownMapFromField, isn't ported (registered items aren't).
+    The Town Map's registered (SELECT) use, Task_UseTownMapFromField, isn't ported yet (it logs and gives the
+    controls back; SCREENS_PLAN.md W-select unit 2).
     The bird of Fly always uses the extracted bird sheet's own palette (Red's), where the GBA draws it in OBJ
     palette 0, the player's (Leaf's frames would use hers). gExitStairsMovementDisabled isn't kept (no stair
     walk-out). The dungeon previews' third palette is zero-filled: the C loads 3 palettes from 2-palette data,
@@ -58,19 +59,28 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     follows. The show-mon banner's graphics load while the player's pose plays, so a very slow load would hold the
     banner back. Dig/Escape Rope with no escape warp saved (a dev start in a cave) go to the last heal location.
   - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Bag uses that need overworld systems
-    (Fame Checker, Teachy TV, mail, registered SELECT items) log "not implemented" and return to the bag. Berry
+    (Fame Checker, Teachy TV, mail) log "not implemented" and return to the bag. Berry
     powder reads as 0. The Escape Rope's quest log event (ItemUse_SetQuestLogEvent) isn't
     recorded; ItemUseOnFieldCB_EscapeRope takes the field controls lock itself (on the GBA the start menu's lock is
     still held when the bag returns; here the field's overlay held the controls until then). RemoveUsedItem after
     the bag has closed skips the bag display's item counts (the GBA writes them through a freed NULL pointer). The TM case
     and berry pouch can't be opened to give from (the PC box's GIVE, GoToTMCase_PCBox / GoToBerryPouch_PCBox).
+  - Registered items (menus/registeredItem.ts, SELECT on the field): the field doesn't run the GBA task list, so
+    the item's task (data[3] = 1) runs its first step in the frame SELECT is read (as RunTasks would, after the
+    input callback) and then once a frame from a field task of its own, which stops when the task is destroyed;
+    the VS Seeker and the Itemfinder destroy it at once and go on in their own field tasks (on the GBA,
+    Task_VsSeeker_0 / ItemUseOnFieldCB_Itemfinder carry on as the item's task). The Fame Checker and Teachy TV
+    from SELECT log and give the controls back (no screens). ChangeBgY(0, 0, 0) is a no-op (the field's message
+    box isn't on a scrolled BG); InUnionRoom is always FALSE. No quest log events (ItemUse_SetQuestLogEvent).
   - TM case (menus/tmCase.ts): silent (SE_SELECT, SE_SHOP); no quest log (RecordItemTransaction). Not ported:
     the Pokédude's Teachy TV demo (TMCASE_POKEDUDE), the Union Room's GIVE / EXIT menu (no link play) and opening
-    it as a registered item from the field (Task_InitTMCaseFromField: there are no registered SELECT items yet).
+    it as a registered item from the field (Task_InitTMCaseFromField logs and gives the controls back; W-select
+    unit 2).
   - Berry pouch (menus/berryPouch.ts): silent (SE_BAG_CURSOR, SE_SELECT, SE_SHOP); no quest log
     (RecordItemTransaction). Not ported: Berry Crush (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room context
     menus (GIVE / EXIT, EXIT) and IsHoldingItemAllowed's Enigma Berry check there (always TRUE: neither can be
-    entered), opening it as a registered item from the field (Task_InitBerryPouchFromField), and
+    entered), opening it as a registered item from the field (Task_InitBerryPouchFromField logs and gives the
+    controls back; W-select unit 2), and
     AbortBerryPouchLoading (for a failed Alloc).
   - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
     overworld's ScreenFade.
@@ -139,7 +149,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail, the daycare mons,
     Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, the fame
     checker, Trainer Tower and minigame records, the enigma berry, mystery gift, easy chat, link records and
-    the sound and region map zoom options. The player's position is stored only when the field writes it before
+    the region map zoom option. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
   - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the title screen; the
     copyright screen and intro.c's Game Freak / Nidorino movie before it aren't ported. Dev starts (`?start=`,
@@ -166,6 +176,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     DoSaveFailedScreen. SaveMapView isn't ported: the map view isn't saved, so CONTINUE rebuilds the map from its
     header and ON_LOAD script (metatiles a script changed later aren't restored). `special Field_AskSaveTheGame`
     (task50_save_game) doesn't switch to HELPCONTEXT_SAVE.
+  - Option menu (menus/optionMenu.ts): no help context (HELPCONTEXT_OPTIONS); SOUND (MONO / STEREO) is stored and
+    saved but changes nothing (no audio, so no SetPokemonCryStereo). The L=A button mode applies on the GBA-layer
+    screens (GbaHostScene's ReadKeys) but not on the field, whose input reads the buttons directly (on the GBA,
+    ReadKeys turns L into A everywhere). The field isn't on the GBA layer, so FieldMenuScene sets the backdrop
+    (BG palette 0 colour 0, black as LoadTilesetPalette leaves it) the option menu doesn't load itself.
+  - Start menu help window (ui/HelpMessageWindow.ts): a Phaser window like the start menu, not a BG0 window; the
+    start menu (and its help window) goes away as soon as an item that leaves the field is chosen, before the fade
+    (on the GBA both stay up under the fade).
   - CONTINUE (OverworldScene.continueSavedGame): the map's objects spawn from its templates (object events aren't
     saved, see Save data); gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no

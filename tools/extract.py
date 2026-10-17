@@ -945,11 +945,20 @@ def extract_scripts(decomp, out):
         list_menus += [None] * (idx + 1 - len(list_menus))
         list_menus[idx] = re.findall(r"\w+", body)
 
+    # The macro names scripts are written in, for tests/unit/scriptCoverage.test.ts to tell script commands
+    # (asm/macros/event.inc incl. the ones expanded above, trainer_tower.inc's ttower_*) from movement actions
+    # (asm/macros/movement.inc's create_movement_action) and map data (asm/macros/map.inc: map_script, ...).
+    macro_names = {
+        "event": re.findall(r"^\s*\.macro\s+(\w+)", event_inc + (decomp / "asm/macros/trainer_tower.inc").read_text(), re.M),
+        "movement": re.findall(r"^\s*create_movement_action\s+(\w+)", (decomp / "asm/macros/movement.inc").read_text(), re.M),
+        "map": re.findall(r"^\s*\.macro\s+(\w+)", (decomp / "asm/macros/map.inc").read_text(), re.M),
+    }
+
     sd = out / "scripts"
     sd.mkdir(parents=True, exist_ok=True)
     (sd / "scripts.json").write_text(
         json.dumps(
-            {"code": code, "labels": labels, "defines": defines, "stdScripts": std, "rematches": rematches, "healLocations": heal_locations, "whiteOut": white_out, "multichoices": multichoices, "listMenus": list_menus},
+            {"code": code, "labels": labels, "defines": defines, "stdScripts": std, "rematches": rematches, "healLocations": heal_locations, "whiteOut": white_out, "multichoices": multichoices, "listMenus": list_menus, "macros": macro_names},
             ensure_ascii=False,
             separators=(",", ":"),
         )

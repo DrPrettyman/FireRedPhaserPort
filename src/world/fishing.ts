@@ -19,13 +19,14 @@ import { encodeRaw, text } from '../menus/common';
 import { random } from '../util/random';
 import type { Direction } from './direction';
 import { registerItemUseFieldFuncs } from '../menus/itemUse';
-import { DisplayItemMessageOnField, fieldItemsHost } from './fieldItems';
+import { ClearDialogWindowAndFrame, DismissMapNamePopup, DisplayItemMessageOnField, fieldItemsHost } from './fieldItems';
 import {
   CanUseEscapeRopeOnCurrMap,
   CreateTask,
   fieldMoveHost,
   LockPlayerFieldControls,
   Overworld_ResetStateAfterDigEscRope,
+  ScriptContext_SetupScript,
   Task_UseDigEscapeRopeOnField,
   UnlockPlayerFieldControls,
 } from './fieldMoves';
@@ -420,15 +421,22 @@ export function fishingProbe(): { step: number; animNum?: number; image?: number
   return { step: sTask.step, ...(s && { animNum: s.anim.animNum, image: s.anim.image, x2: s.x2, y2: s.y2 }) };
 }
 
-/** The field side of the bag's rods and Escape Rope (menus/itemUse.ts' ItemUseFieldFuncs), registered at boot. */
+/**
+ * The field side of the bag's rods and Escape Rope, and what registered items used with SELECT need
+ * (menus/itemUse.ts' ItemUseFieldFuncs), registered at boot.
+ */
 export function registerFieldItems(): void {
   registerItemUseFieldFuncs({
     CanFish,
     StartFishing,
     CanUseEscapeRopeOnCurrMap,
     LockPlayerFieldControls,
+    UnlockPlayerFieldControls,
     Overworld_ResetStateAfterDigEscRope,
     DisplayItemMessageOnField,
+    ClearDialogWindowAndFrame,
+    DismissMapNamePopup,
+    ScriptContext_SetupScript,
     Task_UseDigEscapeRopeOnField,
   });
 }

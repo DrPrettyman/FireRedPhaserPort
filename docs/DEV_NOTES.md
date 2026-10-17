@@ -271,6 +271,26 @@ this is the next level down. When you add or change a subsystem, update its entr
     `itemfinderArrow` (`anim`, `affineAnim`, `deltaX`, `deltaY`), `itemfinderStar`, `itemfinderEnd`. Tests:
     tests/e2e/itemfinder.test.ts (Route 3's Oran Berry (26, 9) from (24, 9); Cape Brink's underfoot PP Max at
     (16, 28); Pallet Town for none; Route 13 (62, 1) for Route 12's Rare Candy), tests/unit/itemfinder.test.ts.
+  - **Registered items (SELECT):** `menus/registeredItem.ts` is UseRegisteredKeyItemOnField (item_menu.c),
+    called from `OverworldScene.processPlayerFieldInput` when FieldGetPlayerInput saw SELECT (after START, as in
+    ProcessPlayerFieldInput). It dismisses the map name popup, takes LockPlayerFieldControls (fieldMoves.ts' flag
+    version, which the field items' own Unlock calls release), FreezeObjectEvents, stops the player, and runs the
+    item's `FIELD_USE_FUNCS` entry as a GBA task with `data[3] = 1` (stepped by a field task: the field doesn't run
+    RunTasks). Nothing registered, or the item gone from the bag (the registration is cleared):
+    EventScript_BagItemCanBeRegistered. The from-the-field branches are in menus/itemUse.ts: SetUpItemUseOnFieldCallback
+    calls sItemUseOnFieldCB at once; DisplayItemMessageInCurrentContext / PrintNotTheTimeToUseThat go to
+    `DisplayItemMessageOnField(taskId, fontId, str, callback)` (the task waits in Task_ContinueTaskAfterMessagePrints
+    while world/fieldItems.ts prints, then the callback becomes its func) and Task_ItemUse_CloseMessageBoxAndReturnToField
+    (clears the box, unfreezes, unlocks). An sItemUseOnFieldCB gets TASK_NONE after the bag (there's no task),
+    so it destroys its task through `DestroyItemUseTask`. To add an item's field branch: check `inField(taskId)` in its
+    FieldUseFunc and end in something that unfreezes and unlocks. The Town Map / TM case / berry pouch branches
+    (`RegisteredItemFromFieldNotPorted`) log and give the controls back. Script `release` / `releaseall` now also
+    unfreeze objects (ClearPlayerHeldMovementAndUnfreezeObjectEvents), and a map load or a battle's return clears the
+    freeze. Probes: `field().locked` (LockPlayerFieldControls held), `field().objectsFrozen`, `__test.gbaTasks()`
+    (active gTasks by function name, e.g. `Task_BagMenu_HandleInput`, `Task_FieldItemContextMenuHandleInput`),
+    `__test.paletteFadeActive()`. Tests: tests/e2e/registeredItems.test.ts (registering the Bicycle in the bag and SELECT on /
+    off, Cycling Road, the Old Rod, the Coin Case, the VS Seeker / Itemfinder / Poké Flute messages, nothing
+    registered; Pallet Town's pond at (8, 16), (12, 13) for no trainers or hidden items).
 - **Scripted battles:** specials that start a battle (StartOldManTutorialBattle, StartMarowakBattle,
   StartLegendaryBattle in `script/specials.ts`) call `host.startScriptedBattle(flags, enemyParty, transition)` and
   block the script with `setWaitState` until the field has faded back in (their CB2_End* sets VAR_RESULT; a loss
@@ -498,6 +518,27 @@ this is the next level down. When you add or change a subsystem, update its entr
   species, printed strings and pic / footprint pixel counts; it also works in battle while the registered page is
   up). Tests: tests/e2e/pokedex.test.ts (Pallet Town with FLAG_SYS_POKEDEX_GET and the dex sets written through
   `t.state`; the registered page from a Master Ball catch on Route 1), tests/unit/pokedex.test.ts.
+- **Option menu:** `menus/optionMenu.ts` is option_menu.c. START → OPTION fades out (OverworldScene
+  `openFieldMenu('options')`) and runs CB2_OptionsMenuFromStartMenu in FieldMenuScene 'options' (which preloads
+  `optionMenuGfxSymbols()`: sOptionMenuPalette, the std frame, every user frame, and sets the black backdrop);
+  CloseAndSaveOptionMenu writes the settings to GameState and returns through gMain.savedCallback =
+  CB2_ReturnToFieldWithOpenMenu (the start menu reopens on OPTION). The settings live in GameState: `textSpeed`
+  ('slow' / 'mid' / 'fast' = OPTIONS_TEXT_SPEED_*), `battleSceneOff`, `battleStyleSet`, `optionsSound` (stored and
+  saved only, since save version 3), `optionsButtonMode`, `optionsWindowFrameType` (0-9 = TYPE 1-10). Who reads
+  them: the field message box and GBA text (text speed), the battle (scene, style, `battle/battleBg.ts`'s user frame),
+  GbaHostScene's ReadKeys (L=A) and the GBA list menus (LR), the start menu (HELP: its help window), and every field
+  window drawn with a user frame: `MenuWindow` defaults to the options' frame through `setUserFrameTypeSource`
+  (OverworldScene sets it), multichoices / list menus / the shop pass it themselves; GBA screens get it through
+  `menuEnv.windowFrameType` (`configureMenuEnv`, each FieldMenuScene start). Probe: `t.optionMenu()` (loadState: 2
+  takes input, cursorPos, option[] by MENUITEM_*). Tests: tests/e2e/options.test.ts.
+- **Start menu help window:** `ui/HelpMessageWindow.ts` is help_message.c (CreateHelpMessageWindow,
+  DrawHelpMessageWindowTilesById, PrintTextOnHelpMessageWindow, DestroyHelpMessageWindow) plus new_menu_helpers.c's
+  DrawHelpMessageWindowWithText, as a Phaser window like the start menu (one at a time, sHelpMessageWindowId; the
+  graphics `helpMessageWindowGfxSymbols` are preloaded by the field). Text drawn on it uses TEXT_COLOR_TRANSPARENT as
+  background, which `TextWindow.drawGlyph` now leaves alone like GLYPH_COPY. `ui/StartMenu.ts` draws the item's
+  sStartMenuDescPointers text on open (DoDrawStartMenu case 5) and on cursor moves (StartCB_HandleInput) and
+  destroys it with the menu, only when `optionsButtonMode == OPTIONS_BUTTON_MODE_HELP` (no link play or union room,
+  so those checks always pass). Probe: `t.helpMessage()` (decoded, undefined when it's down).
 - **Trainer card:** `menus/trainerCard.ts` is trainer_card.c, CARD_TYPE_FRLG for the player only (the Hoenn and link
   cards wait for link play). START → PLAYER (StartMenuPlayerCallback) fades out and runs ShowPlayerTrainerCard in
   FieldMenuScene 'trainerCard' (which preloads `trainerCardGfxSymbols(gender)`: graphics/trainer_card/ by symbol plus
@@ -647,7 +688,21 @@ this is the next level down. When you add or change a subsystem, update its entr
   `mash:game.scene.getScene("Overworld").state.getVar("VAR_MAP_SCENE_PALLET_TOWN_PROFESSOR_OAKS_LAB")===2`.
   Build step lists as a bash array (`args+=(...)`) so JS with spaces survives word splitting.
 - **How to find what a script needs:** unimplemented script commands and specials log once to the browser console
-  as `[script] unimplemented command ...`.
+  as `[script] unimplemented command ...`. The whole list, without running anything: see "Script coverage".
+- **Script coverage:** `tests/unit/scriptCoverage.test.ts` reads `scripts/scripts.json` and finds every script
+  command, special / specialvar, std script (callstd / gotostd / msgbox type), movement action and `dofieldeffect`
+  FLDEFF_* the decomp's scripts use that the port doesn't handle, against the port's own tables: ScriptEngine's
+  command table (`commandNames`), `SPECIALS` + `TRAINER_SPECIALS` + the specials other modules add with
+  `registerSpecials` (read from the source text: those modules import Phaser), MovementRunner's dispatch (each
+  action run on a stub object; unhandled ones log `[movement] unimplemented`), the field effect script's
+  `callnative`s against `registerFieldEffectNatives` (also read from the source). The extractor's `macros` key
+  (asm/macros/event.inc + trainer_tower.inc, movement.inc, map.inc) tells commands from movement actions and map
+  data; an op in none of them fails the test. The known gaps are `tests/unit/scriptCoverageGaps.ts`, each tagged
+  `main` / `side` / `postgame` / `link` with the maps that reach it (from each map's map scripts, object, coord and
+  bg event scripts, following every label argument) and a note (BLOCKER = the story stops there). The test fails on
+  a new gap (it prints a ready-made entry with the maps; pick the tag from the decomp scripts) and on a fixed one
+  (take it off the list). Porting a special in a Phaser module: register it with `registerSpecials({ ... })` as an
+  object literal so the test can read its keys.
 - **Bugs that depend on world position:** `?map=` always loads at origin 0, so maps that are far from the origin in
   a real playthrough (e.g. Viridian at y = -80 after walking up from Pallet) need either a real walk or
   `await s.world.load(name, ox, oy)`, then `s.player.setPosition(...)` and `await s.onMapLoaded(false)`.

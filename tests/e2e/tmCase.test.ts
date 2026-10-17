@@ -16,12 +16,6 @@ async function addItems(game: Game, items: [string, number][]) {
   }, items);
 }
 
-/** The bag is up and takes input (its list task). */
-async function waitForBag(game: Game) {
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_BagMenuRun', { what: 'the bag' });
-  await game.eval((t) => t.waitFrames(30)); // the bag's fade in
-}
-
 /** In the bag: KEY ITEMS, down to the TM case, A. */
 async function selectTmCaseInBag(game: Game) {
   await game.press('RIGHT'); // ITEMS → KEY ITEMS
@@ -52,7 +46,7 @@ async function openTmCaseFromField(game: Game) {
   await game.eval((t) => t.waitFrames(10));
   await game.press('DOWN'); // POKéMON → BAG
   await game.press('A');
-  await waitForBag(game);
+  await game.waitForBag();
   await selectTmCaseInBag(game);
   await game.eval((t) => t.waitFrames(10));
   await game.press('A'); // OPEN
@@ -65,8 +59,7 @@ async function useRow(game: Game, row: number) {
   await game.press('A');
   await game.waitFor((t) => t.tmCase()?.task === 'Task_ContextMenu_HandleInput', { what: 'the USE / GIVE / EXIT menu' });
   await game.press('A'); // USE
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu', { what: 'the party menu' });
-  await game.eval((t) => t.waitFrames(40));
+  await game.waitForPartyMenu();
 }
 
 test('HM01 from the TM case teaches CUT, a mon that cannot learn it says so, and both come back to the TM case', async () => {
@@ -108,8 +101,7 @@ test('HM01 from the TM case teaches CUT, a mon that cannot learn it says so, and
   await game.waitFor((t) => t.tmCase()?.task === 'Task_ContextMenu_HandleInput', { what: 'the USE / GIVE / EXIT menu' });
   await game.press('DOWN'); // GIVE
   await game.press('A');
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu', { what: 'the party menu' });
-  await game.eval((t) => t.waitFrames(40));
+  await game.waitForPartyMenu();
   await game.mashUntil((t) => t.tmCase() !== undefined, { what: 'the TM case after GIVE' });
   expect(await game.eval((t) => t.state!.party[0].heldItem)).toBe(tm28);
   expect(await game.eval((t) => t.itemCount('TM28'))).toBe(1);
@@ -117,7 +109,7 @@ test('HM01 from the TM case teaches CUT, a mon that cannot learn it says so, and
 
   // CLOSE (B) → the bag → the field.
   await game.press('B');
-  await waitForBag(game);
+  await game.waitForBag();
   await game.press('B');
   await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the field' });
 });
@@ -138,7 +130,7 @@ test('selling TMs at a Poké Mart through the TM case (and an HM it won\'t buy)'
   await game.eval((t) => t.waitFrames(60));
   await game.press('DOWN');
   await game.press('A');
-  await waitForBag(game);
+  await game.waitForBag();
   await selectTmCaseInBag(game);
   await waitForTmCaseList(game, 2 /* TMCASE_SELL */);
 
@@ -162,7 +154,7 @@ test('selling TMs at a Poké Mart through the TM case (and an HM it won\'t buy)'
   // "Turned over…" → A → the list again, then out: the bag, the shop menu, the field.
   await game.mashUntil((t) => t.tmCase()?.task === 'Task_HandleListInput', { what: 'the list after the sale' });
   await game.press('B');
-  await waitForBag(game);
+  await game.waitForBag();
   await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the shop to close' });
   expect(await game.eval((t) => t.field())).toMatchObject({ map: 'PewterCity_Mart', x: 4, y: 3 });
 });
