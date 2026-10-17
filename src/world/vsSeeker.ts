@@ -18,6 +18,7 @@ import type { ObjectEvent } from '../entities/ObjectEvent';
 import { directionalAction } from '../entities/movementActions';
 import { ConvertIntToDecimalStringN, ExpandToStringVar4, gStringVar1, STR_CONV_MODE_LEFT_ALIGN, text } from '../menus/common';
 import { registerItemUseFieldFuncs } from '../menus/itemUse';
+import { registerSpecials } from '../script/specials';
 import { MovementRunner, type Instruction } from '../script/MovementRunner';
 import { random } from '../util/random';
 import type { Direction } from './direction';
@@ -633,7 +634,10 @@ export function vsSeekerProbe(): { func: number; animNum?: number; image?: numbe
   return { func: sTask.func, ...(sPlayerAnim && { animNum: sPlayerAnim.animNum, image: sPlayerAnim.image }) };
 }
 
-/** The bag's side (FieldUseFunc_VsSeeker's checks and Task_VsSeeker_0) and FLDEFF_USE_VS_SEEKER's native. */
+/**
+ * The bag's side (FieldUseFunc_VsSeeker's checks and Task_VsSeeker_0), FLDEFF_USE_VS_SEEKER's native and
+ * EventScript_VsSeekerChargingDone's specials.
+ */
 export function registerVsSeeker(): void {
   registerItemUseFieldFuncs({
     GetCurrentMapType: () => fieldMoveHost().mapType(),
@@ -641,4 +645,9 @@ export function registerVsSeeker(): void {
     Task_VsSeeker_0,
   });
   registerFieldEffectNatives({ FldEff_UseVsSeeker });
+  registerSpecials({
+    /** The script's waitstate ends once the player and the raise-hand jumpers stand still. */
+    VsSeekerFreezeObjectsAfterChargeComplete: ({ setWaitState }) => setWaitState(VsSeekerFreezeObjectsAfterChargeComplete()),
+    VsSeekerResetObjectMovementAfterChargeComplete,
+  });
 }

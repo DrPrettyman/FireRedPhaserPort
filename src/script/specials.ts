@@ -14,7 +14,6 @@ import { SAVECB_RETURN_CONTINUE, SAVECB_RETURN_OKAY } from '../ui/SaveDialog';
 import { ForcePlayerOntoBike, GetPlayerAvatarBike } from '../world/bike';
 import { ForcePlayerToStartSurfing, GetPlayerFacingDirection, SeafoamIslandsB4F_CurrentDumpsPlayerOnLand } from '../world/playerAvatar';
 import { RockSmashWildEncounter } from '../world/fieldMoves';
-import { VsSeekerFreezeObjectsAfterChargeComplete, VsSeekerResetObjectMovementAfterChargeComplete } from '../world/vsSeeker';
 
 export interface SpecialEnv {
   state: GameState;
@@ -377,16 +376,6 @@ export const SPECIALS: Record<string, Special> = {
     env.setWaitState(() => shake.done);
   },
 
-  /**
-   * VsSeekerFreezeObjectsAfterChargeComplete (vs_seeker.c, EventScript_VsSeekerChargingDone): the script's
-   * waitstate ends once the player and the raise-hand jumpers stand still.
-   */
-  VsSeekerFreezeObjectsAfterChargeComplete({ setWaitState }) {
-    setWaitState(VsSeekerFreezeObjectsAfterChargeComplete());
-  },
-  /** VsSeekerResetObjectMovementAfterChargeComplete (vs_seeker.c): the trainers stop raising their hands. */
-  VsSeekerResetObjectMovementAfterChargeComplete,
-
   /** EndTrainerApproach (trainer_see.c): the script's waitstate ends once the trainer has walked up. */
   EndTrainerApproach(env) {
     env.setWaitState(env.host.endTrainerApproach());
@@ -591,6 +580,14 @@ export const SPECIALS: Record<string, Special> = {
  * Berry Forest's Hypno). Returns the wait for the script, which dowildbattle stops (ScriptContext_Stop) until
  * CB2_EndScriptedWildBattle is done; undefined (the script runs on) without a mon.
  */
+/**
+ * Add specials from field modules that draw with Phaser (world/vsSeeker.ts), registered at boot: this file is
+ * reached from screens the battle unit tests load (isNationalDexEnabled), so it can't import them.
+ */
+export function registerSpecials(table: Record<string, Special>): void {
+  Object.assign(SPECIALS, table);
+}
+
 export function StartScriptedWildBattle(env: SpecialEnv): (() => boolean) | undefined {
   const { state, host, warnOnce } = env;
   const enemy = state.enemyParty[0];

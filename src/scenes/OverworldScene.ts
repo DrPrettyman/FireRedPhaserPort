@@ -72,7 +72,7 @@ import {
 } from '../world/surf';
 import { setFieldItemsHost, type FieldItemsHost } from '../world/fieldItems';
 import { fishingProbe, registerFieldItems } from '../world/fishing';
-import { registerVsSeeker, ResetMovementOfRematchableTrainers, setVsSeekerHost, vsSeekerBikeGraphicsId, vsSeekerProbe, type VsSeekerHost } from '../world/vsSeeker';
+import { ClearRematchStateByTrainerId, registerVsSeeker, ResetMovementOfRematchableTrainers, setVsSeekerHost, vsSeekerBikeGraphicsId, vsSeekerProbe, type VsSeekerHost } from '../world/vsSeeker';
 import { FieldFlash, FldEff_UseFlash, IsMapTypeOutdoors, Overworld_GetFlashLevel, SetDefaultFlashLevel } from '../world/flash';
 import { fieldListMenuGfxSymbols, fieldListMenuProbe, type ListMenuHost } from '../ui/FieldListMenu';
 import { stringWidth } from '../text/stringWidth';
@@ -2777,6 +2777,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       if (areElevationsCompatible(obj.currentElevation, o.currentElevation)) return true;
     }
     return false;
+  }
+
+  clearRematchStateByTrainerId(trainer: number): void {
+    ClearRematchStateByTrainerId(trainer);
   }
 
   endTrainerApproach(): Wait {

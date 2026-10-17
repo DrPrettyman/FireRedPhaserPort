@@ -12,7 +12,6 @@ import { parseDirection, type Direction } from '../world/direction';
 import type { Defines } from './Defines';
 import { MovementRunner, towards, type Instruction } from './MovementRunner';
 import { GetRematchTrainerId, IsTrainerReadyForRematch, ShouldTryRematchBattle, type RematchEnv } from '../world/rematches';
-import { ClearRematchStateByTrainerId } from '../world/vsSeeker';
 import type { FieldTask } from '../world/elevator';
 import type { ListMenuHost } from '../ui/FieldListMenu';
 import { SetFlashLevel } from '../world/flash';
@@ -131,6 +130,8 @@ export interface ScriptHost {
   showTownMap(): Wait;
   /** StartTrainerBattle: `done` ends when the battle is over (screen still black), with the outcome. */
   startTrainerBattle(battle: TrainerBattle): TrainerBattleRun;
+  /** ClearRematchStateByTrainerId (world/vsSeeker.ts), at the end of every trainer battle. */
+  clearRematchStateByTrainerId?(trainer: number): void;
   /** A non-trainer battle against `enemyParty` (gEnemyParty) behind a B_TRANSITION_*, e.g. StartOldManTutorialBattle. */
   startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number): TrainerBattleRun;
   /** GetWildBattleTransition against gEnemyParty[0] = `enemy`. */
@@ -1348,7 +1349,7 @@ export class ScriptEngine {
     return () => {
       if (fadeIn) return fadeIn();
       if (!run.done()) return false;
-      ClearRematchStateByTrainerId(battle.trainer); // HandleEndTurn_FinishBattle, for every trainer battle
+      this.host.clearRematchStateByTrainerId?.(battle.trainer); // HandleEndTurn_FinishBattle, for every trainer battle
       if (this.endTrainerBattle(battle, run.playerWon(), rematch)) {
         fadeIn = run.returnToField();
         return false;
