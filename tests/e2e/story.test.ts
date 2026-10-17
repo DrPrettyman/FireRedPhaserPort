@@ -250,3 +250,37 @@ test('face_original_direction: the Pewter house Nidoran turns to the player, the
   await game.mashUntil((t) => t.idle(), { what: 'the script to end' });
   expect(await nidoran()).toMatchObject({ facing: 'left' });
 });
+
+// ------------------------------------------------------------------ The Pokémon Center nurse (EventScript_PkmnCenterNurse)
+
+test('The Pokémon Center nurse: the heal machine (FLDEFF_POKECENTER_HEAL), her bow, the party healed, the game stat', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'CeruleanCity_PokemonCenter_1F', x: 7, y: 4, party: [MEWTWO, { species: 'PIDGEY', level: 10 }] });
+  await game.eval((t) => {
+    for (const mon of t.state!.party) mon.hp = 1;
+  });
+  await game.eval((t) => t.face('up'));
+  // Watch in the page: the effect's sprites (the balls, then the monitor) and the bow are short-lived.
+  const watch = game.eval(async (t) => {
+    const s = (window as any).game.scene.getScene('Overworld');
+    const seen = { heal: false, monitor: false, balls: 0, bow: false };
+    await t.until(() => {
+      const f = t.field();
+      if (f?.fieldEffects.includes('FLDEFF_POKECENTER_HEAL')) seen.heal = true;
+      const shown = (key: string) =>
+        (s.children.list as { texture?: { key: string }; visible: boolean; active: boolean }[]).filter((c) => c.active && c.visible && c.texture?.key === key).length;
+      seen.balls = Math.max(seen.balls, shown('fldeff_pokeball_glow'));
+      if (shown('fldeff_pokecenter_monitor')) seen.monitor = true;
+      const nurse = t.objects().find((o) => o.graphicsId === 'OBJ_EVENT_GFX_NURSE');
+      if (nurse?.frame === 9) seen.bow = true;
+      return seen.bow;
+    }, 4000);
+    return seen;
+  });
+  await game.mashUntil((t) => t.message() !== undefined, { what: 'the nurse' });
+  await game.mashUntil((t) => t.idle(), { what: 'the nurse to finish' });
+  const seen = await watch;
+  // One ball per party member on the machine, the monitor flickering, then the bow.
+  expect(seen).toMatchObject({ heal: true, monitor: true, balls: 2, bow: true });
+  expect(await game.eval((t) => t.party().map((m) => m.hp === m.maxHP))).toEqual([true, true]);
+  expect(await game.eval((t) => t.state!.getGameStat(t.define('GAME_STAT_USED_POKECENTER')))).toBe(1);
+});

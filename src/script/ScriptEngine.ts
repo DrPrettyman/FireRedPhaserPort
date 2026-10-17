@@ -1228,6 +1228,10 @@ export class ScriptEngine {
       const start = this.defines.get('TRAINER_FLAGS_START') ?? 0;
       this.state.setFlag(start + this.state.value(a[0]), false);
     },
+    /** ScrCmd_incrementgamestat → IncrementGameStat (the Pokémon Center nurse: GAME_STAT_USED_POKECENTER) */
+    incrementgamestat(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      this.state.incrementGameStat(this.state.value(a[0]));
+    },
 
     // ------------------------------------------------ audio (not implemented yet)
     playse() {},

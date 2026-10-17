@@ -68,6 +68,21 @@ export function SetVermilionTrashCans(rand: () => number = random): { first: num
 }
 
 export const STORY_SPECIALS: Record<string, Special> = {
+  // ------------------------------------------------ the Pokémon Center nurse (EventScript_PkmnCenterNurse)
+  /** IsPlayerNotInTrainerTowerLobby (field_specials.c) */
+  IsPlayerNotInTrainerTowerLobby({ state }) {
+    return state.currentMap === 'TrainerTower_Lobby' ? 0 : 1;
+  },
+  /**
+   * BufferUnionRoomPlayerName (union_room.c): whether a wireless player was seen in the union room
+   * (sUnionRoomPlayerName). There's no wireless play, so never.
+   */
+  BufferUnionRoomPlayerName() {
+    return 0;
+  },
+  /** SetUsedPkmnCenterQuestLogEvent: the quest log isn't kept (like the other quest log specials). */
+  SetUsedPkmnCenterQuestLogEvent() {},
+
   /** SetVermilionTrashCans: VAR_0x8004 / VAR_0x8005 = the first / second switch can (VermilionCity_Gym). */
   SetVermilionTrashCans({ state }) {
     const { first, second } = SetVermilionTrashCans();
