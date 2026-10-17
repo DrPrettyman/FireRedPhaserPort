@@ -271,6 +271,26 @@ this is the next level down. When you add or change a subsystem, update its entr
     `itemfinderArrow` (`anim`, `affineAnim`, `deltaX`, `deltaY`), `itemfinderStar`, `itemfinderEnd`. Tests:
     tests/e2e/itemfinder.test.ts (Route 3's Oran Berry (26, 9) from (24, 9); Cape Brink's underfoot PP Max at
     (16, 28); Pallet Town for none; Route 13 (62, 1) for Route 12's Rare Candy), tests/unit/itemfinder.test.ts.
+  - **Registered items (SELECT):** `menus/registeredItem.ts` is UseRegisteredKeyItemOnField (item_menu.c),
+    called from `OverworldScene.processPlayerFieldInput` when FieldGetPlayerInput saw SELECT (after START, as in
+    ProcessPlayerFieldInput). It dismisses the map name popup, takes LockPlayerFieldControls (fieldMoves.ts' flag
+    version, which the field items' own Unlock calls release), FreezeObjectEvents, stops the player, and runs the
+    item's `FIELD_USE_FUNCS` entry as a GBA task with `data[3] = 1` (stepped by a field task: the field doesn't run
+    RunTasks). Nothing registered, or the item gone from the bag (the registration is cleared):
+    EventScript_BagItemCanBeRegistered. The from-the-field branches are in menus/itemUse.ts: SetUpItemUseOnFieldCallback
+    calls sItemUseOnFieldCB at once; DisplayItemMessageInCurrentContext / PrintNotTheTimeToUseThat go to
+    `DisplayItemMessageOnField(taskId, fontId, str, callback)` (the task waits in Task_ContinueTaskAfterMessagePrints
+    while world/fieldItems.ts prints, then the callback becomes its func) and Task_ItemUse_CloseMessageBoxAndReturnToField
+    (clears the box, unfreezes, unlocks). An sItemUseOnFieldCB gets TASK_NONE after the bag (there's no task),
+    so it destroys its task through `DestroyItemUseTask`. To add an item's field branch: check `inField(taskId)` in its
+    FieldUseFunc and end in something that unfreezes and unlocks. The Town Map / TM case / berry pouch branches
+    (`RegisteredItemFromFieldNotPorted`) log and give the controls back. Script `release` / `releaseall` now also
+    unfreeze objects (ClearPlayerHeldMovementAndUnfreezeObjectEvents), and a map load or a battle's return clears the
+    freeze. Probes: `field().locked` (LockPlayerFieldControls held), `field().objectsFrozen`, `__test.gbaTasks()`
+    (active gTasks by function name, e.g. `Task_BagMenu_HandleInput`, `Task_FieldItemContextMenuHandleInput`),
+    `__test.gbaFading()`. Tests: tests/e2e/registeredItems.test.ts (registering the Bicycle in the bag and SELECT on /
+    off, Cycling Road, the Old Rod, the Coin Case, the VS Seeker / Itemfinder / Poké Flute messages, nothing
+    registered; Pallet Town's pond at (8, 16), (12, 13) for no trainers or hidden items).
 - **Scripted battles:** specials that start a battle (StartOldManTutorialBattle, StartMarowakBattle,
   StartLegendaryBattle in `script/specials.ts`) call `host.startScriptedBattle(flags, enemyParty, transition)` and
   block the script with `setWaitState` until the field has faded back in (their CB2_End* sets VAR_RESULT; a loss

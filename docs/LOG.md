@@ -1736,3 +1736,33 @@ end to end.
   fixed fly.test.ts's `useTownMap` the same way.
 - Verified: typecheck, unit tests and the full e2e suite on each PR after merging master in; the final run is in
   this PR: on master after #40, typecheck, 148 unit tests and 269 e2e tests (39 files) pass.
+
+### Registered SELECT items (W-select unit 1, SCREENS_PLAN.md batch 2)
+
+- `menus/registeredItem.ts` (new): UseRegisteredKeyItemOnField (item_menu.c): DismissMapNamePopup,
+  LockPlayerFieldControls, FreezeObjectEvents, HandleEnforcedLookDirectionOnPlayerStopMoving, StopPlayerAvatar,
+  the item's field func as a GBA task with data[3] = 1 (stepped by a field task), the registration cleared when the
+  item is gone, EventScript_BagItemCanBeRegistered when nothing is registered.
+- OverworldScene: FieldGetPlayerInput reads SELECT (pressedSelectButton) and ProcessPlayerFieldInput ends with
+  `if (pressedSelectButton && UseRegisteredKeyItemOnField())`, as in field_control_avatar.c.
+- `menus/itemUse.ts`: the data[3] == 1 branches: SetUpItemUseOnFieldCallback's direct sItemUseOnFieldCB call,
+  DisplayItemMessageOnField + Task_ItemUse_CloseMessageBoxAndReturnToField, DisplayItemMessageInCurrentContext /
+  PrintNotTheTimeToUseThat on the field (FONT_MALE for Oak), and the items: Bicycle (incl. "You can't dismount your
+  BIKE here."; ItemUseOnFieldCB_Bicycle now unfreezes / unlocks / destroys its task like the C), the rods, the VS
+  Seeker, the Itemfinder, Coin Case, Powder Jar, Poké Flute. The Town Map, TM case and berry pouch from SELECT log
+  and give the controls back (unit 2 ports them).
+- `world/fieldItems.ts`: DisplayItemMessageOnField takes a font; the host dismisses the map name popup;
+  ClearDialogWindowAndFrame / DismissMapNamePopup / UnlockPlayerFieldControls / ScriptContext_SetupScript are
+  registered for itemUse.ts (registerFieldItems). `text/MessageBox.ts`: `show` takes an optional font.
+- Fixes on the way: the field never set the strings.c table itself (setTextStrings), so the field items' gText_*
+  only worked after the bag had been opened once; OverworldScene.create sets it now. Script `release` /
+  `releaseall` didn't unfreeze objects (ClearPlayerHeldMovementAndUnfreezeObjectEvents); now they do. A frozen
+  field (a rod's bite into a battle, a map load) is unfrozen when the map is resumed or loaded.
+- Probes: `field().locked`, `field().objectsFrozen`, `__test.gbaTasks()`, `__test.gbaFading()`.
+- Verified: typecheck; `npm test` (148); e2e tests/e2e/registeredItems.test.ts (new, 6 tests: registering the
+  Bicycle through the bag's REGISTER and SELECT on / off with a step each way; Cycling Road's "can't dismount";
+  the Old Rod facing away (Oak's message) and facing the water (cast, no bite, put away, a step); the Coin Case's
+  "Your COINS: 123" with the controls locked and objects frozen until it closes; the VS Seeker / Itemfinder / Poké
+  Flute messages; nothing registered and a registered item no longer in the bag), plus fieldItems, vsSeeker,
+  itemfinder, tmCase, berryPouch, fieldMoves, strength, surf, playerAvatar, mapNamePopup and field. Screenshots of
+  Oak's message and the Coin Case's in the field message box looked right.
