@@ -429,7 +429,7 @@ this is the next level down. When you add or change a subsystem, update its entr
 - **Hall of Fame and credits:** the room's script (PokemonLeague_HallOfFame_EventScript_EnterRoom) runs
   `dofieldeffect FLDEFF_HALL_OF_FAME_RECORD` (`world/hallOfFameRecord.ts`: the machine's Poké Balls and monitor,
   CreateGlowingPokeballsEffect's states, drawn as FieldEffectSprites from the GBA pics at screen coordinates; the
-  same glow would serve FLDEFF_POKECENTER_HEAL) and `special EnterHallOfFame` → `OverworldScene.enterHallOfFame`:
+  same file runs FLDEFF_POKECENTER_HEAL, whose monitor shares the glow's palette) and `special EnterHallOfFame` → `OverworldScene.enterHallOfFame`:
   post_battle_event_funcs.c's set-up (`EnterHallOfFame` in `menus/hallOfFame.ts`), `storeLocationForSave`, then
   FieldMenuScene 'hallOfFame' runs CB2_DoHallOfFameScreen. `hofEnv` is what the screen needs from its host: saving
   (TrySavingData(SAVE_HALL_OF_FAME)), DoWarp (FieldMenuStart.onExit's `warp`: the field loads Indigo Plateau with
@@ -672,6 +672,18 @@ this is the next level down. When you add or change a subsystem, update its entr
   a new gap (it prints a ready-made entry with the maps; pick the tag from the decomp scripts) and on a fixed one
   (take it off the list). Porting a special in a Phaser module: register it with `registerSpecials({ ... })` as an
   object literal so the test can read its keys.
+- **Story checks:** `tests/e2e/story.test.ts` (Brock to Lt. Surge; later stretches in their own
+  `story*.test.ts`). Each gym starts on its map with the state the story has by then (`setFlags` for the earlier
+  badges and story flags, a Lv. 100 Mewtwo), walks the gym (`walkFighting` lets trainers spot the player and fights
+  them; `beatTrainers` sets their flags instead), then `beatLeader(game, x, y, from)` talks to the leader, fights
+  to the end and presses through the badge and TM text; assert the badge flag, FLAG_DEFEATED_*, the TM
+  (`t.itemCount('TM34')`). Story events between gyms are walked from map to map with `takeWarp(game, x, y, map)`
+  (doors and mats warp by themselves; stairs get a push once the player has stood still for 30 frames) and
+  `talk` / `approach`. Read the decomp map scripts first for the coord events and flags on the way (e.g. Vermilion's
+  ticket check, VAR_MAP_SCENE_*). New story specials go in `script/storySpecials.ts` (STORY_SPECIALS, spread into
+  SPECIALS); ones that draw with Phaser use `registerSpecials` from their own module.
+- **Script argument expressions:** `Defines.get` folds constant expressions over known names (`FALSE | (TRUE <<
+  1)`, `(MAX_COINS + 1) - 20`), as GAS does; before, the Pokémon Center nurse's `multichoice` threw.
 - **Bugs that depend on world position:** `?map=` always loads at origin 0, so maps that are far from the origin in
   a real playthrough (e.g. Viridian at y = -80 after walking up from Pallet) need either a real walk or
   `await s.world.load(name, ox, oy)`, then `s.player.setPosition(...)` and `await s.onMapLoaded(false)`.

@@ -1823,3 +1823,34 @@ end to end.
   staying on the front, B back to the start menu on PLAYER; a girl's blue card with the female background, no
   badges / stars / Pokédex line), plus hallOfFame, pokedexArea and transitions' "every battle transition" (the
   mugshots use PlayerGenderToFrontTrainerPicId). Screenshots of both cards match FRLG's layout.
+### Story checks Brock to Lt. Surge (W-story unit 2)
+
+- `tests/e2e/story.test.ts` (new, 7 tests): Lt. Surge's gym (the trash can puzzle: first switch, a wrong second
+  can resets the locks and picks new cans, both switches open the beam; then Surge, FLAG_BADGE03_GET, TM34); Misty
+  (her gym walked, the trainers spot the player and are fought, then Misty, FLAG_BADGE02_GET, TM03,
+  `set_gym_trainers 2`); Bill's Sea Cottage (Bill the Clefairy into the teleporter, the PC's cell separator, Bill
+  out, the S.S. Ticket); the S.S. Anne (Vermilion's ticket check, aboard, the rival on 2F, the captain's HM01, out
+  again: SSAnne_Exterior_ExitSSAnne and back on the pier with VAR_MAP_SCENE_VERMILION_CITY 3); Cut on the tree in
+  front of Vermilion Gym and in through the door; face_original_direction (Pewter's Nidoran); the Pokémon Center
+  nurse (heal machine sprites, bow, the party healed, GAME_STAT_USED_POKECENTER).
+- Ported: `special SetVermilionTrashCans` (field_specials.c; the gym's BLOCKER), AnimateTeleporterHousing /
+  AnimateTeleporterCable (special_field_anim.c), SetWalkingIntoSignVars, and the nurse's pieces:
+  FLDEFF_POKECENTER_HEAL (FldEff_PokecenterHeal in `world/hallOfFameRecord.ts`, sharing the Hall of Fame record's
+  glow; the monitor is sPokecenterMonitor_Gfx on the glow's palette), `nurse_joy_bow` (sAnim_NurseBow),
+  `incrementgamestat`, IsPlayerNotInTrainerTowerLobby, BufferUnionRoomPlayerName (no wireless: 0),
+  SetUsedPkmnCenterQuestLogEvent (no-op). `movement face_original_direction`: gInitialMovementTypeFacingDirections is
+  extracted (`constants.json` `initialMovementTypeFacing`), NpcBrain sets `ObjectEvent.originalFacing` from the
+  movement type. The new story specials live in `script/storySpecials.ts` (STORY_SPECIALS, spread into SPECIALS).
+- Found on the way: every Pokémon Center nurse threw `Unknown constant FALSE | (TRUE << 1)` at her YES/NO
+  (`multichoice ..., FALSE | (TRUE << 1)`): script arguments can be constant expressions, which GAS folds.
+  `Defines.get` now folds them (names and numbers, + - * / % << >> & | ^ ~ and parentheses; tests/unit/defines.test.ts);
+  that also fixes `(MAX_COINS + 1) - 20` in the Game Corner and `(NUM_TRAINER_FAN_CLUB_MEMBERS - 1)`.
+- Gap list: 11 entries off (main: 6 left: call_if_defeated / call_if_not_defeated for unit 3,
+  DoSSAnneDepartureCutscene, DoPokemonLeagueLightingEffect, GetStarterSpecies, Script_TryGainNewFanFromCounter).
+  The S.S. Anne's departure isn't ported (needs graphics/ss_anne/ extracted and the boat's sprite offset); it's
+  visual only, the story goes on (DEVIATIONS).
+- A race in the test's own warp helper: walking onto Vermilion Gym's door, the field looked idle during the door
+  warp, so the helper pushed as for stairs (`t.enterWarp()`), whose final wait has no frame limit and hung. It now
+  pushes only after the player has stood still on the old map for 30 frames.
+- Verified: typecheck; `npm test` (18 files, 156 tests); e2e story.test.ts (7, twice in a row) plus hallOfFame,
+  field, fieldMoves, vsSeeker, trainerBattle, newGame.

@@ -185,14 +185,23 @@ test("Bill's Sea Cottage: Bill the Clefairy goes into the teleporter, the PC's c
 async function takeWarp(game: Game, x: number, y: number, map: string): Promise<void> {
   const since = await game.mark();
   await game.eval((t, x, y) => t.walkTo(x, y), x, y);
-  // A door or a mat warps by itself (once its anim / fade is done); stairs and arrows need a push.
-  await game.eval((t, map) => t.until(() => t.field()?.map === map || t.idle(), 600), map);
-  if ((await game.eval((t) => t.field()!.map)) !== map) await game.eval((t) => t.enterWarp());
+  // A door or a mat warps by itself (its anim and fade take a while, and the field can look idle on the way);
+  // stairs and arrows need a push: push once the player has stood still on the old map for 30 frames.
+  const arrived = await game.eval((t, map) => {
+    let still = 0;
+    return t.until(() => {
+      const f = t.field();
+      if (f?.map === map) return t.idle();
+      still = t.idle() && !f?.fading ? still + 1 : 0;
+      return still > 30;
+    }, 1200).then(() => t.field()?.map === map);
+  }, map);
+  if (!arrived) await game.eval((t) => t.enterWarp());
   await game.waitForEvent('map', { since, what: map });
   await game.waitIdle();
 }
 
-test('The S.S. Anne: the ticket check, the rival on 2F, the captain gives HM01, the ship sails, Cut opens the way to the gym', async () => {
+test('The S.S. Anne: the ticket check, the rival on 2F, the captain gives HM01, the ship sails', async () => {
   const game = await session.start({ start: 'after-rival', map: 'VermilionCity', x: 23, y: 30, party: [{ ...MEWTWO, moves: ['PSYCHIC', 'CUT'] }] });
   await setFlags(game, ['FLAG_BADGE01_GET', 'FLAG_BADGE02_GET', 'FLAG_GOT_SS_TICKET']);
   await game.eval((t) => t.state!.bag.add(t.define('ITEM_SS_TICKET'), 1));
@@ -229,8 +238,13 @@ test('The S.S. Anne: the ticket check, the rival on 2F, the captain gives HM01, 
   await game.waitIdle();
   expect(await game.eval((t) => t.var('VAR_MAP_SCENE_VERMILION_CITY'))).toBe(3);
   expect(await game.eval((t) => t.field()!)).toMatchObject({ map: 'VermilionCity', x: 23, y: 32 });
+}, 240_000);
 
-  // The cut tree in front of the gym, then the gym door.
+test('Back in Vermilion with HM01: Cut the tree in front of the gym, then the gym door', async () => {
+  // Where SSAnne_Exterior_ExitSSAnne / VermilionCity_EventScript_ExitSSAnne leave the player.
+  const game = await session.start({ start: 'after-rival', map: 'VermilionCity', x: 23, y: 32, party: [{ ...MEWTWO, moves: ['PSYCHIC', 'CUT'] }] });
+  await setFlags(game, ['FLAG_BADGE01_GET', 'FLAG_BADGE02_GET', 'FLAG_GOT_SS_TICKET', 'FLAG_GOT_HM01']);
+  await game.eval((t) => t.state!.setVar('VAR_MAP_SCENE_VERMILION_CITY', 3));
   await approach(game, 19, 24, 'above');
   await talk(game, 'the cut tree');
   expect(await game.eval((t) => t.flag('FLAG_TEMP_12'))).toBe(true);
