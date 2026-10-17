@@ -14,6 +14,7 @@ import { SAVECB_RETURN_CONTINUE, SAVECB_RETURN_OKAY } from '../ui/SaveDialog';
 import { ForcePlayerOntoBike, GetPlayerAvatarBike } from '../world/bike';
 import { ForcePlayerToStartSurfing, GetPlayerFacingDirection, SeafoamIslandsB4F_CurrentDumpsPlayerOnLand } from '../world/playerAvatar';
 import { RockSmashWildEncounter } from '../world/fieldMoves';
+import { STORY_SPECIALS } from './storySpecials';
 
 export interface SpecialEnv {
   state: GameState;
@@ -29,6 +30,8 @@ export interface SpecialEnv {
   warnOnce(key: string, message: string): void;
   /** DisableMsgBoxWalkaway (script.c) */
   disableMsgBoxWalkaway(): void;
+  /** SetWalkingIntoSignVars (script.c) */
+  setWalkingIntoSignVars(): void;
   /** The extracted text `label` (e.g. gText_Ghost), encoded without the terminator. */
   encodeText(label: string): number[];
   /** The field's buttons (gMain.newKeys / heldKeys for specials' tasks). */
@@ -51,6 +54,7 @@ const NO_OP = [
   'SetUnlockedPokedexFlags', // gcnLinkFlags, only used for GameCube link
   'Script_FadeOutMapMusic', // audio: its waitstate ends at once
   'Script_UpdateTrainerFanClubGameClear', // the Trainer Fan Club's state isn't kept (EventScript_SetDefeatedEliteFourFlagsVars)
+  'Script_TryGainNewFanFromCounter', // the same (after Lance); `special` drops its return value
   'InitUnionRoom', // wireless only (and stubbed out from REVISION 0xA): CableClub_OnResume in every Pokémon Center
   'CloseLink', // link play: nothing was opened (TryBattleLinkup below never connects)
   'HelpSystem_Enable', // help system
@@ -59,6 +63,7 @@ const NO_OP = [
 
 export const SPECIALS: Record<string, Special> = {
   ...Object.fromEntries(NO_OP.map((name) => [name, () => {}])),
+  ...STORY_SPECIALS, // storySpecials.ts: field_specials.c's story specials (Lt. Surge's trash cans, ...)
 
   // field_player_avatar.c / bike.c / field_specials.c's player avatar specials
   ForcePlayerOntoBike,
@@ -428,9 +433,13 @@ export const SPECIALS: Record<string, Special> = {
     healPlayerParty(state);
   },
 
-  /** GetQuestLogState: QL_STATE_* (0 = not recording or playing back). */
-  GetQuestLogState() {
-    return 0;
+  /**
+   * GetQuestLogState: gSpecialVar_Result = gQuestLogState (QL_STATE_*; 0 = not recording or playing back). It's
+   * a `special`, so the result has to go into VAR_RESULT here: returning it left a stale VAR_RESULT, and a 2
+   * (QL_STATE_PLAYBACK) sent EventScript_DoNoIntroTrainerBattle to EventScript_EndQuestLogBattle (Giovanni).
+   */
+  GetQuestLogState({ state }) {
+    state.setVar('VAR_RESULT', 0);
   },
 
   /** EnableNationalPokedex */

@@ -9,8 +9,18 @@ Things that are placeholders or approximations, so they aren't mistaken for port
 - **Placeholders (not in the decomp):**
   - Naming screen: the help context, SeedRngAndSetTrainerId after naming the player and the REVISION >= 0xA
     bad-word check aren't ported.
-  - Pokémon Center heal: the healing machine (`dofieldeffect FLDEFF_POKECENTER_HEAL`) and the nurse's bow
-    (`nurse_joy_bow`) are skipped; the heal itself happens.
+  - Pokémon Center nurse: the heal machine's SE_BALL and MUS_HEAL are silent (no audio);
+    SetUsedPkmnCenterQuestLogEvent is a no-op (no quest log) and BufferUnionRoomPlayerName always says no wireless
+    player was seen.
+  - The S.S. Anne leaving (`special DoSSAnneDepartureCutscene`, ss_anne.c) isn't ported: the ship doesn't sail off
+    (no wake or smoke sprites), the script's `waitstate` passes at once and `removeobject` hides it. Its graphics
+    (graphics/ss_anne/) aren't extracted yet.
+  - Lt. Surge's trash cans, Bill's cell separator: silent (SE_PIN, SE_UNLOCK, SE_BALL, SE_WARP_IN).
+  - The Elite Four and Champion rooms' lighting (`special DoPokemonLeagueLightingEffect`, field_specials.c) isn't
+    ported: the rooms keep their tileset's BG palette 7 (no sEliteFourLightingPalettes / sChampionRoomLightingPalettes
+    cycle). It needs a runtime BG palette swap of the tileset atlases; visual only, the scripts go on.
+  - `special Script_TryGainNewFanFromCounter` (after Lance) is a no-op, like Script_UpdateTrainerFanClubGameClear:
+    the Trainer Fan Club isn't kept.
   - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
   - VS Seeker (world/vsSeeker.ts): silent (SE_CONTEST_MONS_TURN, SE_PIN); no quest log event. Task_VsSeeker_0
     takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for
@@ -42,8 +52,6 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Party menu: mail, the move relearner, Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
     field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
   - Region map / Fly (menus/regionMap.ts, world/fly.ts): no audio (SE_DEX_SCROLL, SE_CARD_OPEN, SE_M_FLY, ...).
-    The Town Map's registered (SELECT) use, Task_UseTownMapFromField, isn't ported yet (it logs and gives the
-    controls back; SCREENS_PLAN.md W-select unit 2).
     The bird of Fly always uses the extracted bird sheet's own palette (Red's), where the GBA draws it in OBJ
     palette 0, the player's (Leaf's frames would use hers). gExitStairsMovementDisabled isn't kept (no stair
     walk-out). The dungeon previews' third palette is zero-filled: the C loads 3 palettes from 2-palette data,
@@ -52,8 +60,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Field moves (world/fieldMoves.ts, world/fieldMoveShowMon.ts): no audio (the cry in the banner, SE_M_CUT,
     SE_M_ROCK_THROW, SE_M_SWEET_SCENT, the warp sounds) and no GAME_STAT_USED_CUT / _ROCK_SMASH. The field
     effect scripts' palette commands (loadfadedpal, ...) do nothing: the field's sprites are Phaser textures. A
-    `callnative` that isn't ported warns once and the effect ends at once (FLDEFF_POKECENTER_HEAL, the emote
-    icons from scripts). Sweet Scent's
+    `callnative` that isn't ported warns once and the effect ends at once (the emote icons from scripts). Sweet Scent's
     red fade is an overlay under the player instead of a fade of every other palette, so the player is also drawn
     over the map's top layer meanwhile, and the field is its normal colour during the battle transition that
     follows. The show-mon banner's graphics load while the player's pose plays, so a very slow load would hold the
@@ -72,16 +79,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     Task_VsSeeker_0 / ItemUseOnFieldCB_Itemfinder carry on as the item's task). The Fame Checker and Teachy TV
     from SELECT log and give the controls back (no screens). ChangeBgY(0, 0, 0) is a no-op (the field's message
     box isn't on a scrolled BG); InUnionRoom is always FALSE. No quest log events (ItemUse_SetQuestLogEvent).
+    The Town Map, TM case and berry pouch from SELECT skip StopPokemonLeagueLightingEffectTask (the league rooms'
+    lighting isn't ported), and their screen starts once the map headers the region map / party menu read have
+    loaded (prepareFieldMoveMenu), a frame or more after the fade instead of in the same frame.
   - TM case (menus/tmCase.ts): silent (SE_SELECT, SE_SHOP); no quest log (RecordItemTransaction). Not ported:
-    the Pokédude's Teachy TV demo (TMCASE_POKEDUDE), the Union Room's GIVE / EXIT menu (no link play) and opening
-    it as a registered item from the field (Task_InitTMCaseFromField logs and gives the controls back; W-select
-    unit 2).
+    the Pokédude's Teachy TV demo (TMCASE_POKEDUDE) and the Union Room's GIVE / EXIT menu (no link play).
   - Berry pouch (menus/berryPouch.ts): silent (SE_BAG_CURSOR, SE_SELECT, SE_SHOP); no quest log
     (RecordItemTransaction). Not ported: Berry Crush (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room context
     menus (GIVE / EXIT, EXIT) and IsHoldingItemAllowed's Enigma Berry check there (always TRUE: neither can be
-    entered), opening it as a registered item from the field (Task_InitBerryPouchFromField logs and gives the
-    controls back; W-select unit 2), and
-    AbortBerryPouchLoading (for a failed Alloc).
+    entered) and AbortBerryPouchLoading (for a failed Alloc).
   - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
     overworld's ScreenFade.
   - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;

@@ -1854,6 +1854,84 @@ end to end.
   badges / stars / Pokédex line), plus hallOfFame, pokedexArea and transitions' "every battle transition" (the
   mugshots use PlayerGenderToFrontTrainerPicId). Screenshots of both cards match FRLG's layout.
 
+### Registered items: the Town Map, TM case and berry pouch from the field (W-select unit 2, SCREENS_PLAN.md batch 2)
+
+- `menus/itemUse.ts`: the SELECT branches of FieldUseFunc_TownMap / _TmCase / _BerryPouch (were
+  `RegisteredItemFromFieldNotPorted`, removed): FadeScreen(FADE_TO_BLACK, 0), then Task_UseTownMapFromField /
+  Task_InitTMCaseFromField / Task_InitBerryPouchFromField wait for the fade, SetFieldCallback2ForItemUse and open
+  the screen with CB2_ReturnToField (InitTMCase(..., TRUE) / InitBerryPouch(..., 1): SELECT closes them).
+  FieldCB2_UseItemFromField + Task_ItemUseWaitForFade: freeze and lock while the field fades in, then release.
+  StopPokemonLeagueLightingEffectTask is skipped (no league lighting in the port).
+- Field side: `world/fieldItems.ts` FadeScreen / IsFieldPaletteFadeActive / OpenScreenFromField (FieldItemsHost,
+  registered with the other item field funcs in world/fishing.ts); OverworldScene.openItemScreenFromField
+  (CleanupOverworldWindowsAndTilemaps, prepareFieldMoveMenu, FieldMenuScene `itemFromField` with the screen's init
+  and graphics). The start menu's RunFieldCallback code moved into `OverworldScene.runFieldCallback`, shared by both.
+- The C's return path from a TM taught / a berry used in a screen opened from the field is the same as from the bag
+  (the party menu reopens the TM case / pouch, which keeps its CB2_ReturnToField exit); checked for the TM case.
+- Verified: typecheck; `npm test` (155); e2e registeredItems (9, 3 new: the Town Map opened on Pallet Town and B
+  back to the field; the TM case with HM01 taught and back to it, SELECT closes it; the berry pouch and B; each
+  checks the bag never shows, the objects frozen / controls locked on return, then released, and a step works; run
+  3 times), tmCase, berryPouch, fly, fieldItems, trainerCard (33 in all). Screenshots of the three screens opened
+  from the field match the bag's.
+### Story checks Brock to Lt. Surge (W-story unit 2)
+
+- `tests/e2e/story.test.ts` (new, 7 tests): Lt. Surge's gym (the trash can puzzle: first switch, a wrong second
+  can resets the locks and picks new cans, both switches open the beam; then Surge, FLAG_BADGE03_GET, TM34); Misty
+  (her gym walked, the trainers spot the player and are fought, then Misty, FLAG_BADGE02_GET, TM03,
+  `set_gym_trainers 2`); Bill's Sea Cottage (Bill the Clefairy into the teleporter, the PC's cell separator, Bill
+  out, the S.S. Ticket); the S.S. Anne (Vermilion's ticket check, aboard, the rival on 2F, the captain's HM01, out
+  again: SSAnne_Exterior_ExitSSAnne and back on the pier with VAR_MAP_SCENE_VERMILION_CITY 3); Cut on the tree in
+  front of Vermilion Gym and in through the door; face_original_direction (Pewter's Nidoran); the Pokémon Center
+  nurse (heal machine sprites, bow, the party healed, GAME_STAT_USED_POKECENTER).
+- Ported: `special SetVermilionTrashCans` (field_specials.c; the gym's BLOCKER), AnimateTeleporterHousing /
+  AnimateTeleporterCable (special_field_anim.c), SetWalkingIntoSignVars, and the nurse's pieces:
+  FLDEFF_POKECENTER_HEAL (FldEff_PokecenterHeal in `world/hallOfFameRecord.ts`, sharing the Hall of Fame record's
+  glow; the monitor is sPokecenterMonitor_Gfx on the glow's palette), `nurse_joy_bow` (sAnim_NurseBow),
+  `incrementgamestat`, IsPlayerNotInTrainerTowerLobby, BufferUnionRoomPlayerName (no wireless: 0),
+  SetUsedPkmnCenterQuestLogEvent (no-op). `movement face_original_direction`: gInitialMovementTypeFacingDirections is
+  extracted (`constants.json` `initialMovementTypeFacing`), NpcBrain sets `ObjectEvent.originalFacing` from the
+  movement type. The new story specials live in `script/storySpecials.ts` (STORY_SPECIALS, spread into SPECIALS).
+- Found on the way: every Pokémon Center nurse threw `Unknown constant FALSE | (TRUE << 1)` at her YES/NO
+  (`multichoice ..., FALSE | (TRUE << 1)`): script arguments can be constant expressions, which GAS folds.
+  `Defines.get` now folds them (names and numbers, + - * / % << >> & | ^ ~ and parentheses; tests/unit/defines.test.ts);
+  that also fixes `(MAX_COINS + 1) - 20` in the Game Corner and `(NUM_TRAINER_FAN_CLUB_MEMBERS - 1)`.
+- Gap list: 11 entries off (main: 6 left: call_if_defeated / call_if_not_defeated for unit 3,
+  DoSSAnneDepartureCutscene, DoPokemonLeagueLightingEffect, GetStarterSpecies, Script_TryGainNewFanFromCounter).
+  The S.S. Anne's departure isn't ported (needs graphics/ss_anne/ extracted and the boat's sprite offset); it's
+  visual only, the story goes on (DEVIATIONS).
+- A race in the test's own warp helper: walking onto Vermilion Gym's door, the field looked idle during the door
+  warp, so the helper pushed as for stairs (`t.enterWarp()`), whose final wait has no frame limit and hung. It now
+  pushes only after the player has stood still on the old map for 30 frames.
+- Verified: typecheck; `npm test` (18 files, 156 tests); e2e story.test.ts (7, twice in a row) plus hallOfFame,
+  field, fieldMoves, vsSeeker, trainerBattle, newGame.
+
+### Story checks Erika to Sabrina (W-story unit 3)
+
+- Extractor: `split_args` splits macro arguments like gas (macro.c's get_any_string ends an argument at a blank
+  between two operands; the scrubber keeps blanks only between symbol characters), so the two decomp lines without
+  a comma now extract as three arguments: Rocket Hideout B1F's `call_if_not_defeated TRAINER_TEAM_ROCKET_GRUNT_12
+  RocketHideout_B1F_EventScript_SetBarrier` and the nurse's `case 1 EventScript_PkmnCenterNurse_Goodbye` (NO at a
+  Pokémon Center nurse now says goodbye instead of ending on a missing label). Expressions (`(MAX_COINS + 1) - 500`,
+  `A | B`, battle script flags) stay one argument. Checked by diffing the whole of public/gen before and after: only
+  those two instructions in scripts.json changed.
+- ScriptEngine: `call_if_defeated` / `call_if_not_defeated` (event.inc: checktrainerflag + call_if TRUE / FALSE).
+  Rocket Hideout B4F's barrier to Giovanni opens once both door grunts are beaten (was a BLOCKER), and B1F's OnLoad
+  barrier is set until grunt 12 is beaten. Both gap entries removed.
+- Fixed on the way: `special GetQuestLogState` returned 0 instead of writing VAR_RESULT (quest_log.c sets
+  gSpecialVar_Result; `special` drops return values), so EventScript_DoNoIntroTrainerBattle read a stale VAR_RESULT
+  and, when it was 2, went to EventScript_EndQuestLogBattle: no battle, the script ended and talking again restarted
+  it. Hit by Giovanni in Rocket Hideout B4F after the two grunt battles (a BLOCKER); any `trainerbattle_no_intro`
+  could hit it (every rival battle after Oak's lab, Blaine, the Elite Four, Silph Co.'s Giovanni, Mt. Moon's
+  Miguel), depending on what VAR_RESULT last held.
+- e2e `tests/e2e/storyCeladonSaffron.test.ts` (new, 10 tests): Erika (Cut tree, badge, TM19); the Game Corner grunt,
+  poster switch and stair warp to the hideout; B1F's barrier with and without grunt 12; the hideout lift B1F → B4F;
+  B4F's door grunts, the barrier, Giovanni and the Silph Scope, and the barrier staying open on reload; Mr. Fuji's
+  warp home and the Poké Flute; the Tea, the Route 5 gate guard turning the player back without it and letting
+  them through with it; Silph Co. 7F's rival trigger battle; 11F's Giovanni and the president's Master Ball;
+  Saffron Gym's teleport pads to Sabrina, the badge and TM04. Nothing else on this stretch blocked.
+- Verified: typecheck; `npm test` (17 files, 155 tests, incl. the coverage test); e2e storyCeladonSaffron (10,
+  twice), field, trainerBattle, mainPathLeftovers, pokemonTower, scriptedBattles (24).
+
 ### Four e2e races fixed (W-flaky, SCREENS_PLAN.md batch 2)
 
 Each failed once with other workers' e2e runs on the machine and passed alone; tests only, no game changes.
@@ -1936,3 +2014,27 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   tests) four times: twice alone, once with 8 CPU hogs and two other e2e files (load ~106), once with 16 hogs and
   four other e2e files (load up to ~314); the other battleAnims files that use the changed helpers (2a, 2b, 2c, 2d,
   3e1, 3e3a, 3e3b: 67 tests) once.
+### Story checks Koga to the Hall of Fame (W-story unit 4)
+
+- e2e `tests/e2e/storyLeague.test.ts` (new, 8 tests): Fuchsia Gym (Koga behind the invisible walls, the badge,
+  TM06); the Safari Zone (the gate's ¥500 entry and 30 balls, the Gold Teeth, the Secret House's HM03, the Warden's
+  HM04 for the teeth); Cinnabar (the gym door's locked trigger, Pokémon Mansion B1F's secret switch opening the way
+  to the Secret Key, CheckUnlockGym, in through the door); Cinnabar Gym (quiz 1 answered wrong → Burglar Quinn's
+  battle → the door opens; Blaine, TM38); Viridian Gym (the locked doors with six badges, TryUnlockGym with seven, a
+  spinner tile carrying the player to its stop tile, Giovanni, TM26, VAR_MAP_SCENE_ROUTE22 3); Route 22's late
+  rival; Route 23's badge guards (the gate's Boulder Badge, the Cascade Badge guard turning the player back without
+  it and letting them on with it); the Elite Four rooms one after another (the walk in, the entry closing, each
+  member, the door opening, Lance's corridor) and the Champion's room through Oak to the warp into the Hall of Fame.
+  Nothing on this stretch blocked.
+- Ported: `special GetStarterSpecies` (Oak's congratulations named species 0 without it; `GetStarterSpecies` in
+  world/roamer.ts, which GetRoamerSpecies now uses too). `special Script_TryGainNewFanFromCounter` is a no-op like
+  Script_UpdateTrainerFanClubGameClear (no Trainer Fan Club state). Both gap entries removed; main gaps left:
+  DoPokemonLeagueLightingEffect (visual: needs a runtime BG palette swap; DEVIATIONS) and DoSSAnneDepartureCutscene.
+- Audit of specials whose C sets gSpecialVar_Result (directly or two calls deep, incl. their tasks / callbacks):
+  every one the port implements writes VAR_RESULT itself (RockSmashWildEncounter, TryFieldPoisonWhiteOut,
+  CreatePCMenu, StartMarowakBattle, ListMenu, GetQuestLogState, HasEnoughMonsForDoubleBattle). The others
+  (size records, daycare level menu, Seagallop menu, IsSelectedMonEgg, GetNumMovesSelectedMonHas, the link / tower
+  ones) aren't ported yet; they're on the gap list.
+- Found on the way (test only): mashing A until the field is free after a battle restarted the leader's
+  post-battle script when a press landed in the first free tick (Bruno's looped). The file's `scriptDone` presses B.
+- Verified: typecheck; `npm test` (156); e2e storyLeague (8, twice), story, storyCeladonSaffron, hallOfFame.

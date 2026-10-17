@@ -116,6 +116,9 @@ export class MovementRunner {
       case 'face_player':
         obj.face(towards(obj, this.player));
         return false;
+      case 'face_original_direction': // MovementAction_FaceOriginalDirection_Step0
+        obj.face(obj.originalFacing);
+        return false;
       case 'face_away_player':
         obj.face(OPPOSITE[towards(obj, this.player)]);
         return false;
@@ -136,6 +139,10 @@ export class MovementRunner {
         return true;
       case 'rock_smash_break': // MovementAction_RockSmashBreak_Step0..2 (sAnim_RockBreak)
         this.custom = removeObstacle(obj, 8);
+        return true;
+      case 'nurse_joy_bow': // MovementAction_NurseJoyBowDown_Step0 (ANIM_NURSE_BOW, south), WaitSpriteAnim, PauseSpriteAnim
+        obj.face('down');
+        this.custom = nurseBow(obj);
         return true;
       case 'reveal_trainer':
         // MovementAction_RevealTrainer only acts on tree/mountain-disguised trainers, which FRLG doesn't use
@@ -163,6 +170,27 @@ function removeObstacle(obj: ObjectEvent, frameDuration: number): () => boolean 
     }
     t++;
     return t > animFrames + 32;
+  };
+}
+
+/** sAnim_NurseBow: frame 0 for 8 frames, 9 (the bow) for 32, 0 for 8, END; the action ends once it has. */
+function nurseBow(obj: ObjectEvent): () => boolean {
+  const frames = [
+    [0, 8],
+    [9, 32],
+    [0, 8],
+  ];
+  let t = 0;
+  return () => {
+    let at = t++;
+    for (const [frame, duration] of frames) {
+      if (at < duration) {
+        obj.sprite.setFrame(frame);
+        return false;
+      }
+      at -= duration;
+    }
+    return true;
   };
 }
 

@@ -29,7 +29,7 @@ import {
   STR_CONV_MODE_LEFT_ALIGN,
   text,
 } from './common';
-import { CB2_ReturnToField, gFieldCallback, type FieldCallbackHost } from './fieldCallbacks';
+import { CB2_ReturnToField, gFieldCallback, gFieldCallback2, type FieldCallbackHost } from './fieldCallbacks';
 import { GetOnOffBike, IsBikingDisallowedByPlayer } from '../world/bike';
 import { avatarField, ClearPlayerHeldMovement, PLAYER_AVATAR_FLAG, TestPlayerAvatarFlags } from '../world/playerAvatar';
 import {
@@ -44,7 +44,7 @@ import {
   Task_ReturnToBagFromContextMenu,
 } from './itemMenu';
 import { SpecialVar } from './itemMenuState';
-import { InitRegionMapWithExitCB, REGIONMAP_TYPE_NORMAL } from './regionMap';
+import { InitRegionMapWithExitCB, REGIONMAP_TYPE_NORMAL, regionMapGfxSymbols } from './regionMap';
 import { InitTMCase, TMCASE_FIELD } from './tmCase';
 import {
   BERRYPOUCH_FROMBATTLE,
@@ -178,15 +178,50 @@ function ClearPlayerHeldMovementAndUnfreezeObjectEvents(): void {
   avatarField().unfreezeObjectEvents();
 }
 
+/** SetFieldCallback2ForItemUse: the field callback for coming back from a screen an item opened from the field. */
+function SetFieldCallback2ForItemUse(): void {
+  gFieldCallback2.fn = FieldCB2_UseItemFromField;
+}
+
 /**
- * A registered item's field func whose from-the-field branch isn't ported yet (the Town Map, TM case and berry
- * pouch open their screens from the field: SCREENS_PLAN.md W-select unit 2): log it and give the controls back.
+ * FieldCB2_UseItemFromField + Task_ItemUseWaitForFade: freeze the objects and hold the controls while the field
+ * fades in from black, then give both back. (gExitStairsMovementDisabled = FALSE: no Task_ExitStairs in the port.)
  */
-function RegisteredItemFromFieldNotPorted(taskId: number, what: string): void {
-  console.warn(`[item_use] ${what} from the field (SELECT) is not implemented yet`);
-  DestroyTask(taskId);
-  ClearPlayerHeldMovementAndUnfreezeObjectEvents();
-  fieldFuncs().UnlockPlayerFieldControls();
+function FieldCB2_UseItemFromField(field: FieldCallbackHost): () => boolean {
+  const f = fieldFuncs();
+  avatarField().freezeObjectEvents(); // FreezeObjectEvents
+  f.LockPlayerFieldControls();
+  const faded = field.fadeInFromBlack(); // FadeInFromBlack; the wait is IsWeatherNotFadingIn
+  return () => {
+    if (!faded()) return false;
+    avatarField().unfreezeObjectEvents(); // UnfreezeObjectEvents
+    f.UnlockPlayerFieldControls();
+    return true;
+  };
+}
+
+/**
+ * The from-the-field branch of FieldUseFunc_TownMap / _TmCase / _BerryPouch (a registered item with SELECT):
+ * StopPokemonLeagueLightingEffectTask (the league rooms' lighting isn't ported, so there's nothing to stop),
+ * FadeScreen(FADE_TO_BLACK, 0), then `task` waits for the fade.
+ */
+function FadeToScreenFromField(taskId: number, task: TaskFunc): void {
+  fieldFuncs().FadeScreen(K.FADE_TO_BLACK, 0);
+  gTasks[taskId].func = task;
+}
+
+/**
+ * Task_UseTownMapFromField / Task_InitTMCaseFromField / Task_InitBerryPouchFromField: once the fade is done,
+ * CleanupOverworldWindowsAndTilemaps, SetFieldCallback2ForItemUse and the screen (`init`), which comes back to the
+ * field with CB2_ReturnToField.
+ */
+function OpenScreenFromFieldOnceFaded(taskId: number, init: () => void, gfxSymbols: string[]): void {
+  const f = fieldFuncs();
+  if (!f.IsFieldPaletteFadeActive()) {
+    SetFieldCallback2ForItemUse();
+    f.OpenScreenFromField(init, gfxSymbols); // CleanupOverworldWindowsAndTilemaps + init
+    DestroyTask(taskId);
+  }
 }
 
 /**
@@ -247,6 +282,15 @@ export interface ItemUseFieldFuncs {
   Task_VsSeeker_0(): void;
   /** itemfinder.c's ItemUseOnFieldCB_Itemfinder */
   ItemUseOnFieldCB_Itemfinder(): void;
+  /** FadeScreen (field_screen_effect.c) */
+  FadeScreen(mode: number, delay: number): void;
+  /** gPaletteFade.active on the field */
+  IsFieldPaletteFadeActive(): boolean;
+  /**
+   * CleanupOverworldWindowsAndTilemaps, then the GBA screen `init` starts (it sets the main callback), from the
+   * black field; `gfxSymbols` are the graphics it needs beyond the bag's.
+   */
+  OpenScreenFromField(init: () => void, gfxSymbols: string[]): void;
 }
 
 const sFieldFuncs: Partial<ItemUseFieldFuncs> = {};
@@ -335,16 +379,21 @@ function ItemUseOutOfBattle_Itemfinder(taskId: number): void {
 }
 
 /**
- * FieldUseFunc_TownMap: from the bag, the region map, which returns to the bag. (Its registered-item branch,
- * Task_UseTownMapFromField, isn't ported yet: SCREENS_PLAN.md W-select unit 2.)
+ * FieldUseFunc_TownMap: from the bag, the region map, which returns to the bag; with SELECT, the region map from
+ * the field (Task_UseTownMapFromField), back to the field.
  */
 function FieldUseFunc_TownMap(taskId: number): void {
   if (gTasks[taskId].data[3] === 0) {
     ItemMenu_SetExitCallback(UseTownMapFromBag);
     ItemMenu_StartFadeToExitCallback(taskId);
   } else {
-    RegisteredItemFromFieldNotPorted(taskId, 'Task_UseTownMapFromField (the TOWN MAP)');
+    FadeToScreenFromField(taskId, Task_UseTownMapFromField);
   }
+}
+
+/** Task_UseTownMapFromField (the dungeon previews' graphics too: the Town Map is in the bag) */
+function Task_UseTownMapFromField(taskId: number): void {
+  OpenScreenFromFieldOnceFaded(taskId, () => InitRegionMapWithExitCB(REGIONMAP_TYPE_NORMAL, CB2_ReturnToField), regionMapGfxSymbols(true));
 }
 
 /** UseTownMapFromBag */
@@ -353,16 +402,22 @@ function UseTownMapFromBag(): void {
 }
 
 /**
- * FieldUseFunc_TmCase: from the bag, the TM case, which returns to the bag. (Its registered-item branch,
- * Task_InitTMCaseFromField, isn't ported yet: SCREENS_PLAN.md W-select unit 2.)
+ * FieldUseFunc_TmCase: from the bag, the TM case, which returns to the bag; with SELECT, the TM case from the field
+ * (Task_InitTMCaseFromField), which SELECT closes too and which returns to the field. Its USE / GIVE go through the
+ * party menu and back to the TM case (CB2_ReturnToTMCaseMenu keeps the exit callback) as from the bag.
  */
 function FieldUseFunc_TmCase(taskId: number): void {
   if (!inField(taskId)) {
     ItemMenu_SetExitCallback(InitTMCaseFromBag);
     ItemMenu_StartFadeToExitCallback(taskId);
   } else {
-    RegisteredItemFromFieldNotPorted(taskId, 'Task_InitTMCaseFromField (the TM CASE)');
+    FadeToScreenFromField(taskId, Task_InitTMCaseFromField);
   }
+}
+
+/** Task_InitTMCaseFromField (its graphics are preloaded with the bag's: menuGfxSymbols) */
+function Task_InitTMCaseFromField(taskId: number): void {
+  OpenScreenFromFieldOnceFaded(taskId, () => InitTMCase(TMCASE_FIELD, CB2_ReturnToField, true), []);
 }
 
 /** InitTMCaseFromBag */
@@ -371,16 +426,22 @@ function InitTMCaseFromBag(): void {
 }
 
 /**
- * FieldUseFunc_BerryPouch: from the bag, the berry pouch, which returns to the bag. (Its registered-item branch,
- * Task_InitBerryPouchFromField, isn't ported yet: SCREENS_PLAN.md W-select unit 2.)
+ * FieldUseFunc_BerryPouch: from the bag, the berry pouch, which returns to the bag; with SELECT, the berry pouch
+ * from the field (Task_InitBerryPouchFromField), which SELECT closes too and which returns to the field. A berry's
+ * USE goes through the party menu and back to the pouch (CB2_ReturnToBerryPouchMenu) as from the bag.
  */
 function FieldUseFunc_BerryPouch(taskId: number): void {
   if (gTasks[taskId].data[3] === 0) {
     ItemMenu_SetExitCallback(InitBerryPouchFromBag);
     ItemMenu_StartFadeToExitCallback(taskId);
   } else {
-    RegisteredItemFromFieldNotPorted(taskId, 'Task_InitBerryPouchFromField (the BERRY POUCH)');
+    FadeToScreenFromField(taskId, Task_InitBerryPouchFromField);
   }
+}
+
+/** Task_InitBerryPouchFromField (its graphics are preloaded with the bag's: menuGfxSymbols) */
+function Task_InitBerryPouchFromField(taskId: number): void {
+  OpenScreenFromFieldOnceFaded(taskId, () => InitBerryPouch(BERRYPOUCH_FROMFIELD, CB2_ReturnToField, 1), []);
 }
 
 /** InitBerryPouchFromBag */

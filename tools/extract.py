@@ -672,9 +672,14 @@ DIRECTIVES_SKIP = (".include", ".global", ".align", ".section", ".set", ".equ", 
 
 
 def split_args(s):
-    """Split macro arguments on commas, respecting quotes and parentheses."""
+    """Split macro arguments like gas does: on commas, and on whitespace between two operands (gas's scrubber
+    keeps a blank only between two symbol characters, and macro.c's get_any_string ends an argument at it), so
+    `case 1 Label` is two arguments while `(MAX_COINS + 1) - 500` and `A | B` stay one. Quotes and brackets
+    are respected."""
     args, cur, depth, quote = [], "", 0, False
-    for ch in s:
+    i = 0
+    while i < len(s):
+        ch = s[i]
         if ch == '"':
             quote = not quote
         if not quote and ch in "([":
@@ -684,8 +689,22 @@ def split_args(s):
         if ch == "," and depth == 0 and not quote:
             args.append(cur.strip())
             cur = ""
+        elif ch in " \t" and depth == 0 and not quote:
+            j = i
+            while j < len(s) and s[j] in " \t":
+                j += 1
+            prev = cur.rstrip()[-1:]
+            nxt = s[j] if j < len(s) else ""
+            if prev and nxt and re.match(r'[\w)\]"]', prev) and re.match(r'[\w("]', nxt):
+                args.append(cur.strip())
+                cur = ""
+            else:
+                cur += s[i:j]
+            i = j
+            continue
         else:
             cur += ch
+        i += 1
     if cur.strip():
         args.append(cur.strip())
     return args
@@ -1292,8 +1311,14 @@ def extract_constants(decomp, out):
     behaviors = dict(
         (name, int(val, 0)) for name, val in re.findall(r"#define (MB_\w+)\s+(0x[0-9A-Fa-f]+|\d+)", (decomp / "include/constants/metatile_behaviors.h").read_text())
     )
-    (out / "constants.json").write_text(json.dumps({"newGameFlags": flags, "metatileBehaviors": behaviors}, indent=1))
-    print(f"  {len(flags)} new-game flags, {len(behaviors)} behaviors")
+    # gInitialMovementTypeFacingDirections (event_object_movement.c): MOVEMENT_TYPE_* -> DIR_*
+    eom = (decomp / "src/event_object_movement.c").read_text()
+    m = re.search(r"gInitialMovementTypeFacingDirections\[\w*\] = \{(.*?)\};", eom, re.S)
+    facing = dict(re.findall(r"\[(MOVEMENT_TYPE_\w+)\] = (DIR_\w+)", m.group(1))) if m else {}
+    (out / "constants.json").write_text(
+        json.dumps({"newGameFlags": flags, "metatileBehaviors": behaviors, "initialMovementTypeFacing": facing}, indent=1)
+    )
+    print(f"  {len(flags)} new-game flags, {len(behaviors)} behaviors, {len(facing)} initial facings")
 
 
 def extract_wild_encounters(decomp, out):

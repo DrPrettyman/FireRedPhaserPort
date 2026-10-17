@@ -25,6 +25,14 @@ interface RaiseHandState {
   y2: number;
 }
 
+const DIR_NAMES: Record<string, Direction> = { DIR_SOUTH: 'down', DIR_NORTH: 'up', DIR_WEST: 'left', DIR_EAST: 'right' };
+let initialFacing: Record<string, string> = {};
+
+/** gInitialMovementTypeFacingDirections, from the extracted constants (set at boot). */
+export function setInitialMovementTypeFacing(table: Record<string, string>): void {
+  initialFacing = table;
+}
+
 /** Decides what an NPC does each frame, following its MOVEMENT_TYPE_* from the map data. */
 export class NpcBrain {
   private wait: number;
@@ -53,6 +61,7 @@ export class NpcBrain {
   setMovementType(movementType: string): void {
     const wasRaisingHand = this.raiseHand !== undefined;
     this.kind = movementType.replace('MOVEMENT_TYPE_', '');
+    this.obj.originalFacing = DIR_NAMES[initialFacing[movementType]] ?? 'down';
     this.lookDirs = parseLookDirections(this.kind);
     this.walkDir = this.lookDirs[0];
     this.singleMovementActive = false;

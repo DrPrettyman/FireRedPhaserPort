@@ -284,14 +284,25 @@ this is the next level down. When you add or change a subsystem, update its entr
     while world/fieldItems.ts prints, then the callback becomes its func) and Task_ItemUse_CloseMessageBoxAndReturnToField
     (clears the box, unfreezes, unlocks). An sItemUseOnFieldCB gets TASK_NONE after the bag (there's no task),
     so it destroys its task through `DestroyItemUseTask`. To add an item's field branch: check `inField(taskId)` in its
-    FieldUseFunc and end in something that unfreezes and unlocks. The Town Map / TM case / berry pouch branches
-    (`RegisteredItemFromFieldNotPorted`) log and give the controls back. Script `release` / `releaseall` now also
+    FieldUseFunc and end in something that unfreezes and unlocks. The Town Map, TM case and berry pouch open their
+    screens from the field (Task_UseTownMapFromField / Task_InitTMCaseFromField / Task_InitBerryPouchFromField):
+    `FadeToScreenFromField` (FadeScreen to black through world/fieldItems.ts), then `OpenScreenFromFieldOnceFaded`
+    sets gFieldCallback2 = FieldCB2_UseItemFromField (SetFieldCallback2ForItemUse) and calls the field's
+    `OpenScreenFromField(init, gfxSymbols)`: OverworldScene.openItemScreenFromField clears the message box
+    (CleanupOverworldWindowsAndTilemaps), loads the headers (prepareFieldMoveMenu) and runs FieldMenuScene
+    `itemFromField`, whose `itemScreen.init` is the C's InitRegionMapWithExitCB / InitTMCase / InitBerryPouch with
+    CB2_ReturnToField. Back on the field, `OverworldScene.runFieldCallback` (RunFieldCallback, shared with the start
+    menu's screens) runs FieldCB2_UseItemFromField: objects frozen and controls locked while the field fades in,
+    then both released. The TM case / pouch's USE and GIVE go through the party menu and back to the screen as from
+    the bag (the reopening keeps the CB2_ReturnToField exit); SELECT closes both. The Fame Checker and Teachy TV
+    (no screens) log and give the controls back (registeredItemFieldFunc). Script `release` / `releaseall` now also
     unfreeze objects (ClearPlayerHeldMovementAndUnfreezeObjectEvents), and a map load or a battle's return clears the
     freeze. Probes: `field().locked` (LockPlayerFieldControls held), `field().objectsFrozen`, `__test.gbaTasks()`
     (active gTasks by function name, e.g. `Task_BagMenu_HandleInput`, `Task_FieldItemContextMenuHandleInput`),
     `__test.paletteFadeActive()`. Tests: tests/e2e/registeredItems.test.ts (registering the Bicycle in the bag and SELECT on /
     off, Cycling Road, the Old Rod, the Coin Case, the VS Seeker / Itemfinder / Poké Flute messages, nothing
-    registered; Pallet Town's pond at (8, 16), (12, 13) for no trainers or hidden items).
+    registered; Pallet Town's pond at (8, 16), (12, 13) for no trainers or hidden items; the Town Map, TM case (HM01
+    taught, SELECT to close) and berry pouch from the field, never through the bag).
 - **Scripted battles:** specials that start a battle (StartOldManTutorialBattle, StartMarowakBattle,
   StartLegendaryBattle in `script/specials.ts`) call `host.startScriptedBattle(flags, enemyParty, transition)` and
   block the script with `setWaitState` until the field has faded back in (their CB2_End* sets VAR_RESULT; a loss
@@ -450,7 +461,7 @@ this is the next level down. When you add or change a subsystem, update its entr
 - **Hall of Fame and credits:** the room's script (PokemonLeague_HallOfFame_EventScript_EnterRoom) runs
   `dofieldeffect FLDEFF_HALL_OF_FAME_RECORD` (`world/hallOfFameRecord.ts`: the machine's Poké Balls and monitor,
   CreateGlowingPokeballsEffect's states, drawn as FieldEffectSprites from the GBA pics at screen coordinates; the
-  same glow would serve FLDEFF_POKECENTER_HEAL) and `special EnterHallOfFame` → `OverworldScene.enterHallOfFame`:
+  same file runs FLDEFF_POKECENTER_HEAL, whose monitor shares the glow's palette) and `special EnterHallOfFame` → `OverworldScene.enterHallOfFame`:
   post_battle_event_funcs.c's set-up (`EnterHallOfFame` in `menus/hallOfFame.ts`), `storeLocationForSave`, then
   FieldMenuScene 'hallOfFame' runs CB2_DoHallOfFameScreen. `hofEnv` is what the screen needs from its host: saving
   (TrySavingData(SAVE_HALL_OF_FAME)), DoWarp (FieldMenuStart.onExit's `warp`: the field loads Indigo Plateau with
@@ -704,6 +715,43 @@ this is the next level down. When you add or change a subsystem, update its entr
   a new gap (it prints a ready-made entry with the maps; pick the tag from the decomp scripts) and on a fixed one
   (take it off the list). Porting a special in a Phaser module: register it with `registerSpecials({ ... })` as an
   object literal so the test can read its keys.
+- **Story checks:** `tests/e2e/story.test.ts` (Brock to Lt. Surge; later stretches in their own
+  `story*.test.ts`). Each gym starts on its map with the state the story has by then (`setFlags` for the earlier
+  badges and story flags, a Lv. 100 Mewtwo), walks the gym (`walkFighting` lets trainers spot the player and fights
+  them; `beatTrainers` sets their flags instead), then `beatLeader(game, x, y, from)` talks to the leader, fights
+  to the end and presses through the badge and TM text; assert the badge flag, FLAG_DEFEATED_*, the TM
+  (`t.itemCount('TM34')`). Story events between gyms are walked from map to map with `takeWarp(game, x, y, map)`
+  (doors and mats warp by themselves; stairs get a push once the player has stood still for 30 frames) and
+  `talk` / `approach`. Read the decomp map scripts first for the coord events and flags on the way (e.g. Vermilion's
+  ticket check, VAR_MAP_SCENE_*). New story specials go in `script/storySpecials.ts` (STORY_SPECIALS, spread into
+  SPECIALS); ones that draw with Phaser use `registerSpecials` from their own module.
+- **Script argument expressions:** `Defines.get` folds constant expressions over known names (`FALSE | (TRUE <<
+  1)`, `(MAX_COINS + 1) - 20`), as GAS does; before, the Pokémon Center nurse's `multichoice` threw.
+- **Story checks (Erika to Sabrina):** `tests/e2e/storyCeladonSaffron.test.ts` plays each required story event
+  from a `?map=` start with the state the story would have (badges and hide flags with `setFlag`, the area's
+  trainers marked beaten with the TRAINER_FLAGS_START offset, a level-100 Mewtwo with PSYCHIC + CUT) and checks what
+  the player gets: Celadon Gym (the Cut tree, Erika, the badge, TM19), the Game Corner grunt and poster switch
+  (FLAG_OPENED_ROCKET_HIDEOUT, the stair warp to B1F), Rocket Hideout B1F / B4F's barriers, the hideout lift,
+  Giovanni and the Silph Scope, Mr. Fuji → the Poké Flute, the Tea and the Route 5 gate guard, Silph Co. 7F's rival
+  and 11F's Giovanni + Master Ball, Saffron Gym's pads and Sabrina. The ghost Marowak (pokemonTower.test.ts),
+  Snorlax with the flute (scriptedBattles.test.ts) and the card key doors (mainPathLeftovers.test.ts) have their own
+  files. Helpers in the file: `warp` (OverworldScene.warp, to reload a map after changing flags its ON_LOAD reads),
+  `talkFrom(x, y, dir)`, `winBattle` (A through a trainer battle; mashUntil's predicate runs in the page, so the
+  start mark goes through `window.__storySince`). Stair warps (MB_*_STAIR_WARP) and gate exits need
+  `t.enterWarp()` after `walkTo`; walking onto them doesn't warp. A `special` whose C sets gSpecialVar_Result must
+  set VAR_RESULT itself in specials.ts: `special` drops the function's return value (only `specialvar` stores it).
+- **Story checks (Koga to the Hall of Fame):** `tests/e2e/storyLeague.test.ts`, same approach: Fuchsia Gym
+  (Koga behind the invisible walls), the Safari Zone (the gate's entry, the Gold Teeth, the Secret House's HM03,
+  the Warden's HM04), Cinnabar (the locked gym door, Pokémon Mansion B1F's secret switch and the Secret Key, the
+  door opening), Cinnabar Gym (a wrong quiz answer → its trainer → the door; Blaine), Viridian Gym (locked until
+  the seventh badge; a spinner tile; Giovanni), Route 22's late rival, Route 23's badge guards, and the Elite Four
+  and the Champion from Indigo Plateau up to the warp into the Hall of Fame (Oak's congratulations names the
+  starter: GetStarterSpecies). Victory Road's boulders and switches: strength.test.ts (2F). Helpers here:
+  `scriptDone` presses **B** after a battle or a gift (mashing A in front of the person restarts their script in
+  the first free tick: Bruno's post-battle text looped), `talkUntil(cond)` presses A until a gift or switch is
+  done and then B, `spinnerRoute` is a route search that allows for MB_SPIN_* tiles (t.walkTo's doesn't),
+  `repel` keeps wild battles away, `heal` resets the party between Elite Four rooms. `canReach` (testFindPath)
+  checks whether a part of a map is shut off.
 - **Bugs that depend on world position:** `?map=` always loads at origin 0, so maps that are far from the origin in
   a real playthrough (e.g. Viridian at y = -80 after walking up from Pallet) need either a real walk or
   `await s.world.load(name, ox, oy)`, then `s.player.setPosition(...)` and `await s.onMapLoaded(false)`.
