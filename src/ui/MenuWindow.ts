@@ -13,6 +13,14 @@ export function userFrameTexture(type: number): string {
   return `text_frame_type${type}`;
 }
 
+/** gSaveBlock2Ptr->optionsWindowFrameType + 1: the frame windows get unless they ask for another. */
+let userFrameType = () => 1;
+
+/** The field sets where the user's frame type comes from (GameState.optionsWindowFrameType + 1). */
+export function setUserFrameTypeSource(source: () => number): void {
+  userFrameType = source;
+}
+
 /** LoadStdWindowGfx's frame (gStdTextWindow_Gfx), which ignores the options setting. */
 export const STD_FRAME_TEXTURE = 'text_frame_std';
 
@@ -38,7 +46,8 @@ export class MenuWindow {
     readonly rect: TileRect,
     private fonts: Fonts,
     private input: Input,
-    frameType: number | 'std' = 1,
+    /** A user frame (1..10, default the options' FRAME), or 'std' for gStdTextWindow_Gfx. */
+    frameType: number | 'std' = userFrameType(),
   ) {
     this.frameKey = `menu_frame_${MenuWindow.count++}`;
     this.frame = drawStdFrame(scene, rect, frameType === 'std' ? STD_FRAME_TEXTURE : userFrameTexture(frameType), this.frameKey);

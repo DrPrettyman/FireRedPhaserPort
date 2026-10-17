@@ -19,7 +19,7 @@ import {
 import { BG_PLTT_ID, gPlttBufferFaded, gPlttBufferUnfaded, LoadCompressedPalette, LoadPalette, PLTT_SIZE_4BPP } from '../gba/palette';
 import { GetWindowAttribute, InitWindows, type WindowTemplate } from '../gba/window';
 import { K } from './constants';
-import { bdata, g } from './env';
+import { bdata, g, state } from './env';
 
 /** gBattleBgTemplates */
 export const gBattleBgTemplates: BgTemplate[] = [
@@ -185,12 +185,9 @@ export function InitBattleBgsVideo(): void {
   SetGpuReg(REG_OFFSET_DISPCNT, DISPCNT_MODE_0 | DISPCNT_OBJ_1D_MAP | DISPCNT_OBJ_ON | DISPCNT_WIN0_ON | DISPCNT_OBJWIN_ON);
 }
 
-/** gSaveBlock2Ptr->optionsWindowFrameType (no options menu yet: frame type 1). */
-const optionsWindowFrameType = 0;
-
 /** LoadUserWindowGfx / LoadUserWindowGfxByFrame (gUserFrames) */
 export function LoadUserWindowGfx(windowId: number, destOffset: number, palOffset: number): void {
-  const n = optionsWindowFrameType + 1;
+  const n = state.optionsWindowFrameType + 1; // gSaveBlock2Ptr->optionsWindowFrameType
   LoadBgTiles(GetWindowAttribute(windowId, 'bg'), gfx(`sUserFrame_Type${n}_Gfx`), 0x120, destOffset);
   LoadPalette(gfx16(`sUserFrame_Type${n}_Pal`), palOffset, PLTT_SIZE_4BPP);
 }

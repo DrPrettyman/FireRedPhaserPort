@@ -200,3 +200,16 @@ test('game stats round-trip, and a version 1 save (no gameStats) still loads', (
   expect(read?.version).toBe(SAVE_VERSION);
   expect(fromSaveData(read!, newGame().state).getGameStat(t.d('GAME_STAT_FIRST_HOF_PLAY_TIME'))).toBe(0);
 });
+
+test('a version 2 save (no sound option) loads with MONO', () => {
+  const storage = memoryStorage();
+  t.state.optionsSound = 1;
+  const data = toSaveData(t.state);
+  expect(fromSaveData(structuredClone(data), newGame().state).optionsSound).toBe(1);
+  const v2 = { ...structuredClone(data), version: 2 };
+  delete (v2.options as Partial<typeof data.options>).sound;
+  storage.setItem(SAVE_STORAGE_KEY, JSON.stringify(v2));
+  const read = readSave(storage);
+  expect(read?.version).toBe(SAVE_VERSION);
+  expect(fromSaveData(read!, newGame().state).optionsSound).toBe(t.d('OPTIONS_SOUND_MONO'));
+});

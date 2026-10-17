@@ -139,7 +139,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail, the daycare mons,
     Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, the fame
     checker, Trainer Tower and minigame records, the enigma berry, mystery gift, easy chat, link records and
-    the sound and region map zoom options. The player's position is stored only when the field writes it before
+    the region map zoom option. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
   - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the title screen; the
     copyright screen and intro.c's Game Freak / Nidorino movie before it aren't ported. Dev starts (`?start=`,
@@ -166,6 +166,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     DoSaveFailedScreen. SaveMapView isn't ported: the map view isn't saved, so CONTINUE rebuilds the map from its
     header and ON_LOAD script (metatiles a script changed later aren't restored). `special Field_AskSaveTheGame`
     (task50_save_game) doesn't switch to HELPCONTEXT_SAVE.
+  - Option menu (menus/optionMenu.ts): no help context (HELPCONTEXT_OPTIONS); SOUND (MONO / STEREO) is stored and
+    saved but changes nothing (no audio, so no SetPokemonCryStereo). The L=A button mode applies on the GBA-layer
+    screens (GbaHostScene's ReadKeys) but not on the field, whose input reads the buttons directly (on the GBA,
+    ReadKeys turns L into A everywhere). The field isn't on the GBA layer, so FieldMenuScene sets the backdrop
+    (BG palette 0 colour 0, black as LoadTilesetPalette leaves it) the option menu doesn't load itself.
+  - Start menu help window (ui/HelpMessageWindow.ts): a Phaser window like the start menu, not a BG0 window; the
+    start menu (and its help window) goes away as soon as an item that leaves the field is chosen, before the fade
+    (on the GBA both stay up under the fade).
   - CONTINUE (OverworldScene.continueSavedGame): the map's objects spawn from its templates (object events aren't
     saved, see Save data); gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no

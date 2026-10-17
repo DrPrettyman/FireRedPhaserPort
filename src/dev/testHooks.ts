@@ -39,6 +39,8 @@ import { clearSaveDataProbe } from '../menus/clearSaveDataScreen';
 import { oakSpeechProbe } from '../menus/oakSpeech';
 import { saveDialogProbe } from '../ui/SaveDialog';
 import { startMenuProbe } from '../ui/StartMenu';
+import { helpMessageWindowProbe } from '../ui/HelpMessageWindow';
+import { optionMenuProbe } from '../menus/optionMenu';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -494,6 +496,13 @@ function createApi(game: Phaser.Game) {
     },
     /** The field start menu while it's open: its items and cursor. */
     startMenu: () => startMenuProbe(),
+    /** The help window's text while it's up (the start menu's description in the HELP button mode), decoded. */
+    helpMessage: () => {
+      const text = helpMessageWindowProbe();
+      return text && decode(text);
+    },
+    /** The option menu while it's up (menus/optionMenu.ts): Task_OptionMenu's loadState (2 = input), the cursor and the settings shown. */
+    optionMenu: () => optionMenuProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */
     saveDialog: () => {
       const p = saveDialogProbe();

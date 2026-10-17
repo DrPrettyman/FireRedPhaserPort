@@ -18,6 +18,7 @@ function playedState(): TestGame['state'] {
   s.textSpeed = 'fast';
   s.optionsWindowFrameType = 5;
   s.optionsButtonMode = 2;
+  s.optionsSound = 1;
   s.battleStyleSet = true;
   s.battleSceneOff = true;
   s.setDexFlags(1, true, true);
@@ -104,6 +105,7 @@ describe('save data (save.c / load_save.c)', () => {
       textSpeed: 'fast',
       optionsWindowFrameType: 5,
       optionsButtonMode: 2,
+      optionsSound: 1,
       battleStyleSet: true,
       battleSceneOff: true,
       nationalDexEnabled: true,

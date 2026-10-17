@@ -1736,3 +1736,29 @@ end to end.
   fixed fly.test.ts's `useTownMap` the same way.
 - Verified: typecheck, unit tests and the full e2e suite on each PR after merging master in; the final run is in
   this PR: on master after #40, typecheck, 148 unit tests and 269 e2e tests (39 files) pass.
+### Option menu and start menu help window (W-options, SCREENS_PLAN.md batch 2)
+
+- option_menu.c as `menus/optionMenu.ts` on the GBA layer: CB2_OptionsMenuFromStartMenu → CB2_OptionMenu's load
+  states (BGs 0-2, the windows, sOptionMenuPalette, the header's std frame and the settings' user frame) →
+  Task_OptionMenu (fade in, OptionMenu_ProcessInput with key repeat, the frame's tiles and palette reloaded as it
+  changes, the selected row as WIN0 outside the BLDY lightening, fade out) → CloseAndSaveOptionMenu. START → OPTION
+  opens it (OverworldScene's start menu dispatch, FieldMenuScene 'options') and it returns to the start menu
+  (CB2_ReturnToFieldWithOpenMenu). The strings, sOptionMenuPalette and the help window graphics were already
+  extracted (no extractor change).
+- `optionsSound` in GameState and the save (SAVE_VERSION 3; `upgradeSave` gives version 2 saves MONO).
+  `battle/battleBg.ts` reads the frame type from the state instead of frame 1.
+- Field windows that use the user frame now follow the FRAME option: the start menu and its Safari stats window
+  pass it, and `MenuWindow`'s default frame comes from `setUserFrameTypeSource` (the YES/NO box, the mon pic box);
+  before, they always drew TYPE 1.
+- help_message.c as `ui/HelpMessageWindow.ts` (a Phaser window over the field like the start menu) and
+  start_menu.c's sStartMenuDescPointers in `ui/StartMenu.ts`: the description on open and on cursor moves, gone on
+  close, only in the HELP button mode.
+- Fixed on the way: `TextWindow.drawGlyph` wrote colour 0 (TEXT_COLOR_TRANSPARENT) background pixels over the
+  window; GLYPH_COPY skips them, so text with a transparent background now prints over what's there (the help bar).
+- Verified: typecheck; `npm test` (149, incl. the save round-trip with the sound option and a version 2 save
+  loading as MONO); e2e tests/e2e/options.test.ts (new, 2 tests: text speed FAST → MID and FRAME wrapping 1 → 10 →
+  1 → 2, cursor wrapping, back to the start menu on OPTION, reopened with both kept, saved in the slot; the help
+  text on open and after UP / DOWN (incl. the wrap to EXIT), gone after B, and gone after BUTTON MODE → LR, also on
+  cursor moves and a fresh START), plus saveContinue, pokedex, field, mapNamePopup, titleScreen, trainerBattle,
+  wildBattle, fieldItems, fly and evolution. Screenshots of the option menu and of the help bar under the start menu
+  looked right.
