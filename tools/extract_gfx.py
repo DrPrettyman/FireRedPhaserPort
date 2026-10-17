@@ -21,7 +21,7 @@ from extract import read_jasc
 # screen, the PC storage system and item PC, the evolution scene, the field's tilesets and object event pics, which the buy menu's map view draws from VRAM,
 # field effect pics, door animation tiles, the cave entrance transition, and the weather fog and palette that
 # Haze and Mist Ball load, the main menu's palettes, the title screen and Oak's speech, the Hall of Fame and the
-# credits, and the region map (town map / fly map) with the dungeon map previews it shows).
+# credits, and the region map (town map / fly map) with the dungeon map previews it shows), the TM case.
 GFX_PREFIXES = (
     "graphics/battle_interface/",
     "graphics/battle_terrain/",
@@ -55,6 +55,7 @@ GFX_PREFIXES = (
     "graphics/credits/",
     "graphics/region_map/",
     "graphics/map_preview/",
+    "graphics/tm_case/",
     "data/tilesets/",
 )
 # Footprints are 1bpp and unused so far.
