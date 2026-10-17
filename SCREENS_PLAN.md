@@ -120,8 +120,8 @@ Owns `world/fishing.ts`, `world/vsSeeker.ts`, `world/itemfinder.ts`, and their F
 
 | Batch | Workers | Why together |
 |---|---|---|
-| 1 | W-dex (units 1-3, one after another), W-dexarea (1, then 2 once W-dex 2 is in), W-tmcase (1, then 2), W-fielditems (1, then 2) | Different files; the Pokédex is the focus, the TM case unblocks HMs in a real playthrough |
-| 2 | Leftovers of batch 1; option_menu.c, trainer_card.c; the start menu help window; headless story checks gym by gym | |
+| 1 (done, PRs #31-#40) | W-dex (units 1-3, one after another), W-dexarea (1, then 2 once W-dex 2 is in), W-tmcase (1, then 2), W-fielditems (1-3) | Different files; the Pokédex is the focus, the TM case unblocks HMs in a real playthrough |
+| 2 | Registered SELECT items (UseRegisteredKeyItemOnField and the items' from-field variants: Bike, rods, VS Seeker, Itemfinder, Town Map, TM case, berry pouch); option_menu.c; trainer_card.c; the start menu help window; headless story checks gym by gym | Different files, except the registered items touch the item screens' entry points |
 
 ## Rules
 

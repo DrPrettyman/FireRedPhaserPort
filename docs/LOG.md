@@ -1717,3 +1717,22 @@ end to end.
   Pallet Town: no response; Route 13 (62, 1): Route 12's Rare Candy, 2 arrows moving up), fieldItems, vsSeeker,
   field and hallOfFame e2e files. Screenshots of the arrows (left, right, up) and the star around the player
   looked right.
+### SCREENS_PLAN.md batch 1 merged (PRs #30-#40)
+
+- Plan: SCREENS_PLAN.md (#30). Merged, one PR per unit: #31 Pokédex area data and markers, #32 TM case, #33
+  Pokédex data / top menu / numerical lists, #34 rods and Escape Rope, #35 berry pouch, #36 Pokédex mon page and
+  search lists, #37 Pokédex area page, #38 VS Seeker, #39 Pokédex habitat pages and registering a catch, #40
+  Itemfinder.
+- Found while planning: the TM case was a main-path blocker (HMs couldn't be taught without it); fixed by #32.
+- Conflicts: only comment / prefix lines in tools/extract_gfx.py and the item-use header comment in
+  menus/itemUse.ts (both sides kept). #39 merged after #37 removed the area-page placeholders, so the habitat
+  pages' area states now call menus/pokedexArea.ts; the union-merged Pokédex entries in DEV_NOTES / DEVIATIONS were
+  tidied into one each.
+- Races fixed in the merge runs (each passed when rerun alone, then fixed): playerAvatar's boulder test held UP
+  after the boulder fell, so the player walked into the hole to B1F and saw its twin boulder (hold / watch / release
+  in one eval); mapNamePopup's 100-frame wait started where a batch of ticks ended (counted inside the `until`
+  predicate now; tests/README.md names the pattern); vsSeeker / fieldItems / itemfinder opened the bag with a fixed
+  60-frame wait while its graphics load asynchronously (wait for CB2_BagMenuRun, then the fade). W-dex unit 1 also
+  fixed fly.test.ts's `useTownMap` the same way.
+- Verified: typecheck, unit tests and the full e2e suite on each PR after merging master in; the final run is in
+  this PR: on master after #40, typecheck, 148 unit tests and 269 e2e tests (39 files) pass.

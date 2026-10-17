@@ -21,26 +21,30 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
 
 ## Next up
 
-Batches 1-3 of [MAIN_PATH_PLAN.md](MAIN_PATH_PLAN.md) are in: PC storage (boxes, storage screens, item PC, Hall of
-Fame PC), save/load (SAVE, main menu, CONTINUE, scripted save prompts), every field move including Fly and the Town
-Map, `special ListMenu`, Snorlax and the legendaries, card key doors, Seafoam's currents (`setmaplayoutindex`),
-`seteventmon`, the title screen, Oak's speech, the Hall of Fame and the credits.
+[MAIN_PATH_PLAN.md](MAIN_PATH_PLAN.md) is done. Batch 1 of [SCREENS_PLAN.md](SCREENS_PLAN.md) is in: the Pokédex
+screen (lists, mon page, habitats, area page, the registered page after a catch), the TM case and berry pouch, and
+the rods, Escape Rope, VS Seeker and Itemfinder.
 
-No known main-path blockers are left. Next: find the unknown ones, e.g. headless story checks gym by gym (the
-ones above stop at Brock) and a check that each story script's commands and specials are implemented (unknown ones
-log once). Biggest missing pieces a player notices: the Pokédex screen, the bike / fishing rods / Escape Rope / VS
-Seeker, audio (SE, cries and BGM are no-ops; see DEVIATIONS for what waits on them).
+The TM case was a main-path blocker (every TM and HM lives in it, so HMs couldn't be taught); no other known
+main-path blockers are left. Next: find the unknown ones, e.g. headless story checks gym by gym (the ones above
+stop at Brock) and a check that each story script's commands and specials are implemented (unknown ones log once).
+Biggest missing pieces a player notices: registered SELECT items, the options and trainer card screens, audio (SE,
+cries and BGM are no-ops; see DEVIATIONS for what waits on them).
 
 Other open work:
 
 - The intro movie (intro.c) before the title screen.
-- Start menu screens: options, TM case, berry pouch; the start menu help window.
+- Start menu screens: options, trainer card (PLAYER); the start menu help window.
+- Registered items (the bag's REGISTER exists; SELECT on the field → UseRegisteredKeyItemOnField and the items'
+  from-field variants don't).
 - Map preview screens (map_preview_screen.c): TryDoMapTransition already knows where they'd run.
-- Other bag items that need field systems: Itemfinder, Fame Checker, Teachy TV; registered items (SELECT).
+- Other bag items that need field systems: Fame Checker, Teachy TV, mail.
 - Daycare and egg hatching.
 - Link play (the cable club's link specials are stand-ins that never find a partner), the event tickets for Navel
   Rock / Birth Island, `special ShakeScreen`.
-- More e2e scenarios (see the checklist's Tests section).
+- More e2e scenarios (see the checklist's Tests section). Many e2e helpers still open the bag or party menu with a
+  fixed `waitFrames(60)`; the screens load their graphics asynchronously, so under load that can be too short
+  (fixed in the field item tests: wait for `CB2_BagMenuRun`, then the fade).
 
 Loose ends:
 
@@ -130,7 +134,8 @@ Loose ends:
   away from them, the signpost message frame, and closing a script's last message with a direction/L/R/START/SELECT
   (replayed as field input). PC: CreatePCMenu + AnimatePcTurnOn/Off, the item PC, Pokémon Storage System and Hall
   of Fame PC; GetInteractedWaterScript (Surf/Waterfall)
-- [~] Start menu shell: items by flags, wrap-around cursor, remembered position, B/START close. POKéMON and BAG open the real screens; the other entries (except EXIT) show a "not implemented" notice
+- [~] Start menu shell: items by flags, wrap-around cursor, remembered position, B/START close. POKéDEX, POKéMON,
+  BAG and SAVE open the real screens; PLAYER (trainer card) and OPTION show a "not implemented" notice
 - [ ] Start menu help/description window
 - [x] Tile animations (tileset_anims.c): General water/sand/flowers, Celadon fountain, Silph Co. fountain, Mt. Ember
   steam, Vermilion Gym door, Celadon Gym flowers
@@ -151,11 +156,20 @@ Loose ends:
 - [x] `setmaplayoutindex` (layouts no map uses are extracted), `seteventmon`, Silph Co.'s card key doors
 - [x] Party menu (party_menu.c) and bag (item_menu.c, bag.c, item_use.c) on the GBA layer, from the field and in battle; list menus, scroll arrows, mon/item icons, std/dialog frames, YES/NO, money box
 - [x] Summary screen (pokemon_summary_screen.c): INFO / SKILLS / KNOWN MOVES pages, move details, switching moves, choosing a move to forget (field and battle)
-- [ ] Pokédex, options, TM case, berry pouch
+- [x] Pokédex (pokedex_screen.c, pokedex.c): the top menu with seen/owned counts, the numerical lists (Kanto,
+  national), the search lists (A to Z, type, lightest, smallest), the habitat pages with their page turn, the mon
+  page (pic, category, height/weight, footprint, flavour text), the area page (wild_pokemon_area.c,
+  pokedex_area_markers.c, the Sevii islands, the size comparison) and the "registered" page after a catch
+- [x] TM case (tm_case.c) and berry pouch (berry_pouch.c): from the bag, GIVE (party, PC box), SELL, back from
+  teaching / using; the berry pouch from the battle bag too
+- [ ] Options (option_menu.c), trainer card (trainer_card.c)
+- [~] Field items: rods and fishing (Task_Fishing, FishingWildEncounter), Escape Rope, VS Seeker (vs_seeker.c:
+  rematches, the raise-hand trainers, the charge), Itemfinder (itemfinder.c); Bike, Town Map, flutes, Repel, Coin
+  Case, Powder Jar. Not yet: registered SELECT items, Fame Checker, Teachy TV, mail
 - [~] Wild encounters: grass/water step encounters (wild_encounter.c: cooldown, rate buff, flutes, Cleanse Tag,
   Stench/Illuminate, repel + EventScript_RepelWoreOff, Altering Cave, Tanoby/Unown), StartWildBattle (standard,
   Pokémon Tower ghosts with the ghost pic, roamers, Safari Zone), CB2_EndWildBattle / CB2_EndSafariBattle.
-  Not yet: Rock Smash, fishing, Sweet Scent (they come with those field moves)
+  Rock Smash, Sweet Scent and fishing encounters
 - [x] Scripted wild battles: `setwildbattle`, Pokémon Tower 6F's ghost Marowak (StartMarowakBattle /
   CB2_EndMarowakBattle, the Silph Scope unveil), `dowildbattle` (StartScriptedWildBattle: Snorlax, the legendaries)
   and StartLegendaryBattle
@@ -163,7 +177,7 @@ Loose ends:
 - [x] Safari Zone: safari_zone.c (Enter/ExitSafariMode, 600-step counter, retire, out-of-balls endings),
   battle_controller_safari.c, the Safari healthbox text, start menu RETIRE + stats window, entrance money box
 - [~] Step counters (TryStartStepCountScript): happiness, field poison (incl. the BG mosaic flash and the faint/white-out
-  script), VS Seeker charge counter, Safari steps; eggs only lose egg cycles (no daycare, no hatching scene)
+  script), VS Seeker charge counter (and its rematches), Safari steps; eggs only lose egg cycles (no daycare, no hatching scene)
 - [x] Return to field runs MAP_SCRIPT_ON_RESUME / ON_RETURN_TO_FIELD (after battles and the bag/party menu)
 - [x] Trainer sight (trainer_see.c): sight lines + CheckPathBetweenTrainerAndPlayer, the "!" and walk-up, FRLG's
   camera pan to trainers offscreen above, ConfigureAndSetUpOneTrainerBattle. Disguised/buried trainers aren't ported
@@ -198,6 +212,8 @@ Loose ends:
 - [x] E2E scenarios: new game → Oak → starter → rival battle (and the after-rival preset matches it), trainer
   sight, trainer battle won (prize, flag, no rematch) and lost (white-out home, heal, money loss), wild encounter
   in grass, running, Master Ball catch + nickname, Poké Mart purchase, walking/doors/stairs/talking, evolution
-  (after a battle, learning a move with a full moveset, stopping it with B, Rare Candy and Fire Stone from the bag)
+  (after a battle, learning a move with a full moveset, stopping it with B, Rare Candy and Fire Stone from the bag),
+  the Pokédex (lists, mon page, habitats, area page, registering a catch), TM case / berry pouch, rods, Escape
+  Rope, VS Seeker, Itemfinder
 - [ ] More scenarios: party menu from the start menu, items in battle, level-up move learning, the Old Man
   tutorial, Viridian parcel → Pokédex, elevators, item balls, PCs
