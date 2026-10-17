@@ -728,6 +728,18 @@ this is the next level down. When you add or change a subsystem, update its entr
   start mark goes through `window.__storySince`). Stair warps (MB_*_STAIR_WARP) and gate exits need
   `t.enterWarp()` after `walkTo`; walking onto them doesn't warp. A `special` whose C sets gSpecialVar_Result must
   set VAR_RESULT itself in specials.ts: `special` drops the function's return value (only `specialvar` stores it).
+- **Story checks (Koga to the Hall of Fame):** `tests/e2e/storyLeague.test.ts`, same approach: Fuchsia Gym
+  (Koga behind the invisible walls), the Safari Zone (the gate's entry, the Gold Teeth, the Secret House's HM03,
+  the Warden's HM04), Cinnabar (the locked gym door, Pokémon Mansion B1F's secret switch and the Secret Key, the
+  door opening), Cinnabar Gym (a wrong quiz answer → its trainer → the door; Blaine), Viridian Gym (locked until
+  the seventh badge; a spinner tile; Giovanni), Route 22's late rival, Route 23's badge guards, and the Elite Four
+  and the Champion from Indigo Plateau up to the warp into the Hall of Fame (Oak's congratulations names the
+  starter: GetStarterSpecies). Victory Road's boulders and switches: strength.test.ts (2F). Helpers here:
+  `scriptDone` presses **B** after a battle or a gift (mashing A in front of the person restarts their script in
+  the first free tick: Bruno's post-battle text looped), `talkUntil(cond)` presses A until a gift or switch is
+  done and then B, `spinnerRoute` is a route search that allows for MB_SPIN_* tiles (t.walkTo's doesn't),
+  `repel` keeps wild battles away, `heal` resets the party between Elite Four rooms. `canReach` (testFindPath)
+  checks whether a part of a map is shut off.
 - **Bugs that depend on world position:** `?map=` always loads at origin 0, so maps that are far from the origin in
   a real playthrough (e.g. Viridian at y = -80 after walking up from Pallet) need either a real walk or
   `await s.world.load(name, ox, oy)`, then `s.player.setPosition(...)` and `await s.onMapLoaded(false)`.

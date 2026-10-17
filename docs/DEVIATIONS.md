@@ -16,6 +16,11 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (no wake or smoke sprites), the script's `waitstate` passes at once and `removeobject` hides it. Its graphics
     (graphics/ss_anne/) aren't extracted yet.
   - Lt. Surge's trash cans, Bill's cell separator: silent (SE_PIN, SE_UNLOCK, SE_BALL, SE_WARP_IN).
+  - The Elite Four and Champion rooms' lighting (`special DoPokemonLeagueLightingEffect`, field_specials.c) isn't
+    ported: the rooms keep their tileset's BG palette 7 (no sEliteFourLightingPalettes / sChampionRoomLightingPalettes
+    cycle). It needs a runtime BG palette swap of the tileset atlases; visual only, the scripts go on.
+  - `special Script_TryGainNewFanFromCounter` (after Lance) is a no-op, like Script_UpdateTrainerFanClubGameClear:
+    the Trainer Fan Club isn't kept.
   - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
   - VS Seeker (world/vsSeeker.ts): silent (SE_CONTEST_MONS_TURN, SE_PIN); no quest log event. Task_VsSeeker_0
     takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for

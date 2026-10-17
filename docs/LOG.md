@@ -1959,3 +1959,28 @@ Each failed once with other workers' e2e runs on the machine and passed alone; t
   77, BLDY up to 11 and back to 0, BG0VOFS offsets per line, nothing left per line afterwards; the girl's card; a
   photo in sepia (Pikachu, Bulbasaur, Unown C in slot 4) and two stickers on the back), fly.test.ts (the region
   map's tint). Screenshots of the back, the photo back and mid-flip frames look like FRLG's.
+
+### Story checks Koga to the Hall of Fame (W-story unit 4)
+
+- e2e `tests/e2e/storyLeague.test.ts` (new, 8 tests): Fuchsia Gym (Koga behind the invisible walls, the badge,
+  TM06); the Safari Zone (the gate's ¥500 entry and 30 balls, the Gold Teeth, the Secret House's HM03, the Warden's
+  HM04 for the teeth); Cinnabar (the gym door's locked trigger, Pokémon Mansion B1F's secret switch opening the way
+  to the Secret Key, CheckUnlockGym, in through the door); Cinnabar Gym (quiz 1 answered wrong → Burglar Quinn's
+  battle → the door opens; Blaine, TM38); Viridian Gym (the locked doors with six badges, TryUnlockGym with seven, a
+  spinner tile carrying the player to its stop tile, Giovanni, TM26, VAR_MAP_SCENE_ROUTE22 3); Route 22's late
+  rival; Route 23's badge guards (the gate's Boulder Badge, the Cascade Badge guard turning the player back without
+  it and letting them on with it); the Elite Four rooms one after another (the walk in, the entry closing, each
+  member, the door opening, Lance's corridor) and the Champion's room through Oak to the warp into the Hall of Fame.
+  Nothing on this stretch blocked.
+- Ported: `special GetStarterSpecies` (Oak's congratulations named species 0 without it; `GetStarterSpecies` in
+  world/roamer.ts, which GetRoamerSpecies now uses too). `special Script_TryGainNewFanFromCounter` is a no-op like
+  Script_UpdateTrainerFanClubGameClear (no Trainer Fan Club state). Both gap entries removed; main gaps left:
+  DoPokemonLeagueLightingEffect (visual: needs a runtime BG palette swap; DEVIATIONS) and DoSSAnneDepartureCutscene.
+- Audit of specials whose C sets gSpecialVar_Result (directly or two calls deep, incl. their tasks / callbacks):
+  every one the port implements writes VAR_RESULT itself (RockSmashWildEncounter, TryFieldPoisonWhiteOut,
+  CreatePCMenu, StartMarowakBattle, ListMenu, GetQuestLogState, HasEnoughMonsForDoubleBattle). The others
+  (size records, daycare level menu, Seagallop menu, IsSelectedMonEgg, GetNumMovesSelectedMonHas, the link / tower
+  ones) aren't ported yet; they're on the gap list.
+- Found on the way (test only): mashing A until the field is free after a battle restarted the leader's
+  post-battle script when a press landed in the first free tick (Bruno's looped). The file's `scriptDone` presses B.
+- Verified: typecheck; `npm test` (156); e2e storyLeague (8, twice), story, storyCeladonSaffron, hallOfFame.
