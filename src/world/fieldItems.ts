@@ -1,8 +1,10 @@
 // What the bag's field items (item_use.c's ItemUseOnFieldCB_* and the field systems they start: fishing,
-// later the VS Seeker and the Itemfinder) need from the field once the bag has closed: the field message
-// box (window 0), the wild encounter tables, and the object event anim tables. OverworldScene sets the host.
+// the VS Seeker, the Itemfinder) and the registered items used with SELECT need from the field: the field
+// message box (window 0), the map name popup, the wild encounter tables, and the object event anim tables.
+// OverworldScene sets the host.
 
 import type { AnimCmd } from '../entities/FieldEffects';
+import { FONT_NORMAL } from '../text/Font';
 import { CreateTask } from './fieldMoves';
 
 export interface FieldItemsHost {
@@ -13,12 +15,17 @@ export interface FieldItemsHost {
    * character; `fill` is FillWindowPixelBuffer(0, PIXEL_FILL(1)) first.
    */
   printMessage(str: number[], x: number, speed: number, fill: boolean): void;
-  /** DisplayItemMessageOnField's message: window 0 in the dialogue frame, FONT_NORMAL at the player's text speed. */
-  showMessage(str: number[]): void;
+  /**
+   * DisplayItemMessageOnField's message: window 0 in the dialogue frame, dark gray in `fontId` (FONT_NORMAL, or
+   * FONT_MALE for Oak's "This isn't the time to use that!") at the player's text speed.
+   */
+  showMessage(str: number[], fontId?: number): void;
   /** IsTextPrinterActive(0) / RunTextPrintersAndIsPrinter0Active */
   messagePrinting(): boolean;
   /** ClearDialogWindowAndFrame(0, TRUE) */
   clearMessageBox(): void;
+  /** DismissMapNamePopup */
+  dismissMapNamePopup(): void;
   /** JOY_NEW(A_BUTTON) this frame */
   aButtonNew(): boolean;
   /** An object event anim table (sAnimTable_*, field_effects/objects.json) by name. */
@@ -45,12 +52,22 @@ export function fieldItemsHost(): FieldItemsHost {
  * gStringVar4) in the field's message box, then run `callback` once it has printed (incl. its
  * {PAUSE_UNTIL_PRESS}).
  */
-export function DisplayItemMessageOnField(str: number[], callback: () => void): void {
+export function DisplayItemMessageOnField(str: number[], callback: () => void, fontId = FONT_NORMAL): void {
   const h = fieldItemsHost();
-  h.showMessage(str);
+  h.showMessage(str, fontId);
   CreateTask(() => {
     if (h.messagePrinting()) return false;
     callback();
     return true;
   });
+}
+
+/** ClearDialogWindowAndFrame(0, TRUE) on the field's message box */
+export function ClearDialogWindowAndFrame(): void {
+  fieldItemsHost().clearMessageBox();
+}
+
+/** DismissMapNamePopup */
+export function DismissMapNamePopup(): void {
+  fieldItemsHost().dismissMapNamePopup();
 }

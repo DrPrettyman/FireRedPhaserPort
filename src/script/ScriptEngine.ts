@@ -1,4 +1,4 @@
-import { ClearPlayerHeldMovement, IsFreezePlayerFinished } from '../world/playerAvatar';
+import { avatarField, ClearPlayerHeldMovement, IsFreezePlayerFinished } from '../world/playerAvatar';
 import type { ObjectEvent } from '../entities/ObjectEvent';
 import type { Button, Input } from '../input/Input';
 import type { NamingScreenRequest } from '../scenes/FieldMenuScene';
@@ -835,15 +835,18 @@ export class ScriptEngine {
     },
     /**
      * ScrCmd_release / ScrCmd_releaseall: both hide the field message box, and
-     * ClearPlayerHeldMovementAndUnfreezeObjectEvents lets go of the player's finished movement.
+     * ClearPlayerHeldMovementAndUnfreezeObjectEvents lets go of the player's finished movement and unfreezes
+     * the objects a field task froze (FreezeObjectEvents: e.g. a registered Itemfinder's underfoot script).
      */
     release(this: ScriptEngine) {
       this.messageBox.hide();
       ClearPlayerHeldMovement();
+      avatarField().unfreezeObjectEvents();
     },
     releaseall(this: ScriptEngine) {
       this.messageBox.hide();
       ClearPlayerHeldMovement();
+      avatarField().unfreezeObjectEvents();
     },
     faceplayer(this: ScriptEngine) {
       const obj = this.host.selectedObject;
