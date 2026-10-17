@@ -42,8 +42,10 @@ async function approach(game: Game, x: number, y: number, from: 'below' | 'above
 async function beatLeader(game: Game, x: number, y: number, from: 'below' | 'above' | 'left' | 'right'): Promise<void> {
   await approach(game, x, y, from);
   const since = await game.mark();
-  await game.mashUntil((t) => t.events().some((e) => e.type === 'battleStart'), { what: 'the leader battle' });
-  await game.mashUntil((t) => t.events().some((e) => e.type === 'battleEnd'), { what: 'the battle to end' });
+  // (mashUntil's check is sent as source text: the mark goes through the page)
+  await game.eval((_t, since) => ((window as any).__storySince = since), since);
+  await game.mashUntil((t) => t.events((window as any).__storySince).some((e) => e.type === 'battleStart'), { what: 'the leader battle' });
+  await game.mashUntil((t) => t.events((window as any).__storySince).some((e) => e.type === 'battleEnd'), { what: 'the battle to end' });
   const end = await game.waitForEvent('battleEnd', { since });
   expect(await game.eval((t, n) => t.nameOf('B_OUTCOME_', n), end.outcome as number)).toBe('B_OUTCOME_WON');
   await game.mashUntil((t) => t.idle(), { what: 'the badge and TM text' });
@@ -105,4 +107,132 @@ test('Lt. Surge: the trash can switches (a wrong second can resets them), then t
   expect(await game.eval((t) => t.flag('FLAG_BADGE03_GET'))).toBe(true);
   expect(await game.eval((t) => t.flag('FLAG_DEFEATED_LT_SURGE'))).toBe(true);
   expect(await game.eval((t) => t.itemCount('TM34'))).toBe(1);
+});
+
+// ------------------------------------------------------------------ Misty (CeruleanCity_Gym)
+
+/**
+ * Walk to (x, y), fighting the trainers who spot the player on the way (their battles run to the end) and
+ * pressing through their text, until the player gets there.
+ */
+async function walkFighting(game: Game, x: number, y: number): Promise<number> {
+  let battles = 0;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const since = await game.mark();
+    const r = await game.eval((t, x, y) => t.walkTo(x, y), x, y);
+    // A trainer can spot the player on the last step: give him the frames to (checkForTrainersWantingBattle).
+    if (r.arrived && (await game.eval((t) => t.waitFrames(8).then(() => t.idle())))) return battles;
+    await game.mashUntil((t) => t.idle(), { what: 'a trainer battle on the way' });
+    if ((await game.events(since)).some((e) => e.type === 'battleEnd')) battles++;
+  }
+  throw new Error(`Couldn't walk to (${x}, ${y})`);
+}
+
+test('Misty: the gym trainers spot the player on the way, then Misty, the Cascade Badge and TM03', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'CeruleanCity_Gym', x: 8, y: 17, party: [MEWTWO] });
+  await setFlags(game, ['FLAG_BADGE01_GET']);
+  const battles = await walkFighting(game, 8, 7);
+  expect(battles).toBeGreaterThanOrEqual(1);
+  expect(await game.eval((t) => t.trainerDefeated('PICNICKER_DIANA') || t.trainerDefeated('SWIMMER_MALE_LUIS'))).toBe(true);
+  await beatLeader(game, 8, 6, 'below');
+  expect(await game.eval((t) => t.flag('FLAG_BADGE02_GET'))).toBe(true);
+  expect(await game.eval((t) => t.flag('FLAG_DEFEATED_MISTY'))).toBe(true);
+  expect(await game.eval((t) => t.itemCount('TM03'))).toBe(1);
+  // set_gym_trainers 2: the gym's trainers count as beaten now.
+  expect(await game.eval((t) => t.trainerDefeated('PICNICKER_DIANA') && t.trainerDefeated('SWIMMER_MALE_LUIS'))).toBe(true);
+});
+
+// ------------------------------------------------------------------ Bill (Route25_SeaCottage)
+
+test("Bill's Sea Cottage: Bill the Clefairy goes into the teleporter, the PC's cell separator, the S.S. Ticket", async () => {
+  const game = await session.start({ start: 'after-rival', map: 'Route25_SeaCottage', x: 10, y: 7, party: [MEWTWO] });
+  await setFlags(game, ['FLAG_BADGE01_GET', 'FLAG_BADGE02_GET']);
+  const bill = (gfx: string) => game.eval((t, gfx) => t.objects().find((o) => o.graphicsId === gfx), gfx);
+  expect(await bill('OBJ_EVENT_GFX_CLEFAIRY')).toMatchObject({ x: 10, y: 6 });
+  expect(await bill('OBJ_EVENT_GFX_BILL')).toBeUndefined();
+
+  // "Help me out, pal?" YES: he walks into the right teleporter.
+  await game.eval((t) => t.face('up'));
+  await talk(game, 'Bill the Clefairy');
+  expect(await bill('OBJ_EVENT_GFX_CLEFAIRY')).toBeUndefined();
+  expect(await game.eval((t) => t.flag('FLAG_TEMP_2'))).toBe(true);
+
+  // The PC: the cell separator runs (the teleporters flash, the cable's ball), Bill walks out of the left one.
+  await approach(game, 4, 5, 'below');
+  await talk(game, 'the cell separator');
+  expect(await game.eval((t) => t.flag('FLAG_HELPED_BILL_IN_SEA_COTTAGE'))).toBe(true);
+  // AnimateTeleporterHousing / AnimateTeleporterCable leave the lights green and the cable plain.
+  const metatile = (x: number, y: number) => game.eval((t, x, y) => {
+    const s = (window as any).game.scene.getScene('Overworld');
+    const f = t.field()!;
+    return s.world.tileAt(f.worldX - f.x + x, f.worldY - f.y + y).metatile as number;
+  }, x, y);
+  const green = await game.eval((t) => t.define('METATILE_SeaCottage_Teleporter_Light_Green'));
+  expect(await metatile(10, 1)).toBe(green);
+  expect(await metatile(3, 1)).toBe(green);
+  const human = await bill('OBJ_EVENT_GFX_BILL');
+  expect(human).toBeDefined();
+
+  await approach(game, human!.x, human!.y, 'below');
+  await talk(game, 'Bill');
+  expect(await game.eval((t) => t.flag('FLAG_GOT_SS_TICKET'))).toBe(true);
+  expect(await game.eval((t) => t.itemCount('SS_TICKET'))).toBe(1);
+});
+
+// ------------------------------------------------------------------ The S.S. Anne, HM01 and the way to Lt. Surge
+
+/** Walk onto a warp at (x, y) (a door, stairs, a mat: pushing on if it needs it) and wait for `map` to settle. */
+async function takeWarp(game: Game, x: number, y: number, map: string): Promise<void> {
+  const since = await game.mark();
+  await game.eval((t, x, y) => t.walkTo(x, y), x, y);
+  // A door or a mat warps by itself (once its anim / fade is done); stairs and arrows need a push.
+  await game.eval((t, map) => t.until(() => t.field()?.map === map || t.idle(), 600), map);
+  if ((await game.eval((t) => t.field()!.map)) !== map) await game.eval((t) => t.enterWarp());
+  await game.waitForEvent('map', { since, what: map });
+  await game.waitIdle();
+}
+
+test('The S.S. Anne: the ticket check, the rival on 2F, the captain gives HM01, the ship sails, Cut opens the way to the gym', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'VermilionCity', x: 23, y: 30, party: [{ ...MEWTWO, moves: ['PSYCHIC', 'CUT'] }] });
+  await setFlags(game, ['FLAG_BADGE01_GET', 'FLAG_BADGE02_GET', 'FLAG_GOT_SS_TICKET']);
+  await game.eval((t) => t.state!.bag.add(t.define('ITEM_SS_TICKET'), 1));
+  await game.eval((t) => t.state!.setVar('VAR_REPEL_STEP_COUNT', 500));
+
+  // The sailor checks the ticket (coord event at (23, 33)), then the gangway to the ship.
+  await game.eval((t) => t.walkTo(23, 33));
+  await game.mashUntil((t) => t.idle(), { what: 'the ticket check' });
+  expect(await game.eval((t) => t.var('VAR_VERMILION_CITY_TICKET_CHECK_TRIGGER'))).toBe(1);
+  await takeWarp(game, 23, 34, 'SSAnne_Exterior');
+  await takeWarp(game, 32, 14, 'SSAnne_1F_Corridor');
+  await takeWarp(game, 3, 8, 'SSAnne_2F_Corridor');
+
+  // The rival on 2F, in front of the captain's office.
+  await game.eval((t) => t.walkTo(31, 6));
+  await game.mashUntil((t) => t.idle() && t.var('VAR_MAP_SCENE_S_S_ANNE_2F_CORRIDOR') !== 0, { what: 'the rival battle' });
+  expect(await game.eval((t) => t.trainerDefeated('RIVAL_SS_ANNE_SQUIRTLE') || t.trainerDefeated('RIVAL_SS_ANNE_BULBASAUR') || t.trainerDefeated('RIVAL_SS_ANNE_CHARMANDER'))).toBe(true);
+
+  // The captain: rub his back, HM01.
+  await takeWarp(game, 30, 2, 'SSAnne_CaptainsOffice');
+  await approach(game, 5, 4, 'below');
+  await talk(game, 'the captain');
+  expect(await game.eval((t) => t.flag('FLAG_GOT_HM01'))).toBe(true);
+  expect(await game.eval((t) => t.itemCount('HM01'))).toBe(1);
+  expect(await game.eval((t) => t.var('VAR_MAP_SCENE_VERMILION_CITY'))).toBe(1);
+
+  // Back out: SSAnne_Exterior_ExitSSAnne (the ship sails off), then Vermilion's pier.
+  await takeWarp(game, 3, 7, 'SSAnne_2F_Corridor');
+  await takeWarp(game, 2, 2, 'SSAnne_1F_Corridor');
+  const since = await game.mark();
+  await game.eval((t) => t.walkTo(19, 1));
+  await game.waitForEvent('map', { since, what: 'SSAnne_Exterior' });
+  await game.waitForEvent('map', { since, what: 'VermilionCity', timeout: 60_000 });
+  await game.waitIdle();
+  expect(await game.eval((t) => t.var('VAR_MAP_SCENE_VERMILION_CITY'))).toBe(3);
+  expect(await game.eval((t) => t.field()!)).toMatchObject({ map: 'VermilionCity', x: 23, y: 32 });
+
+  // The cut tree in front of the gym, then the gym door.
+  await approach(game, 19, 24, 'above');
+  await talk(game, 'the cut tree');
+  expect(await game.eval((t) => t.flag('FLAG_TEMP_12'))).toBe(true);
+  await takeWarp(game, 14, 25, 'VermilionCity_Gym');
 });

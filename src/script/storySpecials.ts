@@ -74,4 +74,67 @@ export const STORY_SPECIALS: Record<string, Special> = {
     state.setVar('VAR_0x8004', first);
     state.setVar('VAR_0x8005', second);
   },
+
+  /**
+   * AnimateTeleporterHousing (special_field_anim.c; Bill's cell separator): Task_DrawTeleporterHousing flashes
+   * a teleporter's light (yellow / red) and door (half / full glow) every 16 frames, 13 times, then leaves it
+   * green and plain. VAR_0x8004 0 is the right teleporter (player + (6, -5)), 1 the left one (player + (-1, -5)).
+   */
+  AnimateTeleporterHousing({ state, host }) {
+    const d = state.defines;
+    const p = host.playerLocal(); // PlayerGetDestCoords
+    const tX = p.x + (state.getVar('VAR_0x8004') === 0 ? 6 : -1);
+    const tY = p.y - 5;
+    let tTimer = 0;
+    let tState = 0;
+    host.startFieldTask({
+      tick() {
+        if (tTimer === 0) {
+          const on = (tState & 1) === 0;
+          host.setMetatile(tX, tY, d.require(on ? 'METATILE_SeaCottage_Teleporter_Light_Yellow' : 'METATILE_SeaCottage_Teleporter_Light_Red'), true);
+          host.setMetatile(tX, tY + 2, d.require(on ? 'METATILE_SeaCottage_Teleporter_Door_HalfGlowing' : 'METATILE_SeaCottage_Teleporter_Door_FullGlowing'), true);
+        }
+        if (++tTimer !== 16) return false;
+        tTimer = 0;
+        if (++tState !== 13) return false;
+        host.setMetatile(tX, tY, d.require('METATILE_SeaCottage_Teleporter_Light_Green'), true);
+        host.setMetatile(tX, tY + 2, d.require('METATILE_SeaCottage_Teleporter_Door'), true);
+        return true;
+      },
+    });
+  },
+
+  /**
+   * AnimateTeleporterCable (special_field_anim.c): Task_DrawTeleporterCable moves a ball along the cable between
+   * the teleporters, from player + (4, -5) one tile left every 4 frames, and clears it after four tiles.
+   */
+  AnimateTeleporterCable({ state, host }) {
+    const d = state.defines;
+    const p = host.playerLocal();
+    let tX = p.x + 4;
+    const tY = p.y - 5;
+    let tTimer = 0;
+    let tState = 0;
+    const draw = (top: string, bottom: string) => {
+      host.setMetatile(tX, tY, d.require(top), true);
+      host.setMetatile(tX, tY + 1, d.require(bottom), true);
+    };
+    host.startFieldTask({
+      tick() {
+        if (tTimer === 0) {
+          if (tState !== 0) {
+            draw('METATILE_SeaCottage_Teleporter_Cable_Top', 'METATILE_SeaCottage_Teleporter_Cable_Bottom');
+            if (tState === 4) return true;
+            tX--;
+          }
+          draw('METATILE_SeaCottage_Teleporter_CableBall_Top', 'METATILE_SeaCottage_Teleporter_CableBall_Bottom');
+        }
+        if (++tTimer === 4) {
+          tTimer = 0;
+          tState++;
+        }
+        return false;
+      },
+    });
+  },
 };
