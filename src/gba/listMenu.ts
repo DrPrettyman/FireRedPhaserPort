@@ -21,6 +21,7 @@ import {
   GetFontAttribute,
   GetWindowAttribute,
   PIXEL_FILL,
+  PutWindowRectTilemapOverridePalette,
   PutWindowTilemap,
   ScrollWindow,
   TEXT_SKIP_DRAW,
@@ -107,6 +108,23 @@ function ListMenuDummyTask(_taskId: number): void {}
 export function ListMenuInit(listMenuTemplate: ListMenuTemplate, cursorPos: number, itemsAbove: number): number {
   const taskId = ListMenuInitInternal(listMenuTemplate, cursorPos, itemsAbove);
   PutWindowTilemap(listMenuTemplate.windowId);
+  CopyWindowToVram(listMenuTemplate.windowId, COPYWIN_GFX);
+  return taskId;
+}
+
+/** struct ListMenuWindowRect: a column band of the list's window put with its own palette. */
+export interface ListMenuWindowRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  palNum: number;
+}
+
+/** ListMenuInitInRect: like ListMenuInit, but the window's tilemap is put rect by rect (until palNum 0xFF). */
+export function ListMenuInitInRect(listMenuTemplate: ListMenuTemplate, rect: ListMenuWindowRect[], cursorPos: number, itemsAbove: number): number {
+  const taskId = ListMenuInitInternal(listMenuTemplate, cursorPos, itemsAbove);
+  for (let i = 0; rect[i].palNum !== 0xff; i++) PutWindowRectTilemapOverridePalette(listMenuTemplate.windowId, rect[i].x, rect[i].y, rect[i].width, rect[i].height, rect[i].palNum);
   CopyWindowToVram(listMenuTemplate.windowId, COPYWIN_GFX);
   return taskId;
 }

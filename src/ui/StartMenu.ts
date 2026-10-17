@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import type { Input } from '../input/Input';
+import { FLAG_GET_SEEN, GetNationalPokedexCount } from '../menus/pokedex';
 import type { GameState } from '../state/GameState';
 import type { Charmap } from '../text/charmap';
 import type { Fonts } from '../text/Font';
@@ -48,7 +49,7 @@ export class StartMenu {
     private input: Input,
     charmap: Charmap,
     strings: Record<string, string>,
-    state: GameState,
+    private state: GameState,
   ) {
     this.items = [];
     const safari = state.getFlag('FLAG_SYS_SAFARI_MODE'); // GetSafariZoneFlag
@@ -91,6 +92,8 @@ export class StartMenu {
     if (r === 'cancel') return this.close();
     if (r === undefined) return undefined;
     const item = this.items[r];
+    // StartMenuPokedexSanityCheck: no POKéDEX before a mon has been seen
+    if (item === 'POKEDEX' && GetNationalPokedexCount(this.state, FLAG_GET_SEEN) === 0) return undefined;
     if (item === 'EXIT') return this.close();
     this.destroy();
     return item;

@@ -56,6 +56,8 @@ async function useTownMap(game: Game) {
   await game.eval((t) => t.waitFrames(10));
   await game.press('DOWN');
   await game.press('A'); // BAG
+  // The bag's scene loads its graphics first: wait for it to run, then for its fade in.
+  await game.waitFor((t) => t.gbaScreen() === 'CB2_BagMenuRun', { what: 'the bag' });
   await game.eval((t) => t.waitFrames(60));
   await game.press('RIGHT'); // KEY ITEMS
   await game.eval((t) => t.waitFrames(20));

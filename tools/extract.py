@@ -985,6 +985,8 @@ EXTRA_DEFINE_HEADERS = (
     "include/global.fieldmap.h", "include/bike.h",
     # save.c / start_menu.c / main_menu.c: SAVE_STATUS_*, SAVE_NORMAL.., CONTINUE_GAME_WARP, SAVE_STAT_*
     "include/save.h", "include/save_location.h", "include/save_menu_util.h",
+    # pokedex_screen.c: DEX_CATEGORY_*, DEX_ORDER_*
+    "include/pokedex_screen.h",
 )
 
 
@@ -1396,6 +1398,10 @@ def main():
     from extract_menus import extract_menus
 
     extract_menus(decomp, out)
+    print("pokedex")
+    from extract_pokedex import extract_pokedex
+
+    extract_pokedex(decomp, out)
     print("gfx")
     from extract_gfx import extract_gfx
     extract_gfx(decomp, out)
