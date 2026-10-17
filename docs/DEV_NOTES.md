@@ -198,12 +198,13 @@ this is the next level down. When you add or change a subsystem, update its entr
   DoSafariBattle + CB2_EndSafariBattle. To skip the dice in tests:
   `s.startWildBattle(s.state.pokemon.createMonWithNature(species, level, 32, nature, {...}))` on the Overworld scene.
   `state.currentMapId` is the MAP_* id (`currentMap` is the folder name).
-- **Field items (rods, Escape Rope):** the bag's half is `menus/itemUse.ts` (FieldUseFunc_Rod,
+- **Field items (rods, Escape Rope, VS Seeker):** the bag's half is `menus/itemUse.ts` (FieldUseFunc_Rod,
   ItemUseOutOfBattle_EscapeRope, their ItemUseOnFieldCB_* through gFieldCallback = FieldCB_FadeInFromBlack, like the
   Bicycle). itemUse.ts must stay free of Phaser imports (battle unit tests load it), so the field functions it calls
   (CanFish, StartFishing, CanUseEscapeRopeOnCurrMap, LockPlayerFieldControls, DisplayItemMessageOnField,
   Task_UseDigEscapeRopeOnField, ...) are registered at boot: `registerFieldItems()` (world/fishing.ts) fills
-  `registerItemUseFieldFuncs`. Add the VS Seeker's / Itemfinder's field functions to that interface the same way.
+  `registerItemUseFieldFuncs` (which merges: `registerVsSeeker()` adds its part). Add the Itemfinder's field
+  functions to that interface the same way.
   `world/fieldItems.ts` is the field host for item uses (OverworldScene.createFieldItemsHost): the field message box
   as window 0 (`openMessageBox` = LoadMessageBoxAndFrameGfx, `printMessage` = AddTextPrinterParameterized(2) at an x
   and speed, `showMessage` + `DisplayItemMessageOnField(str, callback)`), JOY_NEW(A), the object event anim tables
@@ -225,6 +226,32 @@ this is the next level down. When you add or change a subsystem, update its entr
     `fishingEnd`. Seed the bite roll with `t.seedWhen(() => t.field()?.fishing?.step === 5, seed)` (seed 0: a bite,
     3: none). Tests: tests/e2e/fieldItems.test.ts (Pallet Town's pond from (8, 16) facing down; Mt. Moon from Route
     4 (19, 6) for the rope), tests/unit/fishing.test.ts.
+  - **VS Seeker:** `world/vsSeeker.ts` is vs_seeker.c's field side: Task_VsSeeker_0..3 (Task_VsSeeker_0 is the
+    ItemUseOnFieldCB; FieldUseFunc_VsSeeker's map check is in itemUse.ts), GatherNearbyTrainerInfo /
+    GetVsSeekerResponseInArea (the "!" / "X" / step-in-place + "!!" movement scripts as MovementRunners in field
+    tasks, the 30% refusal roll), StartAllRespondantIdleMovements, FLDEFF_USE_VS_SEEKER (UseVsSeekerEffect_1..4 and
+    the player's VS Seeker anim through `SpriteAnim`, as fishing; both VS Seeker graphics are preloaded),
+    ClearRematchStateByTrainerId (ScriptHost.clearRematchStateByTrainerId, from ScriptEngine.runTrainerBattle at
+    every trainer battle's end), ResetMovementOfRematchableTrainers (after `mapResetTrainerRematches` on map load)
+    and EventScript_VsSeekerChargingDone's specials (registered with `registerSpecials`: script/specials.ts is
+    reached from the battle unit tests, so it can't import Phaser-side modules). `world/rematches.ts` is the
+    Phaser-free part: the sRematches lookups (GetRematchTrainerId, GetNextAvailableRematchTrainer, the
+    ShouldTryRematchBattle / IsTrainerReadyForRematch specials ScriptEngine.trainerSpecial calls),
+    GetRunningBehaviorFromGraphicsId. A rematch: the VS Seeker sets `state.trainerRematches[localId]` (the party's
+    index in the row); talking to the trainer goes trainerbattle → post-battle script → ShouldTryRematchBattle →
+    `trainerbattle_rematch` (GetRematchTrainerId) → IsTrainerReadyForRematch → StartRematchBattle; winning clears
+    it (ClearRematchStateOfLastTalked). Trainer sight ignores rematches (CheckTrainer skips beaten trainers), as on
+    the GBA. The charge: 100 steps with it in the bag (low byte of `trainerRematchStepCounter`), reset by a use that
+    finds a rematch; then 100 charging steps (high byte) end every rematch (world/stepCounters.ts).
+    The raise-hand movement types (MOVEMENT_TYPE_RAISE_HAND_AND_STOP / _JUMP / _SWIM and their actions) are in
+    `entities/NpcBrain.ts` (frame 9 = ANIM_RAISE_HAND, x2/y2 on the Phaser sprite; `singleMovementActive` while in
+    the air). Probes / events: `field().vsSeeker` (`func` 0..3 = Task_VsSeeker_0..3, the player's `animNum` /
+    `image`), `__test.objects()` now has each object's `facing`, `movementType`, `frame`, `x2`, `y2`; events
+    `vsSeeker` (`result`: notCharged / noOneInRange / canUse), `vsSeekerResponse` (noResponse / unfoughtTrainers /
+    foundRematches), `vsSeekerEnd`. Seed the refusal roll at the start of the tick it runs:
+    `t.seedWhen(() => f.vsSeeker?.func === 2 && !f.fieldEffects.includes('FLDEFF_USE_VS_SEEKER'), seed)` (the
+    first roll is the first beaten trainer in range's; seed 1 → 38, a rematch). Tests: tests/e2e/vsSeeker.test.ts
+    (Route 3's Ben from (16, 6); Pallet Town for the messages), tests/unit/rematches.test.ts.
 - **Scripted battles:** specials that start a battle (StartOldManTutorialBattle, StartMarowakBattle,
   StartLegendaryBattle in `script/specials.ts`) call `host.startScriptedBattle(flags, enemyParty, transition)` and
   block the script with `setWaitState` until the field has faded back in (their CB2_End* sets VAR_RESULT; a loss
