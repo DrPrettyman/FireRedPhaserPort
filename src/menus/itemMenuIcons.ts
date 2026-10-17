@@ -173,6 +173,22 @@ export function CreateItemMenuIcon(itemId: number, idx: number): void {
   }
 }
 
+/** CreateBerryPouchItemIcon: CreateItemMenuIcon for the berry pouch (7 px lower). */
+export function CreateBerryPouchItemIcon(itemId: number, idx: number): void {
+  const slot = SPR_ITEM_ICON + idx;
+  if (sItemMenuIconSpriteIds[slot] === K.SPRITE_NONE) {
+    // Either TAG_ITEM_ICON or TAG_ITEM_ICON_ALT
+    FreeSpriteTilesByTag(TAG_ITEM_ICON + idx);
+    FreeSpritePaletteByTag(TAG_ITEM_ICON + idx);
+    const spriteId = AddItemIconObject(TAG_ITEM_ICON + idx, TAG_ITEM_ICON + idx, itemId);
+    if (spriteId !== MAX_SPRITES) {
+      sItemMenuIconSpriteIds[slot] = spriteId;
+      gSprites[spriteId].x2 = 24;
+      gSprites[spriteId].y2 = 147; // This value is the only difference from CreateItemMenuIcon
+    }
+  }
+}
+
 export function DestroyItemMenuIcon(idx: number): void {
   const slot = SPR_ITEM_ICON + idx;
   if (sItemMenuIconSpriteIds[slot] !== K.SPRITE_NONE) {

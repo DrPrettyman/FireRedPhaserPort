@@ -160,6 +160,7 @@ import { PrintMoneyAmount, PrintMoneyAmountInMoneyBox } from './money';
 import { CB2_ChooseMonToGiveItem, CB2_SelectBagItemToGive } from './partyMenu';
 import { CB2_ReturnToPokeStorage } from './pokemonStorage';
 import { InitTMCase, TMCASE_GIVE_PARTY, TMCASE_GIVE_PC, TMCASE_SELL } from './tmCase';
+import { BERRYPOUCH_FROMMARTSELL, BERRYPOUCH_FROMPARTYGIVE, BERRYPOUCH_FROMPOKEMONSTORAGEPC, InitBerryPouch } from './berryPouch';
 
 const LIST_TILES_WIDTH = 18;
 const LIST_TILES_HEIGHT = 12;
@@ -1345,9 +1346,8 @@ function Task_ItemContext_FieldGive(taskId: number): void {
     ItemMenu_SetExitCallback(GoToTMCase_Give);
     ItemMenu_StartFadeToExitCallback(taskId);
   } else if (itemId === K.ITEM_BERRY_POUCH) {
-    // GoToBerryPouch_Give: the berry pouch isn't implemented
-    console.warn('[bag] the berry pouch is not implemented');
-    Task_ReturnToBagFromContextMenu(taskId);
+    ItemMenu_SetExitCallback(GoToBerryPouch_Give);
+    ItemMenu_StartFadeToExitCallback(taskId);
   } else if (gBagMenuState.pocket !== K.POCKET_KEY_ITEMS - 1 && ItemId_GetImportance(itemId) === 0) {
     Bag_BeginCloseWin0Animation();
     gTasks[taskId].func = ItemMenu_StartFadeToExitCallback;
@@ -1415,9 +1415,8 @@ function Task_ItemContext_PcBoxGive(taskId: number): void {
     ItemMenu_SetExitCallback(GoToTMCase_PCBox);
     ItemMenu_StartFadeToExitCallback(taskId);
   } else if (itemId === K.ITEM_BERRY_POUCH) {
-    // GoToBerryPouch_PCBox: the berry pouch isn't implemented
-    console.warn('[bag] the berry pouch is not implemented');
-    Task_ReturnToBagFromContextMenu(taskId);
+    ItemMenu_SetExitCallback(GoToBerryPouch_PCBox);
+    ItemMenu_StartFadeToExitCallback(taskId);
   } else if (gBagMenuState.pocket !== K.POCKET_KEY_ITEMS - 1 && ItemId_GetImportance(itemId) === 0) {
     Bag_BeginCloseWin0Animation();
     gTasks[taskId].func = ItemMenu_StartFadeToExitCallback;
@@ -1431,6 +1430,11 @@ function GoToTMCase_Give(): void {
   InitTMCase(TMCASE_GIVE_PARTY, ReturnToBagMenuFromSubmenu_Give, false);
 }
 
+/** GoToBerryPouch_Give */
+function GoToBerryPouch_Give(): void {
+  InitBerryPouch(BERRYPOUCH_FROMPARTYGIVE, ReturnToBagMenuFromSubmenu_Give, 0);
+}
+
 /** ReturnToBagMenuFromSubmenu_Give */
 export function ReturnToBagMenuFromSubmenu_Give(): void {
   CB2_SelectBagItemToGive();
@@ -1441,6 +1445,11 @@ function GoToTMCase_PCBox(): void {
   InitTMCase(TMCASE_GIVE_PC, ReturnToBagMenuFromSubmenu_PCBox, false);
 }
 
+/** GoToBerryPouch_PCBox */
+function GoToBerryPouch_PCBox(): void {
+  InitBerryPouch(BERRYPOUCH_FROMPOKEMONSTORAGEPC, ReturnToBagMenuFromSubmenu_PCBox, 0);
+}
+
 /** ReturnToBagMenuFromSubmenu_PCBox */
 function ReturnToBagMenuFromSubmenu_PCBox(): void {
   GoToBagMenu(K.ITEMMENULOCATION_PCBOX, K.OPEN_BAG_LAST, CB2_ReturnToPokeStorage);
@@ -1449,6 +1458,11 @@ function ReturnToBagMenuFromSubmenu_PCBox(): void {
 /** GoToTMCase_Sell */
 function GoToTMCase_Sell(): void {
   InitTMCase(TMCASE_SELL, ReturnToBagMenuFromSubmenu_Sell, false);
+}
+
+/** GoToBerryPouch_Sell */
+function GoToBerryPouch_Sell(): void {
+  InitBerryPouch(BERRYPOUCH_FROMMARTSELL, ReturnToBagMenuFromSubmenu_Sell, 0);
 }
 
 /** ReturnToBagMenuFromSubmenu_Sell */
@@ -1463,8 +1477,8 @@ function Task_ItemContext_Sell(taskId: number): void {
     ItemMenu_SetExitCallback(GoToTMCase_Sell);
     ItemMenu_StartFadeToExitCallback(taskId);
   } else if (itemId === K.ITEM_BERRY_POUCH) {
-    console.warn('[bag] the berry pouch is not implemented');
-    Task_ReturnToBagFromContextMenu(taskId);
+    ItemMenu_SetExitCallback(GoToBerryPouch_Sell);
+    ItemMenu_StartFadeToExitCallback(taskId);
   } else if (ItemId_GetPrice(itemId) === 0) {
     gStringVar1.set(CopyItemName(itemId));
     DisplayItemMessageInBag(taskId, GetDialogBoxFontId(), ExpandToStringVar4(text('gText_OhNoICantBuyThat')), Task_ReturnToBagFromContextMenu);

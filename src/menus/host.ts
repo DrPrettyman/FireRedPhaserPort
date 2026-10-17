@@ -1,4 +1,4 @@
-// What a host scene does before the party menu, bag, TM case, summary screen or evolution scene can run: load menus.json, preload every
+// What a host scene does before the party menu, bag, TM case, berry pouch, summary screen or evolution scene can run: load menus.json, preload every
 // graphic the screens can touch (graphics are fetched asynchronously, the screens use them
 // synchronously), and point the menu helpers at the save-block options and string tables.
 // Call after initBattleEnv (the K constants and battle data are needed).
@@ -18,6 +18,7 @@ import { itemIconSymbols } from './itemMenuIcons';
 import { GetIconSpecies, monIconSymbol } from './pokemonIcon';
 import { SUMMARY_SCREEN_GFX } from './summaryScreen';
 import { TM_CASE_GFX } from './tmCase';
+import { BERRY_POUCH_GFX } from './berryPouch';
 
 const PARTY_MENU_GFX = [
   'gPartyMenuBg_Gfx',
@@ -65,6 +66,8 @@ export function menuGfxSymbols(state: GameState): string[] {
   const syms = new Set<string>([...PARTY_MENU_GFX, ...BAG_GFX, ...WINDOW_GFX, ...SUMMARY_SCREEN_GFX, ...ballGfxSymbols()]);
   // The TM case opens from the bag (USE, GIVE, the PC box's GIVE, the Poké Mart's SELL).
   for (const s of TM_CASE_GFX) syms.add(s);
+  // So does the berry pouch (and from the battle bag: BattleScene preloads these too).
+  for (const s of BERRY_POUCH_GFX) syms.add(s);
   // The evolution scene draws on the battle textbox and terrain.
   for (const s of [...EVOLUTION_SCENE_GFX, ...battleBgGfxSymbols()]) syms.add(s);
   // Summary screen / evolution scene front pics and their palettes (normal and shiny), and the
