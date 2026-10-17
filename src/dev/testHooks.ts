@@ -33,6 +33,7 @@ import { creditsProbe, creditsSkipToClosing } from '../menus/credits';
 import { pokedexAreaProbe } from '../menus/pokedexArea';
 import { pokedexScreenProbe } from '../menus/pokedexScreen';
 import { regionMapProbe } from '../menus/regionMap';
+import { trainerCardProbe } from '../menus/trainerCard';
 import { mainMenuProbe } from '../menus/mainMenu';
 import { titleScreenProbe } from '../menus/titleScreen';
 import { clearSaveDataProbe } from '../menus/clearSaveDataScreen';
@@ -571,6 +572,15 @@ function createApi(game: Phaser.Game) {
      * icon, and the two silhouettes (OAM, matrix scale, y2).
      */
     pokedexArea: () => pokedexAreaProbe(),
+    /**
+     * The trainer card while it's up (menus/trainerCard.ts): its state, `ready` (the front takes input, no fade), the
+     * stars and badges it has and draws, which card palette is loaded, the trainer pic's pixels and what the front
+     * printed, decoded.
+     */
+    trainerCard: () => {
+      const p = trainerCardProbe();
+      return p && { ...p, printed: Object.fromEntries(Object.entries(p.printed).map(([k, v]) => [k, decode(v!)])) as Record<string, string> };
+    },
     /** The item PC's list (WITHDRAW ITEM, item_pc.c) while it runs: its task, scroll/row and item count. */
     itemPc: () => (gMain.callback2?.name === 'ItemPc_MainCB' ? itemPcProbe() : undefined),
     /** The TM case while it's open (menus/tmCase.ts): TMCASE_* type, task, scroll/row and the pocket's item ids in list order. */

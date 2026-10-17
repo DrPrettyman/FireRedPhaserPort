@@ -23,7 +23,8 @@ from extract import read_jasc
 # Haze and Mist Ball load, the main menu's palettes, the title screen and Oak's speech, the Hall of Fame and the
 # credits, the region map (town map / fly map) with the dungeon map previews it shows, the TM case, the berry
 # pouch, and the Pokédex (pokedex_screen.c with the mons' footprints, the area page's maps and
-# pokedex_area_markers.c's markers), and the Itemfinder's arrows and star (itemfinder.c).
+# pokedex_area_markers.c's markers), the Itemfinder's arrows and star (itemfinder.c), and the trainer card
+# (trainer_card.c).
 GFX_PREFIXES = (
     "graphics/battle_interface/",
     "graphics/battle_terrain/",
@@ -61,6 +62,7 @@ GFX_PREFIXES = (
     "graphics/berry_pouch/",
     "graphics/pokedex/",
     "graphics/itemfinder/",
+    "graphics/trainer_card/",
     "data/tilesets/",
 )
 
