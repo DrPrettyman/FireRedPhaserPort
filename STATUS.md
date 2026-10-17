@@ -106,7 +106,8 @@ Loose ends:
 - [x] Input module with all GBA buttons (A, B, Start, Select, L, R), sampled per logic tick
 - [x] Text engine: port of RenderText (speed + A/B speed-up, all FC control codes, \n \l \p, placeholders)
 - [x] Message box (dialogue frame, down-arrow indicator)
-- [~] Game state: flags, vars, names, text speed, trainer id, money, party, bag, Pokédex seen/caught (in memory only; player/rival names are placeholders until Oak's speech calls the naming screen)
+- [x] Game state: flags, vars, names, options, trainer id, money, coins, party, PC boxes, bag, registered item, Pokédex
+  seen/caught, game stats; all saved (state/saveData.ts)
 - [x] Pokémon creation: CreateMon/CreateBoxMon port (personality, IVs, nature, ability, initial moveset, stats); GBA RNG (random.c)
 - [x] Bag: AddBagItem/RemoveBagItem/CheckBagHasItem/CheckBagHasSpace incl. TM case / berry pouch handling
 - [~] Script interpreter: flow/branching, flags/vars, msgbox via std scripts, text colour, movements, object add/remove/move, setmetatile, warps, delay. Unimplemented commands log once to the console

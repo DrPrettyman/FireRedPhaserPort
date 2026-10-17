@@ -1,6 +1,6 @@
 # Screens and items: plan for what a player notices is missing
 
-Status as of 2026-10-17 (master at `abcb7d0`). MAIN_PATH_PLAN.md is done; this plan picks up STATUS.md "Next up":
+Status as of 2026-10-17 (master at `abcb7d0`; batch 2 planned at `64e4565`). MAIN_PATH_PLAN.md is done; this plan picks up STATUS.md "Next up":
 the Pokédex screen, and the bag items that still say "not implemented".
 
 One main-path blocker turned up while planning: **the TM case can't be opened** (FieldUseFunc_TmCase isn't
@@ -102,7 +102,111 @@ Owns `world/fishing.ts`, `world/vsSeeker.ts`, `world/itemfinder.ts`, and their F
    Seeker deviation.
 3. **Itemfinder** (itemfinder.c), and registered SELECT items if there's room.
 
-## Shared files and owners
+## Batch 2: registered items, options, trainer card, story checks
+
+Checked against the decomp and master at `64e4565` (2026-10-17):
+
+- **Registered items:** UseRegisteredKeyItemOnField (item_menu.c) is called from field_control_avatar.c's
+  ProcessPlayerFieldInput on SELECT; it starts the item's field func as a task with `data[3] = 1`. In the port,
+  `menus/itemUse.ts` has every `data[3] != 0` branch as a `console.warn` (DisplayItemMessageInCurrentContext,
+  FieldUseFunc_TmCase / _BerryPouch, the Town Map), SetUpItemUseOnFieldCallback has no `data[3] == 1` branch, and
+  OverworldScene's field input ignores SELECT. EventScript_BagItemCanBeRegistered (event_scripts.s) is extracted.
+- **Options:** option_menu.c is 575 lines. GameState already has every option except `optionsSound` and the
+  consumers read them (text speed, battle scene / style, button mode, frame type), except `battle/battleBg.ts`,
+  which hardcodes frame type 1.
+- **Start menu help window:** help_message.c (106 lines) + start_menu.c's sStartMenuDescPointers: shown when
+  `optionsButtonMode == OPTIONS_BUTTON_MODE_HELP`, the new-game default, so every FRLG start menu has it.
+  (`loadhelp` / `unloadhelp` aren't used by any script. help_system.c, the L/R help screens, is a separate 2.5k
+  lines and stays out.)
+- **Trainer card:** trainer_card.c is 1,959 lines, about a third of it the Hoenn / link cards, which stay out
+  (no link play).
+- **Story checks:** a rough static check of `scripts.json` against `script/specials.ts` already finds
+  main-path gaps: `special SetVermilionTrashCans` (Lt. Surge's gym puzzle), `special DoSSAnneDepartureCutscene`,
+  `special SetSeenMon`; and side ones (ChoosePartyMon for the in-game trades, the move deleter / relearner, the
+  daycare, the Seagallop ferry, Icefall Cave's `warphole` / `setstepcallback`, the Game Corner's coins box and
+  slot machine). Some hits were false positives (specials registered outside specials.ts), so unit 1 builds the
+  check properly before anyone fixes from it.
+
+### W-select: registered SELECT items
+
+Owns `menus/itemUse.ts` (the `data[3] == 1` branches), UseRegisteredKeyItemOnField (in `menus/itemMenu.ts`), the
+SELECT hook in OverworldScene's field input, and DisplayItemMessageOnField / Task_ItemUse_CloseMessageBoxAndReturnToField.
+
+1. **SELECT and the field-message items.** UseRegisteredKeyItemOnField (LockPlayerFieldControls, FreezeObjectEvents,
+   StopPlayerAvatar, the task with data[3] = 1, the cleared registration when the item is gone,
+   EventScript_BagItemCanBeRegistered), SetUpItemUseOnFieldCallback's direct branch, DisplayItemMessageOnField
+   and the items that use them: Bicycle (incl. "can't dismount here"), the rods, VS Seeker, Itemfinder, Coin Case,
+   Powder Jar, Poké Flute, and PrintNotTheTimeToUseThat on the field. E2E `tests/e2e/registeredItems.test.ts`:
+   register the Bicycle and mount / dismount with SELECT, a rod cast, the Coin Case message, SELECT with nothing
+   registered.
+2. **The screens from the field.** Task_UseTownMapFromField, Task_InitTMCaseFromField,
+   Task_InitBerryPouchFromField: fade, open the screen from the field (FieldMenuScene) and come back to the field
+   (CB2_ReturnToField), not the bag. Fame Checker and Teachy TV still log (not ported). E2E in the same file.
+
+### W-options: the option menu and the start menu help window
+
+Owns `menus/optionMenu.ts` (option_menu.c), `ui/HelpMessageWindow.ts` (help_message.c), the start menu's
+descriptions in `ui/StartMenu.ts`, the OPTION dispatch in OverworldScene, an `options` mode in FieldMenuScene,
+`optionsSound` in GameState / saveData.
+
+1. **One unit.** option_menu.c: CB2_OptionsMenuFromStartMenu, the six items (text speed, battle scene, battle
+   style, sound, button mode, frame) with the frame redrawn as it changes, CloseAndSaveOptionMenu back to the start
+   menu; `battle/battleBg.ts` reads the frame type from the state. help_message.c (CreateHelpMessageWindow,
+   DrawHelpMessageWindowTilesById, PrintTextOnHelpMessageWindow, DestroyHelpMessageWindow) and start_menu.c's
+   description per item (on open, on cursor move, gone on close; only when
+   `optionsButtonMode == OPTIONS_BUTTON_MODE_HELP`, as in DrawStartMenuInOneGo / StartMenu_InputProcessCallback). Sound (mono/stereo) is stored and saved, a no-op until
+   audio exists. E2E `tests/e2e/options.test.ts`: change text speed and frame, close, reopen (kept), the
+   description changes with the cursor and is gone in LR mode.
+
+### W-tcard: the trainer card (trainer_card.c)
+
+Owns `menus/trainerCard.ts`, the trainer card graphics in the extractor, the PLAYER dispatch in OverworldScene,
+a `trainerCard` mode in FieldMenuScene. Only CARD_TYPE_FRLG for the player (the Hoenn and link cards stay out).
+Reuse `PlayerGenderToFrontTrainerPicId` from `menus/hallOfFame.ts` (battle/transition.ts has a private copy; move it
+onto the export if convenient).
+
+1. **The card front.** The graphics (trainer_card.c's INCBINs for the Kanto card), ShowPlayerTrainerCard,
+   CB2_InitTrainerCard / LoadCardGfx / SetTrainerCardBgsAndPals, SetPlayerCardData (stars, money, Pokédex, play
+   time, badges), the front (name, ID, money, Pokédex, time with BlinkTimeColon, the stars' card colour, the
+   badges, the trainer pic), CloseTrainerCard back to the start menu. A on the front can stay a stub for unit 2.
+   E2E `tests/e2e/trainerCard.test.ts`: open from PLAYER, the badges and money shown, close.
+2. **The card back and the flip.** PrintAllOnCardBack (name, Hall of Fame debut, the link stats as zero),
+   DrawCardBackStats, FlipTrainerCard / Task_DoCardFlipTask (the HBlank squash), A flips both ways, B closes.
+
+### W-story: script coverage and headless story checks
+
+Owns the coverage test, `tests/e2e/story*.test.ts`, the e2e helper cleanup (tests/e2e/harness.ts and the tests'
+bag / party openers), and the specials / commands it adds for blockers it finds (`script/specials.ts`,
+`script/ScriptEngine.ts`, new `world/*.ts` files as needed).
+
+1. **The coverage check and the helper cleanup.** A unit test that reads `public/gen/scripts/scripts.json` and
+   lists every script command, special, std script and movement action the scripts use that the port doesn't
+   handle, against the port's own tables (export them if needed; count specials registered outside
+   specials.ts). Keep the known gaps in a checked-in list, each tagged main path / side / postgame / link, so the
+   test fails when a new gap appears or a listed one gets fixed. Then switch the e2e helpers that open the bag or
+   party menu with a fixed `waitFrames(60)` to waiting on the screen's callback (as fieldItems / vsSeeker /
+   itemfinder do). Don't change the test files W-select, W-options and W-tcard create.
+2. **Brock to Lt. Surge.** The main-path gaps on this stretch (SetVermilionTrashCans and the trash can puzzle,
+   DoSSAnneDepartureCutscene, SetSeenMon, whatever unit 1 tags), and `tests/e2e/story.test.ts`: per gym, set up
+   the state the story would have (flags, badges, a strong party), walk the gym, beat the leader, check the badge
+   and the TM. Misty and Surge here, plus the story events between them that the decomp marks as required (Bill,
+   the S.S. Anne and Cut).
+3. **Erika to Sabrina** (Rocket Game Corner / hideout, Pokémon Tower and the Poké Flute, Snorlax, Silph Co.),
+   same approach, fixing what it finds.
+4. **Koga, Blaine, Giovanni and Victory Road** (and the One Island trip if the decomp makes it required).
+
+## Shared files in batch 2
+
+- `scenes/OverworldScene.ts`: W-select (SELECT in the field input), W-options (OPTION dispatch), W-tcard (PLAYER
+  dispatch). Small hooks only, each in its own place.
+- `scenes/FieldMenuScene.ts`: W-options (`options`), W-tcard (`trainerCard`), W-select unit 2 (opening the TM
+  case / berry pouch / Town Map from the field). One mode each.
+- `ui/StartMenu.ts`: W-options only.
+- `tools/extract_*.py`: W-tcard and W-options add their own graphics; the merger keeps both.
+- `tests/e2e/harness.ts`: W-story's cleanup; others only add small helpers.
+- `script/specials.ts`, `script/ScriptEngine.ts`: W-story only.
+
+## Shared files and owners (batch 1)
 
 - `menus/itemUse.ts`: W-tmcase adds the TM case / berry pouch entries, W-fielditems the rod / Escape Rope / VS
   Seeker / Itemfinder entries. Separate functions; the merger keeps both sides of the table.
@@ -121,7 +225,7 @@ Owns `world/fishing.ts`, `world/vsSeeker.ts`, `world/itemfinder.ts`, and their F
 | Batch | Workers | Why together |
 |---|---|---|
 | 1 (done, PRs #31-#40) | W-dex (units 1-3, one after another), W-dexarea (1, then 2 once W-dex 2 is in), W-tmcase (1, then 2), W-fielditems (1-3) | Different files; the Pokédex is the focus, the TM case unblocks HMs in a real playthrough |
-| 2 | Registered SELECT items (UseRegisteredKeyItemOnField and the items' from-field variants: Bike, rods, VS Seeker, Itemfinder, Town Map, TM case, berry pouch); option_menu.c; trainer_card.c; the start menu help window; headless story checks gym by gym | Different files, except the registered items touch the item screens' entry points |
+| 2 | W-select (1, then 2), W-options (1), W-tcard (1, then 2), W-story (1-4, one after another; what's left goes to batch 3) | Different files; the start menu screens are the focus, the story checks find the unknown main-path blockers |
 
 ## Rules
 
@@ -129,14 +233,23 @@ Worker and merger rules: docs/WORKFLOW.md sections 3 and 4. Each worker's e2e fi
 
 ## Decisions
 
-1. **Batch 1 is wider than the Pokédex** (coordinator, revisit if you disagree): the Pokédex has two parallel
+1. **Batch 1 is wider than the Pokédex** (approved by the user): the Pokédex has two parallel
    workstreams at most (pokedex_screen.c is one tightly coupled file), so the other two slots take the TM case
    (a main-path blocker found while planning) and the field items STATUS.md lists as the most-noticed gaps.
-2. **One PR per unit** (coordinator, revisit if you disagree): instead of one draft PR per workstream, each unit
+2. **One PR per unit** (approved by the user): instead of one draft PR per workstream, each unit
    is merged as it finishes, so W-dexarea's area page can build on W-dex's mon page in the same batch.
-3. **No cries or SE** (as everywhere): START on the mon page and the cry after registering are no-ops until
+3. **No cries or SE** (as everywhere; approved by the user): START on the mon page and the cry after registering are no-ops until
    audio exists; logged under the existing audio deviation.
+
+4. **Batch 2 takes the story checks as its fourth workstream** (coordinator, revisit if you disagree): the
+   screens fill three slots; the gym-by-gym checks and the script coverage test find main-path blockers (the
+   static check already shows Lt. Surge's trash cans), which matter more than another screen.
+5. **The coverage test keeps a checked-in list of known gaps** (coordinator, revisit if you disagree): it
+   fails both on a new gap and on a fixed one, so the list stays the current backlog of unported script features.
+6. **The trainer card is FRLG only** (coordinator, revisit if you disagree): the Hoenn and link card types
+   (about a third of trainer_card.c) wait for link play.
 
 ## Not in this plan
 
-The intro movie, audio, map preview screens, daycare and eggs, link play, Fame Checker and Teachy TV, mail.
+The intro movie, audio, map preview screens, daycare and eggs, link play, Fame Checker and Teachy TV, mail, the
+L/R help system (help_system.c).
