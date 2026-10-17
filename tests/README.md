@@ -59,7 +59,7 @@ sent as source text, so it can't use the test file's variables: pass them as arg
 | **Input** | A virtual gamepad that the game samples with the keyboard, once per logic tick. `game.press('A')` taps a button for 2 ticks. `t.walk(dir, n)` / `t.walkTo(x, y)` (pathfinding) / `t.face(dir)` / `t.enterWarp()` (stairs, mats). |
 | **Mashing** | `game.mashUntil(t => cond)` presses A until `cond` holds. The check runs in the page at the start of every tick, so a press can't land on a menu that just opened. `answers: [[/nickname/, 'B']]` presses another button while the message matches. `trace: true` logs the messages it went through. |
 | **State** | `t.field()` (map, x, y, facing, script, …), `t.idle()`, `t.message()`, `t.party()`, `t.money()`, `t.itemCount('POTION')`, `t.flag(...)`, `t.var(...)`, `t.trainerDefeated('BUG_CATCHER_RICK')`, `t.battle()` (battlers, the player's `controller` function, the last battle `message`), `t.gbaScreen()` (e.g. `CB2_BuyMenu`, `CB2_NamingScreen`), `t.snapshot()` (every set flag and var), `t.state` (the GameState itself). |
-| **Events** | Milestones the game reports: `map`, `script`, `trainerApproach`, `battleTransition` (`transition`), `battleTransitionEnd` (`black`: share of black pixels in its last frame), `battleStart`, `battleEnd`, `whiteOut`, `evolution` (`from`, `to`, `stopped`), `mapTransition` (a cave's flash screen: `from`, `to`), `barnDoorWipe`, `multichoice` (a multichoice menu opened: `mcId`), `titleScreen`, `titleScene` (`scene`: each SetTitleScreenScene), `mainMenu`, `oakSpeech`. Use `game.mark()` then `game.waitForEvent(type, { since })`. |
+| **Events** | Milestones the game reports: `map`, `script`, `trainerApproach`, `battleTransition` (`transition`), `battleTransitionEnd` (`black`: share of black pixels in its last frame), `battleStart`, `battleEnd`, `whiteOut`, `evolution` (`from`, `to`, `stopped`), `mapTransition` (a cave's flash screen: `from`, `to`), `barnDoorWipe`, `mapNamePopupText` (each name the map name popup prints: `text`), `multichoice` (a multichoice menu opened: `mcId`), `titleScreen`, `titleScene` (`scene`: each SetTitleScreenScene), `mainMenu`, `oakSpeech`. Use `game.mark()` then `game.waitForEvent(type, { since })`. |
 | **Setup** | `t.setParty([...])`, `t.startWildBattle({ species, level })`, `t.forceBattleTransition('SWIRL')` (every battle uses B_TRANSITION_SWIRL), `t.seed(n)`, `t.state.bag.add(...)`. |
 | **Battle** | `game.chooseAction('FIGHT' \| 'BAG' \| 'POKEMON' \| 'RUN')` waits for the action menu. Pressing A at the menu picks FIGHT and then the first move, so `mashUntil(battleEnd)` fights a battle to the end. |
 | **Screens** | `game.waitForBag()` / `game.waitForPartyMenu()` after opening the bag or the party menu (from the start menu, in battle, from an item): they wait until its main callback runs (`t.gbaScreen()` is `CB2_BagMenuRun` / `CB2_UpdatePartyMenu`) and its palette fade is over (`t.paletteFadeActive()`), which is when it takes input. `game.waitForScreen('CB2_...')` does the same for another GBA-layer screen. Don't use a fixed `waitFrames` instead: the screens load their graphics asynchronously, so under load it can end before they're up. |
@@ -76,17 +76,24 @@ A test fails if the page throws or logs `console.error`. When a test fails, the 
 3. Wait on state and events, not on time. If something has to settle first, wait in ticks
    (`t.waitFrames(n)`, `t.until(() => ...)`), never in milliseconds.
 4. Assert what the player would notice (party, money, bag, map, flags), plus the event the game reported.
-5. Anything that lasts only a few ticks (a movement action, a jump, the moment an anim ends) must be watched
-   in the page, not polled from Node: under load, a poll can arrive after it's over. Start an in-page watcher
-   (`game.eval(async (t) => { await t.until(...); ... })`) before it can happen and await it afterwards; do
-   hold + watch + release in one eval; reseed right before a roll with `reseedAfterAnims` (battleAnimHelpers.ts),
-   which uses `t.seedWhen(pred, n)` to seed inside the exact tick (an awaited `t.seed()` lands wherever the
-   frame's batch of ticks ends). The same goes for an `await t.until(...)` followed by `t.waitFrames(n)`: the
+5. Anything that lasts only a few ticks (a movement action, a jump, the moment an anim ends, a sprite or a
+   register value mid-anim, the foe's sprite while Reflect's wall is up) must be watched in the page, not polled
+   from Node: under load, a poll can arrive after it's over. Start an in-page watcher (`game.watch(t => ...)`, or
+   `game.eval(async (t) => { await t.until(...); ... })`) before it can happen and await it afterwards; do
+   hold + watch + release in one eval. What lasts ~150 ticks can be too short as well: the map name popup after a
+   load can be over before the harness's `ready` poll and the next one come back, so the hooks log it
+   (`mapNamePopupText`). Reseed right before a roll with `reseedAfterAnims` (battleAnimHelpers.ts), which uses
+   `t.seedWhen(pred, n)` to seed inside the exact tick (an awaited `t.seed()` lands wherever the frame's batch
+   of ticks ends), or seed and press in one eval (`pressSeeded`): in battle VBlankCB_Battle calls Random()
+   every tick, as on the GBA, so a seed and a press in two evals are as many rolls apart as ticks ran between
+   the round trips (Sweet Kiss missed under load). The same goes for an `await t.until(...)` followed by `t.waitFrames(n)`: the
    wait starts where the batch ends, possibly dozens of ticks late. To check something exactly n ticks after an
    event, or to compare two reads n ticks apart, count inside one `until` predicate (mapNamePopup.test.ts,
    fieldEffects' tile animation: two evals 40 ticks apart were 80 apart under load, a whole flower cycle). Read
    what you check inside the predicate too: `t.until` only returns whether it held, and the game moves on after
-   (Baton Pass's party screen replaces the battle sprites right after its anim ends).
+   (Baton Pass's party screen replaces the battle sprites right after its anim ends). The same for `mashUntil`:
+   have its predicate return the value (the Silph Scope's ghost is renamed ~50 ticks into the anim the mash
+   waited for, and a read from Node after the mash came after that).
    Several tests here failed only when four e2e runs shared the machine.
 6. Don't answer a prompt with one press after a fixed wait: if the question is still printing, the press only
    speeds the text up and the next mash answers it instead. Mash the answer button itself (a catch's "Give a

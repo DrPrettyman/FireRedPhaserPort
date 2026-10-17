@@ -6,7 +6,7 @@ import type { Game, useGame } from './harness';
 
 export const ROUTE1 = { start: 'after-rival', map: 'Route1', x: 12, y: 7 } as const;
 
-/** The first battleAnim / battleAnimEnd event for `label` after `since` (pressing A through text meanwhile). */
+/** The first battleAnim / battleAnimEnd event for `label` after `since` (no presses meanwhile: battle text goes on by itself). */
 export async function animEvent(game: Game, type: 'battleAnim' | 'battleAnimEnd', label: string, since: number) {
   for (let i = 0; i < 300; i++) {
     const e = (await game.events(since)).find((ev) => ev.type === type && ev.label === label);
@@ -16,12 +16,23 @@ export async function animEvent(game: Game, type: 'battleAnim' | 'battleAnimEnd'
   throw new Error(`no ${type} event for ${label}: ${JSON.stringify((await game.events(since)).map((e) => [e.type, e.label]))}`);
 }
 
-/**
- * Reseeds the RNG, so the turn's rolls (the wild mon's move, accuracy, damage) don't depend on how many frames
- * the run took to get here: a 95% Tackle otherwise misses now and then, and a miss plays no anim at all.
- */
+/** Reseeds the RNG now (wherever the frame's batch of ticks ends; to seed for a press, use pressSeeded). */
 export async function reseed(game: Game, seed = 1): Promise<void> {
   await game.eval((t, n) => t.seed(n), seed);
+}
+
+/**
+ * Reseeds the RNG and taps `button` in one eval, so the press is sampled in the tick right after the seed and
+ * the turn's rolls (the wild mon's move, accuracy, damage) don't depend on how long the run took to get here: a
+ * 95% Tackle otherwise misses now and then, and a miss plays no anim at all. VBlankCB_Battle calls Random() every
+ * tick, so a seed in one eval and the press in the next were as many rolls apart as ticks ran between the two
+ * round trips (none on an idle machine, dozens under load).
+ */
+export async function pressSeeded(game: Game, button: Parameters<Game['press']>[0] = 'A', seed = 1): Promise<void> {
+  await game.eval((t, b, n) => {
+    t.seed(n);
+    return t.press(b);
+  }, button, seed);
 }
 
 /** Picks the first move at the action menu. */
@@ -30,8 +41,7 @@ export async function useFirstMove(game: Game): Promise<number> {
   const since = await game.mark();
   await game.press('A'); // FIGHT
   await game.eval((t) => t.waitFrames(10));
-  await reseed(game);
-  await game.press('A'); // move 1
+  await pressSeeded(game, 'A'); // move 1
   return since;
 }
 
@@ -46,8 +56,7 @@ export async function useMoveSlot(game: Game, from: number, slot: number, seed =
   await game.eval((t) => t.waitFrames(10));
   if ((slot & 1) !== (from & 1)) await game.press(slot & 1 ? 'RIGHT' : 'LEFT');
   if ((slot & 2) !== (from & 2)) await game.press(slot & 2 ? 'DOWN' : 'UP');
-  await reseed(game, seed);
-  await game.press('A');
+  await pressSeeded(game, 'A', seed);
   return since;
 }
 
@@ -55,8 +64,8 @@ export async function useMoveSlot(game: Game, from: number, slot: number, seed =
  * Uses up to four moves in turn against a Lv. 100 Snorlax that only splashes (and has the HP to take them),
  * checking each move's anim script runs to its end, and that both battlers are back on screen afterwards.
  * A move that can miss (SING, DISABLE, THUNDER, ...) plays no anim when it does, and the reseed can't rule that
- * out (the ticks between it and the roll depend on wall-clock time), so a miss uses the move again, with another
- * seed (the same seed would roll about the same).
+ * out (waitForActionMenu's A presses, timed from here, can cut the foe's messages short before the move's rolls,
+ * and VBlankCB_Battle rolls every tick), so a miss uses the move again, with another seed.
  */
 export async function expectMovesRun(session: ReturnType<typeof useGame>, moves: string[]): Promise<void> {
   const game = await session.start({ ...ROUTE1, party: [{ species: 'RATTATA', level: 10, moves }] });

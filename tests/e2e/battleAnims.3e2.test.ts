@@ -62,20 +62,26 @@ function hblankLines(game: Game, regOffset: number): Promise<number[] | null> {
 test("Sketch: the target's BG copy is scrolled away on its lines, then drawn back in", async () => {
   const game = await session.start({ ...ROUTE1, speed: 1, party: [{ species: 'SMEARGLE', level: 10, moves: ['SKETCH'] }] });
   await game.eval((t) => t.startWildBattle({ species: 'SNORLAX', level: 100, moves: ['SPLASH'] }));
+  await game.waitForActionMenu();
+  // AnimTask_SketchDrawMon: BG1HOFS or BG2HOFS (whichever BG holds the target's copy) is the BG's scroll + 240
+  // on the 65 lines above its feet, so nothing of the copy shows there, until the lines are put back. Watched in
+  // the page, tick by tick, from before the move: polls from here, a few round trips apart, can miss it.
+  const lines = game.eval(async (t, path) => {
+    const hw = await new Function('p', 'return import(p)')(path);
+    const shifted = (l: Uint16Array) => l.some((a) => l.some((b) => ((b - a) & 0x1ff) === 0xf0));
+    let found: number[] | null = null;
+    await t.until(() => {
+      for (const reg of [0x14, 0x18]) {
+        const l = hw.hblankRegs.get(reg) as Uint16Array | undefined;
+        if (l && shifted(l)) found = [...l];
+      }
+      return found;
+    }, 20000);
+    return found;
+  }, '/src/gba/hw.ts');
   const since = await useFirstMove(game);
   expect(await animEvent(game, 'battleAnim', 'Move_SKETCH', since)).toMatchObject({ ran: true, attacker: 0, target: 1 });
-  // AnimTask_SketchDrawMon: BG1HOFS or BG2HOFS (whichever BG holds the target's copy) is the BG's scroll + 240
-  // on the 65 lines above its feet, so nothing of the copy shows there, until the lines are put back.
-  const shifted = (l: number[]) => l.some((a) => l.some((b) => ((b - a) & 0x1ff) === 0xf0));
-  let lines: number[] | null = null;
-  for (let i = 0; i < 600 && !lines; i++) {
-    for (const reg of [0x14, 0x18]) {
-      const l = await hblankLines(game, reg);
-      if (l && shifted(l)) lines = l;
-    }
-    if (!lines) await game.eval((t) => t.waitFrames(1));
-  }
-  expect(lines).not.toBeNull();
+  expect(await lines).not.toBeNull();
   await animEvent(game, 'battleAnimEnd', 'Move_SKETCH', since);
   await game.waitForActionMenu();
   expect(await hblankLines(game, 0x14)).toBeNull();

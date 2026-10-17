@@ -328,8 +328,14 @@ function createApi(game: Phaser.Game) {
   // A free field can still start an ON_FRAME script or a trainer on its next tick, so "idle" means it
   // was free at the start of two ticks in a row.
   let freeTicks = 0;
+  // The map name popup is up for only ~150 ticks, which a poll from the tests can miss right after a load: each
+  // name it prints is logged as a `mapNamePopupText` event (`text`).
+  let popupText: string | undefined;
   pad.onTick = () => {
     freeTicks = free() ? freeTicks + 1 : 0;
+    const bytes = field()?.mapNamePopup;
+    const text = bytes && decode(bytes);
+    if (text !== popupText && (popupText = text)) testEvent('mapNamePopupText', { text });
   };
   const idle = () => freeTicks >= 2 && free();
 

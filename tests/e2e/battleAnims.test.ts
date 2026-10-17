@@ -2,26 +2,27 @@
 // and the battle carries on afterwards.
 
 import { expect, test } from 'vitest';
-import { animEvent, expectMovesRun, reseed, ROUTE1, useFirstMove } from './battleAnimHelpers';
+import { animEvent, expectMovesRun, pressSeeded, ROUTE1, useFirstMove } from './battleAnimHelpers';
 import { useGame, type Game } from './harness';
 
 const session = useGame();
 
 test('Tackle runs its anim script to the end, then the turn carries on', async () => {
-  // speed 1 so polling from here catches the hit splat while it's up
   const game = await session.start({ ...ROUTE1, speed: 1, party: [{ species: 'RATTATA', level: 30, moves: ['TACKLE'] }] });
   // Splash only: a Lv. 30 Magikarp knows Tackle too, and when it's faster its Tackle is the first one
   await game.eval((t) => t.startWildBattle({ species: 'MAGIKARP', level: 30, moves: ['SPLASH'] }));
+  await game.waitForActionMenu();
+  // Mid-animation the hit splat exists alongside the battlers and healthboxes (watched in the page: it's up for
+  // only a few ticks).
+  const sprites = game.watch((t) => {
+    const n = t.gbaSprites().filter((s) => s.tileTag === t.define('ANIM_TAG_IMPACT')).length;
+    return n > 0 && n;
+  }, { what: 'the hit splat sprite' });
   const since = await useFirstMove(game);
 
   const start = await animEvent(game, 'battleAnim', 'Move_TACKLE', since);
   expect(start).toMatchObject({ ran: true, attacker: 0, target: 1 });
-  // Mid-animation the hit splat exists alongside the battlers and healthboxes.
-  const sprites = await game.waitFor((t) => {
-    const n = t.gbaSprites().filter((s) => s.tileTag === t.define('ANIM_TAG_IMPACT')).length;
-    return n > 0 && n;
-  }, { what: 'the hit splat sprite' });
-  expect(sprites).toBeGreaterThan(0);
+  expect(await sprites).toBeGreaterThan(0);
   await animEvent(game, 'battleAnimEnd', 'Move_TACKLE', since);
 
   await game.waitForActionMenu();
@@ -59,11 +60,12 @@ test('a Poké Ball the wild mon breaks out of', async () => {
   const game = await session.start({ ...ROUTE1, party: [{ species: 'MEWTWO', level: 100, moves: ['TAIL_WHIP'] }] });
   await game.eval((t) => t.state!.bag.add(t.define('ITEM_POKE_BALL'), 1));
   await game.eval((t) => t.startWildBattle({ species: 'MEWTWO', level: 70 })); // catch rate 3 at full HP
+  // The ball lands, the target shrinks into it... (the burst is up for a few ticks: watched in the page)
+  const burst = game.watch((t) => t.gbaSprites().some((s) => s.tileTag === 55000) && t.battle()!.mons[1].hp > 0 && t.gbaSprites().filter((s) => s.tileTag >= 55020 && s.tileTag < 55032).length > 0, { what: 'the ball open burst' });
   const since = await throwFirstBall(game);
 
   expect(await animEvent(game, 'battleAnim', 'Special_BallThrow', since)).toMatchObject({ ran: true, target: 1 });
-  // The ball lands, the target shrinks into it...
-  await game.waitFor((t) => t.gbaSprites().some((s) => s.tileTag === 55000) && t.battle()!.mons[1].hp > 0 && t.gbaSprites().filter((s) => s.tileTag >= 55020 && s.tileTag < 55032).length > 0, { what: 'the ball open burst' });
+  await burst;
   await animEvent(game, 'battleAnimEnd', 'Special_BallThrow', since);
   // ...and breaks out: it's back, the ball gone, and the battle goes on.
   await game.waitForActionMenu();
@@ -137,8 +139,7 @@ test('a substitute swaps back to the mon to attack, then back to the doll', asyn
   await game.press('A');
   await game.eval((t) => t.waitFrames(10));
   await game.press('LEFT');
-  await reseed(game);
-  await game.press('A');
+  await pressSeeded(game, 'A');
   expect(await animEvent(game, 'battleAnim', 'Special_SubstituteToMon', since)).toMatchObject({ ran: true });
   await animEvent(game, 'battleAnimEnd', 'Move_TACKLE', since);
   expect(await animEvent(game, 'battleAnim', 'Special_MonToSubstitute', since)).toMatchObject({ ran: true });
@@ -150,11 +151,12 @@ test("the old man's catching tutorial: his throw and the catch", async () => {
   const game = await session.start({ start: 'after-rival', map: 'ViridianCity', x: 22, y: 9 });
   await game.eval((t) => t.state!.setVar('VAR_MAP_SCENE_VIRIDIAN_CITY_OLD_MAN', 1));
   const since = await game.mark();
+  // The Poké Ball leaves his hand (AnimTask_ThrowBallSpecial waits for his throw frame).
+  const ball = game.watch((t) => t.gbaSprites().some((s) => s.tileTag === 55000 && !s.invisible), { what: 'the ball in flight' });
   await game.walk('up');
   await game.mashUntil((t) => t.events().some((e) => e.type === 'battleAnim' && e.label === 'Special_BallThrowWithTrainer'), { what: 'the old man’s throw' });
   expect(await animEvent(game, 'battleAnim', 'Special_BallThrowWithTrainer', since)).toMatchObject({ ran: true });
-  // The Poké Ball leaves his hand (AnimTask_ThrowBallSpecial waits for his throw frame).
-  await game.waitFor((t) => t.gbaSprites().some((s) => s.tileTag === 55000 && !s.invisible), { what: 'the ball in flight' });
+  await ball;
   // The ball click clears gDoingBattleAnim at frame 95 of 315, so (as on the GBA) the battle can end
   // before the anim script does.
   await game.mashUntil((t) => t.events().some((e) => e.type === 'battleEnd'), { what: 'the tutorial battle to end' });
@@ -188,13 +190,14 @@ test('a ghost dodges the ball', async () => {
 
 test("a shiny's sparkles", async () => {
   const game = await session.start({ ...ROUTE1, speed: 1, party: [{ species: 'MEWTWO', level: 100, moves: ['TAIL_WHIP'] }] });
-  await game.eval((t) => t.startWildBattle({ species: 'PIDGEY', level: 5, shiny: true }));
-  const stars = await game.waitFor((t) => {
+  // (the sparkles are up for a few ticks: watched in the page from before the battle starts)
+  const stars = game.watch((t) => {
     const tag = t.define('ANIM_TAG_GOLD_STARS');
     const n = t.gbaSprites().filter((s) => s.tileTag === tag).length;
     return n > 0 && n;
-  }, { what: 'the shiny sparkles', timeout: 60_000 });
-  expect(stars).toBeGreaterThan(0);
+  }, { what: 'the shiny sparkles' });
+  await game.eval((t) => t.startWildBattle({ species: 'PIDGEY', level: 5, shiny: true }));
+  expect(await stars).toBeGreaterThan(0);
   await game.waitForActionMenu();
   expect(await game.eval((t) => t.gbaSprites().filter((s) => s.tileTag === t.define('ANIM_TAG_GOLD_STARS')).length)).toBe(0);
 });
@@ -209,11 +212,12 @@ test('Safari Zone: throwing bait and a rock', async () => {
   // any turn, so each throw gets its own battle.
   await game.eval((t) => t.startWildBattle({ species: 'RHYHORN', level: 25 }));
   let since = await game.mark();
+  // The bait flies from the player's throw at the wild mon (for a few ticks: watched in the page).
+  const bait = game.watch((t) => t.gbaSprites().some((s) => s.tileTag === t.define('ANIM_TAG_SAFARI_BAIT')), { what: 'the bait in flight' });
   await game.chooseAction('BAG'); // BAIT
   // (the event's attacker/target are the launch's; AnimTask_SafariOrGhost_DecideAnimSides then sets them)
   expect(await animEvent(game, 'battleAnim', 'General_BaitThrow', since)).toMatchObject({ ran: true });
-  // The bait flies from the player's throw at the wild mon.
-  await game.waitFor((t) => t.gbaSprites().some((s) => s.tileTag === t.define('ANIM_TAG_SAFARI_BAIT')), { what: 'the bait in flight' });
+  await bait;
   await animEvent(game, 'battleAnimEnd', 'General_BaitThrow', since);
   await game.mashUntil((t) => t.idle() || t.battle()?.controller?.startsWith('HandleInputChooseAction'), { what: 'the next turn or the field' });
   if (await game.eval((t) => !t.battle())) {
@@ -251,10 +255,12 @@ test.each([
 test('Transform mosaics the attacker into a copy of the target', async () => {
   const game = await session.start({ ...ROUTE1, speed: 1, party: [{ species: 'DITTO', level: 30, moves: ['TRANSFORM'] }] });
   await game.eval((t) => t.startWildBattle({ species: 'MAGIKARP', level: 30, moves: ['SPLASH'] }));
+  await game.waitForActionMenu();
+  // AnimTask_TransformMon mosaics the mon's BG copy (monbg) up to 16x16 blocks, swaps the pic, and back down.
+  const mosaic = game.watch((t) => t.gpuReg(0x4c) === 0xff, { what: 'the full mosaic' });
   const since = await useFirstMove(game);
   expect(await animEvent(game, 'battleAnim', 'Move_TRANSFORM', since)).toMatchObject({ ran: true, attacker: 0, target: 1 });
-  // AnimTask_TransformMon mosaics the mon's BG copy (monbg) up to 16x16 blocks, swaps the pic, and back down.
-  await game.waitFor((t) => t.gpuReg(0x4c) === 0xff, { what: 'the full mosaic' });
+  await mosaic;
   await animEvent(game, 'battleAnimEnd', 'Move_TRANSFORM', since);
   await game.waitForActionMenu();
   const ditto = (await game.eval((t) => t.battle()))!.mons[0];
@@ -271,10 +277,11 @@ test('the Silph Scope unveils the ghost Marowak', async () => {
   // "Begone… Intruders…", then special StartMarowakBattle
   const start = await game.mashUntil((t) => t.events().find((e) => e.type === 'battleStart'), { what: 'the Marowak battle' });
   expect(start.flags).toBe(await game.eval((t) => t.define('BATTLE_TYPE_GHOST') | t.define('BATTLE_TYPE_GHOST_UNVEILED')));
-  // past "The GHOST appeared!" and "SILPH SCOPE unveiled the GHOST's identity!"
-  await game.mashUntil((t) => t.events().some((e) => e.type === 'battleAnim' && e.label === 'General_SilphScoped'), { what: 'the unveiling' });
+  // past "The GHOST appeared!" and "SILPH SCOPE unveiled the GHOST's identity!"; the name is read in the tick
+  // after the anim starts (AnimTask_TransformMon renames it ~50 ticks in, which a read from here can come after).
+  const nickname = await game.mashUntil((t) => t.events().some((e) => e.type === 'battleAnim' && e.label === 'General_SilphScoped') && t.battle()!.mons[1].nickname, { what: 'the unveiling' });
   expect(await animEvent(game, 'battleAnim', 'General_SilphScoped', since)).toMatchObject({ ran: true, attacker: 1 });
-  expect((await game.eval((t) => t.battle()))!.mons[1].nickname).toBe('GHOST');
+  expect(nickname).toBe('GHOST');
   await animEvent(game, 'battleAnimEnd', 'General_SilphScoped', since);
   // HandleSpeciesGfxDataChange(…, 255) loaded the real pic and renamed it after its species.
   await game.waitForActionMenu();
@@ -284,10 +291,12 @@ test('the Silph Scope unveils the ghost Marowak', async () => {
 test("Surf's wave blends in a band at a time and clears up after", async () => {
   const game = await session.start({ ...ROUTE1, speed: 1, party: [{ species: 'LAPRAS', level: 30, moves: ['SURF'] }] });
   await game.eval((t) => t.startWildBattle({ species: 'SNORLAX', level: 100, moves: ['SPLASH'] }));
+  await game.waitForActionMenu();
+  // BG1 (the wave) blends over everything else
+  const blend = game.watch((t) => t.gpuReg(0x50) === 0x3f42, { what: 'the wave blend' });
   const since = await useFirstMove(game);
   expect(await animEvent(game, 'battleAnim', 'Move_SURF', since)).toMatchObject({ ran: true });
-  // BG1 (the wave) blends over everything else
-  await game.waitFor((t) => t.gpuReg(0x50) === 0x3f42, { what: 'the wave blend' });
+  await blend;
   await animEvent(game, 'battleAnimEnd', 'Move_SURF', since);
   await game.waitForActionMenu();
   expect(await game.eval((t) => [t.gpuReg(0x50), t.gpuReg(0x52)])).toEqual([0, 0]);
@@ -296,9 +305,12 @@ test("Surf's wave blends in a band at a time and clears up after", async () => {
 test('Reflect: the foe moves to an anim BG under the wall and comes back', async () => {
   const game = await session.start({ ...ROUTE1, speed: 1, party: [{ species: 'MEWTWO', level: 30, moves: ['REFLECT'] }] });
   await game.eval((t) => t.startWildBattle({ species: 'MAGIKARP', level: 30, moves: ['SPLASH'] }));
+  await game.waitForActionMenu();
+  // (watched in the page: the foe is on the BG only while the wall is up)
+  const onBg = game.watch((t) => t.battle()?.mons[1].spriteInvisible, { what: 'the foe drawn on a BG' });
   const since = await useFirstMove(game);
   expect(await animEvent(game, 'battleAnim', 'Move_REFLECT', since)).toMatchObject({ ran: true });
-  await game.waitFor((t) => t.battle()!.mons[1].spriteInvisible, { what: 'the foe drawn on a BG' });
+  await onBg;
   await animEvent(game, 'battleAnimEnd', 'Move_REFLECT', since);
   await game.waitForActionMenu();
   expect((await game.eval((t) => t.battle()))!.mons[1].spriteInvisible).toBe(false);

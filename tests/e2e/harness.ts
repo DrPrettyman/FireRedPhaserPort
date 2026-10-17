@@ -268,6 +268,31 @@ export class Game {
   }
 
   /**
+   * Start watching, in the page and tick by tick, for `fn(__test)` to return something truthy, and resolve with
+   * that value (read in that tick). For anything that lasts only a few ticks (a sprite, a register value mid-anim):
+   * a `waitFor` poll from here can arrive after it's over. Start it before the thing can happen, without awaiting,
+   * and await it afterwards. Rejects after `maxFrames` ticks (default 20000) without it.
+   */
+  watch<R>(fn: (t: TestApi) => R, opts: { maxFrames?: number; what?: string } = {}): Promise<Truthy<R>> {
+    // (a throw counts as not yet: it would otherwise escape from the tick that checks it)
+    const expr = `(async () => {
+      const fn = ${fn.toString()};
+      let v;
+      const held = await window.__test.until(() => {
+        try { v = fn(window.__test); } catch { v = undefined; }
+        return v;
+      }, ${opts.maxFrames ?? 20000});
+      return held ? v : null;
+    })()`;
+    const p = this.evalRaw<R | null>(expr).then((v) => {
+      if (!v) throw new Error(`Never saw ${opts.what ?? fn.toString()}`);
+      return v as Truthy<R>;
+    });
+    p.catch(() => {}); // a test that fails before awaiting it shouldn't also report an unhandled rejection
+    return p;
+  }
+
+  /**
    * Wait until the GBA-layer screen whose main callback is `callback2` (`t.gbaScreen()`) runs and its palette
    * fade is over, i.e. it takes input: the bag (`CB2_BagMenuRun`, item_menu.c's Task_BagMenu_HandleInput
    * returns while gPaletteFade.active), the party menu (`CB2_UpdatePartyMenu`). The screens load their
