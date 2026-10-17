@@ -80,11 +80,16 @@ test('leaving Mt. Moon flashes white, and Route 4 fades in from white', async ()
   const game = await session.start({ start: 'after-rival', map: 'MtMoon_1F', x: 18, y: 37 });
   await game.waitIdle();
   const mark = await game.mark();
+  // Watched in the page from before the warp, and the fade's colour read in the tick it's seen: a separate read
+  // can come after the fade is over. The limit allows for the game ticking on while Route 4 loads.
+  const fadeIn = game.eval((t) => {
+    let white: boolean | undefined;
+    return t.until(() => t.field()?.map === 'Route4' && t.field()?.fading && ((white = t.field()?.fadeWhite), true), 20000).then((seen) => seen && white);
+  });
   const arrived = game.eval((t) => t.enterWarp());
   const flash = await game.waitForEvent('mapTransition', { since: mark });
   expect(flash).toMatchObject({ from: 'MtMoon_1F', to: 'Route4' });
-  expect(await game.eval((t) => t.until(() => t.field()?.map === 'Route4' && t.field()?.fading, 600))).toBe(true);
-  expect(await game.eval((t) => t.field()?.fadeWhite)).toBe(true);
+  expect(await fadeIn).toBe(true);
   expect(await arrived).toBe('Route4');
 });
 
@@ -93,7 +98,11 @@ test('walking into Mt. Moon fades to black (it has a cave preview screen)', asyn
   // MapTransitionIsEnter's white. Route 4's (19, 5) is the cave mouth.
   const game = await session.start({ start: 'after-rival', map: 'Route4', x: 19, y: 6 });
   await game.waitIdle();
-  const leaving = game.eval((t) => t.until(() => t.field()?.map === 'Route4' && t.field()?.fading, 120).then(() => t.field()?.fadeWhite));
+  // (The fade out starts once Mt. Moon's map has loaded, which takes a while the first time.)
+  const leaving = game.eval((t) => {
+    let white: boolean | undefined;
+    return t.until(() => t.field()?.map === 'Route4' && t.field()?.fading && ((white = t.field()?.fadeWhite), true), 20000).then((seen) => (seen ? white : 'no fade'));
+  });
   await game.eval((t) => t.walk('up', 1));
   expect(await leaving).toBe(false);
   await game.waitIdle();

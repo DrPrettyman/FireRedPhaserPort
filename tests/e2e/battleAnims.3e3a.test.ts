@@ -63,10 +63,20 @@ test('Baton Pass: the attacker squashes into a ball that flies off', async () =>
     ],
   });
   await game.eval((t) => t.startWildBattle({ species: 'SNORLAX', level: 100, moves: ['SPLASH'] }));
+  // The party screen opens right after the anim (openpartyscreen), so read the attacker's sprite in the page, at
+  // the start of the tick after the anim ended: a read from Node can come after the battle sprites are gone.
+  const start = await game.mark();
+  const invisibleAtEnd = game.eval(async (t, s) => {
+    let invisible: boolean | undefined;
+    const ended = await t.until(
+      () => t.events(s).some((e) => e.type === 'battleAnimEnd' && e.label === 'Move_BATON_PASS') && ((invisible = t.battle()?.mons[0].spriteInvisible), true),
+      20000,
+    );
+    return ended ? invisible : 'no battleAnimEnd';
+  }, start);
   const since = await useFirstMove(game);
   expect(await animEvent(game, 'battleAnim', 'Move_BATON_PASS', since)).toMatchObject({ ran: true, attacker: 0 });
-  await animEvent(game, 'battleAnimEnd', 'Move_BATON_PASS', since);
-  expect((await game.eval((t) => t.battle()))!.mons[0].spriteInvisible).toBe(true);
+  expect(await invisibleAtEnd).toBe(true);
 });
 
 // The hit rolls accuracy (85%) at the end of turn 3; with the RNG reseeded at each move choice it's the same
