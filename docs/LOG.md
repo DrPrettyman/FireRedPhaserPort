@@ -1487,3 +1487,24 @@ end to end.
   PIDGEY can't learn it, TM28 → GIVE; at the Pewter Mart: SELL → TM case, an HM it won't buy, two TM28s sold for
   half price), screenshots of the list, context menu and quantity box; the bag / mart / PC / evolution e2e files
   (pokemart, pcStorage, evolution, listMenuFlash, saveContinue) and the unit tests still pass.
+### Pokédex area data and markers (W-dexarea unit 1, batch 1 of SCREENS_PLAN.md)
+
+- `menus/wildPokemonArea.ts`: wild_pokemon_area.c (GetSpeciesPokedexAreaMarkers, GetRoamerIndex /
+  GetRoamerPokedexAreaMarkers, IsSpeciesOnMap, IsSpeciesInEncounterTable, GetMapSecIdFromWildMonHeader,
+  FindDexAreaByMapSec), plus GetStarterSpecies and roamer.c's GetRoamerLocationMapSectionId (an unset roamer
+  location is map 0/0, as after a reboot on the GBA). IsSpeciesOnMap's fishing search reads 12 slots of a 10-slot
+  table in the C; the extra two are never a species, so the port searches the table's own length (same result).
+- `menus/pokedexArea.ts`: pokedex_area_markers.c (CreatePokedexAreaMarkers, Task_ShowAreaMarkers,
+  DestroyPokedexAreaMarkers, GetAreaMarkerSubsprite, GetNumPokedexAreaMarkers). There's no blink: the task only
+  makes the sprite visible on its first run.
+- GetUnlockedSeviiAreas (field_specials.c) in `world/regionMap.ts` rather than menus/regionMap.ts, so the marker
+  code stays loadable in the Node unit tests (menus/regionMap.ts pulls in Phaser through world/fly.ts).
+- Extractor: menus.json `pokedexArea` (`pokedex_area_data` in extract_menus.py); `graphics/pokedex/` in
+  extract_gfx.py (pokedex_screen.c's INCBINs and the markers). Fixed on the way: extract_gfx.py's make-variable
+  parsing kept only a variable's first word and didn't expand nested `$(VAR)`s, so `cat` rules over a variable list
+  (POKEDEXAREAMARKERFILES → marker.4bpp) produced nothing; no existing symbol changed. Rerun `npm run extract`.
+- Shared: OverworldScene (`initWildPokemonArea` at init), menus/data.ts (`pokedexArea` type), world/regionMap.ts.
+- Tests: tests/unit/pokedexArea.test.ts (9: Pidgey on 13 Kanto routes and the Sevii areas as islands unlock,
+  Magikarp by rod only, no areas, Slugma only once One Island is unlocked, Altering Cave's sets, the roamer at its
+  location / the unpaired roamers / inactive, the markers' OBJ-window OAM). typecheck, `npm test` (100) and
+  mapNamePopup e2e pass. The e2e (tests/e2e/pokedexArea.test.ts) comes with the area page in unit 2.
