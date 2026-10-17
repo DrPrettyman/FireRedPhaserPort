@@ -72,6 +72,7 @@ import {
 } from '../world/surf';
 import { setFieldItemsHost, type FieldItemsHost } from '../world/fieldItems';
 import { fishingProbe, registerFieldItems } from '../world/fishing';
+import { registerVsSeeker, ResetMovementOfRematchableTrainers, setVsSeekerHost, vsSeekerBikeGraphicsId, vsSeekerProbe, type VsSeekerHost } from '../world/vsSeeker';
 import { FieldFlash, FldEff_UseFlash, IsMapTypeOutdoors, Overworld_GetFlashLevel, SetDefaultFlashLevel } from '../world/flash';
 import { fieldListMenuGfxSymbols, fieldListMenuProbe, type ListMenuHost } from '../ui/FieldListMenu';
 import { stringWidth } from '../text/stringWidth';
@@ -91,7 +92,7 @@ import {
 import { mapResetTrainerRematches, shouldEggHatch, updateHappinessStepCounter, updatePoisonStepCounter, updateVsSeekerStepCounter } from '../world/stepCounters';
 import { sharedBattleData, type BattleStart } from './BattleScene';
 import { softReset } from './BootScene';
-import { forcedBattleTransition, logicSpeed, testEvent, testHooks, type FieldProbe } from '../dev/testHooks';
+import { forcedBattleTransition, logicSpeed, testEvent, testHooks, type FieldObjectProbe, type FieldProbe } from '../dev/testHooks';
 import {
   GetInitialPlayerAvatarState,
   GetPlayerAvatarGraphicsIdByStateIdAndGender,
@@ -335,13 +336,14 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (!playerInfo) throw new Error(`Missing player sprite ${PLAYER_GFX}`);
     this.player = new ObjectEvent(this, playerInfo, 0, 0, this.field);
     this.player.graphicsId = PLAYER_GFX;
-    // The avatar's other looks (bike, surfing, field move, fishing), so ObjectEventSetGraphicsId can swap at once.
+    // The avatar's other looks (bike, surfing, field move, fishing, VS Seeker), so ObjectEventSetGraphicsId can swap at once.
     const gender = this.playerGender();
-    await Promise.all(
-      ['PLAYER_AVATAR_GFX_NORMAL', 'PLAYER_AVATAR_GFX_BIKE', 'PLAYER_AVATAR_GFX_RIDE', 'PLAYER_AVATAR_GFX_FIELD_MOVE', 'PLAYER_AVATAR_GFX_FISH'].map((s) =>
+    await Promise.all([
+      ...['PLAYER_AVATAR_GFX_NORMAL', 'PLAYER_AVATAR_GFX_BIKE', 'PLAYER_AVATAR_GFX_RIDE', 'PLAYER_AVATAR_GFX_FIELD_MOVE', 'PLAYER_AVATAR_GFX_FISH', 'PLAYER_AVATAR_GFX_VSSEEKER'].map((s) =>
         this.assets.loadSprite(this, GetPlayerAvatarGraphicsIdByStateIdAndGender(this.defines.require(s), gender)),
       ),
-    );
+      this.assets.loadSprite(this, vsSeekerBikeGraphicsId(gender)),
+    ]);
     setPlayerAvatarHost(this.createAvatarHost());
     // Field moves: field_effect.c's script table, the moves' field side and their graphics
     setFieldEffectScripts(this.assets.fieldEffectScripts);
@@ -349,6 +351,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     setFieldMoveHost(this.createFieldMoveHost());
     setFieldItemsHost(this.createFieldItemsHost());
     registerFieldItems();
+    setVsSeekerHost(this.createVsSeekerHost());
+    registerVsSeeker();
     setSurfHost({
       terrainAt: (x, y) => this.world.tileAt(x, y).terrain,
       createFieldEffectSprite: (fldEff, template, x, y, subpriority, callback) => this.fieldEffects.createSprite(fldEff, template, x, y, subpriority, callback),
@@ -412,6 +416,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       listMenu: fieldListMenuProbe(),
       surfBlob: surfBlobProbe(),
       fishing: fishingProbe(),
+      vsSeeker: vsSeekerProbe(),
       avatar: {
         flags: Object.keys(this.assets.scripts.defines)
           .filter((k) => k.startsWith('PLAYER_AVATAR_FLAG_') && gPlayerAvatar.flags & this.defines.require(k))
@@ -426,11 +431,21 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /** Dev: the current map's objects, for `__test.objects()`. */
-  testObjects(): { localId: number; graphicsId: string; x: number; y: number; moving: boolean }[] {
+  testObjects(): FieldObjectProbe[] {
     const cur = this.world.current;
     return this.npcs
       .filter((n) => n.chunk === cur)
-      .map((n) => ({ localId: n.localId, graphicsId: n.graphicsId, x: n.brain.obj.tileX - cur.originX, y: n.brain.obj.tileY - cur.originY, moving: n.brain.obj.isMoving }));
+      .map((n) => ({
+        localId: n.localId,
+        graphicsId: n.graphicsId,
+        x: n.brain.obj.tileX - cur.originX,
+        y: n.brain.obj.tileY - cur.originY,
+        moving: n.brain.obj.isMoving,
+        facing: n.brain.obj.facing,
+        movementType: n.brain.movementType,
+        frame: Number(n.brain.obj.sprite.frame.name),
+        ...n.brain.spriteOffset,
+      }));
   }
 
   /** Dev: the direction to push to take the warp the player stands on (stairs, arrow mats), if it is one. */
@@ -1240,6 +1255,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       this.state.clearTemps();
       this.wild.resetEncounterRateModifiers(); // RestartWildEncounterImmunitySteps
       mapResetTrainerRematches(this.state);
+      ResetMovementOfRematchableTrainers();
       // LoadMapFromWarp / LoadMapFromCameraTransition
       updateLocationHistoryForRoamer(this.state);
       if (warped) roamerMoveToOtherLocationSet(this.state);
@@ -2524,6 +2540,29 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       objectEventAnims: (table) => this.assets.fieldEffectObjects.objectEventAnims?.[table],
       doesCurrentMapHaveFishingMons: () => this.wild.doesCurrentMapHaveFishingMons(),
       fishingWildEncounter: (rod) => this.wild.fishingWildEncounter(rod),
+    };
+  }
+
+  /** What the VS Seeker (world/vsSeeker.ts) reads and does on the field. */
+  private createVsSeekerHost(): VsSeekerHost {
+    const brainOf = (obj: ObjectEvent) => this.npcs.find((n) => n.brain.obj === obj)?.brain;
+    return {
+      objectTemplates: () => {
+        const cur = this.world.current;
+        return this.templatesFor(cur).map((template, i) => {
+          const n = this.npcByLocalId(i + 1, cur);
+          return { localId: i + 1, template, obj: n?.brain.obj };
+        });
+      },
+      objectEvents: () => this.npcs.map((n) => n.brain.obj),
+      movementType: (obj) => brainOf(obj)?.movementType,
+      setTrainerMovementType: (obj, movementType) => brainOf(obj)?.setMovementType(movementType),
+      singleMovementActive: (obj) => !!brainOf(obj)?.singleMovementActive,
+      setTemplateMovementType: (localId, movementType) => this.setObjectTemplate(localId, { movementType }),
+      trainerOfScript: (script) => this.scripts.trainerScriptBattle(script)?.trainer ?? 0,
+      selectedObject: () => this.selectedObject,
+      startFieldEffect: (fldEff, obj) => this.fieldEffects.start(fldEff, obj),
+      rematches: this.assets.scripts.rematches,
     };
   }
 

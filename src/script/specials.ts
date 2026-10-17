@@ -14,6 +14,7 @@ import { SAVECB_RETURN_CONTINUE, SAVECB_RETURN_OKAY } from '../ui/SaveDialog';
 import { ForcePlayerOntoBike, GetPlayerAvatarBike } from '../world/bike';
 import { ForcePlayerToStartSurfing, GetPlayerFacingDirection, SeafoamIslandsB4F_CurrentDumpsPlayerOnLand } from '../world/playerAvatar';
 import { RockSmashWildEncounter } from '../world/fieldMoves';
+import { VsSeekerFreezeObjectsAfterChargeComplete, VsSeekerResetObjectMovementAfterChargeComplete } from '../world/vsSeeker';
 
 export interface SpecialEnv {
   state: GameState;
@@ -375,6 +376,16 @@ export const SPECIALS: Record<string, Special> = {
     env.host.startFieldTask(shake);
     env.setWaitState(() => shake.done);
   },
+
+  /**
+   * VsSeekerFreezeObjectsAfterChargeComplete (vs_seeker.c, EventScript_VsSeekerChargingDone): the script's
+   * waitstate ends once the player and the raise-hand jumpers stand still.
+   */
+  VsSeekerFreezeObjectsAfterChargeComplete({ setWaitState }) {
+    setWaitState(VsSeekerFreezeObjectsAfterChargeComplete());
+  },
+  /** VsSeekerResetObjectMovementAfterChargeComplete (vs_seeker.c): the trainers stop raising their hands. */
+  VsSeekerResetObjectMovementAfterChargeComplete,
 
   /** EndTrainerApproach (trainer_see.c): the script's waitstate ends once the trainer has walked up. */
   EndTrainerApproach(env) {

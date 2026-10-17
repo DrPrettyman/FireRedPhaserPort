@@ -11,6 +11,8 @@ import type { YesNoMenu } from '../ui/YesNoMenu';
 import { parseDirection, type Direction } from '../world/direction';
 import type { Defines } from './Defines';
 import { MovementRunner, towards, type Instruction } from './MovementRunner';
+import { GetRematchTrainerId, IsTrainerReadyForRematch, ShouldTryRematchBattle, type RematchEnv } from '../world/rematches';
+import { ClearRematchStateByTrainerId } from '../world/vsSeeker';
 import type { FieldTask } from '../world/elevator';
 import type { ListMenuHost } from '../ui/FieldListMenu';
 import { SetFlashLevel } from '../world/flash';
@@ -1301,7 +1303,7 @@ export class ScriptEngine {
       this.state.setVar('VAR_LAST_TALKED', battle.localIdOrFlags);
       this.host.selectObject(battle.localIdOrFlags);
     }
-    if (is('TRAINER_BATTLE_REMATCH', 'TRAINER_BATTLE_REMATCH_DOUBLE')) battle.trainer = this.getRematchTrainerId(battle.trainer);
+    if (is('TRAINER_BATTLE_REMATCH', 'TRAINER_BATTLE_REMATCH_DOUBLE')) battle.trainer = GetRematchTrainerId(this.rematchEnv(), battle.trainer);
     return script;
   }
 
@@ -1346,6 +1348,7 @@ export class ScriptEngine {
     return () => {
       if (fadeIn) return fadeIn();
       if (!run.done()) return false;
+      ClearRematchStateByTrainerId(battle.trainer); // HandleEndTurn_FinishBattle, for every trainer battle
       if (this.endTrainerBattle(battle, run.playerWon(), rematch)) {
         fadeIn = run.returnToField();
         return false;
@@ -1375,10 +1378,9 @@ export class ScriptEngine {
   }
 
   /**
-   * battle_setup.c / vs_seeker.c specials that read the configured battle. The VS Seeker itself isn't
-   * implemented, so `state.trainerRematches` stays clear and no trainer is ever ready for a rematch;
-   * ShouldTryRematchBattle still sends a beaten trainer down the rematch script, which then falls
-   * through to the post-battle text, as on the GBA.
+   * battle_setup.c / vs_seeker.c specials that read the configured battle. A beaten table trainer always goes
+   * down the rematch script (ShouldTryRematchBattle); only one the VS Seeker readied (`state.trainerRematches`
+   * by local id, world/vsSeeker.ts) battles there, the others fall through to the post-battle text.
    */
   private trainerSpecial(name: string): number | void {
     const battle = this.battle;
@@ -1405,18 +1407,10 @@ export class ScriptEngine {
       case 'HasEnoughMonsForDoubleBattle':
         this.state.setVar('VAR_RESULT', this.monsStateToDoubles());
         return;
-      case 'ShouldTryRematchBattle': {
-        if (!battle) return 0;
-        const i = this.data.rematches.findIndex((r) => r[0] === battle.trainer); // GetRematchIdx
-        if (i < 0) return 0;
-        if (this.trainerRematchable()) return 1; // ShouldTryRematchBattleInternal
-        return this.trainerFlag(this.data.rematches[i][0]) ? 1 : 0; // HasRematchTrainerAlreadyBeenFought
-      }
-      case 'IsTrainerReadyForRematch': {
-        // IsTrainerReadyForRematchInternal (LookupVsSeekerOpponentInArray skips SKIP entries)
-        const found = battle && this.data.rematches.some((r) => r.includes(battle.trainer));
-        return found && this.trainerRematchable() ? 1 : 0;
-      }
+      case 'ShouldTryRematchBattle':
+        return battle && ShouldTryRematchBattle(this.rematchEnv(), battle.trainer, this.trainerRematchable()) ? 1 : 0;
+      case 'IsTrainerReadyForRematch':
+        return battle && IsTrainerReadyForRematch(this.rematchEnv(), battle.trainer, this.trainerRematchable()) ? 1 : 0;
       case 'StartRematchBattle': {
         if (battle) this.waitState = this.runTrainerBattle(battle, true);
         return;
@@ -1437,31 +1431,9 @@ export class ScriptEngine {
     return !!this.state.trainerRematches[this.state.getVar('VAR_LAST_TALKED')];
   }
 
-  /** GetRematchTrainerId: the next rematch party not yet beaten, held back by story progress. */
-  private getRematchTrainerId(trainer: number): number {
-    const SKIP = 0xffff;
-    const NONE = this.defines.require('TRAINER_NONE');
-    const MAX_REMATCH_PARTIES = 6;
-    // GetNextAvailableRematchTrainer
-    const ids = this.data.rematches.find((r) => r[0] === trainer);
-    if (!ids) return 0;
-    const at = (j: number) => ids[j] ?? NONE;
-    let j = 1;
-    for (; j < MAX_REMATCH_PARTIES; j++) {
-      if (at(j) === NONE) break;
-      if (at(j) === SKIP || this.trainerFlag(at(j))) continue;
-      break;
-    }
-    if (j === MAX_REMATCH_PARTIES || at(j) === NONE) j--;
-    if (j === 0) return 0;
-    // TryGetRematchTrainerIdGivenGameState: tiers unlock with the VS Seeker, Celadon, Fuchsia, the credits, RS link
-    const gate = ['', 'FLAG_GOT_VS_SEEKER', 'FLAG_WORLD_MAP_CELADON_CITY', 'FLAG_WORLD_MAP_FUCHSIA_CITY', 'FLAG_SYS_GAME_CLEAR', 'FLAG_SYS_CAN_LINK_WITH_RS'][j];
-    if (gate && !this.state.getFlag(gate)) {
-      // GetRematchTrainerIdGivenGameState
-      do j--;
-      while (j !== 0 && at(j) === SKIP);
-    }
-    return at(j);
+  /** What world/rematches.ts' sRematches lookups read. */
+  private rematchEnv(): RematchEnv {
+    return { rematches: this.data.rematches, hasTrainerBeenFought: (t) => this.trainerFlag(t), flagGet: (f) => this.state.getFlag(f) };
   }
 
   /** ShowFieldMessage */

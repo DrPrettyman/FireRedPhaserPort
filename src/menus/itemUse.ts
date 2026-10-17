@@ -1,7 +1,7 @@
 // item_use.c: what Use does for each item, from the bag (tasks' data[3] == 0) and in battle. The
 // functions are looked up by the names in the item table (fieldUseFunc / battleUseFunc). Uses that
-// need overworld systems that don't exist yet (Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail,
-// berry pouch) aren't in the tables; the bag logs them.
+// need overworld systems that don't exist yet (Itemfinder, Fame Checker, Teachy TV, mail, berry pouch)
+// aren't in the tables; the bag logs them.
 
 import { K } from '../battle/constants';
 import { g, state } from '../battle/env';
@@ -145,9 +145,9 @@ function ItemUseOnFieldCB_Bicycle(_taskId: number): void {
 }
 
 /**
- * The field side of the rods and the Escape Rope (world/fishing.ts, world/fieldMoves.ts, world/fieldItems.ts),
- * registered at boot (registerFieldItems) like the party menu's field moves, so the bag doesn't import the
- * field's Phaser code.
+ * The field side of the rods, the Escape Rope and the VS Seeker (world/fishing.ts, world/fieldMoves.ts,
+ * world/fieldItems.ts, world/vsSeeker.ts), registered at boot (registerFieldItems, registerVsSeeker) like the
+ * party menu's field moves, so the bag doesn't import the field's Phaser code. Each registers its part.
  */
 export interface ItemUseFieldFuncs {
   CanFish(): boolean;
@@ -158,17 +158,23 @@ export interface ItemUseFieldFuncs {
   /** DisplayItemMessageOnField(taskId, FONT_NORMAL, str, callback) */
   DisplayItemMessageOnField(str: number[], callback: () => void): void;
   Task_UseDigEscapeRopeOnField(): void;
+  /** gMapHeader.mapType */
+  GetCurrentMapType(): number;
+  /** gSaveBlock1Ptr->location as its MAP_* id */
+  GetCurrentMapId(): string;
+  /** vs_seeker.c's Task_VsSeeker_0 */
+  Task_VsSeeker_0(): void;
 }
 
-let sFieldFuncs: ItemUseFieldFuncs | undefined;
+const sFieldFuncs: Partial<ItemUseFieldFuncs> = {};
 
-export function registerItemUseFieldFuncs(funcs: ItemUseFieldFuncs): void {
-  sFieldFuncs = funcs;
+export function registerItemUseFieldFuncs(funcs: Partial<ItemUseFieldFuncs>): void {
+  Object.assign(sFieldFuncs, funcs);
 }
 
 function fieldFuncs(): ItemUseFieldFuncs {
-  if (!sFieldFuncs) throw new Error('[item_use] the field items are not registered');
-  return sFieldFuncs;
+  if (!sFieldFuncs.CanFish || !sFieldFuncs.Task_VsSeeker_0) throw new Error('[item_use] the field items are not registered');
+  return sFieldFuncs as ItemUseFieldFuncs;
 }
 
 /** FieldUseFunc_Rod: only facing water you can fish in (CanFish, world/fishing.ts). */
@@ -208,6 +214,24 @@ function ItemUseOnFieldCB_EscapeRope(_taskId: number): void {
   f.Overworld_ResetStateAfterDigEscRope();
   RemoveUsedItem();
   f.DisplayItemMessageOnField(gStringVar4.slice(), f.Task_UseDigEscapeRopeOnField);
+}
+
+/**
+ * FieldUseFunc_VsSeeker: only on routes, in towns and cities, and not in the forests that are routes (Viridian
+ * Forest, Mt. Ember's exterior, Berry Forest, Pattern Bush).
+ */
+function FieldUseFunc_VsSeeker(taskId: number): void {
+  const f = fieldFuncs();
+  const mapType = f.GetCurrentMapType();
+  if (
+    (mapType !== K.MAP_TYPE_ROUTE && mapType !== K.MAP_TYPE_TOWN && mapType !== K.MAP_TYPE_CITY) ||
+    ['MAP_VIRIDIAN_FOREST', 'MAP_MT_EMBER_EXTERIOR', 'MAP_THREE_ISLAND_BERRY_FOREST', 'MAP_SIX_ISLAND_PATTERN_BUSH'].includes(f.GetCurrentMapId())
+  ) {
+    PrintNotTheTimeToUseThat(taskId, inField(taskId));
+  } else {
+    sItemUseOnFieldCB = () => f.Task_VsSeeker_0();
+    SetUpItemUseOnFieldCallback(taskId);
+  }
 }
 
 /**
@@ -509,6 +533,7 @@ export const FIELD_USE_FUNCS: Record<string, TaskFunc> = {
   FieldUseFunc_Bike,
   FieldUseFunc_Rod,
   ItemUseOutOfBattle_EscapeRope,
+  FieldUseFunc_VsSeeker,
   FieldUseFunc_TownMap,
   FieldUseFunc_TmCase,
   FieldUseFunc_CoinCase,

@@ -48,8 +48,8 @@ function vsSeekerResetChargingStepCounter(state: GameState): void {
 }
 
 /**
- * MapResetTrainerRematches, on every map load. ResetMovementOfRematchableTrainers is left out: only
- * the VS Seeker (not ported) gives trainers the raise-hand movement types it undoes.
+ * MapResetTrainerRematches' state part, on every map load; its ResetMovementOfRematchableTrainers (the objects'
+ * part) is world/vsSeeker.ts, called right after.
  */
 export function mapResetTrainerRematches(state: GameState): void {
   state.setFlag('FLAG_SYS_VS_SEEKER_CHARGING', false);
