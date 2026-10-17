@@ -1463,7 +1463,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         if (fadingIn && this.screenFade.active) return false;
         const r = menu.tick();
         if (r === undefined) return false;
-        if (r === 'POKEMON') this.openFieldMenu('party');
+        if (r === 'POKEDEX') this.openFieldMenu('pokedex');
+        else if (r === 'POKEMON') this.openFieldMenu('party');
         else if (r === 'BAG') this.openFieldMenu('bag');
         else if (r === 'RETIRE') this.startFieldScript('SafariZone_EventScript_RetirePrompt'); // SafariZoneRetirePrompt
         else if (r === 'SAVE') this.openSaveDialog();
@@ -1509,11 +1510,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /**
-   * StartMenu_FadeScreenIfLeavingOverworld + StartMenuPokemonCallback / StartMenuBagCallback: fade to
-   * black, then hand over to the party menu or bag (FieldMenuScene). They come back through
-   * CB2_ReturnToFieldWithOpenMenu (start menu reopened while the field fades in) or CB2_ReturnToField.
+   * StartMenu_FadeScreenIfLeavingOverworld + StartMenuPokedexCallback / StartMenuPokemonCallback /
+   * StartMenuBagCallback: fade to black, then hand over to the Pokédex, party menu or bag (FieldMenuScene). They
+   * come back through CB2_ReturnToFieldWithOpenMenu (start menu reopened while the field fades in) or
+   * CB2_ReturnToField.
    */
-  private openFieldMenu(menu: 'party' | 'bag'): void {
+  private openFieldMenu(menu: 'party' | 'bag' | 'pokedex'): void {
     const d = this.defines;
     this.screenFade.begin(d.require('FADE_TO_BLACK'));
     let launched = false;
@@ -1525,6 +1527,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       tick: () => {
         if (launched || this.screenFade.active || !ready) return false;
         launched = true;
+        if (menu === 'pokedex') this.state.incrementGameStat(d.require('GAME_STAT_CHECKED_POKEDEX'));
         this.runFieldMenu({ menu }, (openStartMenu) => {
           // RunFieldCallback: gFieldCallback2 (a field move's FieldCallback_PrepareFadeInFromMenu) before gFieldCallback
           const fieldCallback = gFieldCallback2.fn ?? gFieldCallback.fn;

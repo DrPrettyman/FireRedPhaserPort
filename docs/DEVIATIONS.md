@@ -154,6 +154,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     FLDEFF_HALL_OF_FAME_RECORD's SE_BALL is silent. Other game stats than GAME_STAT_ENTERED_HOF and
     GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted. `special Script_UpdateTrainerFanClubGameClear` is a no-op (the Trainer
     Fan Club isn't kept).
+  - Pokédex screen (menus/pokedexScreen.ts): no audio (SE_SELECT, the SE_DEX_* sounds; the BGM volume calls are
+    no-ops); no help system context. Only the top menu and the numerical lists are ported so far: A on a mon in
+    the list, the habitat categories and the search lists (A TO Z, TYPE, LIGHTEST, SMALLEST) do nothing yet (the
+    habitats and search modes log a warning). The anticheat's second and third copies of the seen flags aren't
+    kept (one `dexSeen` set), so "caught" just needs "seen" too. The Pokédex keeps the field's DISPCNT, which the
+    port sets in FieldMenuScene since the field isn't on the GBA layer.
   - Credits (menus/credits.ts): no audio (MUS_CREDITS, the cries). A map scene loads asynchronously, so it can start
     a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
     GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.

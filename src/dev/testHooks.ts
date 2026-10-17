@@ -30,6 +30,7 @@ import { tmCaseProbe } from '../menus/tmCase';
 import { berryPouchProbe } from '../menus/berryPouch';
 import { hallOfFameProbe } from '../menus/hallOfFame';
 import { creditsProbe, creditsSkipToClosing } from '../menus/credits';
+import { pokedexScreenProbe } from '../menus/pokedexScreen';
 import { regionMapProbe } from '../menus/regionMap';
 import { mainMenuProbe } from '../menus/mainMenu';
 import { titleScreenProbe } from '../menus/titleScreen';
@@ -540,6 +541,12 @@ function createApi(game: Phaser.Game) {
       const p = regionMapProbe();
       return p && { ...p, mapName: decode(p.mapName), topBarRight: decode(p.topBarRight) };
     },
+    /**
+     * The Pokédex screen while it's up (menus/pokedexScreen.ts): the task and its state, `ready` (input state, no
+     * fade), the seen/owned counts it computed, the top menu's list and the numerical list (order, rows, cursor,
+     * the selected row's species and its seen/caught bits).
+     */
+    pokedex: () => pokedexScreenProbe(),
     /** The item PC's list (WITHDRAW ITEM, item_pc.c) while it runs: its task, scroll/row and item count. */
     itemPc: () => (gMain.callback2?.name === 'ItemPc_MainCB' ? itemPcProbe() : undefined),
     /** The TM case while it's open (menus/tmCase.ts): TMCASE_* type, task, scroll/row and the pocket's item ids in list order. */

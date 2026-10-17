@@ -1,8 +1,8 @@
 // The GBA-layer screens opened from the field: the party menu and bag from the start menu
 // (CB2_PartyMenuFromStartMenu / CB2_BagMenuFromStartMenu), the Poké Mart's buy menu and sell bag
 // (CB2_InitBuyMenu / CB2_GoToSellMenu), the naming screen (DoNamingScreen from a special), the Hall of Fame
-// (CB2_DoHallOfFameScreen from EnterHallOfFame, CB2_InitHofPC from the PC) and the wall maps' region map
-// (`special ShowTownMap`). The
+// (CB2_DoHallOfFameScreen from EnterHallOfFame, CB2_InitHofPC from the PC), the wall maps' region map
+// (`special ShowTownMap`) and the Pokédex (CB2_OpenPokedexFromStartMenu). The
 // overworld isn't a GBA screen, so its return points (CB2_ReturnToFieldWithOpenMenu, CB2_ReturnToField,
 // CB2_ReturnToFieldContinueScriptPlayMapMusic) end this scene instead.
 
@@ -12,7 +12,16 @@ import { setBattleTextSpeed } from '../battle/battleWindow';
 import { g, initBattleEnv, setTextStrings } from '../battle/env';
 import { initBattleMessages } from '../battle/message';
 import { loadGfx } from '../gba/gfx';
-import { resetHardware } from '../gba/hw';
+import {
+  DISPCNT_MODE_0,
+  DISPCNT_OBJ_1D_MAP,
+  DISPCNT_OBJ_ON,
+  DISPCNT_WIN0_ON,
+  DISPCNT_WIN1_ON,
+  REG_OFFSET_DISPCNT,
+  resetHardware,
+  SetGpuReg,
+} from '../gba/hw';
 import { gMain, SetMainCallback1, SetMainCallback2, SetVBlankCallback } from '../gba/main';
 import { initGbaText } from '../gba/window';
 import { CB2_ReturnToField, CB2_ReturnToFieldContinueScriptPlayMapMusic, fieldReturn } from '../menus/fieldCallbacks';
@@ -27,6 +36,8 @@ import { CB2_DoHallOfFameScreen, CB2_InitHofPC, hallOfFameGfxSymbols, hofEnv, pa
 import type { WarpData } from '../state/GameState';
 import { gHofBuffer, LoadHallOfFameSave } from '../state/hallOfFame';
 import { SAVE_STATUS_OK, TrySavingData } from '../state/save';
+import { loadPokedexData } from '../menus/pokedex';
+import { CB2_OpenPokedexFromStartMenu, pokedexScreenGfxSymbols } from '../menus/pokedexScreen';
 import { InitRegionMapWithExitCB, REGIONMAP_TYPE_WALL, regionMapGfxSymbols } from '../menus/regionMap';
 import { buyMenuGfxSymbols, CB2_GoToSellMenu, CB2_InitBuyMenu, LoadFieldTilesetsForShop, type ShopFieldView } from '../menus/shop';
 import type { PokemonData } from '../pokemon/Pokemon';
@@ -54,7 +65,7 @@ export interface NamingScreenRequest {
 }
 
 export interface FieldMenuStart {
-  menu: 'party' | 'bag' | 'buy' | 'sell' | 'naming' | 'storage' | 'itemPc' | 'itemPcDeposit' | 'hallOfFame' | 'hallOfFamePc' | 'townMap';
+  menu: 'party' | 'bag' | 'buy' | 'sell' | 'naming' | 'storage' | 'itemPc' | 'itemPcDeposit' | 'hallOfFame' | 'hallOfFamePc' | 'townMap' | 'pokedex';
   /** For 'storage': OPTION_WITHDRAW / OPTION_DEPOSIT / OPTION_MOVE_MONS / OPTION_MOVE_ITEMS */
   storageOption?: number;
   /** For 'buy': what the buy menu's map view reads from the field. */
@@ -110,6 +121,11 @@ export class FieldMenuScene extends GbaHostScene {
     if (start.menu === 'party' || start.menu === 'bag' || start.menu === 'townMap') {
       await loadGfx(regionMapGfxSymbols(start.menu === 'bag' && start.state.bag.has(K.ITEM_TOWN_MAP, 1)));
     }
+    // The Pokédex (StartMenuPokedexCallback): its data and graphics.
+    if (start.menu === 'pokedex') {
+      await loadPokedexData('gen');
+      await loadGfx(pokedexScreenGfxSymbols());
+    }
     // The item PC's list (WITHDRAW ITEM) draws the PC's items' icons.
     if (start.menu === 'itemPc') await loadGfx(itemPcGfxSymbols());
     const naming = start.naming;
@@ -147,6 +163,11 @@ export class FieldMenuScene extends GbaHostScene {
     } else if (start.menu === 'townMap') {
       // ShowTownMap (field_specials.c)
       SetMainCallback2(() => InitRegionMapWithExitCB(REGIONMAP_TYPE_WALL, CB2_ReturnToFieldContinueScriptPlayMapMusic));
+    } else if (start.menu === 'pokedex') {
+      // The Pokédex keeps the DISPCNT the field set up (InitOverworldGraphicsRegisters: OBJ on, 1D mapping,
+      // WIN0/WIN1, which it turns off while it's up): the overworld isn't on the GBA layer, so set it here.
+      SetGpuReg(REG_OFFSET_DISPCNT, DISPCNT_MODE_0 | DISPCNT_OBJ_1D_MAP | DISPCNT_OBJ_ON | DISPCNT_WIN0_ON | DISPCNT_WIN1_ON);
+      SetMainCallback2(CB2_OpenPokedexFromStartMenu); // StartMenuPokedexCallback
     } else if (start.menu === 'storage') {
       const option = start.storageOption!;
       SetMainCallback2(() => EnterPokeStorage(option));

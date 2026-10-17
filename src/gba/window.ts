@@ -165,6 +165,15 @@ export function PutWindowRectTilemap(windowId: number, x: number, y: number, wid
   }
 }
 
+export function PutWindowRectTilemapOverridePalette(windowId: number, x: number, y: number, width: number, height: number, palette: number): void {
+  const w = gWindows[windowId].window;
+  let currentRow = w.baseBlock + y * w.width + x + GetBgAttribute(w.bg, BG_ATTR_BASETILE);
+  for (let i = 0; i < height; ++i) {
+    WriteSequenceToBgTilemapBuffer(w.bg, currentRow, w.tilemapLeft + x, w.tilemapTop + y + i, width, 1, palette, 1);
+    currentRow += w.width;
+  }
+}
+
 export function ClearWindowTilemap(windowId: number): void {
   const w = gWindows[windowId].window;
   FillBgTilemapBufferRect(w.bg, gWindowClearTile, w.tilemapLeft, w.tilemapTop, w.width, w.height, w.paletteNum);
