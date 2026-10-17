@@ -1467,3 +1467,28 @@ end to end.
   worker does one unit and hands back, continuation workers carry the branch on; the coordinator runs a watchdog
   (a background timer, then a "Checkpoint" SendMessage to a worker past 60 minutes or 45 minutes without a commit).
   Worker rules for keeping the context small.
+
+### Pokédex screen: data, top menu, numerical lists (W-dex unit 1, SCREENS_PLAN.md batch 1)
+
+- Extractor: `tools/extract_pokedex.py` → public/gen/pokedex.json (gPokedexEntries' category names, FireRed
+  descriptions, heights, weights, scales and offsets; gPokedexOrder_*; gDexCategories; gMonFootprintTable).
+  extract_gfx.py takes `graphics/pokedex/` and the footprints: a gbagfx-style 1bpp conversion (greyscale PNGs are
+  inverted, so the black footprint pixels are set bits; bit 0 is the leftmost pixel). include/pokedex_screen.h's
+  DEX_CATEGORY_* / DEX_ORDER_* are in the defines.
+- `menus/pokedex.ts`: pokedex.c (GetSetPokedexFlag, GetKanto/NationalPokedexCount, HasAllKantoMons, HasAllMons,
+  GetPokedexHeightWeight), DexScreen_GetSetPokedexFlag, NationalPokedexNumToSpecies.
+- `menus/pokedexScreen.ts`: CB2_OpenPokedexFromStartMenu, DexScreen_LoadResources, DoClosePokedex /
+  CB2_ClosePokedex, Task_PokedexScreen (the mode list with its icons and locked habitats greyed out, the seen /
+  owned counts, Kanto and national layouts), Task_DexScreen_NumericalOrder, DexScreen_CountMonsInOrderedList (all
+  orders), DexScreen_InitListMenuForOrderedList / _DestroyDexOrderListMenu, ItemPrintFunc_OrderedListMenu (number,
+  caught ball, type icons), the scroll arrows, the print helpers, DexScreen_IsCategoryUnlocked. Not yet (stubs):
+  the mon page, the search lists, the habitat pages.
+- Start menu: POKéDEX opens it (OverworldScene `openFieldMenu('pokedex')`, FieldMenuScene 'pokedex'), counts
+  GAME_STAT_CHECKED_POKEDEX, and StartMenuPokedexSanityCheck keeps the menu open while nothing's been seen.
+- Found on the way: the field's DISPCNT (OBJ on, 1D mapping) isn't on the GBA layer, so the screen's scroll arrows
+  didn't show until FieldMenuScene set it. tests/e2e/fly.test.ts's `useTownMap` pressed RIGHT 60 frames after A on
+  BAG, which could land before the bag was up (seen once under load): it waits for CB2_BagMenuRun first.
+- Verified: typecheck; unit tests (tests/unit/pokedex.test.ts: the JSON, the footprint bits, the counts and the
+  anticheat); e2e tests/e2e/pokedex.test.ts (open from START, counts, scrolling the Kanto list incl. paging,
+  the list's remembered row, the national layout and list, closing back to the start menu and the field, the
+  sanity check), plus saveContinue, fly, listMenuFlash. Screenshots of the top menu and lists match FRLG's layout.

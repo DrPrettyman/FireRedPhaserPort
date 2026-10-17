@@ -329,6 +329,25 @@ this is the next level down. When you add or change a subsystem, update its entr
   `?map=PokemonLeague_HallOfFame&x=5&y=12`; the Viridian PC for the Hall of Fame PC, records written straight
   into localStorage). To grab a GBA-layer frame at an exact tick, read the canvas inside a `t.until` predicate
   (and keep the predicate idempotent: `until` calls it once more after it resolves).
+- **Pokédex screen:** `menus/pokedexScreen.ts` is pokedex_screen.c; `menus/pokedex.ts` is pokedex.c plus the data
+  (`loadPokedexData` → `pokedexData`: gPokedexEntries' strings, sizes and scales by national number, the four
+  orders, gDexCategories' pages, gMonFootprintTable's symbols; public/gen/pokedex.json from
+  tools/extract_pokedex.py), NationalPokedexNumToSpecies and DexScreen_GetSetPokedexFlag (on GameState's
+  `dexSeen` / `dexCaught`). START → POKéDEX (StartMenuPokedexSanityCheck: nothing until a mon's been seen) fades
+  out and runs CB2_OpenPokedexFromStartMenu in FieldMenuScene 'pokedex' (which loads the data and
+  `pokedexScreenGfxSymbols()`, and sets the field's DISPCNT the screen inherits); CB2_ClosePokedex returns through
+  CB2_ReturnToFieldWithOpenMenu. Graphics: graphics/pokedex/ by symbol (sKantoDexTiles, sTopMenuIconTiles_*, ...),
+  the footprints as 1bpp `gMonFootprint_*` symbols (32 bytes, bit 0 = leftmost pixel). Structure: struct
+  PokedexScreenData is `sPokedexScreenData` (null while the screen is down); one task whose func is swapped like
+  the C's (`gTasks[taskId].func = Task_DexScreen_X; d.state = 0`), each a `switch (d.state)`. Ported: DexScreen_
+  LoadResources, Task_PokedexScreen (top menu, the selection icons, the counts), Task_DexScreen_NumericalOrder
+  (Kanto; national with the National Dex), the ordered-list helpers and printers. To add a page (the mon page,
+  the characteristic lists, the habitats), fill in the STUB branches in Task_PokedexScreen case 6 (states 7 / 8)
+  and Task_DexScreen_NumericalOrder case 6 (state 7). list_menu.c's ListMenuInitInRect and window.c's
+  PutWindowRectTilemapOverridePalette came with it. Probe: `__test.pokedex()` (task, state, `ready`, the counts,
+  unlocked categories, the top menu's and the numerical list's cursor and selected entry). Tests:
+  tests/e2e/pokedex.test.ts (Pallet Town with FLAG_SYS_POKEDEX_GET and the dex sets written through `t.state`),
+  tests/unit/pokedex.test.ts.
 - **Evolution scene:** `menus/evolutionScene.ts` + `menus/evolutionGraphics.ts` run on whichever GBA host is up
   (BattleScene after TryEvolvePokemon, FieldMenuScene from the party menu) and hand back through
   `gCB2_AfterEvolution` (`setCB2_AfterEvolution`). It draws on the battle BG/window layout, so the field host
