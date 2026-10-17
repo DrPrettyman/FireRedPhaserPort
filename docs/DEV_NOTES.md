@@ -513,7 +513,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   (`CreateTrainerCardTrainerPicSprite` in menus/picSprites.ts, which also has PlayerGenderToFrontTrainerPicId now).
   Not yet (W-tcard unit 2): the back (PrintAllOnCardBack, BufferTextForCardBack, DrawCardBackStats, the stickers'
   and mon icons' tiles: LoadMonIconGfx is a stub, LoadStickerGfx is ported) and the flip (A on the front does
-  nothing; the flip needs the HBlank BG0VOFS scanline effect, which the port does with `hblankRegs`). Probe
+  nothing; the flip's HBlankCB_TrainerCard sets BG0VOFS per scanline, and the port doesn't run HBlank callbacks:
+  scanline effects go through gba/hw.ts's `hblankRegs`). Probe
   `__test.trainerCard()` (mainState, `ready`, the stars and badges it has and the ones drawn on BG3, which card
   palette is in the hardware palettes, the female background, the pic's pixel count, what the front printed,
   decoded). Tests: tests/e2e/trainerCard.test.ts, tests/unit/trainerCard.test.ts (the stars).
