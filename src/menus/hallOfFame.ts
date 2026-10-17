@@ -219,7 +219,7 @@ export function partyHallOfFameTeam(gs: GameState): HallofFameTeam {
 }
 
 /** PlayerGenderToFrontTrainerPicId(gender, TRUE): gFacilityClassToPicIndex[FACILITY_CLASS_RED / LEAF] */
-function PlayerGenderToFrontTrainerPicId(gender: number): number {
+export function PlayerGenderToFrontTrainerPicId(gender: number): number {
   return gender !== K.MALE ? K.TRAINER_PIC_LEAF : K.TRAINER_PIC_RED;
 }
 

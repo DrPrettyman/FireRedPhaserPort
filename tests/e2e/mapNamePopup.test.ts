@@ -12,14 +12,24 @@ test('crossing into another map section slides the new name in, holds it, and sl
   await game.waitIdle();
 
   // Crossing the connection while it's up reshows it: out, reprinted, back in.
-  // 120 frames on screen (tTimer > 120), 12 frames out, then the window is cleared. Counted in the page, frame by
-  // frame, from the walk on: polling from here can notice the new map (and the full height) many frames late on a
-  // loaded machine, by when the popup's 120 frames are nearly up.
+  // 120 frames on screen (tTimer > 120), 12 frames out, then the window is cleared. Counted inside one `until`
+  // predicate, tick by tick: an awaited `until` resumes only where the frame's batch of ticks ends, which on a
+  // loaded machine can be dozens of ticks late, so a separate `waitFrames(100)` after it could land past the 120.
   expect(await game.eval(async (t) => {
     await t.walk('up', 3); // stops at the connection while Route 1 loads
-    const shown = await t.until(() => { const p = t.mapNamePopup(); return p?.text === 'ROUTE 1' && p.height === 24; }, 600);
-    await t.waitFrames(100);
-    return shown && t.mapNamePopup()?.height;
+    let shownAt = -1;
+    let height: number | undefined;
+    await t.until(() => {
+      const p = t.mapNamePopup();
+      if (shownAt < 0) {
+        if (p?.text === 'ROUTE 1' && p.height === 24) shownAt = t.frame();
+        return false;
+      }
+      if (t.frame() < shownAt + 100) return false;
+      height = p?.height;
+      return true;
+    }, 900);
+    return height;
   })).toBe(24);
   expect(await game.eval((t) => t.until(() => t.mapNamePopup() === undefined, 60))).toBe(true);
 });

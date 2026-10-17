@@ -21,8 +21,9 @@ from extract import read_jasc
 # screen, the PC storage system and item PC, the evolution scene, the field's tilesets and object event pics, which the buy menu's map view draws from VRAM,
 # field effect pics, door animation tiles, the cave entrance transition, and the weather fog and palette that
 # Haze and Mist Ball load, the main menu's palettes, the title screen and Oak's speech, the Hall of Fame and the
-# credits, the region map (town map / fly map) with the dungeon map previews it shows, the TM case, and the
-# Pokédex (pokedex_screen.c with the mons' footprints, the area page's maps and pokedex_area_markers.c's markers).
+# credits, the region map (town map / fly map) with the dungeon map previews it shows, the TM case, the berry
+# pouch, and the Pokédex (pokedex_screen.c with the mons' footprints, the area page's maps and
+# pokedex_area_markers.c's markers).
 GFX_PREFIXES = (
     "graphics/battle_interface/",
     "graphics/battle_terrain/",
@@ -57,6 +58,7 @@ GFX_PREFIXES = (
     "graphics/region_map/",
     "graphics/map_preview/",
     "graphics/tm_case/",
+    "graphics/berry_pouch/",
     "graphics/pokedex/",
     "data/tilesets/",
 )
@@ -112,14 +114,16 @@ class MakeRules:
 
 
 class GrayIndices:
-    """gbagfx reads greyscale PNGs' raw samples as colour indices; PIL scales them to 0..255."""
+    """gbagfx reads greyscale PNGs' raw samples as colour indices (PIL scales them to 0..255) and inverts them:
+    ConvertBitDepth keeps the sample's low bits, then ConvertToTiles4Bpp / 8Bpp take 15 - pixel / 255 - pixel.
+    `~sample` masked to the output depth (png_tiles does that) is the same."""
 
     def __init__(self, img, bit_depth):
         self.px = img.load()
         self.scale = 255 // ((1 << bit_depth) - 1)
 
     def __getitem__(self, xy):
-        return self.px[xy] // self.scale
+        return ~(self.px[xy] // self.scale) & 0xFF
 
 
 def open_indexed(png):

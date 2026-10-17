@@ -53,6 +53,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     banner back. Dig/Escape Rope with no escape warp saved (a dev start in a cave) go to the last heal location.
   - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Bag uses that need overworld systems
     (Itemfinder, Fame Checker, Teachy TV, mail, TM case, berry pouch, registered SELECT items) log
+    (rods, Escape Rope, Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail,
+    registered SELECT items) log "not implemented" and return to the bag. Berry powder reads as 0.
+    (Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail, TM case, berry pouch, registered SELECT items) log
     "not implemented" and return to the bag. The Escape Rope's quest log event (ItemUse_SetQuestLogEvent) isn't
     recorded; ItemUseOnFieldCB_EscapeRope takes the field controls lock itself (on the GBA the start menu's lock is
     still held when the bag returns; here the field's overlay held the controls until then). RemoveUsedItem after
@@ -61,6 +64,11 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - TM case (menus/tmCase.ts): silent (SE_SELECT, SE_SHOP); no quest log (RecordItemTransaction). Not ported:
     the Pokédude's Teachy TV demo (TMCASE_POKEDUDE), the Union Room's GIVE / EXIT menu (no link play) and opening
     it as a registered item from the field (Task_InitTMCaseFromField: there are no registered SELECT items yet).
+  - Berry pouch (menus/berryPouch.ts): silent (SE_BAG_CURSOR, SE_SELECT, SE_SHOP); no quest log
+    (RecordItemTransaction). Not ported: Berry Crush (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room context
+    menus (GIVE / EXIT, EXIT) and IsHoldingItemAllowed's Enigma Berry check there (always TRUE: neither can be
+    entered), opening it as a registered item from the field (Task_InitBerryPouchFromField), and
+    AbortBerryPouchLoading (for a failed Alloc).
   - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
     overworld's ScreenFade.
   - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;
@@ -108,7 +116,6 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
     GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
-    Selling from the berry pouch logs "not implemented" (that screen doesn't exist yet).
   - Field steps: eggs count down egg cycles, but the daycare (breeding,
     its mons' steps) and the hatching scene (`special EggHatch`) aren't ported.
   - Safari Zone: the entrance's SE/fanfare are silent.
@@ -173,8 +180,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Pokédex screen (menus/pokedexScreen.ts): no audio (SE_SELECT, the SE_DEX_* sounds, the mon page's cries and
     START = CRY; the BGM volume calls are no-ops); no help system context. Not ported yet: the habitat categories
     (picking one logs a warning and does nothing), so A on a mon in a search list (A TO Z, TYPE, LIGHTEST,
-    SMALLEST), which opens its habitat page, also only logs a warning; A on the mon page (the area page) does
-    nothing. The mon page loads the shown mon's pic, palettes and footprint when it's first drawn (they're
+    SMALLEST), which opens its habitat page, also only logs a warning. The mon page loads the shown mon's pic,
+    palettes, footprint and icon (for the area page) when it's first drawn (they're
     fetched on demand, not preloaded), so the first view of a mon can take a frame or two longer. Unown and Spinda
     are drawn with personality 0 (the save's unownPersonality / spindaPersonality aren't kept; Spinda's spots
     aren't drawn anywhere). The anticheat's second and third copies of the seen flags aren't

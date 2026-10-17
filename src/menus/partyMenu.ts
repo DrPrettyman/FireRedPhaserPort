@@ -167,6 +167,7 @@ import { CB2_BagMenuFromBattle, CB2_SetUpReshowBattleScreenAfterMenu, GoToBagMen
 import { SpecialVar } from './itemMenuState';
 import { CheckIfItemIsTMHMOrEvolutionStone } from './itemUse';
 import { InitTMCase, TMCASE_KEEP_PREV, TMCASE_REOPENING } from './tmCase';
+import { BERRYPOUCH_KEEP_PREV, BERRYPOUCH_NA, InitBerryPouch } from './berryPouch';
 import { BeginEvolutionScene, setCB2_AfterEvolution } from './evolutionScene';
 import { CreateMonIcon, LoadMonIconPalettes, SetPartyHPBarSprite, SpriteCB_MonIcon, UpdateMonIconFrame } from './pokemonIcon';
 import { testEvent } from '../dev/testHooks';
@@ -3051,10 +3052,9 @@ function CB2_ReturnToTMCaseMenu(): void {
   InitTMCase(TMCASE_REOPENING, null, TMCASE_KEEP_PREV);
 }
 
-/** CB2_ReturnToBerryPouchMenu: the berry pouch doesn't exist yet, so back to the bag. */
+/** CB2_ReturnToBerryPouchMenu */
 function CB2_ReturnToBerryPouchMenu(): void {
-  console.warn('[party_menu] the berry pouch is not implemented; returning to the bag');
-  CB2_ReturnToBagMenu();
+  InitBerryPouch(BERRYPOUCH_NA, null, BERRYPOUCH_KEEP_PREV);
 }
 
 function Task_DoUseItemAnim(taskId: number): void {

@@ -1,7 +1,8 @@
 // item_use.c: what Use does for each item, from the bag (tasks' data[3] == 0) and in battle. The
 // functions are looked up by the names in the item table (fieldUseFunc / battleUseFunc). Uses that
-// need overworld systems that don't exist yet (Itemfinder, Fame Checker, Teachy TV, mail, berry pouch)
-// aren't in the tables; the bag logs them.
+// need overworld systems that don't exist yet (Itemfinder, Fame Checker, Teachy TV, mail) aren't in the
+// tables; the bag logs them. Berries used from the berry pouch run these with the pouch's task, and hand
+// back to the pouch instead of the bag.
 
 import { K } from '../battle/constants';
 import { g, state } from '../battle/env';
@@ -32,6 +33,7 @@ import { GetOnOffBike, IsBikingDisallowedByPlayer } from '../world/bike';
 import { avatarField, ClearPlayerHeldMovement, PLAYER_AVATAR_FLAG } from '../world/playerAvatar';
 import {
   Bag_BeginCloseWin0Animation,
+  CB2_BagMenuFromBattle,
   CB2_BagMenuFromStartMenu,
   DisplayItemMessageInBag,
   ItemMenu_SetExitCallback,
@@ -43,6 +45,15 @@ import {
 import { SpecialVar } from './itemMenuState';
 import { InitRegionMapWithExitCB, REGIONMAP_TYPE_NORMAL } from './regionMap';
 import { InitTMCase, TMCASE_FIELD } from './tmCase';
+import {
+  BERRYPOUCH_FROMBATTLE,
+  BERRYPOUCH_FROMFIELD,
+  BerryPouch_SetExitCallback,
+  BerryPouch_StartFadeToExitCallback,
+  DisplayItemMessageInBerryPouch,
+  InitBerryPouch,
+  Task_BerryPouch_DestroyDialogueWindowAndRefreshListMenu,
+} from './berryPouch';
 import {
   CB2_ShowPartyMenuForItemUse,
   EnterPartyFromItemMenuInBattle,
@@ -69,8 +80,8 @@ function SetUpItemUseCallback(taskId: number): void {
   if (SpecialVar.ItemId === K.ITEM_ENIGMA_BERRY) itemType = gTasks[taskId].data[4] - 1;
   else itemType = ItemId_GetType(SpecialVar.ItemId) - 1;
   if (GetPocketByItemId(SpecialVar.ItemId) === K.POCKET_BERRY_POUCH) {
-    console.warn('[item_use] the berry pouch is not implemented');
-    Task_ReturnToBagFromContextMenu(taskId);
+    BerryPouch_SetExitCallback(sExitCallbackByItemType(itemType));
+    BerryPouch_StartFadeToExitCallback(taskId);
     return;
   }
   ItemMenu_SetExitCallback(sExitCallbackByItemType(itemType));
@@ -266,6 +277,35 @@ function InitTMCaseFromBag(): void {
   InitTMCase(TMCASE_FIELD, CB2_BagMenuFromStartMenu, false);
 }
 
+/**
+ * FieldUseFunc_BerryPouch: from the bag, the berry pouch, which returns to the bag. (Its registered-item branch,
+ * Task_InitBerryPouchFromField, opens it from the field with SELECT, which the port doesn't have yet.)
+ */
+function FieldUseFunc_BerryPouch(taskId: number): void {
+  if (gTasks[taskId].data[3] === 0) {
+    ItemMenu_SetExitCallback(InitBerryPouchFromBag);
+    ItemMenu_StartFadeToExitCallback(taskId);
+  } else {
+    console.warn('[item_use] using registered items from the field is not implemented');
+  }
+}
+
+/** InitBerryPouchFromBag */
+function InitBerryPouchFromBag(): void {
+  InitBerryPouch(BERRYPOUCH_FROMFIELD, CB2_BagMenuFromStartMenu, 0);
+}
+
+/** BattleUseFunc_BerryPouch: the battle bag's OPEN, back to the battle bag. */
+function BattleUseFunc_BerryPouch(taskId: number): void {
+  ItemMenu_SetExitCallback(InitBerryPouchFromBattle);
+  ItemMenu_StartFadeToExitCallback(taskId);
+}
+
+/** InitBerryPouchFromBattle */
+function InitBerryPouchFromBattle(): void {
+  InitBerryPouch(BERRYPOUCH_FROMBATTLE, CB2_BagMenuFromBattle, 0);
+}
+
 function FieldUseFunc_CoinCase(taskId: number): void {
   gStringVar1.set(ConvertIntToDecimalStringN(state.coins, STR_CONV_MODE_LEFT_ALIGN, 4)); // GetCoins
   ExpandToStringVar4(text('gText_CoinCase'));
@@ -427,8 +467,8 @@ function Task_BattleUse_StatBooster_WaitButton_ReturnToBattle(taskId: number): v
 
 function ItemUse_SwitchToPartyMenuInBattle(taskId: number): void {
   if (GetPocketByItemId(SpecialVar.ItemId) === K.POCKET_BERRY_POUCH) {
-    console.warn('[item_use] the berry pouch is not implemented');
-    Task_ReturnToBagFromContextMenu(taskId);
+    BerryPouch_SetExitCallback(EnterPartyFromItemMenuInBattle);
+    BerryPouch_StartFadeToExitCallback(taskId);
     return;
   }
   ItemMenu_SetExitCallback(EnterPartyFromItemMenuInBattle);
@@ -521,8 +561,7 @@ function ItemUseInBattle_EnigmaBerry(taskId: number): void {
 
 function FieldUseFunc_OakStopsYou(taskId: number): void {
   if (GetPocketByItemId(SpecialVar.ItemId) === K.POCKET_BERRY_POUCH) {
-    console.warn('[item_use] the berry pouch is not implemented');
-    Task_ReturnToBagFromContextMenu(taskId);
+    DisplayItemMessageInBerryPouch(taskId, K.FONT_MALE, ExpandToStringVar4(text('gText_OakForbidsUseOfItemHere')), Task_BerryPouch_DestroyDialogueWindowAndRefreshListMenu);
   } else {
     PrintNotTheTimeToUseThat(taskId, inField(taskId));
   }
@@ -536,6 +575,7 @@ export const FIELD_USE_FUNCS: Record<string, TaskFunc> = {
   FieldUseFunc_VsSeeker,
   FieldUseFunc_TownMap,
   FieldUseFunc_TmCase,
+  FieldUseFunc_BerryPouch,
   FieldUseFunc_CoinCase,
   FieldUseFunc_PowderJar,
   FieldUseFunc_PokeFlute,
@@ -560,4 +600,5 @@ export const BATTLE_USE_FUNCS: Record<string, TaskFunc> = {
   BattleUseFunc_Ether,
   BattleUseFunc_PokeDoll,
   ItemUseInBattle_EnigmaBerry,
+  BattleUseFunc_BerryPouch,
 };

@@ -293,6 +293,20 @@ this is the next level down. When you add or change a subsystem, update its entr
   and exit callback). `SortPocketAndPlaceHMsFirst` / `SortAndCompactBagPocket` (item.c) live there too. Probe
   `__test.tmCase()` (TMCASE_* type, the screen task's name, `fading`, scroll/row, the pocket's item ids in list
   order). Tests: tests/e2e/tmCase.test.ts.
+- **Berry pouch:** `menus/berryPouch.ts` is berry_pouch.c, built like the TM case (static vs per-open resources,
+  `rebuildList` after a toss / sale). `InitBerryPouch(type, savedCallback, allowSelect)` runs on whichever GBA host
+  has the bag: FieldMenuScene, or BattleScene for the battle bag (`menuGfxSymbols` preloads `BERRY_POUCH_GFX` for
+  both). Ways in: the bag's KEY ITEMS → BERRY POUCH → OPEN (`FieldUseFunc_BerryPouch` → BERRYPOUCH_FROMFIELD), the
+  battle bag's OPEN (`BattleUseFunc_BerryPouch` → BERRYPOUCH_FROMBATTLE, back to CB2_BagMenuFromBattle), the bag's
+  GIVE from the party menu / PC box and the Poké Mart's SELL (`GoToBerryPouch_Give` / `_PCBox` / `_Sell` in
+  menus/itemMenu.ts). USE runs the berry's own item_use.c function with the pouch's task (looked up in
+  `FIELD_USE_FUNCS` / `BATTLE_USE_FUNCS`); item_use.c checks `GetPocketByItemId(...) == POCKET_BERRY_POUCH` to hand
+  back through `BerryPouch_SetExitCallback` + `BerryPouch_StartFadeToExitCallback` (SetUpItemUseCallback,
+  ItemUse_SwitchToPartyMenuInBattle) or `DisplayItemMessageInBerryPouch` (FieldUseFunc_OakStopsYou). The party
+  menu comes back through CB2_ReturnToBerryPouchMenu (BERRYPOUCH_NA: same type, list position and callback).
+  Item icons: `CreateBerryPouchItemIcon` (menus/itemMenuIcons.ts). Probe `__test.berryPouch()` (BERRYPOUCH_* type,
+  the screen task's name, `fading`, scroll/row, the pocket's berries in list order). Tests:
+  tests/e2e/berryPouch.test.ts.
 - **Naming screen:** `DoNamingScreen` (`menus/namingScreen.ts`) runs on any GBA host. From a script, use
   `ScriptHost.doNamingScreen` (FieldMenuScene `naming`). Oak's speech calls it with NAMING_SCREEN_PLAYER
   (monSpecies = the player's gender) and NAMING_SCREEN_RIVAL on MainMenuScene, preloading `namingScreenGfxSymbols`
@@ -377,10 +391,22 @@ this is the next level down. When you add or change a subsystem, update its entr
   base 0 and sets the window/blend registers (BG1 blended 12/8 inside the markers); the sprite shows on the
   task's first run; DestroyPokedexAreaMarkers puts BG1 (char base 2) and the registers back. Preload
   `pokedexAreaMarkerGfxSymbols` (sMarkerTiles, sMarkerPal). GetUnlockedSeviiAreas (field_specials.c) is in
-  `world/regionMap.ts` (importable in Node, unlike menus/regionMap.ts). The area page (DexScreen_DrawMonAreaPage,
-  W-dexarea unit 2) goes in `menus/pokedexArea.ts` too; its graphics are already extracted (graphics/pokedex/:
-  sTilemap_AreaMap_Kanto and the seven islands' sTilemap_AreaMap_*, sBlitTiles_WideEllipse, sPalette_Silhouette).
-  Tests: tests/unit/pokedexArea.test.ts (the marker lists, and the sprite's OAM in Node).
+  `world/regionMap.ts` (importable in Node, unlike menus/regionMap.ts). The area page is in `menus/pokedexArea.ts`
+  too: DexScreen_DrawMonAreaPage (A on the mon page; Task_DexScreen_ShowMonPage states 7-12 run it) draws the
+  frame (BG3, and BG0 round the size box), the Kanto map and each unlocked island as BG2 windows whose pixel buffers
+  get the sTilemap_AreaMap_* 4bpp tiles (Kanto moves up 4 tiles, kantoMapVoff 0, once any of islands 4-7 is
+  unlocked), the icon / number and name / types (caught only) / "SIZE" / "AREA" windows, the size comparison (the
+  mon's pic and the player's front pic as pic sprites in OBJ palette 2, sPalette_Silhouette, with affine matrices 2
+  and 1 scaled by gPokedexEntries' pokemonScale / trainerScale and y2 = the offsets; caught only), the markers
+  (OBJ palette 3, tag 2001) and "AREA UNKNOWN" over the sBlitTiles_WideEllipse when there are none.
+  DexScreen_DestroyAreaScreenResources undoes it. It leaves BG1 to the markers (DestroyPokedexAreaMarkers puts it
+  back for the mon page's flavour text). W-dex unit 3's category pages call the same two functions. Graphics:
+  `pokedexAreaGfxSymbols()` (in `pokedexScreenGfxSymbols()`, with the player's front pic by gender) and the mon's
+  icon in `dexMonGfxSymbols` (DexScreen_LoadMonGfx). list_menu.c's ListMenu_LoadMonIconPalette /
+  ListMenu_DrawMonIconGraphics are in `gba/listMenu.ts`. Probe: `__test.pokedexArea()` (species, `ready` = state 9,
+  kantoMapVoff, islands, markers and their sprite, areaUnknown, the blitted types, icon / type pixels, the
+  silhouettes' OAM and matrix scale). Tests: tests/unit/pokedexArea.test.ts (the marker lists, and the sprite's OAM
+  in Node), tests/e2e/pokedexArea.test.ts (the page from the Pokédex).
 - **Hall of Fame and credits:** the room's script (PokemonLeague_HallOfFame_EventScript_EnterRoom) runs
   `dofieldeffect FLDEFF_HALL_OF_FAME_RECORD` (`world/hallOfFameRecord.ts`: the machine's Poké Balls and monitor,
   CreateGlowingPokeballsEffect's states, drawn as FieldEffectSprites from the GBA pics at screen coordinates; the
@@ -431,10 +457,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   Task_DexScreen_CharacteristicOrder case 6's A (→ state 7, which the C sends to Task_DexScreen_CategorySubmenu
   with parentOfCategoryMenu = 1; both STUBs carry the C lines). The category page's mon page reuses
   DexScreen_DrawMonDexPage / DexScreen_DexPageZoomEffectFrame / RemoveDexPageWindows (exported) and
-  DexScreen_LoadMonGfx. **Area page (W-dexarea unit 2)**: Task_DexScreen_ShowMonPage case 5's A branch is a STUB
-  holding the C lines (RemoveDexPageWindows, clear BG1, state 7); states 7-12 are ported and call the local
-  placeholders DexScreen_DrawMonAreaPage / DexScreen_DestroyAreaScreenResources: replace them with the real ones
-  (menus/pokedexArea.ts) and un-stub the A. list_menu.c's ListMenuInitInRect and window.c's
+  DexScreen_LoadMonGfx. **Area page**: A on the mon page → states 7-12 → menus/pokedexArea.ts (see "Pokédex area
+  markers"). list_menu.c's ListMenuInitInRect and window.c's
   PutWindowRectTilemapOverridePalette came with it. Probe: `__test.pokedex()` (task, state, `ready`, the counts,
   unlocked categories, the top menu's and the ordered list's cursor, selected entry and every row's species,
   the mon page's species, printed strings and pic / footprint pixel counts). Tests:

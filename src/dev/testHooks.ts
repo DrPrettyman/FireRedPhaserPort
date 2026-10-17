@@ -27,8 +27,10 @@ import type { FieldListMenuProbe } from '../ui/FieldListMenu';
 import { storageProbe } from '../menus/pokemonStorage';
 import { itemPcProbe } from '../menus/itemPc';
 import { tmCaseProbe } from '../menus/tmCase';
+import { berryPouchProbe } from '../menus/berryPouch';
 import { hallOfFameProbe } from '../menus/hallOfFame';
 import { creditsProbe, creditsSkipToClosing } from '../menus/credits';
+import { pokedexAreaProbe } from '../menus/pokedexArea';
 import { pokedexScreenProbe } from '../menus/pokedexScreen';
 import { regionMapProbe } from '../menus/regionMap';
 import { mainMenuProbe } from '../menus/mainMenu';
@@ -558,10 +560,18 @@ function createApi(game: Phaser.Game) {
      * cursor, the selected row's species and its seen/caught bits) and the mon page (what it printed).
      */
     pokedex: () => pokedexScreenProbe(),
+    /**
+     * The Pokédex area page while it's up (menus/pokedexArea.ts): the species, `ready` (its input state, no fade),
+     * the Kanto map's offset, the unlocked islands, the markers (count, sprite), "AREA UNKNOWN", the type icons, the
+     * icon, and the two silhouettes (OAM, matrix scale, y2).
+     */
+    pokedexArea: () => pokedexAreaProbe(),
     /** The item PC's list (WITHDRAW ITEM, item_pc.c) while it runs: its task, scroll/row and item count. */
     itemPc: () => (gMain.callback2?.name === 'ItemPc_MainCB' ? itemPcProbe() : undefined),
     /** The TM case while it's open (menus/tmCase.ts): TMCASE_* type, task, scroll/row and the pocket's item ids in list order. */
     tmCase: () => (gMain.callback2?.name === 'CB2_Idle' ? tmCaseProbe() : undefined),
+    /** The berry pouch while it's open (menus/berryPouch.ts): BERRYPOUCH_* type, task, scroll/row and the pocket's berries in list order. */
+    berryPouch: () => (gMain.callback2?.name === 'CB2_BerryPouchIdle' ? berryPouchProbe() : undefined),
     /** The map name popup while Task_MapNamePopup runs: its text, decoded, and how many px of it are on screen. */
     mapNamePopup: () => {
       const f = field();
