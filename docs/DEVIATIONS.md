@@ -189,10 +189,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     aren't kept; Spinda's spots aren't drawn anywhere). The anticheat's second and third copies of the seen flags
     aren't kept (one `dexSeen` set), so "caught" just needs "seen" too. The Pokédex keeps the field's DISPCNT,
     which the port sets in FieldMenuScene since the field isn't on the GBA layer.
-  - Trainer card (menus/trainerCard.ts): no audio (SE_CARD_OPEN / SE_CARD_FLIP); no help system context. The back
-    and the flip aren't ported yet (A on the front does nothing). The berry picking and Pokémon Jump records (a
-    star for 200 of each) and the link stats are always 0 (no link minigames); the easy chat profile isn't kept
-    (only a link card prints it).
+  - Trainer card (menus/trainerCard.ts): no audio (SE_CARD_OPEN / SE_CARD_FLIP / SE_CARD_FLIPPING); no help system
+    context. The berry picking and Pokémon Jump records (a star for 200 of each) and the link stats are always 0 (no
+    link minigames), so the back never shows its link battle / trade / Berry Crush / Union Room lines; the easy chat
+    profile isn't kept (only a link card prints it). The flip's per-line BG0VOFS gives line L buffer[L] (the PPU's
+    HBlank convention), where the GBA's HBlank interrupt sets it for the line after, a one-line shift of the squash.
+    LoadMonIconGfx's 96 colours read 48 past gMonIconPalettes on the GBA; those palettes (BG 8-10) are zeros here and
+    no icon uses them. The photo's icons need special UpdateTrainerCardPhotoIcons (the Celadon Game Corner printer),
+    which isn't in specials.ts yet, so they only show with the vars set by hand.
   - Credits (menus/credits.ts): no audio (MUS_CREDITS, the cries). A map scene loads asynchronously, so it can start
     a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
     GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.

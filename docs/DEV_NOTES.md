@@ -511,13 +511,24 @@ this is the next level down. When you add or change a subsystem, update its entr
   (name, ID, money, Pokédex once FLAG_SYS_POKEDEX_GET is set, the live play time with BlinkTimeColon's colon, from
   the VBlank callback), the badges (FLAG_BADGE01-08_GET) on BG3, the player's pic drawn into window 2
   (`CreateTrainerCardTrainerPicSprite` in menus/picSprites.ts, which also has PlayerGenderToFrontTrainerPicId now).
-  Not yet (W-tcard unit 2): the back (PrintAllOnCardBack, BufferTextForCardBack, DrawCardBackStats, the stickers'
-  and mon icons' tiles: LoadMonIconGfx is a stub, LoadStickerGfx is ported) and the flip (A on the front does
-  nothing; the flip's HBlankCB_TrainerCard sets BG0VOFS per scanline, and the port doesn't run HBlank callbacks:
-  scanline effects go through gba/hw.ts's `hblankRegs`). Probe
-  `__test.trainerCard()` (mainState, `ready`, the stars and badges it has and the ones drawn on BG3, which card
-  palette is in the hardware palettes, the female background, the pic's pixel count, what the front printed,
-  decoded). Tests: tests/e2e/trainerCard.test.ts, tests/unit/trainerCard.test.ts (the stars).
+  The back (BufferTextForCardBack at init, PrintAllOnCardBack when flipping): the name, the Hall of Fame debut once
+  GAME_STAT_ENTERED_HOF is set, the link battle / trade / Berry Crush / Union Room lines only when not 0 (so never,
+  without link play), DrawCardBackStats (their end tiles), the photo's mon icons (VAR_TRAINER_CARD_MON_ICON_*, mail
+  species, tinted by VAR_TRAINER_CARD_MON_ICON_TINT_IDX: LoadMonIconGfx puts the icon palettes in BG palettes 5-10
+  and the tiles at BG3 tile 224 + 16 * i; trainerCardGfxSymbols preloads those icons) and the Four Island stickers
+  (the brag vars; palettes 11-14, tiles at 320). BG3 tilemap entries leave out its baseTile (192): badges 192+,
+  icons 224+, stickers 320+. The flip (FlipTrainerCard → Task_DoCardFlipTask, one step a frame): hide BG1/BG3, the
+  card closes 7 lines a frame from each edge to 77 (UpdateCardFlipRegs: WIN0V and the BLDY darkening), the other
+  side is drawn, then it opens 5 lines a frame. HBlankCB_TrainerCard's per-line BG0VOFS is modelled as an HBlank
+  DMA table (gba/hw.ts `hblankRegs` on `gScanlineEffectRegBuffers[1]`, which VBlankCB_TrainerCard copies buffer 0
+  into while `allowDMACopy`), not a real HBlank callback: the PPU runs callbacks only for the frames the host draws,
+  so a register written per line could be left mid-flip when the flip ends between two drawn frames. Input as in
+  the C: A on the front flips, on the back B flips back and A closes; B on the front closes. Probe
+  `__test.trainerCard()` (mainState, `ready` / `backReady`, `onBack`, `flip` while the flip task runs (step,
+  cardTop, BLDY, the per-line offsets), the stars and badges it has and the ones drawn on BG3, the back's icons and
+  stickers drawn on BG3 and BG palette 5, which card palette is in the hardware palettes, the female background,
+  the pic's pixel count, what each side printed, decoded). Tests: tests/e2e/trainerCard.test.ts (front, back, the
+  flip both ways, closing from each side, the photo and stickers), tests/unit/trainerCard.test.ts (the stars).
 - **Evolution scene:** `menus/evolutionScene.ts` + `menus/evolutionGraphics.ts` run on whichever GBA host is up
   (BattleScene after TryEvolvePokemon, FieldMenuScene from the party menu) and hand back through
   `gCB2_AfterEvolution` (`setCB2_AfterEvolution`). It draws on the battle BG/window layout, so the field host

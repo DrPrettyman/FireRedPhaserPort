@@ -1761,3 +1761,26 @@ end to end.
   staying on the front, B back to the start menu on PLAYER; a girl's blue card with the female background, no
   badges / stars / Pokédex line), plus hallOfFame, pokedexArea and transitions' "every battle transition" (the
   mugshots use PlayerGenderToFrontTrainerPicId). Screenshots of both cards match FRLG's layout.
+
+### Trainer card back and flip (W-tcard unit 2, SCREENS_PLAN.md batch 2)
+
+- `menus/trainerCard.ts`: the card back (BufferTextForCardBack and its Buffer* functions, PrintAllOnCardBack: the
+  name, the Hall of Fame debut, the link battle / trade / Berry Crush / Union Room lines, which FRLG prints only when
+  not 0, so never for the port's player; DrawCardBackStats; PrintPokemonIconsOnCard / LoadMonIconGfx with the photo's
+  tints; PrintStickersOnCard), the flip (FlipTrainerCard, Task_DoCardFlipTask and its six steps, UpdateCardFlipRegs,
+  VBlankCB_TrainerCard's buffer copy) and Task_TrainerCard states 11-13. As in the C, A on the front flips to the
+  back, B on the back flips back and A on the back closes the card (B on the front closes it).
+  MailSpeciesToIconSpecies is ported for the photo vars (Unown is stored as 30000 + its letter);
+  trainerCardGfxSymbols preloads the photo's icons.
+- HBlankCB_TrainerCard's per-line BG0VOFS goes through gba/hw.ts `hblankRegs` (an HBlank DMA table on
+  gScanlineEffectRegBuffers[1]) rather than SetHBlankCallback: the PPU does run HBlank callbacks, but only for the
+  frames the host draws, so with several ticks per drawn frame the register could be left at a mid-flip offset when
+  the flip ends.
+- gba/palette.ts: TintPalette_CustomTone (moved from menus/regionMap.ts, which imports it now) and
+  TintPalette_SepiaTone.
+- Verified: typecheck; `npm test` (150); e2e tests/e2e/trainerCard.test.ts (3 tests: the boy's card flips to the
+  back (name, Hall of Fame debut 12:34:56, no link / trade lines, no icons or stickers), back to the front (badges,
+  stars, pic), to the back again and A closes it; each flip watched in the page: steps 1/2/4, the card closing to
+  77, BLDY up to 11 and back to 0, BG0VOFS offsets per line, nothing left per line afterwards; the girl's card; a
+  photo in sepia (Pikachu, Bulbasaur, Unown C in slot 4) and two stickers on the back), fly.test.ts (the region
+  map's tint). Screenshots of the back, the photo back and mid-flip frames look like FRLG's.
