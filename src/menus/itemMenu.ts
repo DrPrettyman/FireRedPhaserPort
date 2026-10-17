@@ -135,7 +135,7 @@ import {
   STR_CONV_MODE_RIGHT_ALIGN,
   text,
 } from './common';
-import { CB2_ReturnToFieldWithOpenMenu } from './fieldCallbacks';
+import { CB2_ReturnToField, CB2_ReturnToFieldWithOpenMenu } from './fieldCallbacks';
 import {
   CreateBagSprite,
   CreateItemMenuIcon,
@@ -158,6 +158,8 @@ import { BATTLE_USE_FUNCS, FIELD_USE_FUNCS } from './itemUse';
 import { AddScrollIndicatorArrowPair, AddScrollIndicatorArrowPairParameterized, RemoveScrollIndicatorArrowPair, SCROLL_ARROW_LEFT, SCROLL_ARROW_RIGHT, SCROLL_ARROW_UP, type ScrollArrowsTemplate } from './menuIndicators';
 import { PrintMoneyAmount, PrintMoneyAmountInMoneyBox } from './money';
 import { CB2_ChooseMonToGiveItem, CB2_SelectBagItemToGive } from './partyMenu';
+import { CB2_ReturnToPokeStorage } from './pokemonStorage';
+import { InitTMCase, TMCASE_GIVE_PARTY, TMCASE_GIVE_PC, TMCASE_SELL } from './tmCase';
 
 const LIST_TILES_WIDTH = 18;
 const LIST_TILES_HEIGHT = 12;
@@ -1337,9 +1339,12 @@ function Task_ItemMenuAction_BattleUse(taskId: number): void {
 function Task_ItemContext_FieldGive(taskId: number): void {
   const data = gTasks[taskId].data;
   const itemId = BagGetItemIdByPocketPosition(gBagMenuState.pocket + 1, data[1]);
-  if (itemId === K.ITEM_TM_CASE || itemId === K.ITEM_BERRY_POUCH) {
-    // GoToTMCase_Give / GoToBerryPouch_Give: those screens aren't implemented
-    console.warn('[bag] the TM case and berry pouch are not implemented');
+  if (itemId === K.ITEM_TM_CASE) {
+    ItemMenu_SetExitCallback(GoToTMCase_Give);
+    ItemMenu_StartFadeToExitCallback(taskId);
+  } else if (itemId === K.ITEM_BERRY_POUCH) {
+    // GoToBerryPouch_Give: the berry pouch isn't implemented
+    console.warn('[bag] the berry pouch is not implemented');
     Task_ReturnToBagFromContextMenu(taskId);
   } else if (gBagMenuState.pocket !== K.POCKET_KEY_ITEMS - 1 && ItemId_GetImportance(itemId) === 0) {
     Bag_BeginCloseWin0Animation();
@@ -1404,9 +1409,12 @@ function Task_ItemContext_PcBoxGive(taskId: number): void {
   const itemId = BagGetItemIdByPocketPosition(gBagMenuState.pocket + 1, data[1]);
   if (ItemIsMail(itemId)) {
     DisplayItemMessageInBag(taskId, K.FONT_NORMAL, text('gText_CantWriteMailHere'), Task_WaitAButtonAndCloseContextMenu);
-  } else if (itemId === K.ITEM_TM_CASE || itemId === K.ITEM_BERRY_POUCH) {
-    // GoToTMCase_PCBox / GoToBerryPouch_PCBox: those screens aren't implemented
-    console.warn('[bag] the TM case and berry pouch are not implemented');
+  } else if (itemId === K.ITEM_TM_CASE) {
+    ItemMenu_SetExitCallback(GoToTMCase_PCBox);
+    ItemMenu_StartFadeToExitCallback(taskId);
+  } else if (itemId === K.ITEM_BERRY_POUCH) {
+    // GoToBerryPouch_PCBox: the berry pouch isn't implemented
+    console.warn('[bag] the berry pouch is not implemented');
     Task_ReturnToBagFromContextMenu(taskId);
   } else if (gBagMenuState.pocket !== K.POCKET_KEY_ITEMS - 1 && ItemId_GetImportance(itemId) === 0) {
     Bag_BeginCloseWin0Animation();
@@ -1416,16 +1424,44 @@ function Task_ItemContext_PcBoxGive(taskId: number): void {
   }
 }
 
+/** GoToTMCase_Give */
+function GoToTMCase_Give(): void {
+  InitTMCase(TMCASE_GIVE_PARTY, ReturnToBagMenuFromSubmenu_Give, false);
+}
+
 /** ReturnToBagMenuFromSubmenu_Give */
 export function ReturnToBagMenuFromSubmenu_Give(): void {
   CB2_SelectBagItemToGive();
 }
 
+/** GoToTMCase_PCBox */
+function GoToTMCase_PCBox(): void {
+  InitTMCase(TMCASE_GIVE_PC, ReturnToBagMenuFromSubmenu_PCBox, false);
+}
+
+/** ReturnToBagMenuFromSubmenu_PCBox */
+function ReturnToBagMenuFromSubmenu_PCBox(): void {
+  GoToBagMenu(K.ITEMMENULOCATION_PCBOX, K.OPEN_BAG_LAST, CB2_ReturnToPokeStorage);
+}
+
+/** GoToTMCase_Sell */
+function GoToTMCase_Sell(): void {
+  InitTMCase(TMCASE_SELL, ReturnToBagMenuFromSubmenu_Sell, false);
+}
+
+/** ReturnToBagMenuFromSubmenu_Sell */
+function ReturnToBagMenuFromSubmenu_Sell(): void {
+  GoToBagMenu(K.ITEMMENULOCATION_SHOP, K.OPEN_BAG_LAST, CB2_ReturnToField);
+}
+
 function Task_ItemContext_Sell(taskId: number): void {
   const data = gTasks[taskId].data;
   const itemId = SpecialVar.ItemId;
-  if (itemId === K.ITEM_TM_CASE || itemId === K.ITEM_BERRY_POUCH) {
-    console.warn('[bag] the TM case and berry pouch are not implemented');
+  if (itemId === K.ITEM_TM_CASE) {
+    ItemMenu_SetExitCallback(GoToTMCase_Sell);
+    ItemMenu_StartFadeToExitCallback(taskId);
+  } else if (itemId === K.ITEM_BERRY_POUCH) {
+    console.warn('[bag] the berry pouch is not implemented');
     Task_ReturnToBagFromContextMenu(taskId);
   } else if (ItemId_GetPrice(itemId) === 0) {
     gStringVar1.set(CopyItemName(itemId));
@@ -1444,7 +1480,7 @@ function Task_ItemContext_Sell(taskId: number): void {
 }
 
 /** GetDialogBoxFontId: FONT_MALE for a male NPC's text colour, otherwise FONT_FEMALE. */
-function GetDialogBoxFontId(): number {
+export function GetDialogBoxFontId(): number {
   return state.getVar('VAR_TEXT_COLOR') === K.NPC_TEXT_COLOR_MALE ? K.FONT_MALE : K.FONT_FEMALE;
 }
 

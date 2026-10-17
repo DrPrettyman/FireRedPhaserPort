@@ -229,6 +229,15 @@ this is the next level down. When you add or change a subsystem, update its entr
   `LoadFieldTilesetsForShop` puts the map's tiles/palettes where the overworld would have left them in VRAM.
   `menus/objectEventGraphics.ts` is CreateObjectGraphicsSprite for any GBA-layer screen that needs NPC sprites.
   Test: `?start=after-rival&map=PewterCity_Mart&x=4&y=3`, face left, A (TM layout: Celadon Dept. Store 2F, x=3 y=6).
+- **TM case:** `menus/tmCase.ts` is tm_case.c. `InitTMCase(type, exitCallback, allowSelectClose)` runs on whichever
+  GBA host has the bag (FieldMenuScene); `menuGfxSymbols` preloads `TM_CASE_GFX`. Ways in: the bag's KEY ITEMS → TM
+  CASE → OPEN (`FieldUseFunc_TmCase` in menus/itemUse.ts → TMCASE_FIELD, back to CB2_BagMenuFromStartMenu), the
+  bag's GIVE from the party menu / PC box (`GoToTMCase_Give` / `GoToTMCase_PCBox`) and the Poké Mart's SELL
+  (`GoToTMCase_Sell`), all in menus/itemMenu.ts. USE sets ItemUseCB_TMHM and opens CB2_ShowPartyMenuForItemUse,
+  whose exit callback for the TM case pocket is CB2_ReturnToTMCaseMenu (TMCASE_REOPENING: same type, list position
+  and exit callback). `SortPocketAndPlaceHMsFirst` / `SortAndCompactBagPocket` (item.c) live there too. Probe
+  `__test.tmCase()` (TMCASE_* type, the screen task's name, `fading`, scroll/row, the pocket's item ids in list
+  order). Tests: tests/e2e/tmCase.test.ts.
 - **Naming screen:** `DoNamingScreen` (`menus/namingScreen.ts`) runs on any GBA host. From a script, use
   `ScriptHost.doNamingScreen` (FieldMenuScene `naming`). Oak's speech calls it with NAMING_SCREEN_PLAYER
   (monSpecies = the player's gender) and NAMING_SCREEN_RIVAL on MainMenuScene, preloading `namingScreenGfxSymbols`

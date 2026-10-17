@@ -1492,6 +1492,25 @@ end to end.
   anticheat); e2e tests/e2e/pokedex.test.ts (open from START, counts, scrolling the Kanto list incl. paging,
   the list's remembered row, the national layout and list, closing back to the start menu and the field, the
   sanity check), plus saveContinue, fly, listMenuFlash. Screenshots of the top menu and lists match FRLG's layout.
+### TM case (SCREENS_PLAN.md batch 1, W-tmcase unit 1)
+
+- `menus/tmCase.ts` ports tm_case.c: InitTMCase for TMCASE_FIELD (the bag's KEY ITEMS → TM CASE → OPEN:
+  FieldUseFunc_TmCase / InitTMCaseFromBag), TMCASE_GIVE_PARTY (GoToTMCase_Give), TMCASE_GIVE_PC (GoToTMCase_PCBox),
+  TMCASE_SELL (GoToTMCase_Sell) and TMCASE_REOPENING (CB2_ReturnToTMCaseMenu, which used to fall back to the bag).
+  The list (SortPocketAndPlaceHMsFirst, "No01 MOVE", ×quantity or the HM tile), the description and move info
+  windows, the disc sprite tinted by type sliding in and out of the case (SpriteCB_SwapDisc), USE / GIVE / EXIT
+  (USE → the party menu's ItemUseCB_TMHM; GIVE → CB2_ChooseMonToGiveItem), the sell flow (how many, the money box,
+  YES/NO, "Oh no, I can't buy that" for HMs). The Pokédude demo and the Union Room menu are left out.
+- Graphics: `graphics/tm_case/` added to extract_gfx.py's prefixes (gTMCase_*, gTMCaseDisc*, gTMCaseHM_Gfx);
+  `menuGfxSymbols` preloads them for every GBA menu host.
+- Fix found on the way: FRLG's ClearTextSpan (text_printer.c) is empty, but the port's TextPrinter filled the span
+  for CLEAR / CLEAR_TO / MIN_LETTER_SPACING with the background colour. That erased the TM case's HM tile under an
+  HM's `{CLEAR_TO 18}`; now it only moves the cursor, like the GBA.
+- No list_menu.c cursor objects needed (the TM case uses cursorKind 0, the printed arrow).
+- Verified: tests/e2e/tmCase.test.ts (from the bag: HM01 → USE teaches CHARMANDER CUT and comes back to the TM case,
+  PIDGEY can't learn it, TM28 → GIVE; at the Pewter Mart: SELL → TM case, an HM it won't buy, two TM28s sold for
+  half price), screenshots of the list, context menu and quantity box; the bag / mart / PC / evolution e2e files
+  (pokemart, pcStorage, evolution, listMenuFlash, saveContinue) and the unit tests still pass.
 ### Pokédex area data and markers (W-dexarea unit 1, batch 1 of SCREENS_PLAN.md)
 
 - `menus/wildPokemonArea.ts`: wild_pokemon_area.c (GetSpeciesPokedexAreaMarkers, GetRoamerIndex /
