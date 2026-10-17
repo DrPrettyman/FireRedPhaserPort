@@ -59,12 +59,21 @@ async function talkFrom(game: Game, x: number, y: number, dir: 'up' | 'down' | '
   await game.press('A');
 }
 
-/** Press A until the script has ended and the field is free. */
+/**
+ * Press B until the script has ended and the field is free. (B closes messages as A does, but can't talk to
+ * the person in front again: mashing A, a press in the first free tick restarted Bruno's post-battle script.)
+ */
 async function scriptDone(game: Game, what: string) {
-  await game.mashUntil((t) => t.idle() && !t.field()!.script, { what });
+  await game.mashUntil((t) => t.idle() && !t.field()!.script, { what, button: 'B' });
 }
 
-/** Press A through a trainer battle (the first move each turn) and the script after it. */
+/** Press A until `cond` holds (a gift, a switch), then B until the script is over. */
+async function talkUntil(game: Game, cond: Parameters<Game['mashUntil']>[0], what: string) {
+  await game.mashUntil(cond, { what });
+  await scriptDone(game, `${what}: the end of the script`);
+}
+
+/** Press A through a trainer battle (the first move each turn), then B through the script after it. */
 async function winBattle(game: Game, what: string) {
   const since = await game.mark();
   await game.eval((_t, s) => ((window as any).__storySince = s), since);
@@ -128,21 +137,21 @@ test('Safari Zone: in through the gate, the Gold Teeth and the Secret House\'s H
   // (The way to the west area is a walk through the zone; warp next to the Gold Teeth's ball.)
   await warp(game, 'MAP_SAFARI_ZONE_WEST', 28, 15);
   await talkFrom(game, 28, 15, 'up'); // the Gold Teeth at (28, 14)
-  await game.mashUntil((t) => t.itemCount('GOLD_TEETH') === 1 && t.idle() && !t.field()!.script, { what: 'the Gold Teeth' });
+  await talkUntil(game, (t) => t.itemCount('GOLD_TEETH') === 1, 'the Gold Teeth');
   expect(await game.eval((t) => t.flag('FLAG_HIDE_SAFARI_ZONE_WEST_GOLD_TEETH'))).toBe(true);
 
   // The Secret House's door at (12, 7); the attendant at (6, 5).
   await takeWarp(game, 12, 7, 'SafariZone_SecretHouse');
   await game.waitIdle();
   await talkFrom(game, 6, 6, 'up');
-  await game.mashUntil((t) => t.flag('FLAG_GOT_HM03') && t.idle() && !t.field()!.script, { what: 'HM03' });
+  await talkUntil(game, (t) => t.flag('FLAG_GOT_HM03'), 'HM03');
   expect(await game.eval((t) => t.itemCount('HM03'))).toBe(1);
 
   // The Warden in Fuchsia: the Gold Teeth for HM04.
   await game.eval((t) => t.state!.setFlag('FLAG_SYS_SAFARI_MODE', false));
   await warp(game, 'MAP_FUCHSIA_CITY_WARDENS_HOUSE', 3, 7);
   await talkFrom(game, 3, 6, 'up'); // the Warden at (3, 5)
-  await game.mashUntil((t) => t.flag('FLAG_GOT_HM04') && t.idle() && !t.field()!.script, { what: 'HM04' });
+  await talkUntil(game, (t) => t.flag('FLAG_GOT_HM04'), 'HM04');
   expect(await game.eval((t) => [t.itemCount('HM04'), t.itemCount('GOLD_TEETH')])).toEqual([1, 0]);
 }, 120_000);
 
@@ -173,11 +182,11 @@ test('Cinnabar: the gym is locked; the Mansion B1F switch and the Secret Key; th
   expect((await cell(game, 33, 20)).metatile).not.toBe(d.barrierTop);
   await talkFrom(game, 27, 6, 'up');
   // "A secret switch! Press it?" YES (PokemonMansion_EventScript_SecretSwitch → PressSwitch_B1F)
-  await game.mashUntil((t) => t.flag('FLAG_POKEMON_MANSION_SWITCH_STATE') && t.idle() && !t.field()!.script, { what: 'the secret switch' });
+  await talkUntil(game, (t) => t.flag('FLAG_POKEMON_MANSION_SWITCH_STATE'), 'the secret switch');
   expect(await cell(game, 33, 20)).toEqual({ metatile: d.barrierTop, impassable: true });
 
   await talkFrom(game, 5, 6, 'down'); // the Secret Key at (5, 7)
-  await game.mashUntil((t) => t.itemCount('SECRET_KEY') === 1 && t.idle() && !t.field()!.script, { what: 'the Secret Key' });
+  await talkUntil(game, (t) => t.itemCount('SECRET_KEY') === 1, 'the Secret Key');
   expect(await game.eval((t) => t.flag('FLAG_HIDE_POKEMON_MANSION_B1F_SECRET_KEY'))).toBe(true);
 
   // Back on Cinnabar: CinnabarIsland_EventScript_CheckUnlockGym sets VAR_TEMP_1, the trigger is off.
@@ -311,3 +320,73 @@ test('Viridian Gym: locked until the seventh badge; over the spinner tiles to Gi
   expect(await game.eval((t) => [t.flag('FLAG_BADGE08_GET'), t.flag('FLAG_DEFEATED_LEADER_GIOVANNI'), t.flag('FLAG_GOT_TM26_FROM_GIOVANNI')])).toEqual([true, true, true]);
   expect(await game.eval((t) => [t.itemCount('TM26'), t.var('VAR_MAP_SCENE_ROUTE22')])).toEqual([1, 3]);
 }, 180_000);
+
+// ---------------------------------------------------------------- The Elite Four and the Champion
+
+/** Heal the party for the next battle (a fresh Lv. 100 Mewtwo: full HP and PP). */
+async function heal(game: Game) {
+  await game.eval((t, mon) => t.setParty([mon]), MEWTWO);
+}
+
+/**
+ * An Elite Four room: the walk in (PokemonLeague_EventScript_EnterRoom: five steps up, the entry closes behind),
+ * talk to the member at (x, y) from below, win, and the door at the top opens.
+ */
+async function eliteFourRoom(game: Game, member: string, x: number, y: number, defeatedFlag: string) {
+  await game.waitIdle({ timeout: 60_000 });
+  await heal(game);
+  await talkFrom(game, x, y + 1, 'up');
+  await winBattle(game, member);
+  expect(await game.eval((t, f) => [t.flag(f), t.flag('FLAG_TEMP_4')], defeatedFlag)).toEqual([true, true]);
+}
+
+test('The Elite Four and the Champion: each room in turn, then Oak takes the player to the Hall of Fame', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'IndigoPlateau_PokemonCenter_1F', x: 4, y: 3, party: [MEWTWO], speed: 16 });
+  await setFlags(game, badgesBefore(9));
+
+  // Lorelei: PokemonLeague_LoreleisRoom_OnFrame walks the player in (VAR_MAP_SCENE_POKEMON_LEAGUE 0 → 1).
+  await takeWarp(game, 4, 1, 'PokemonLeague_LoreleisRoom');
+  await game.waitFor((t) => t.var('VAR_MAP_SCENE_POKEMON_LEAGUE') === 1 && t.idle() && !t.field()!.script, { what: 'the walk into Lorelei\'s room' });
+  expect(await game.eval((t) => t.field())).toMatchObject({ x: 6, y: 7 });
+  const entry = await game.eval((t) => t.define('METATILE_PokemonLeague_Entry_TopMid_Closed'));
+  expect(await cell(game, 6, 11)).toEqual({ metatile: entry, impassable: true });
+  await eliteFourRoom(game, 'Lorelei', 6, 5, 'FLAG_DEFEATED_LORELEI');
+  expect((await cell(game, 6, 2)).metatile).toBe(await game.eval((t) => t.define('METATILE_PokemonLeague_Door_Mid_Open')));
+
+  await takeWarp(game, 6, 2, 'PokemonLeague_BrunosRoom');
+  await game.waitFor((t) => t.var('VAR_MAP_SCENE_POKEMON_LEAGUE') === 2 && t.idle() && !t.field()!.script, { what: 'the walk into Bruno\'s room' });
+  await eliteFourRoom(game, 'Bruno', 6, 5, 'FLAG_DEFEATED_BRUNO');
+
+  await takeWarp(game, 6, 2, 'PokemonLeague_AgathasRoom');
+  await game.waitFor((t) => t.var('VAR_MAP_SCENE_POKEMON_LEAGUE') === 3 && t.idle() && !t.field()!.script, { what: 'the walk into Agatha\'s room' });
+  await eliteFourRoom(game, 'Agatha', 6, 5, 'FLAG_DEFEATED_AGATHA');
+
+  // Lance's room: the long corridor walk (PokemonLeague_LancesRoom_Movement_WalkThroughCorridor).
+  await takeWarp(game, 6, 2, 'PokemonLeague_LancesRoom');
+  await game.waitFor((t) => t.var('VAR_MAP_SCENE_POKEMON_LEAGUE') === 4 && t.idle() && !t.field()!.script, { what: 'the corridor into Lance\'s room' });
+  await eliteFourRoom(game, 'Lance', 6, 8, 'FLAG_DEFEATED_LANCE');
+  expect((await cell(game, 6, 5)).metatile).toBe(await game.eval((t) => t.define('METATILE_PokemonLeague_Door_Mid_Open')));
+
+  // The Champion's room: PokemonLeague_ChampionsRoom_EventScript_EnterRoom runs it all: the walk in, the rival,
+  // the battle, Oak's congratulations (GetStarterSpecies → STR_VAR_1), then the warp to the Hall of Fame.
+  await heal(game);
+  const starter = ['BULBASAUR', 'SQUIRTLE', 'CHARMANDER'][await game.eval((t) => t.var('VAR_STARTER_MON'))];
+  const oak = game.eval(async (t) => {
+    let said: string | undefined;
+    await t.until(() => {
+      const m = t.message();
+      if (m && /first left with/.test(m)) said = m;
+      return t.field()?.map === 'PokemonLeague_HallOfFame';
+    }, 200000);
+    return said;
+  });
+  await takeWarp(game, 6, 5, 'PokemonLeague_ChampionsRoom');
+  const since = await game.mark();
+  await game.eval((_t, s) => ((window as any).__storySince = s), since);
+  await game.mashUntil((t) => t.events((window as any).__storySince).some((e) => e.type === 'battleEnd'), { what: 'the Champion battle' });
+  const end = await game.waitForEvent('battleEnd', { since });
+  expect(await game.eval((t, o) => t.nameOf('B_OUTCOME_', o), end.outcome as number)).toBe('B_OUTCOME_WON');
+  await game.mashUntil((t) => t.field()?.map === 'PokemonLeague_HallOfFame', { what: 'Oak and the warp to the Hall of Fame' });
+  expect(await game.eval((t) => t.flag('FLAG_DEFEATED_CHAMP'))).toBe(true);
+  expect(await oak).toMatch(new RegExp(`first left with ${starter} to work`));
+}, 600_000);
