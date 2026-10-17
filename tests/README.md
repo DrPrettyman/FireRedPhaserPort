@@ -77,7 +77,9 @@ A test fails if the page throws or logs `console.error`. When a test fails, the 
    (`game.eval(async (t) => { await t.until(...); ... })`) before it can happen and await it afterwards; do
    hold + watch + release in one eval; reseed right before a roll with `reseedAfterAnims` (battleAnimHelpers.ts),
    which uses `t.seedWhen(pred, n)` to seed inside the exact tick (an awaited `t.seed()` lands wherever the
-   frame's batch of ticks ends).
+   frame's batch of ticks ends). The same goes for an `await t.until(...)` followed by `t.waitFrames(n)`: the
+   wait starts where the batch ends, possibly dozens of ticks late. To check something exactly n ticks after an
+   event, count inside one `until` predicate (mapNamePopup.test.ts).
    Several tests here failed only when four e2e runs shared the machine.
 6. Don't answer a prompt with one press after a fixed wait: if the question is still printing, the press only
    speeds the text up and the next mash answers it instead. Mash the answer button itself (a catch's "Give a
