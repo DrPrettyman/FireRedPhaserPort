@@ -210,6 +210,8 @@ export interface FieldProbe {
    * 2 left, 3 right), BOB_* state, and the player sprite's y2 it sets.
    */
   surfBlob: { x: number; y: number; anim: number; bobState: number; invisible: boolean; playerY2: number } | undefined;
+  /** Task_Fishing's tStep and the player's fishing anim (world/fishing.ts) while it runs. */
+  fishing: { step: number; animNum?: number; image?: number; x2?: number; y2?: number } | undefined;
   /** gPlayerAvatar and the player's held movement (world/playerAvatar.ts). */
   avatar: {
     /** PLAYER_AVATAR_FLAG_* set, without the prefix (ON_FOOT, MACH_BIKE, SURFING, FORCED, ...). */

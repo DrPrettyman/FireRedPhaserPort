@@ -70,6 +70,8 @@ import {
   StartPlayerSurfBlob,
   surfBlobProbe,
 } from '../world/surf';
+import { setFieldItemsHost, type FieldItemsHost } from '../world/fieldItems';
+import { fishingProbe, registerFieldItems } from '../world/fishing';
 import { FieldFlash, FldEff_UseFlash, IsMapTypeOutdoors, Overworld_GetFlashLevel, SetDefaultFlashLevel } from '../world/flash';
 import { fieldListMenuGfxSymbols, fieldListMenuProbe, type ListMenuHost } from '../ui/FieldListMenu';
 import { stringWidth } from '../text/stringWidth';
@@ -331,10 +333,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (!playerInfo) throw new Error(`Missing player sprite ${PLAYER_GFX}`);
     this.player = new ObjectEvent(this, playerInfo, 0, 0, this.field);
     this.player.graphicsId = PLAYER_GFX;
-    // The avatar's other looks (bike, surfing, field move), so ObjectEventSetGraphicsId can swap at once.
+    // The avatar's other looks (bike, surfing, field move, fishing), so ObjectEventSetGraphicsId can swap at once.
     const gender = this.playerGender();
     await Promise.all(
-      ['PLAYER_AVATAR_GFX_NORMAL', 'PLAYER_AVATAR_GFX_BIKE', 'PLAYER_AVATAR_GFX_RIDE', 'PLAYER_AVATAR_GFX_FIELD_MOVE'].map((s) =>
+      ['PLAYER_AVATAR_GFX_NORMAL', 'PLAYER_AVATAR_GFX_BIKE', 'PLAYER_AVATAR_GFX_RIDE', 'PLAYER_AVATAR_GFX_FIELD_MOVE', 'PLAYER_AVATAR_GFX_FISH'].map((s) =>
         this.assets.loadSprite(this, GetPlayerAvatarGraphicsIdByStateIdAndGender(this.defines.require(s), gender)),
       ),
     );
@@ -343,6 +345,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     setFieldEffectScripts(this.assets.fieldEffectScripts);
     setFieldEffectScriptHost({ isPhaserEffectActive: (fldeff) => this.fieldEffects.isActive(fldeff) });
     setFieldMoveHost(this.createFieldMoveHost());
+    setFieldItemsHost(this.createFieldItemsHost());
+    registerFieldItems();
     setSurfHost({
       terrainAt: (x, y) => this.world.tileAt(x, y).terrain,
       createFieldEffectSprite: (fldEff, template, x, y, subpriority, callback) => this.fieldEffects.createSprite(fldEff, template, x, y, subpriority, callback),
@@ -405,6 +409,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       gbaScreenBlack: this.gbaScreen.active ? this.gbaScreen.blackFraction() : undefined,
       listMenu: fieldListMenuProbe(),
       surfBlob: surfBlobProbe(),
+      fishing: fishingProbe(),
       avatar: {
         flags: Object.keys(this.assets.scripts.defines)
           .filter((k) => k.startsWith('PLAYER_AVATAR_FLAG_') && gPlayerAvatar.flags & this.defines.require(k))
@@ -1120,6 +1125,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.busy = true;
     const from = this.world.current.data;
     const data = await this.assets.loadMap(name);
+    this.messageBox.hide(); // CB2_LoadMap frees the field's windows (the Escape Rope's message is still up)
     await this.doChangeMap(from, data, white);
     const dest = warpDestCoords(data, warpId, x, y);
     await this.enterMap(name, dest.x, dest.y, undefined, true);
@@ -2496,6 +2502,23 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         const surf = this.defines.require('MOVE_SURF');
         return this.state.party.some((m) => m.moves.includes(surf));
       },
+    };
+  }
+
+  // ------------------------------------------------------------------ field items
+
+  /** What the bag's field items (menus/itemUse.ts' ItemUseOnFieldCB_*, world/fishing.ts) read and do on the field. */
+  private createFieldItemsHost(): FieldItemsHost {
+    return {
+      openMessageBox: () => this.messageBox.open(),
+      printMessage: (str, x, speed, fill) => this.messageBox.print(str, { x, speed, fill }),
+      showMessage: (str) => this.messageBox.show(str),
+      messagePrinting: () => this.messageBox.isPrinting,
+      clearMessageBox: () => this.messageBox.hide(),
+      aButtonNew: () => this.buttons.pressed('A'),
+      objectEventAnims: (table) => this.assets.fieldEffectObjects.objectEventAnims?.[table],
+      doesCurrentMapHaveFishingMons: () => this.wild.doesCurrentMapHaveFishingMons(),
+      fishingWildEncounter: (rod) => this.wild.fishingWildEncounter(rod),
     };
   }
 

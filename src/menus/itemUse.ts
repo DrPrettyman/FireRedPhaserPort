@@ -1,7 +1,7 @@
 // item_use.c: what Use does for each item, from the bag (tasks' data[3] == 0) and in battle. The
 // functions are looked up by the names in the item table (fieldUseFunc / battleUseFunc). Uses that
-// need overworld systems that don't exist yet (rods, Escape Rope, Itemfinder, VS Seeker, Fame
-// Checker, Teachy TV, mail, TM case, berry pouch) aren't in the tables; the bag logs them.
+// need overworld systems that don't exist yet (Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail,
+// TM case, berry pouch) aren't in the tables; the bag logs them.
 
 import { K } from '../battle/constants';
 import { g, state } from '../battle/env';
@@ -21,6 +21,7 @@ import {
   GetPocketByItemId,
   ItemId_GetHoldEffectParam,
   ItemId_GetPocket,
+  ItemId_GetSecondaryId,
   ItemId_GetType,
   RemoveBagItem,
   STR_CONV_MODE_LEFT_ALIGN,
@@ -140,6 +141,72 @@ function FieldUseFunc_Bike(taskId: number): void {
 function ItemUseOnFieldCB_Bicycle(_taskId: number): void {
   GetOnOffBike(PLAYER_AVATAR_FLAG.MACH_BIKE | PLAYER_AVATAR_FLAG.ACRO_BIKE);
   ClearPlayerHeldMovement(); // ClearPlayerHeldMovementAndUnfreezeObjectEvents
+}
+
+/**
+ * The field side of the rods and the Escape Rope (world/fishing.ts, world/fieldMoves.ts, world/fieldItems.ts),
+ * registered at boot (registerFieldItems) like the party menu's field moves, so the bag doesn't import the
+ * field's Phaser code.
+ */
+export interface ItemUseFieldFuncs {
+  CanFish(): boolean;
+  StartFishing(rod: number): void;
+  CanUseEscapeRopeOnCurrMap(): boolean;
+  LockPlayerFieldControls(): void;
+  Overworld_ResetStateAfterDigEscRope(): void;
+  /** DisplayItemMessageOnField(taskId, FONT_NORMAL, str, callback) */
+  DisplayItemMessageOnField(str: number[], callback: () => void): void;
+  Task_UseDigEscapeRopeOnField(): void;
+}
+
+let sFieldFuncs: ItemUseFieldFuncs | undefined;
+
+export function registerItemUseFieldFuncs(funcs: ItemUseFieldFuncs): void {
+  sFieldFuncs = funcs;
+}
+
+function fieldFuncs(): ItemUseFieldFuncs {
+  if (!sFieldFuncs) throw new Error('[item_use] the field items are not registered');
+  return sFieldFuncs;
+}
+
+/** FieldUseFunc_Rod: only facing water you can fish in (CanFish, world/fishing.ts). */
+function FieldUseFunc_Rod(taskId: number): void {
+  if (fieldFuncs().CanFish()) {
+    sItemUseOnFieldCB = ItemUseOnFieldCB_Rod;
+    SetUpItemUseOnFieldCallback(taskId);
+  } else {
+    PrintNotTheTimeToUseThat(taskId, inField(taskId));
+  }
+}
+
+/** ItemUseOnFieldCB_Rod: Task_Fishing takes over the field (world/fishing.ts). */
+function ItemUseOnFieldCB_Rod(_taskId: number): void {
+  fieldFuncs().StartFishing(ItemId_GetSecondaryId(SpecialVar.ItemId));
+}
+
+/**
+ * ItemUseOutOfBattle_EscapeRope: only where gMapHeader.allowEscaping. (ItemUse_SetQuestLogEvent: no quest
+ * log.)
+ */
+function ItemUseOutOfBattle_EscapeRope(taskId: number): void {
+  if (fieldFuncs().CanUseEscapeRopeOnCurrMap()) {
+    sItemUseOnFieldCB = ItemUseOnFieldCB_EscapeRope;
+    SetUpItemUseOnFieldCallback(taskId);
+  } else {
+    PrintNotTheTimeToUseThat(taskId, inField(taskId));
+  }
+}
+
+/** ItemUseOnFieldCB_EscapeRope: "{PLAYER} used the ESCAPE ROPE.", then Dig's escape (Task_UseDigEscapeRopeOnField). */
+function ItemUseOnFieldCB_EscapeRope(_taskId: number): void {
+  // The start menu's LockPlayerFieldControls is still held on the GBA (the bag doesn't release it); here the
+  // field's overlay held the controls until now, so the message takes the lock itself.
+  const f = fieldFuncs();
+  f.LockPlayerFieldControls();
+  f.Overworld_ResetStateAfterDigEscRope();
+  RemoveUsedItem();
+  f.DisplayItemMessageOnField(gStringVar4.slice(), f.Task_UseDigEscapeRopeOnField);
 }
 
 /**
@@ -421,6 +488,8 @@ function FieldUseFunc_OakStopsYou(taskId: number): void {
 /** Field use functions by name (ItemId_GetFieldFunc) */
 export const FIELD_USE_FUNCS: Record<string, TaskFunc> = {
   FieldUseFunc_Bike,
+  FieldUseFunc_Rod,
+  ItemUseOutOfBattle_EscapeRope,
   FieldUseFunc_TownMap,
   FieldUseFunc_CoinCase,
   FieldUseFunc_PowderJar,

@@ -131,7 +131,16 @@ def extract_field_effect_objects(decomp, out, defines):
             else:
                 cmds.append([c["xScale"], c["yScale"], c["rotation"], c["duration"]])
         distortion.append(cmds)
-    (fe / "objects.json").write_text(json.dumps({"templates": index, "reflectionDistortion": distortion}, separators=(",", ":")))
+    # Object events' anim tables (object_event_anims.h, sAnimTable_*), for code that starts one of their anims
+    # on an object's sprite itself (StartSpriteAnim: the player's fishing anims). Same command format.
+    object_anims = {
+        name: [anim_list(unit["anims"][a]) if a in unit["anims"] else [] for a in table]
+        for name, table in unit["tables"].items()
+        if name.startswith("sAnimTable_")
+    }
+    (fe / "objects.json").write_text(
+        json.dumps({"templates": index, "reflectionDistortion": distortion, "objectEventAnims": object_anims}, separators=(",", ":"))
+    )
     print(f"  {len(index)} field effect object templates")
 
 
