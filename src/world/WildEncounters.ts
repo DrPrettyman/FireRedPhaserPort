@@ -29,8 +29,8 @@ export interface WildBattleHost {
 
 /**
  * wild_encounter.c: the step encounter check (TryStandardWildEncounter), its cooldown and rate
- * modifiers, the repel counter, and wild mon generation. Fields are sWildEncounterData (EWRAM).
- * Not ported: the quest log/Union Room checks, fishing.
+ * modifiers, the repel counter, wild mon generation and fishing (DoesCurrentMapHaveFishingMons,
+ * FishingWildEncounter). Fields are sWildEncounterData (EWRAM). Not ported: the quest log/Union Room checks.
  */
 export class WildEncounters {
   private rngState = 0;
@@ -130,6 +130,25 @@ export class WildEncounters {
     this.tryGenerateWildMon(info, area, 0);
     this.startWildBattle();
     return true;
+  }
+
+  /** DoesCurrentMapHaveFishingMons */
+  doesCurrentMapHaveFishingMons(): boolean {
+    return this.currentHeader()?.fishing_mons !== undefined;
+  }
+
+  /**
+   * FishingWildEncounter: GenerateFishingEncounter for the rod (OLD_ROD / GOOD_ROD / SUPER_ROD), then
+   * StartWildBattle. (IncrementGameStat(GAME_STAT_FISHING_CAPTURES): game stats aren't kept.)
+   */
+  fishingWildEncounter(rod: number): void {
+    const info = this.currentHeader()?.fishing_mons;
+    if (!info) throw new Error('[wild] FishingWildEncounter on a map without fishing mons');
+    // GenerateFishingEncounter
+    const slot = ChooseWildMonIndex_Fishing(random(), rod, this.data.chances.fishing_mons);
+    const level = this.chooseWildMonLevel(info, slot);
+    this.generateWildMon(this.species(info, slot), level, slot);
+    this.startWildBattle();
   }
 
   // ------------------------------------------------------------------ encounter check
@@ -407,6 +426,25 @@ export class WildEncounters {
   private startWildBattle(): void {
     this.host.startWildBattle(this.enemy!);
   }
+}
+
+/**
+ * ChooseWildMonIndex_Fishing, given its Random(): the roll is taken modulo the largest of the three rods'
+ * ENCOUNTER_CHANCE_FISHING_MONS_*_TOTAL, and each rod has its own slots (old 0-1, good 2-4, super 5-9).
+ * `chances` is wild_encounters.json's per-rod [slot, running total] pairs.
+ */
+export function ChooseWildMonIndex_Fishing(random16: number, rod: number, chances: WildEncounterData['chances']['fishing_mons']): number {
+  const rods = [chances.old_rod, chances.good_rod, chances.super_rod];
+  const max = Math.max(...rods.map((slots) => slots[slots.length - 1][1]));
+  const rand = (random16 % max) & 0xff; // u8 rand
+  let wildMonIndex = 0;
+  let lo = 0;
+  for (const [slot, total] of rods[rod] ?? []) {
+    if (rand >= lo && rand < total) wildMonIndex = slot;
+    lo = total;
+  }
+  // OLD_ROD's `else wildMonIndex = 1` covers rolls past its total too (none: every total is 100).
+  return wildMonIndex;
 }
 
 /** GET_UNOWN_LETTER */

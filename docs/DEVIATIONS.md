@@ -42,6 +42,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     follows. The show-mon banner's graphics load while the player's pose plays, so a very slow load would hold the
     banner back. Dig/Escape Rope with no escape warp saved (a dev start in a cave) go to the last heal location.
   - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Bag uses that need overworld systems
+    (Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail, TM case, berry pouch, registered SELECT items) log
+    "not implemented" and return to the bag. The Escape Rope's quest log event (ItemUse_SetQuestLogEvent) isn't
+    recorded; ItemUseOnFieldCB_EscapeRope takes the field controls lock itself (on the GBA the start menu's lock is
+    still held when the bag returns; here the field's overlay held the controls until then). RemoveUsedItem after
+    the bag has closed skips the bag display's item counts (the GBA writes them through a freed NULL pointer). Berry powder reads as 0. The TM case
+    and berry pouch can't be opened to give from (the PC box's GIVE, GoToTMCase_PCBox / GoToBerryPouch_PCBox).
     (rods, Escape Rope, Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail, berry pouch,
     registered SELECT items) log "not implemented" and return to the bag. Berry powder reads as 0. The berry
     pouch can't be opened to give from (GoToBerryPouch_Give / _PCBox).
@@ -73,9 +79,16 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Player avatar (world/playerAvatar.ts, world/bike.ts): no audio (bump, ledge, spinner, bike bell, Strength
     and fall sounds; Cycling Road and surf music). Not ported: the warp arrow sprite on arrow mats
     (HandleWarpArrowSpriteHideShow), DoStairWarp's 12-frame delay when a stair warp takes the player off the
-    bike, fishing (rods), the teleport spin, the quest log's recordings, and the help context. Movement scripts
+    bike, the teleport spin, the quest log's recordings, and the help context. Movement scripts
     (applymovement) still run through MovementRunner rather than the player's held-movement actions, so `lock`
     waits for a scripted step to end by `isMoving`.
+  - Fishing (world/fishing.ts): no quest log (QuestLogTryRecordPlayerAvatarGfxTransition, QL_PLAYER_GFX_FISH's
+    playback task) and no GAME_STAT_FISHING_CAPTURES. StartFishing's task runs its second state a frame later than
+    the GBA's (a new task there also runs in the RunTasks pass that created it). The dots and messages go through
+    the field message box's printer, which runs after the field's tasks: a dot printed at speed 0 appears in the
+    same frame, but Fishing11 / Fishing16 see a finished message a frame later than RunTextPrinters would. The
+    player's sprite anim (AnimateSprites) is run by the fishing task after its state functions, as the GBA's sprite
+    pass would after the tasks.
   - Surf and Waterfall (world/surf.ts): no audio (MUS_SURF and Overworld_ClearSavedMusic; the banner's cry as
     above), no HELPCONTEXT_SURFING, no quest log (`goto_if_questlog` never branches). FldEff_UseSurf takes the
     field controls lock at once: the C holds FieldCallback_PrepareFadeInFromMenu's (or the script's) lock until

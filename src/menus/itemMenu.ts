@@ -679,6 +679,7 @@ export function ResetBagCursorPositions(): void {
 }
 
 export function PocketCalculateInitialCursorPosAndItemsAbove(pocketId: number): void {
+  if (!sBagMenuDisplay) return; // freed with the bag (item_use.c's field callbacks read through NULL on the GBA)
   const nItems = disp().nItems[pocketId];
   const maxShowed = disp().maxShowed[pocketId];
   if (gBagMenuState.cursorPos[pocketId] !== 0 && gBagMenuState.cursorPos[pocketId] + maxShowed > nItems + 1) {
@@ -782,6 +783,7 @@ export function MoveItemSlotInList(itemSlots: { itemId: number; quantity: number
 export function Pocket_CalculateNItemsAndMaxShowed(pocketId: number): void {
   const slots = bagPocket(pocketId);
   BagPocketCompaction(slots, slots.length);
+  if (!sBagMenuDisplay) return; // freed with the bag (the Escape Rope's RemoveUsedItem on the field)
   disp().nItems[pocketId] = 0;
   for (let i = 0; i < slots.length; i++) {
     if (slots[i].itemId === K.ITEM_NONE) break;

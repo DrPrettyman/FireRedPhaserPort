@@ -6,8 +6,8 @@
 // objects and the field's tasks. Like the C, the state is a module global, so specials and item uses
 // (TestPlayerAvatarFlags, GetOnOffBike, ...) reach it directly.
 //
-// Not ported here: fishing (StartFishing, Task_Fishing: the rods), the teleport warp-out/in spin
-// (field moves), the warp arrow sprite (HandleWarpArrowSpriteHideShow), the quest log's recordings,
+// Not here: fishing (StartFishing, Task_Fishing: world/fishing.ts), the teleport warp-out/in spin
+// (field moves). Not ported: the warp arrow sprite (HandleWarpArrowSpriteHideShow), the quest log's recordings,
 // and the Acro Bike / secret base mat functions, which FRLG's metatile behaviours never trigger.
 
 import { K } from '../battle/constants';
