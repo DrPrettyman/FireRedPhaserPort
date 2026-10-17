@@ -340,7 +340,7 @@ export function SetSurfBlob_DontSyncAnim(sprite: FieldEffectSprite | undefined, 
   sprite.data[sBitfield] = (sprite.data[sBitfield] & ~0xf0) | ((Number(value) & 0xf) << 4);
 }
 
-/** SetSurfBlob_PlayerOffset (the rods' bobbing; fishing isn't ported yet) */
+/** SetSurfBlob_PlayerOffset (fishing while surfing: AlignFishingAnimationFrames' y2, world/fishing.ts) */
 export function SetSurfBlob_PlayerOffset(sprite: FieldEffectSprite | undefined, hasOffset: boolean, offset: number): void {
   if (!sprite) return;
   sprite.data[sBitfield] = (sprite.data[sBitfield] & ~0xf00) | ((Number(hasOffset) & 0xf) << 8);

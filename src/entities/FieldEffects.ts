@@ -16,7 +16,7 @@ const ICONS: Record<string, { anim: number; subpriority: number }> = {
 };
 
 /** [imageValue, duration, hFlip, vFlip] / ["end"] / ["jump", index] / ["loop", count] (tools/extract_field.py) */
-type AnimCmd = [number, number, number, number] | ['end'] | ['jump', number] | ['loop', number];
+export type AnimCmd = [number, number, number, number] | ['end'] | ['jump', number] | ['loop', number];
 /** [xScale, yScale, rotation, duration] / ["jump", index] / ["end"] */
 type AffineAnimCmd = [number, number, number, number] | ['jump', number] | ['end'];
 
@@ -34,6 +34,8 @@ export interface FieldEffectObjects {
   templates: Record<string, FieldEffectTemplate>;
   /** sAffineAnims_ReflectionDistortion: OAM matrices 0 and 1 that water reflections draw with. */
   reflectionDistortion: AffineAnimCmd[][];
+  /** Object events' anim tables by name (sAnimTable_*, object_event_anims.h); SpriteInfo.anims names one. */
+  objectEventAnims: Record<string, AnimCmd[][]>;
 }
 
 /** What the field effects need from the field. */
@@ -59,34 +61,10 @@ const BIKE_TIRE_TRACKS_TRANSITIONS = [
 ];
 
 /**
- * A field effect sprite: struct Sprite's fields the field effect code uses, with sprite.c's frame
- * animation (AnimateSprite), drawn as a Phaser sprite. Positions are world pixels of the sprite's
- * centre (coordOffsetEnabled sprites' x/y), x2/y2 an offset on top.
+ * A sprite's sprite.c animation state (struct Sprite's anim fields) and AnimateSprite for plain (non-affine)
+ * anims: field effect sprites, and anything that runs an object event's anim table itself (world/fishing.ts).
  */
-export class FieldEffectSprite {
-  readonly sprite: Phaser.GameObjects.Sprite;
-  x: number;
-  y: number;
-  x2 = 0;
-  y2 = 0;
-  priority = 0;
-  subpriority: number;
-  invisible = false;
-  /** OAM flip bits (from the anim frame, or set directly) and an affine x scale (reflections). */
-  hFlip = false;
-  vFlip = false;
-  scaleX = 1;
-  /** The rest of an OAM matrix (world/fly.ts' bird): y scale, rotation (radians, clockwise) and the
-   *  ST_OAM_AFFINE_DOUBLE box as a crop of the frame [x, y, width, height]. */
-  scaleY = 1;
-  rotation = 0;
-  crop?: [number, number, number, number];
-  data = [0, 0, 0, 0, 0, 0, 0, 0];
-  inUse = true;
-  /** The object this effect follows, standing in for its localId/mapNum/mapGroup in data. */
-  obj?: ObjectEvent;
-  readonly width: number;
-  readonly height: number;
+export class SpriteAnim {
   // sprite.c animation state
   anims: AnimCmd[][];
   animNum = 0;
@@ -97,24 +75,12 @@ export class FieldEffectSprite {
   animPaused = false;
   animLoopCounter = 0;
   image = 0;
+  /** OAM flip bits (from the anim frame, or set directly). */
+  hFlip = false;
+  vFlip = false;
 
-  constructor(
-    scene: Phaser.Scene,
-    readonly fldEff: string,
-    texture: string,
-    template: { frameWidth: number; frameHeight: number; anims: AnimCmd[][] },
-    x: number,
-    y: number,
-    subpriority: number,
-    public callback: (s: FieldEffectSprite) => void,
-  ) {
-    this.x = x;
-    this.y = y;
-    this.subpriority = subpriority;
-    this.width = template.frameWidth;
-    this.height = template.frameHeight;
-    this.anims = template.anims;
-    this.sprite = scene.add.sprite(0, 0, texture, 0).setOrigin(0.5, 0.5).setVisible(false);
+  constructor(anims: AnimCmd[][]) {
+    this.anims = anims;
   }
 
   /** StartSpriteAnim */
@@ -203,6 +169,54 @@ export class FieldEffectSprite {
           this.applyFrame(cmd);
       }
     }
+  }
+}
+
+/**
+ * A field effect sprite: struct Sprite's fields the field effect code uses, with sprite.c's frame
+ * animation (AnimateSprite), drawn as a Phaser sprite. Positions are world pixels of the sprite's
+ * centre (coordOffsetEnabled sprites' x/y), x2/y2 an offset on top.
+ */
+export class FieldEffectSprite extends SpriteAnim {
+  readonly sprite: Phaser.GameObjects.Sprite;
+  x: number;
+  y: number;
+  x2 = 0;
+  y2 = 0;
+  priority = 0;
+  subpriority: number;
+  invisible = false;
+  /** An affine x scale (reflections); the OAM flip bits are SpriteAnim's. */
+  scaleX = 1;
+  /** The rest of an OAM matrix (world/fly.ts' bird): y scale, rotation (radians, clockwise) and the
+   *  ST_OAM_AFFINE_DOUBLE box as a crop of the frame [x, y, width, height]. */
+  scaleY = 1;
+  rotation = 0;
+  crop?: [number, number, number, number];
+  data = [0, 0, 0, 0, 0, 0, 0, 0];
+  inUse = true;
+  /** The object this effect follows, standing in for its localId/mapNum/mapGroup in data. */
+  obj?: ObjectEvent;
+  readonly width: number;
+  readonly height: number;
+
+  constructor(
+    scene: Phaser.Scene,
+    readonly fldEff: string,
+    texture: string,
+    template: { frameWidth: number; frameHeight: number; anims: AnimCmd[][] },
+    x: number,
+    y: number,
+    subpriority: number,
+    public callback: (s: FieldEffectSprite) => void,
+  ) {
+    super(template.anims);
+    this.x = x;
+    this.y = y;
+    this.subpriority = subpriority;
+    this.width = template.frameWidth;
+    this.height = template.frameHeight;
+    this.sprite = scene.add.sprite(0, 0, texture, 0).setOrigin(0.5, 0.5).setVisible(false);
   }
 
   /** The OAM entry: position, frame, flips and depth (SortSprites' priority/subpriority/screen top). */

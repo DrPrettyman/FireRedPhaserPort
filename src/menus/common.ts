@@ -142,8 +142,10 @@ export function ItemId_GetBattleFunc(itemId: number): string {
   return item(itemId).battleUseFunc;
 }
 
+/** ItemId_GetSecondaryId: items.json keeps a named constant as its name (the rods' OLD_ROD / GOOD_ROD / SUPER_ROD). */
 export function ItemId_GetSecondaryId(itemId: number): number {
-  return item(itemId).secondaryId;
+  const id = item(itemId).secondaryId;
+  return typeof id === 'string' ? K[id] : id;
 }
 
 /** ItemIsMail (mail_data.c) */

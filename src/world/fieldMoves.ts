@@ -161,7 +161,7 @@ function Overworld_ResetStateAfterTeleport(): void {
   state.setFlag('FLAG_SYS_QL_DEPARTED', false);
   state.setVar('VAR_QL_ENTRANCE', 0);
 }
-const Overworld_ResetStateAfterDigEscRope = Overworld_ResetStateAfterTeleport;
+export const Overworld_ResetStateAfterDigEscRope = Overworld_ResetStateAfterTeleport;
 /** Overworld_ResetStateAfterFly (the same in FRLG) */
 export const Overworld_ResetStateAfterFly = Overworld_ResetStateAfterTeleport;
 
@@ -719,12 +719,16 @@ function FldEff_UseDig(): boolean {
 
 function StartDigFieldEffect(): void {
   FieldEffectActiveListRemove('FLDEFF_USE_DIG');
-  // Task_UseDigEscapeRopeOnField (item_use.c)
   CreateTask(() => {
-    ResetInitialPlayerAvatarState();
-    StartEscapeRopeFieldEffect();
+    Task_UseDigEscapeRopeOnField();
     return true;
   });
+}
+
+/** Task_UseDigEscapeRopeOnField (item_use.c): Dig's and the Escape Rope's warp out. */
+export function Task_UseDigEscapeRopeOnField(): void {
+  ResetInitialPlayerAvatarState();
+  StartEscapeRopeFieldEffect();
 }
 
 /** SetUpFieldMove_Teleport */

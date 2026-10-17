@@ -192,11 +192,39 @@ this is the next level down. When you add or change a subsystem, update its entr
   starts the task. Test trainers: Viridian Forest Rick (`?start=after-rival&map=ViridianForest&x=41&y=45`, step
   right), Route 20 Nora for the camera pan (teleport the player to 34,11).
 - **Wild encounters:** `world/WildEncounters.ts` (wild_encounter.c) runs from `OverworldScene.processStep`
-  after every completed step, incl. the first tile after a map connection. `startWildBattle` is
+  after every completed step, incl. the first tile after a map connection. Rock Smash, Sweet Scent and fishing
+  call in from their field code. `startWildBattle` is
   StartWildBattle + CB2_EndWildBattle as a field overlay (white-out on a loss); `doSafariBattle` is
   DoSafariBattle + CB2_EndSafariBattle. To skip the dice in tests:
   `s.startWildBattle(s.state.pokemon.createMonWithNature(species, level, 32, nature, {...}))` on the Overworld scene.
   `state.currentMapId` is the MAP_* id (`currentMap` is the folder name).
+- **Field items (rods, Escape Rope):** the bag's half is `menus/itemUse.ts` (FieldUseFunc_Rod,
+  ItemUseOutOfBattle_EscapeRope, their ItemUseOnFieldCB_* through gFieldCallback = FieldCB_FadeInFromBlack, like the
+  Bicycle). itemUse.ts must stay free of Phaser imports (battle unit tests load it), so the field functions it calls
+  (CanFish, StartFishing, CanUseEscapeRopeOnCurrMap, LockPlayerFieldControls, DisplayItemMessageOnField,
+  Task_UseDigEscapeRopeOnField, ...) are registered at boot: `registerFieldItems()` (world/fishing.ts) fills
+  `registerItemUseFieldFuncs`. Add the VS Seeker's / Itemfinder's field functions to that interface the same way.
+  `world/fieldItems.ts` is the field host for item uses (OverworldScene.createFieldItemsHost): the field message box
+  as window 0 (`openMessageBox` = LoadMessageBoxAndFrameGfx, `printMessage` = AddTextPrinterParameterized(2) at an x
+  and speed, `showMessage` + `DisplayItemMessageOnField(str, callback)`), JOY_NEW(A), the object event anim tables
+  (`field_effects/objects.json` `objectEventAnims`, sAnimTable_* by the name SpriteInfo.anims gives) and the wild
+  encounter calls.
+  - **Fishing:** `world/fishing.ts` is StartFishing / Task_Fishing (Fishing1..16, one task object with the C's
+    tStep/tFrameCounter/...), AlignFishingAnimationFrames and CanFish. FRLG's Fishing7 jumps straight to "A POKéMON's
+    on the hook!" (no "Oh! A bite!", no A-press window, one round of dots; Fishing8/9/13 are ported but
+    unreachable). The player's sprite runs the fishing graphics' anims through `SpriteAnim` (sprite.c's anim
+    state, split out of FieldEffectSprite in entities/FieldEffects.ts), with x2/y2 put on the Phaser sprite
+    (surfing: SetSurfBlob_PlayerOffset). The encounter is `WildEncounters.doesCurrentMapHaveFishingMons` /
+    `fishingWildEncounter(rod)` (ChooseWildMonIndex_Fishing is exported for unit tests). The rod is
+    `ItemId_GetSecondaryId` (items.json keeps OLD_ROD etc. as names; menus/common.ts resolves them).
+  - **Escape Rope:** ItemUseOnFieldCB_EscapeRope prints "{PLAYER} used the ESCAPE ROPE." and then runs Dig's
+    Task_UseDigEscapeRopeOnField (world/fieldMoves.ts, exported). The field message box is hidden when a warp
+    loads the next map (`loadWarpedMap`: CB2_LoadMap frees the windows).
+  - Probes / events: `field().fishing` (`step` = tStep, 5 is Fishing6's bite roll; the anim's `animNum`, `image`,
+    `x2`, `y2`), events `fishing` (rod), `fishingBite`, `fishingResult` (`onHook` / `noBite` / `gotAway`),
+    `fishingEnd`. Seed the bite roll with `t.seedWhen(() => t.field()?.fishing?.step === 5, seed)` (seed 0: a bite,
+    3: none). Tests: tests/e2e/fieldItems.test.ts (Pallet Town's pond from (8, 16) facing down; Mt. Moon from Route
+    4 (19, 6) for the rope), tests/unit/fishing.test.ts.
 - **Scripted battles:** specials that start a battle (StartOldManTutorialBattle, StartMarowakBattle,
   StartLegendaryBattle in `script/specials.ts`) call `host.startScriptedBattle(flags, enemyParty, transition)` and
   block the script with `setWaitState` until the field has faded back in (their CB2_End* sets VAR_RESULT; a loss

@@ -80,6 +80,38 @@ export class MessageBox {
     this.setVisible(true);
   }
 
+  /** LoadMessageBoxAndFrameGfx(0, TRUE) with nothing printed: the dialogue frame around an empty window. */
+  open(): void {
+    this.signpost = false;
+    this.printer = undefined;
+    this.text = [];
+    this.window.fill(TEXT_COLOR_WHITE);
+    this.setVisible(true);
+  }
+
+  /**
+   * AddTextPrinterParameterized / AddTextPrinterParameterized2 on the open window: FONT_NORMAL in dark gray on
+   * white, at `x` px, `speed` frames a character (0: at once). `fill` is FillWindowPixelBuffer(PIXEL_FILL(1))
+   * first; otherwise it prints over what is there (the fishing dots). No placeholders are expanded.
+   */
+  print(str: number[], opts: { x: number; speed: number; fill?: boolean }): void {
+    if (opts.fill) this.window.fill(TEXT_COLOR_WHITE);
+    this.text = opts.fill ? str : [...this.text.filter((c) => c !== 0xff), ...str];
+    this.printer = new TextPrinter(this.window, this.fonts, this.input, this.arrowSheet, str, {
+      fontId: FONT_NORMAL,
+      x: opts.x,
+      y: 1,
+      fgColor: TEXT_COLOR_DARK_GRAY,
+      bgColor: TEXT_COLOR_WHITE,
+      shadowColor: TEXT_COLOR_LIGHT_GRAY,
+      lineSpacing: this.fonts.get(FONT_NORMAL).info.lineSpacing,
+      speed: opts.speed,
+      canABSpeedUp: opts.speed !== 0,
+      scrollSpeed: TEXT_SPEED[this.state.textSpeed].scroll,
+    });
+    this.setVisible(true);
+  }
+
   /** True while the printer is still running (waitmessage blocks on this). */
   get isPrinting(): boolean {
     return this.printer !== undefined && !this.printer.finished;

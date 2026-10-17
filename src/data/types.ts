@@ -262,7 +262,8 @@ export interface ItemInfo {
   fieldUseFunc: string;
   battleUsage: number;
   battleUseFunc: string;
-  secondaryId: number;
+  /** A number, or a constant's name (ItemId_GetSecondaryId resolves it). */
+  secondaryId: number | string;
 }
 
 export interface PokemonTables {

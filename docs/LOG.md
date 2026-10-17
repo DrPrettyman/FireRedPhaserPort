@@ -1468,6 +1468,30 @@ end to end.
   (a background timer, then a "Checkpoint" SendMessage to a worker past 60 minutes or 45 minutes without a commit).
   Worker rules for keeping the context small.
 
+### Rods and the Escape Rope (W-fielditems unit 1, `fielditems-1`)
+
+- Fishing (world/fishing.ts): FieldUseFunc_Rod / CanFish / ItemUseOnFieldCB_Rod, StartFishing / Task_Fishing with
+  Fishing1..16 and AlignFishingAnimationFrames, QL_GfxTransition_Fish's graphics swap; DoesCurrentMapHaveFishingMons,
+  ChooseWildMonIndex_Fishing, GenerateFishingEncounter, FishingWildEncounter in world/WildEncounters.ts. Found on the
+  way: FRLG's Task_Fishing has no "Oh! A bite!" and no A-press window (Fishing7 goes straight to "A POKéMON's on the
+  hook!", so Fishing8/9/13 and "It got away" can't be reached); the planning notes had the R/S/Emerald flow.
+- Escape Rope: ItemUseOutOfBattle_EscapeRope / ItemUseOnFieldCB_EscapeRope on top of Dig's escape
+  (Task_UseDigEscapeRopeOnField, now exported from world/fieldMoves.ts). The message holds the field controls (the
+  GBA's start menu lock). The field message box now goes away when a warp loads the next map.
+- Shared pieces: `SpriteAnim` (sprite.c's anim state) split out of FieldEffectSprite; the extractor writes every
+  object event anim table (`objectEventAnims` in field_effects/objects.json); MessageBox `open` / `print` for
+  window 0 prints at an x and speed; world/fieldItems.ts (the item uses' field host); `ItemId_GetSecondaryId`
+  resolves the named secondary ids items.json keeps (OLD_ROD...); the player's fishing graphics are preloaded.
+- Fixes on the way: menus/itemUse.ts importing field (Phaser) modules broke the battle unit tests that load it, so
+  the field functions are registered at boot (`registerItemUseFieldFuncs`, like the party menu's field moves);
+  RemoveUsedItem after the bag had closed threw on the freed bag display (the GBA writes through NULL there), so
+  Pocket_CalculateNItemsAndMaxShowed / PocketCalculateInitialCursorPosAndItemsAbove skip the display when it's gone.
+- Verified: typecheck; unit tests (tests/unit/fishing.test.ts: the slot thresholds per rod against the
+  ENCOUNTER_CHANCE_FISHING_MONS_* values, Pallet Town's old and super rod mons); e2e tests/e2e/fieldItems.test.ts
+  (Old Rod with a seeded bite → a wild Magikarp, Good Rod with no bite → "Not even a nibble…" and the controls
+  back, a rod facing land refused in the bag, the Escape Rope from Mt. Moon to Route 4, refused on Route 1), plus
+  playerAvatar / surf / wildBattle / fieldMoves / fieldEffects / fly e2e; screenshots of the cast facing down from
+  the bank and left/right while surfing.
 ### Pokédex screen: data, top menu, numerical lists (W-dex unit 1, SCREENS_PLAN.md batch 1)
 
 - Extractor: `tools/extract_pokedex.py` → public/gen/pokedex.json (gPokedexEntries' category names, FireRed
