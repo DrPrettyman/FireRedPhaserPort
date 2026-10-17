@@ -271,6 +271,26 @@ this is the next level down. When you add or change a subsystem, update its entr
     `itemfinderArrow` (`anim`, `affineAnim`, `deltaX`, `deltaY`), `itemfinderStar`, `itemfinderEnd`. Tests:
     tests/e2e/itemfinder.test.ts (Route 3's Oran Berry (26, 9) from (24, 9); Cape Brink's underfoot PP Max at
     (16, 28); Pallet Town for none; Route 13 (62, 1) for Route 12's Rare Candy), tests/unit/itemfinder.test.ts.
+  - **Registered items (SELECT):** `menus/registeredItem.ts` is UseRegisteredKeyItemOnField (item_menu.c),
+    called from `OverworldScene.processPlayerFieldInput` when FieldGetPlayerInput saw SELECT (after START, as in
+    ProcessPlayerFieldInput). It dismisses the map name popup, takes LockPlayerFieldControls (fieldMoves.ts' flag
+    version, which the field items' own Unlock calls release), FreezeObjectEvents, stops the player, and runs the
+    item's `FIELD_USE_FUNCS` entry as a GBA task with `data[3] = 1` (stepped by a field task: the field doesn't run
+    RunTasks). Nothing registered, or the item gone from the bag (the registration is cleared):
+    EventScript_BagItemCanBeRegistered. The from-the-field branches are in menus/itemUse.ts: SetUpItemUseOnFieldCallback
+    calls sItemUseOnFieldCB at once; DisplayItemMessageInCurrentContext / PrintNotTheTimeToUseThat go to
+    `DisplayItemMessageOnField(taskId, fontId, str, callback)` (the task waits in Task_ContinueTaskAfterMessagePrints
+    while world/fieldItems.ts prints, then the callback becomes its func) and Task_ItemUse_CloseMessageBoxAndReturnToField
+    (clears the box, unfreezes, unlocks). An sItemUseOnFieldCB gets TASK_NONE after the bag (there's no task),
+    so it destroys its task through `DestroyItemUseTask`. To add an item's field branch: check `inField(taskId)` in its
+    FieldUseFunc and end in something that unfreezes and unlocks. The Town Map / TM case / berry pouch branches
+    (`RegisteredItemFromFieldNotPorted`) log and give the controls back. Script `release` / `releaseall` now also
+    unfreeze objects (ClearPlayerHeldMovementAndUnfreezeObjectEvents), and a map load or a battle's return clears the
+    freeze. Probes: `field().locked` (LockPlayerFieldControls held), `field().objectsFrozen`, `__test.gbaTasks()`
+    (active gTasks by function name, e.g. `Task_BagMenu_HandleInput`, `Task_FieldItemContextMenuHandleInput`),
+    `__test.paletteFadeActive()`. Tests: tests/e2e/registeredItems.test.ts (registering the Bicycle in the bag and SELECT on /
+    off, Cycling Road, the Old Rod, the Coin Case, the VS Seeker / Itemfinder / Poké Flute messages, nothing
+    registered; Pallet Town's pond at (8, 16), (12, 13) for no trainers or hidden items).
 - **Scripted battles:** specials that start a battle (StartOldManTutorialBattle, StartMarowakBattle,
   StartLegendaryBattle in `script/specials.ts`) call `host.startScriptedBattle(flags, enemyParty, transition)` and
   block the script with `setWaitState` until the field has faded back in (their CB2_End* sets VAR_RESULT; a loss
@@ -532,13 +552,24 @@ this is the next level down. When you add or change a subsystem, update its entr
   (name, ID, money, Pokédex once FLAG_SYS_POKEDEX_GET is set, the live play time with BlinkTimeColon's colon, from
   the VBlank callback), the badges (FLAG_BADGE01-08_GET) on BG3, the player's pic drawn into window 2
   (`CreateTrainerCardTrainerPicSprite` in menus/picSprites.ts, which also has PlayerGenderToFrontTrainerPicId now).
-  Not yet (W-tcard unit 2): the back (PrintAllOnCardBack, BufferTextForCardBack, DrawCardBackStats, the stickers'
-  and mon icons' tiles: LoadMonIconGfx is a stub, LoadStickerGfx is ported) and the flip (A on the front does
-  nothing; the flip's HBlankCB_TrainerCard sets BG0VOFS per scanline, and the port doesn't run HBlank callbacks:
-  scanline effects go through gba/hw.ts's `hblankRegs`). Probe
-  `__test.trainerCard()` (mainState, `ready`, the stars and badges it has and the ones drawn on BG3, which card
-  palette is in the hardware palettes, the female background, the pic's pixel count, what the front printed,
-  decoded). Tests: tests/e2e/trainerCard.test.ts, tests/unit/trainerCard.test.ts (the stars).
+  The back (BufferTextForCardBack at init, PrintAllOnCardBack when flipping): the name, the Hall of Fame debut once
+  GAME_STAT_ENTERED_HOF is set, the link battle / trade / Berry Crush / Union Room lines only when not 0 (so never,
+  without link play), DrawCardBackStats (their end tiles), the photo's mon icons (VAR_TRAINER_CARD_MON_ICON_*, mail
+  species, tinted by VAR_TRAINER_CARD_MON_ICON_TINT_IDX: LoadMonIconGfx puts the icon palettes in BG palettes 5-10
+  and the tiles at BG3 tile 224 + 16 * i; trainerCardGfxSymbols preloads those icons) and the Four Island stickers
+  (the brag vars; palettes 11-14, tiles at 320). BG3 tilemap entries leave out its baseTile (192): badges 192+,
+  icons 224+, stickers 320+. The flip (FlipTrainerCard → Task_DoCardFlipTask, one step a frame): hide BG1/BG3, the
+  card closes 7 lines a frame from each edge to 77 (UpdateCardFlipRegs: WIN0V and the BLDY darkening), the other
+  side is drawn, then it opens 5 lines a frame. HBlankCB_TrainerCard's per-line BG0VOFS is modelled as an HBlank
+  DMA table (gba/hw.ts `hblankRegs` on `gScanlineEffectRegBuffers[1]`, which VBlankCB_TrainerCard copies buffer 0
+  into while `allowDMACopy`), not a real HBlank callback: the PPU runs callbacks only for the frames the host draws,
+  so a register written per line could be left mid-flip when the flip ends between two drawn frames. Input as in
+  the C: A on the front flips, on the back B flips back and A closes; B on the front closes. Probe
+  `__test.trainerCard()` (mainState, `ready` / `backReady`, `onBack`, `flip` while the flip task runs (step,
+  cardTop, BLDY, the per-line offsets), the stars and badges it has and the ones drawn on BG3, the back's icons and
+  stickers drawn on BG3 and BG palette 5, which card palette is in the hardware palettes, the female background,
+  the pic's pixel count, what each side printed, decoded). Tests: tests/e2e/trainerCard.test.ts (front, back, the
+  flip both ways, closing from each side, the photo and stickers), tests/unit/trainerCard.test.ts (the stars).
 - **Evolution scene:** `menus/evolutionScene.ts` + `menus/evolutionGraphics.ts` run on whichever GBA host is up
   (BattleScene after TryEvolvePokemon, FieldMenuScene from the party menu) and hand back through
   `gCB2_AfterEvolution` (`setCB2_AfterEvolution`). It draws on the battle BG/window layout, so the field host
@@ -684,6 +715,19 @@ this is the next level down. When you add or change a subsystem, update its entr
   SPECIALS); ones that draw with Phaser use `registerSpecials` from their own module.
 - **Script argument expressions:** `Defines.get` folds constant expressions over known names (`FALSE | (TRUE <<
   1)`, `(MAX_COINS + 1) - 20`), as GAS does; before, the Pokémon Center nurse's `multichoice` threw.
+- **Story checks (Erika to Sabrina):** `tests/e2e/storyCeladonSaffron.test.ts` plays each required story event
+  from a `?map=` start with the state the story would have (badges and hide flags with `setFlag`, the area's
+  trainers marked beaten with the TRAINER_FLAGS_START offset, a level-100 Mewtwo with PSYCHIC + CUT) and checks what
+  the player gets: Celadon Gym (the Cut tree, Erika, the badge, TM19), the Game Corner grunt and poster switch
+  (FLAG_OPENED_ROCKET_HIDEOUT, the stair warp to B1F), Rocket Hideout B1F / B4F's barriers, the hideout lift,
+  Giovanni and the Silph Scope, Mr. Fuji → the Poké Flute, the Tea and the Route 5 gate guard, Silph Co. 7F's rival
+  and 11F's Giovanni + Master Ball, Saffron Gym's pads and Sabrina. The ghost Marowak (pokemonTower.test.ts),
+  Snorlax with the flute (scriptedBattles.test.ts) and the card key doors (mainPathLeftovers.test.ts) have their own
+  files. Helpers in the file: `warp` (OverworldScene.warp, to reload a map after changing flags its ON_LOAD reads),
+  `talkFrom(x, y, dir)`, `winBattle` (A through a trainer battle; mashUntil's predicate runs in the page, so the
+  start mark goes through `window.__storySince`). Stair warps (MB_*_STAIR_WARP) and gate exits need
+  `t.enterWarp()` after `walkTo`; walking onto them doesn't warp. A `special` whose C sets gSpecialVar_Result must
+  set VAR_RESULT itself in specials.ts: `special` drops the function's return value (only `specialvar` stores it).
 - **Bugs that depend on world position:** `?map=` always loads at origin 0, so maps that are far from the origin in
   a real playthrough (e.g. Viridian at y = -80 after walking up from Pallet) need either a real walk or
   `await s.world.load(name, ox, oy)`, then `s.player.setPosition(...)` and `await s.onMapLoaded(false)`.

@@ -83,11 +83,21 @@ A test fails if the page throws or logs `console.error`. When a test fails, the 
    which uses `t.seedWhen(pred, n)` to seed inside the exact tick (an awaited `t.seed()` lands wherever the
    frame's batch of ticks ends). The same goes for an `await t.until(...)` followed by `t.waitFrames(n)`: the
    wait starts where the batch ends, possibly dozens of ticks late. To check something exactly n ticks after an
-   event, count inside one `until` predicate (mapNamePopup.test.ts).
+   event, or to compare two reads n ticks apart, count inside one `until` predicate (mapNamePopup.test.ts,
+   fieldEffects' tile animation: two evals 40 ticks apart were 80 apart under load, a whole flower cycle). Read
+   what you check inside the predicate too: `t.until` only returns whether it held, and the game moves on after
+   (Baton Pass's party screen replaces the battle sprites right after its anim ends).
    Several tests here failed only when four e2e runs shared the machine.
 6. Don't answer a prompt with one press after a fixed wait: if the question is still printing, the press only
    speeds the text up and the next mash answers it instead. Mash the answer button itself (a catch's "Give a
    nickname...?": `mashUntil(..., { button: 'B' })`), use `answers`, or wait in the page for the prompt.
+   The same goes for `mashUntil(a menu opened)` followed by a press to pick from it: a menu without an input
+   delay takes input in the tick it opens (as on the GBA, its task runs in the frame the script creates it), so
+   the mash's last press may already have picked its first item, and the press meant for the menu lands on
+   whatever comes next. Mash on to what the choice leads to instead (mainPathLeftovers' cable club).
+7. A tick limit (`t.until(pred, maxFrames)`) that spans a warp or anything else that loads files has to allow
+   for the load: the game keeps ticking while a map loads, so leaving the player's house took ~185 ticks idle
+   and 1,221 under load. Use a generous limit (20000) there; it's only there to fail rather than hang.
 
 Runs are close to deterministic, not exactly: the RNG is seeded, but the number of logic ticks between
 two harness calls depends on wall-clock time. Write scenarios that hold whatever the dice say.

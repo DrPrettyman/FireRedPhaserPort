@@ -227,9 +227,10 @@ async function askToSaveAtCableClub(game: Game) {
   await game.eval((t) => t.waitFrames(20)); // sDelay: 12 frames before the cable club menus take input
   await game.press('DOWN');
   await game.press('A'); // COLOSSEUM
-  await game.mashUntil((t) => t.events().filter((e) => e.type === 'multichoice').length === 2, { what: 'the battle mode menu' });
-  await game.press('A'); // SINGLE BATTLE
-  await game.waitFor((t) => t.saveDialog()?.statsWindow, { what: 'the save info window' });
+  // A through "Which battle mode?" and on SINGLE BATTLE (the cursor starts there) until the save prompt is up.
+  // The battle mode menu has no sDelay and takes input in the tick it opens (the script runs on into it after
+  // waitmessage), so a mash press can pick it; a separate press after the mash then lands on the YES/NO.
+  await game.mashUntil((t) => t.saveDialog()?.statsWindow, { what: 'the save info window' });
   expect(await game.message()).toMatch(/Would you like to save the game\?/);
 }
 

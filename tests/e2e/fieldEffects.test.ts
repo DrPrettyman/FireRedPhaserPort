@@ -8,10 +8,22 @@ const session = useGame();
 test('water and flower tiles animate', async () => {
   const game = await session.start({ start: 'after-rival', map: 'PalletTown', x: 12, y: 14 });
   await game.waitIdle();
-  // TilesetAnim_General: the water frames go to tiles 416+ every 16 frames, the flowers to 508+.
-  const before = await game.eval((t) => [t.tilesetTile('General', 416), t.tilesetTile('General', 508)]);
-  await game.eval((t) => t.waitFrames(40));
-  const after = await game.eval((t) => [t.tilesetTile('General', 416), t.tilesetTile('General', 508)]);
+  // TilesetAnim_General: the water frames go to tiles 416+ every 16 frames (8 frames, so the same one every 128),
+  // the flowers to 508+ (5 frames: every 80). Both reads in one `until`, exactly 40 ticks apart: with separate
+  // evals the gap is 40 plus however long the round trip took, which under load can be 80 or 128.
+  const [before, after] = await game.eval(async (t) => {
+    const read = () => [t.tilesetTile('General', 416), t.tilesetTile('General', 508)];
+    let before: (string | undefined)[] = [];
+    let after: (string | undefined)[] = [];
+    let ticks = 0;
+    await t.until(() => {
+      if (ticks === 0) before = read();
+      if (ticks++ < 40) return false;
+      after = read();
+      return true;
+    });
+    return [before, after];
+  });
   expect(after[0]).not.toBe(before[0]);
   expect(after[1]).not.toBe(before[1]);
 });
@@ -34,8 +46,10 @@ test('leaving a house, the player walks out of the opening door', async () => {
   // Task_ExitDoor: the 1F mat warps to the door at (6, 7), where the player arrives hidden.
   const game = await session.start({ start: 'after-rival', map: 'PalletTown_PlayersHouse_1F', x: 4, y: 8 });
   await game.waitIdle();
-  const arrival = game.eval((t) => t.until(() => t.field()?.map === 'PalletTown' && !t.field()?.playerVisible, 600));
-  const door = game.eval((t) => t.until(() => t.field()?.map === 'PalletTown' && t.field()?.doorAnimating, 600));
+  // The limits are only there to fail rather than hang: the game keeps ticking while Pallet Town loads (fetched
+  // the first time), so the arrival took ~185 ticks on an idle machine and 1,221 under load.
+  const arrival = game.eval((t) => t.until(() => t.field()?.map === 'PalletTown' && !t.field()?.playerVisible, 20000));
+  const door = game.eval((t) => t.until(() => t.field()?.map === 'PalletTown' && t.field()?.doorAnimating, 20000));
   await game.eval((t) => t.enterWarp());
   expect(await arrival).toBe(true);
   expect(await door).toBe(true);

@@ -57,12 +57,14 @@ export class MessageBox {
    * ShowFieldMessage: expand placeholders, draw the frame, start printing. Task_DrawFieldMessageBox
    * loads the signpost frame instead of the dialogue frame while IsMsgSignpost().
    */
-  show(raw: number[], color: TextColor = 'neutral', signpost = false, instant = false): void {
+  show(raw: number[], color: TextColor = 'neutral', signpost = false, instant = false, font?: number): void {
     this.signpost = signpost;
     // `instant`: AddTextPrinterParameterized2 with TEXT_SKIP_DRAW / speed 0 (e.g. the PC storage menu's descriptions)
     const speed = instant ? { delay: 0, scroll: TEXT_SPEED[this.state.textSpeed].scroll } : TEXT_SPEED[this.state.textSpeed];
-    const [fontId, fg] =
+    // `font`: another font in the colour's text colours (DisplayItemMessageOnField's FONT_MALE in dark gray)
+    const [colorFont, fg] =
       color === 'male' ? [FONT_MALE, TEXT_COLOR_BLUE] : color === 'female' ? [FONT_FEMALE, TEXT_COLOR_RED] : [FONT_NORMAL, TEXT_COLOR_DARK_GRAY];
+    const fontId = font ?? colorFont;
     this.window.fill(TEXT_COLOR_WHITE);
     this.text = expandPlaceholders(raw, this.charmap, this.state);
     this.printer = new TextPrinter(this.window, this.fonts, this.input, this.arrowSheet, this.text, {

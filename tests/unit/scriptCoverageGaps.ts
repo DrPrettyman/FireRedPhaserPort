@@ -24,8 +24,6 @@ export interface KnownGap {
 
 export const KNOWN_GAPS: KnownGap[] = [
   // ---------------------------------------------------------------- main: on the main path to the Hall of Fame. BLOCKER in the note = the story can't go on without it.
-  { kind: 'command', name: 'call_if_defeated', tag: 'main', where: "FiveIsland_LostCave_Room10, FiveIsland_RocketWarehouse, RocketHideout_B4F", note: "BLOCKER: Rocket Hideout B4F counts the two door grunts with it (OnLoad and after each battle); the barrier to Giovanni never opens" },
-  { kind: 'command', name: 'call_if_not_defeated', tag: 'main', where: "RocketHideout_B1F", note: "Rocket Hideout B1F OnLoad: the barrier is never set. The decomp has no comma between its args, so the extractor reads them as one (split_args)" },
   { kind: 'special', name: 'DoPokemonLeagueLightingEffect', tag: 'main', where: "PokemonLeague_AgathasRoom, PokemonLeague_BrunosRoom, PokemonLeague_ChampionsRoom, PokemonLeague_LancesRoom, PokemonLeague_LoreleisRoom", note: "the Elite Four rooms (PokemonLeague_EventScript_DoLightingEffect), visual only" },
   { kind: 'special', name: 'DoSSAnneDepartureCutscene', tag: 'main', where: "SSAnne_Exterior", note: "the S.S. Anne sails off after Cut; its waitstate passes, so the script runs on without the cutscene" },
   { kind: 'special', name: 'GetStarterSpecies', tag: 'main', where: "PokemonLeague_ChampionsRoom", note: "Oak's congratulations in the Champion's room buffers the starter's name from it (VAR_RESULT 0 without it)" },

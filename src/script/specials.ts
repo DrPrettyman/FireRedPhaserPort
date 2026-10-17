@@ -432,9 +432,13 @@ export const SPECIALS: Record<string, Special> = {
     healPlayerParty(state);
   },
 
-  /** GetQuestLogState: QL_STATE_* (0 = not recording or playing back). */
-  GetQuestLogState() {
-    return 0;
+  /**
+   * GetQuestLogState: gSpecialVar_Result = gQuestLogState (QL_STATE_*; 0 = not recording or playing back). It's
+   * a `special`, so the result has to go into VAR_RESULT here: returning it left a stale VAR_RESULT, and a 2
+   * (QL_STATE_PLAYBACK) sent EventScript_DoNoIntroTrainerBattle to EventScript_EndQuestLogBattle (Giovanni).
+   */
+  GetQuestLogState({ state }) {
+    state.setVar('VAR_RESULT', 0);
   },
 
   /** EnableNationalPokedex */

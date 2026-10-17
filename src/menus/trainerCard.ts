@@ -3,10 +3,11 @@
 // CB2_ReturnToFieldWithOpenMenu). Only CARD_TYPE_FRLG for the player: the Hoenn card (CARD_TYPE_RSE, a partner's
 // R/S/E card) and the link cards (ShowTrainerCardInLink, the Union Room) wait for link play.
 //
-// Ported so far: the card front (name, ID, money, Pokédex, play time with the blinking colon, the stars' card
-// colour, the badges, the player's pic). Not yet (W-tcard unit 2): the back (PrintAllOnCardBack, DrawCardBackStats,
-// the stickers and mon icons) and the flip (FlipTrainerCard / Task_DoCardFlipTask with its HBlank squash); A on the
-// front is a no-op until then.
+// The front (name, ID, money, Pokédex, play time with the blinking colon, the stars' card colour, the badges, the
+// player's pic), the back (name, Hall of Fame debut, the link / trade / Berry Crush / Union Room stats when they're
+// not zero, the photo's mon icons, the stickers) and the flip between them (FlipTrainerCard / Task_DoCardFlipTask:
+// the card squashes to a line and opens again, BG0VOFS set per scanline). A on the front flips to the back; on the
+// back B flips back to the front and A closes; B on the front closes.
 //
 // No audio: the SE_CARD_* calls are no-ops.
 
@@ -19,12 +20,14 @@ import {
   FillBgTilemapBufferRect,
   FillBgTilemapBufferRect_Palette0,
   GetBgTilemapBuffer,
+  HideBg,
   InitBgsFromTemplates,
   IsDma3ManagerBusyWithBgCopy,
   LoadBgTiles,
   ResetBgsAndClearDma3BusyFlags,
   SetBgTilemapBuffer,
   ShowBg,
+  WriteSequenceToBgTilemapBuffer,
   type BgTemplate,
 } from '../gba/bg';
 import { gfx, gfx16 } from '../gba/gfx';
@@ -35,6 +38,7 @@ import {
   DISPCNT_OBJ_1D_MAP,
   DISPCNT_OBJ_ON,
   DISPCNT_WIN0_ON,
+  hblankRegs,
   PALETTES_ALL,
   pltt,
   REG_OFFSET_BG0CNT,
@@ -69,11 +73,22 @@ import {
 } from '../gba/hw';
 import { A_BUTTON, B_BUTTON, gMain, JOY_NEW, SetHBlankCallback, SetMainCallback2, SetVBlankCallback, type MainCallback } from '../gba/main';
 import { LoadStdWindowFrameGfx, TEXT_COLOR_DARK_GRAY, TEXT_COLOR_LIGHT_GRAY, TEXT_COLOR_TRANSPARENT } from '../gba/menu';
-import { BeginNormalPaletteFade, BG_PLTT_ID, gPaletteFade, LoadPalette, PLTT_SIZE_4BPP, ResetPaletteFade, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
-import { ScanlineEffect_Stop } from '../gba/scanline';
+import {
+  BeginNormalPaletteFade,
+  BG_PLTT_ID,
+  gPaletteFade,
+  LoadPalette,
+  PLTT_SIZE_4BPP,
+  ResetPaletteFade,
+  TintPalette_CustomTone,
+  TintPalette_SepiaTone,
+  TransferPlttBuffer,
+  UpdatePaletteFade,
+} from '../gba/palette';
+import { gScanlineEffectRegBuffers, ScanlineEffect_Clear, ScanlineEffect_Stop } from '../gba/scanline';
 import { IsSEPlaying, PlaySE } from '../gba/sound';
 import { AnimateSprites, BuildOamBuffer, ProcessSpriteCopyRequests, ResetSpriteData } from '../gba/sprite';
-import { CreateTask, DestroyTask, ResetTasks, RunTasks } from '../gba/task';
+import { CreateTask, DestroyTask, FindTaskIdByFunc, gTasks, ResetTasks, RunTasks, TASK_NONE, type Task } from '../gba/task';
 import {
   AddTextPrinterParameterized3,
   CopyWindowToVram,
@@ -95,7 +110,9 @@ import { EOS } from '../text/charmap';
 import { FONT_NORMAL, FONT_SMALL } from '../text/Font';
 import { concat, ConvertIntToDecimalStringN, STR_CONV_MODE_LEADING_ZEROS, STR_CONV_MODE_LEFT_ALIGN, STR_CONV_MODE_RIGHT_ALIGN, text } from './common';
 import { FLAG_GET_CAUGHT, GetKantoPokedexCount, GetNationalPokedexCount, HasAllKantoMons, HasAllMons } from './pokedex';
+import { menusData } from './data';
 import { CreateTrainerCardTrainerPicSprite, PlayerGenderToFrontTrainerPicId } from './picSprites';
+import { GetIconSpecies, GetMonIconTiles, monIconSymbol } from './pokemonIcon';
 
 // include/constants/trainer_card.h
 const CARD_TYPE_FRLG = 0;
@@ -104,6 +121,28 @@ const TRAINER_CARD_PROFILE_LENGTH = 4;
 const TRAINER_CARD_STICKER_TYPES = 3;
 const NUM_BADGES = 8;
 const PARTY_SIZE = 6;
+const MON_ICON_TINT_NORMAL = 0;
+const MON_ICON_TINT_BLACK = 1;
+const MON_ICON_TINT_PINK = 2;
+const MON_ICON_TINT_SEPIA = 3;
+// characters.h
+const TEXT_COLOR_RED = 4;
+const TEXT_COLOR_LIGHT_RED = 5;
+
+// The strings for the back (trainer_card.c's enum)
+const TRAINER_CARD_STRING_NAME = 0;
+const TRAINER_CARD_STRING_HOF_TIME = 1;
+const TRAINER_CARD_STRING_LINK_RECORD = 2;
+const TRAINER_CARD_STRING_WIN_LOSS = 3;
+const TRAINER_CARD_STRING_LINK_WINS = 4;
+const TRAINER_CARD_STRING_LINK_LOSSES = 5;
+const TRAINER_CARD_STRING_TRADES = 6;
+const TRAINER_CARD_STRING_TRADE_COUNT = 7;
+const TRAINER_CARD_STRING_BERRY_CRUSH = 8;
+const TRAINER_CARD_STRING_BERRY_CRUSH_COUNT = 9;
+const TRAINER_CARD_STRING_UNION_ROOM = 10;
+const TRAINER_CARD_STRING_UNION_ROOM_NUM = 11;
+const TRAINER_CARD_STRING_COUNT = 12;
 
 /** struct TrainerCardRSE */
 interface TrainerCardRSE {
@@ -186,7 +225,7 @@ export const emptyTrainerCard = (): TrainerCard => ({
   monSpecies: new Array(PARTY_SIZE).fill(0),
 });
 
-/** struct TrainerCardData (the strings for the back, monIconPals and the flip's fields come with unit 2) */
+/** struct TrainerCardData */
 interface TrainerCardData {
   mainState: number;
   printState: number;
@@ -205,6 +244,10 @@ interface TrainerCardData {
   hasTrades: boolean;
   hasBadge: boolean[];
   easyChatProfile: number[][];
+  /** strings[TRAINER_CARD_STRING_COUNT]: the back's text, from BufferTextForCardBack */
+  strings: number[][];
+  /** monIconPals[16 * PARTY_SIZE] */
+  monIconPals: Uint16Array;
   flipBlendY: number;
   cardType: number;
   callback2: MainCallback;
@@ -220,9 +263,11 @@ interface TrainerCardData {
   cardTop: number;
   timeColonNeedDraw: boolean;
   language: number;
-  /** Not in the C: what the front printed last, for the test probe. */
-  printed: Partial<Record<'name' | 'id' | 'money' | 'pokedex' | 'hours' | 'minutes', number[]>>;
+  /** Not in the C: what the front and the back printed last, for the test probe. */
+  printed: Partial<Record<PrintedKey, number[]>>;
 }
+
+type PrintedKey = 'name' | 'id' | 'money' | 'pokedex' | 'hours' | 'minutes' | 'backName' | 'hofDebut' | 'linkRecord' | 'trades' | 'berryCrush' | 'unionRoom';
 
 /** sTrainerCardDataPtr: null while the card is down. */
 let sTrainerCardDataPtr: TrainerCardData | null = null;
@@ -255,6 +300,7 @@ const sKantoTrainerCardPals = [
 ];
 
 const sTrainerCardTextColors = [TEXT_COLOR_TRANSPARENT, TEXT_COLOR_DARK_GRAY, TEXT_COLOR_LIGHT_GRAY];
+const sTrainerCardStatColors = [TEXT_COLOR_TRANSPARENT, TEXT_COLOR_RED, TEXT_COLOR_LIGHT_RED];
 const sTimeColonInvisibleTextColors = [TEXT_COLOR_TRANSPARENT, TEXT_COLOR_TRANSPARENT, TEXT_COLOR_TRANSPARENT];
 const sTrainerCardFontIds = [FONT_SMALL, FONT_NORMAL, FONT_SMALL];
 
@@ -279,6 +325,13 @@ const sTrainerCardTimeHoursXPositions = [0x65, 0x55];
 const sTrainerCardTimeHoursYPositions = [0x77, 0x67];
 const sTrainerCardTimeMinutesXPositions = [0x7c, 0x6c];
 const sTrainerCardTimeMinutesYPositions = [0x58, 0x59];
+const sTrainerCardBackNameXPositions = [0x8a, 0xd8];
+const sTrainerCardBackNameYPositions = [0xb, 0xa];
+const sTrainerCardHofDebutXPositions = [0xa, 0x10, 0x0, 0x0];
+const sLinkTrainerCardRecordStrings = ['gText_LinkBattles', 'gText_LinkCableBattles'];
+const sPokemonIconPalSlots = [5, 6, 7, 8, 9, 10];
+const sPokemonIconXOffsets = [0, 4, 8, 12, 16, 20];
+const sStickerPalSlots = [11, 12, 13, 14];
 const sStarYOffsets = [7, 6, 0, 0];
 
 /** The graphics the card loads (preload them before ShowPlayerTrainerCard). `gender`: MALE / FEMALE. */
@@ -301,7 +354,30 @@ export function trainerCardGfxSymbols(gender: number): string[] {
     'sTrainerCardStickerPal4',
     bdata.anims.trainerFrontPics[pic]!.pic,
     bdata.anims.trainerFrontPalettes[pic]!,
+    // LoadMonIconGfx: the icons of the photo's mons (VAR_TRAINER_CARD_MON_ICON_*; SPECIES_NONE's too)
+    'gMonIconPalettes',
+    ...Array.from({ length: PARTY_SIZE }, (_, i) => monIconSymbol(MailSpeciesToIconSpecies(state.getVar(`VAR_TRAINER_CARD_MON_ICON_${i + 1}`)))),
   ];
+}
+
+// mail_data.c / pokemon_icon.c
+const UNOWN_OFFSET = 30000;
+const NUM_UNOWN_FORMS = 28;
+
+/** MailSpeciesToIconSpecies: a mail species (SpeciesToMailSpecies: Unown as UNOWN_OFFSET + its letter) to an icon species. */
+function MailSpeciesToIconSpecies(species: number): number {
+  if (species >= UNOWN_OFFSET && species < UNOWN_OFFSET + NUM_UNOWN_FORMS) {
+    // MailSpeciesToSpecies → SPECIES_UNOWN with the letter
+    const letter = species - UNOWN_OFFSET;
+    return letter === 0 ? K.SPECIES_UNOWN : letter + (K.SPECIES_UNOWN_B - 1);
+  }
+  if (species > K.SPECIES_UNOWN_B - 1) species = K.SPECIES_NONE;
+  return GetIconSpecies(species, 0);
+}
+
+/** GetMonIconPaletteIndexFromSpecies */
+function GetMonIconPaletteIndexFromSpecies(species: number): number {
+  return menusData.monIconPaletteIndices[species] ?? 0;
 }
 
 // ------------------------------------------------------------------ callbacks
@@ -312,7 +388,20 @@ function VBlankCB_TrainerCard(): void {
   ProcessSpriteCopyRequests();
   TransferPlttBuffer();
   BlinkTimeColon();
-  // allowDMACopy (the flip's scanline buffers): unit 2
+  // (null after CloseTrainerCard, as in BlinkTimeColon)
+  if (sTrainerCardDataPtr?.allowDMACopy) gScanlineEffectRegBuffers[1].set(gScanlineEffectRegBuffers[0].subarray(0, 160)); // DmaCopy16(3, ..., 0x140)
+}
+
+/**
+ * HBlankCB_TrainerCard: REG_BG0VOFS = gScanlineEffectRegBuffers[1][REG_VCOUNT] on every line. Modelled like the
+ * scanline effects' HBlank DMA: the PPU reads each line's BG0VOFS from the live buffer (gba/hw.ts hblankRegs, line L
+ * gets buffer[L]), so BG0VOFS itself stays 0 and nothing is left behind when the flip ends, whichever frames the
+ * host draws.
+ */
+function SetHBlankCB_TrainerCard(on: boolean): void {
+  if (on) hblankRegs.set(REG_OFFSET_BG0VOFS, gScanlineEffectRegBuffers[1]);
+  else hblankRegs.delete(REG_OFFSET_BG0VOFS);
+  SetHBlankCallback(null);
 }
 
 /** CB2_TrainerCard */
@@ -398,20 +487,41 @@ function Task_TrainerCard(taskId: number): void {
         d.timeColonNeedDraw = false;
       }
       if (JOY_NEW(A_BUTTON)) {
-        // TODO(W-tcard unit 2): SetHelpContext(HELPCONTEXT_TRAINER_CARD_BACK); FlipTrainerCard(); PlaySE(SE_CARD_FLIP);
-        // d.mainState = STATE_WAIT_FLIP_TO_BACK
+        // SetHelpContext(HELPCONTEXT_TRAINER_CARD_BACK): no help system
+        FlipTrainerCard();
+        PlaySE(K.SE_CARD_FLIP);
+        d.mainState = STATE_WAIT_FLIP_TO_BACK;
       } else if (JOY_NEW(B_BUTTON)) {
         BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_BLACK);
         d.mainState = STATE_CLOSE_CARD;
       }
       break;
     case STATE_WAIT_FLIP_TO_BACK:
+      if (IsCardFlipTaskActive()) {
+        PlaySE(K.SE_CARD_OPEN);
+        d.mainState = STATE_HANDLE_INPUT_BACK;
+      }
+      break;
     case STATE_HANDLE_INPUT_BACK:
-    case STATE_WAIT_FLIP_TO_FRONT:
-      // TODO(W-tcard unit 2): the back and the flip
+      // Not linked: B flips back to the front, A closes the card.
+      if (JOY_NEW(B_BUTTON)) {
+        // SetHelpContext(HELPCONTEXT_TRAINER_CARD_FRONT)
+        FlipTrainerCard();
+        d.mainState = STATE_WAIT_FLIP_TO_FRONT;
+        PlaySE(K.SE_CARD_FLIP);
+      } else if (JOY_NEW(A_BUTTON)) {
+        BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_BLACK);
+        d.mainState = STATE_CLOSE_CARD;
+      }
       break;
     case STATE_CLOSE_CARD:
       if (!UpdatePaletteFade()) CloseTrainerCard(taskId);
+      break;
+    case STATE_WAIT_FLIP_TO_FRONT:
+      if (IsCardFlipTaskActive()) {
+        d.mainState = STATE_HANDLE_INPUT_FRONT;
+        PlaySE(K.SE_CARD_OPEN);
+      }
       break;
   }
 }
@@ -627,8 +737,8 @@ export function TrainerCard_GenerateCardForLinkPlayer(trainerCard: TrainerCard):
 
   trainerCard.monIconTint = state.getVar('VAR_TRAINER_CARD_MON_ICON_TINT_IDX');
 
-  // MailSpeciesToIconSpecies: the identity for anything but the Unown mail species, which these vars never hold.
-  for (let i = 0; i < PARTY_SIZE; i++) trainerCard.monSpecies[i] = state.getVar(`VAR_TRAINER_CARD_MON_ICON_${i + 1}`);
+  // (UpdateTrainerCardPhotoIcons, the Celadon Game Corner photo, stores them as mail species)
+  for (let i = 0; i < PARTY_SIZE; i++) trainerCard.monSpecies[i] = MailSpeciesToIconSpecies(state.getVar(`VAR_TRAINER_CARD_MON_ICON_${i + 1}`));
 }
 
 /** SetDataFromTrainerCard */
@@ -667,6 +777,16 @@ function HandleGpuRegs(): void {
   SetGpuReg(REG_OFFSET_WIN0V, WININ_WIN0_CLR | WIN_RANGE(0, 0x80));
   SetGpuReg(REG_OFFSET_WIN0H, WININ_WIN0_CLR | WININ_WIN0_OBJ | WIN_RANGE(0, 0xc0));
   // EnableInterrupts(INTR_FLAG_VBLANK | INTR_FLAG_HBLANK): the port runs every callback
+}
+
+/** UpdateCardFlipRegs: part of animating the card flip. */
+function UpdateCardFlipRegs(cardTop: number): void {
+  const d = sd();
+  let blendY = Math.trunc((cardTop + 40) / 10); // s8
+  if (blendY <= 4) blendY = 0;
+  d.flipBlendY = blendY;
+  SetGpuReg(REG_OFFSET_BLDY, d.flipBlendY);
+  SetGpuReg(REG_OFFSET_WIN0V, WIN_RANGE(d.cardTop, 160 - d.cardTop));
 }
 
 /** ResetGpuRegs */
@@ -756,8 +876,51 @@ function PrintAllOnCardFront(): boolean {
   return false;
 }
 
-/** BufferTextForCardBack: TODO(W-tcard unit 2) the name, Hall of Fame debut and link stats for the back */
-function BufferTextForCardBack(): void {}
+/** PrintAllOnCardBack */
+function PrintAllOnCardBack(): boolean {
+  const d = sd();
+  switch (d.printState) {
+    case 0:
+      PrintNameOnCardBack();
+      break;
+    case 1:
+      PrintHofDebutTimeOnCard();
+      break;
+    case 2:
+      PrintLinkBattleResultsOnCard();
+      break;
+    case 3:
+      PrintTradesStringOnCard();
+      break;
+    case 4:
+      PrintBerryCrushStringOnCard();
+      break;
+    case 5:
+      PrintUnionStringOnCard();
+      break;
+    case 6:
+      PrintPokemonIconsOnCard();
+      break;
+    case 7:
+      PrintStickersOnCard();
+      break;
+    default:
+      d.printState = 0;
+      return true;
+  }
+  d.printState++;
+  return false;
+}
+
+/** BufferTextForCardBack */
+function BufferTextForCardBack(): void {
+  BufferNameForCardBack();
+  BufferHofDebutTime();
+  BufferLinkBattleResults();
+  BufferNumTrades();
+  BufferBerryCrushPoints();
+  BufferUnionRoomStats();
+}
 
 /** PrintNameOnCardFront (ConvertInternationalString: English to English is a no-op) */
 function PrintNameOnCardFront(): void {
@@ -856,8 +1019,172 @@ function PrintProfilePhraseOnCard(): void {
   if (sd().isLink) console.warn('[trainer_card] the link card profile phrase is not implemented');
 }
 
-/** LoadMonIconGfx: TODO(W-tcard unit 2) the mon icons' palettes and tiles for the back */
-function LoadMonIconGfx(): void {}
+// ------------------------------------------------------------------ the back
+
+/** BufferNameForCardBack (ConvertInternationalString: English to English is a no-op) */
+function BufferNameForCardBack(): void {
+  const d = sd();
+  let name = concat(d.trainerCard.rse.playerName);
+  if (d.cardType === CARD_TYPE_RSE) name = concat(name, text('gText_Var1sTrainerCard'));
+  d.strings[TRAINER_CARD_STRING_NAME] = name;
+}
+
+/** PrintNameOnCardBack: "<name>'s TRAINER CARD" on the Hoenn card is right-aligned (not ported: no RSE card). */
+function PrintNameOnCardBack(): void {
+  const d = sd();
+  const name = d.strings[TRAINER_CARD_STRING_NAME];
+  d.printed.backName = name;
+  if (d.cardType === CARD_TYPE_FRLG) {
+    AddTextPrinterParameterized3(1, sTrainerCardFontIds[1], sTrainerCardBackNameXPositions[d.cardType], sTrainerCardBackNameYPositions[d.cardType], sTrainerCardTextColors, TEXT_SKIP_DRAW, name);
+  } else {
+    console.warn('[trainer_card] the Hoenn card back is not implemented');
+  }
+}
+
+/** BufferHofDebutTime: "hhh:mm:ss" (the hours right-aligned to 3). */
+function BufferHofDebutTime(): void {
+  const d = sd();
+  if (!d.hasHofResult) return;
+  const rse = d.trainerCard.rse;
+  d.strings[TRAINER_CARD_STRING_HOF_TIME] = concat(
+    ConvertIntToDecimalStringN(rse.hofDebutHours, STR_CONV_MODE_RIGHT_ALIGN, 3),
+    text('gText_Colon2'),
+    ConvertIntToDecimalStringN(rse.hofDebutMinutes, STR_CONV_MODE_LEADING_ZEROS, 2),
+    text('gText_Colon2'),
+    ConvertIntToDecimalStringN(rse.hofDebutSeconds, STR_CONV_MODE_LEADING_ZEROS, 2),
+  );
+}
+
+/** PrintHofDebutTimeOnCard: only after the Hall of Fame. */
+function PrintHofDebutTimeOnCard(): void {
+  const d = sd();
+  if (!d.hasHofResult) return;
+  d.printed.hofDebut = d.strings[TRAINER_CARD_STRING_HOF_TIME];
+  AddTextPrinterParameterized3(1, sTrainerCardFontIds[1], sTrainerCardHofDebutXPositions[d.cardType], 35, sTrainerCardTextColors, TEXT_SKIP_DRAW, text('gText_HallOfFameDebut'));
+  AddTextPrinterParameterized3(1, sTrainerCardFontIds[1], 164, 35, sTrainerCardStatColors, TEXT_SKIP_DRAW, d.strings[TRAINER_CARD_STRING_HOF_TIME]);
+}
+
+/** BufferLinkBattleResults */
+function BufferLinkBattleResults(): void {
+  const d = sd();
+  if (!d.hasLinkResults) return;
+  d.strings[TRAINER_CARD_STRING_LINK_RECORD] = text(sLinkTrainerCardRecordStrings[d.cardType]);
+  d.strings[TRAINER_CARD_STRING_WIN_LOSS] = text('gText_WinLossRatio');
+  d.strings[TRAINER_CARD_STRING_LINK_WINS] = ConvertIntToDecimalStringN(d.trainerCard.rse.linkBattleWins, STR_CONV_MODE_RIGHT_ALIGN, 4);
+  d.strings[TRAINER_CARD_STRING_LINK_LOSSES] = ConvertIntToDecimalStringN(d.trainerCard.rse.linkBattleLosses, STR_CONV_MODE_RIGHT_ALIGN, 4);
+}
+
+/** PrintLinkBattleResultsOnCard: only with a link battle won or lost. */
+function PrintLinkBattleResultsOnCard(): void {
+  const d = sd();
+  if (!d.hasLinkResults) return;
+  const x = sTrainerCardHofDebutXPositions[d.cardType];
+  d.printed.linkRecord = concat(d.strings[TRAINER_CARD_STRING_LINK_WINS], d.strings[TRAINER_CARD_STRING_LINK_LOSSES]);
+  AddTextPrinterParameterized3(1, sTrainerCardFontIds[1], x, 51, sTrainerCardTextColors, TEXT_SKIP_DRAW, d.strings[TRAINER_CARD_STRING_LINK_RECORD]);
+  AddTextPrinterParameterized3(1, sTrainerCardFontIds[1], 130, 51, sTrainerCardTextColors, TEXT_SKIP_DRAW, d.strings[TRAINER_CARD_STRING_WIN_LOSS]);
+  AddTextPrinterParameterized3(1, sTrainerCardFontIds[1], 144, 51, sTrainerCardStatColors, TEXT_SKIP_DRAW, d.strings[TRAINER_CARD_STRING_LINK_WINS]);
+  AddTextPrinterParameterized3(1, sTrainerCardFontIds[1], 192, 51, sTrainerCardStatColors, TEXT_SKIP_DRAW, d.strings[TRAINER_CARD_STRING_LINK_LOSSES]);
+}
+
+/** BufferNumTrades */
+function BufferNumTrades(): void {
+  const d = sd();
+  if (!d.hasTrades) return;
+  d.strings[TRAINER_CARD_STRING_TRADES] = text('gText_PokemonTrades');
+  d.strings[TRAINER_CARD_STRING_TRADE_COUNT] = ConvertIntToDecimalStringN(d.trainerCard.rse.pokemonTrades, STR_CONV_MODE_RIGHT_ALIGN, 5);
+}
+
+/** PrintTradesStringOnCard: only with a trade made. */
+function PrintTradesStringOnCard(): void {
+  const d = sd();
+  if (!d.hasTrades) return;
+  d.printed.trades = d.strings[TRAINER_CARD_STRING_TRADE_COUNT];
+  AddTextPrinterParameterized3(1, sTrainerCardFontIds[1], sTrainerCardHofDebutXPositions[d.cardType], 67, sTrainerCardTextColors, TEXT_SKIP_DRAW, d.strings[TRAINER_CARD_STRING_TRADES]);
+  AddTextPrinterParameterized3(1, sTrainerCardFontIds[1], 186, 67, sTrainerCardStatColors, TEXT_SKIP_DRAW, d.strings[TRAINER_CARD_STRING_TRADE_COUNT]);
+}
+
+/** BufferBerryCrushPoints */
+function BufferBerryCrushPoints(): void {
+  const d = sd();
+  if (d.cardType === CARD_TYPE_RSE) return;
+  d.strings[TRAINER_CARD_STRING_BERRY_CRUSH] = text('gText_BerryCrushes');
+  d.strings[TRAINER_CARD_STRING_BERRY_CRUSH_COUNT] = ConvertIntToDecimalStringN(d.trainerCard.berryCrushPoints, STR_CONV_MODE_RIGHT_ALIGN, 5);
+}
+
+/** PrintBerryCrushStringOnCard: only with Berry Crush points. */
+function PrintBerryCrushStringOnCard(): void {
+  const d = sd();
+  if (d.cardType === CARD_TYPE_RSE || !d.trainerCard.berryCrushPoints) return;
+  d.printed.berryCrush = d.strings[TRAINER_CARD_STRING_BERRY_CRUSH_COUNT];
+  AddTextPrinterParameterized3(1, sTrainerCardFontIds[1], sTrainerCardHofDebutXPositions[d.cardType], 99, sTrainerCardTextColors, TEXT_SKIP_DRAW, d.strings[TRAINER_CARD_STRING_BERRY_CRUSH]);
+  AddTextPrinterParameterized3(1, sTrainerCardFontIds[1], 186, 99, sTrainerCardStatColors, TEXT_SKIP_DRAW, d.strings[TRAINER_CARD_STRING_BERRY_CRUSH_COUNT]);
+}
+
+/** BufferUnionRoomStats */
+function BufferUnionRoomStats(): void {
+  const d = sd();
+  if (d.cardType === CARD_TYPE_RSE) return;
+  d.strings[TRAINER_CARD_STRING_UNION_ROOM] = text('gText_UnionRoomTradesBattles');
+  d.strings[TRAINER_CARD_STRING_UNION_ROOM_NUM] = ConvertIntToDecimalStringN(d.trainerCard.unionRoomNum, STR_CONV_MODE_RIGHT_ALIGN, 5);
+}
+
+/** PrintUnionStringOnCard: only with Union Room trades or battles. */
+function PrintUnionStringOnCard(): void {
+  const d = sd();
+  if (d.cardType === CARD_TYPE_RSE || !d.trainerCard.unionRoomNum) return;
+  d.printed.unionRoom = d.strings[TRAINER_CARD_STRING_UNION_ROOM_NUM];
+  AddTextPrinterParameterized3(1, sTrainerCardFontIds[1], sTrainerCardHofDebutXPositions[d.cardType], 83, sTrainerCardTextColors, TEXT_SKIP_DRAW, d.strings[TRAINER_CARD_STRING_UNION_ROOM]);
+  AddTextPrinterParameterized3(1, sTrainerCardFontIds[1], 186, 83, sTrainerCardStatColors, TEXT_SKIP_DRAW, d.strings[TRAINER_CARD_STRING_UNION_ROOM_NUM]);
+}
+
+/** PrintPokemonIconsOnCard: the photo's mons (Celadon Game Corner's printer), 4x4 tiles each along row 15 of BG3. */
+function PrintPokemonIconsOnCard(): void {
+  const d = sd();
+  if (d.cardType === CARD_TYPE_RSE) return;
+  for (let i = 0; i < PARTY_SIZE; i++) {
+    if (d.trainerCard.monSpecies[i]) {
+      const palIndex = GetMonIconPaletteIndexFromSpecies(d.trainerCard.monSpecies[i]);
+      WriteSequenceToBgTilemapBuffer(3, 16 * i + 224, sPokemonIconXOffsets[i] + 3, 15, 4, 4, sPokemonIconPalSlots[palIndex], 1);
+    }
+  }
+}
+
+/**
+ * LoadMonIconGfx: the icon palettes, tinted as the photo was printed, into BG palettes 5-10, and each photo mon's
+ * first icon frame (SPECIES_NONE's "?" for an empty slot) into BG3 tiles 224 + 16 * i. The C copies 96 colours from
+ * gMonIconPalettes, which has 48: the rest (palettes 8-10, read past it in the ROM) are never used by an icon, and the
+ * trainer pic's palette replaces 8. They're zeros here.
+ */
+function LoadMonIconGfx(): void {
+  const d = sd();
+  d.monIconPals.fill(0);
+  d.monIconPals.set(gfx16('gMonIconPalettes').subarray(0, 48));
+  switch (d.trainerCard.monIconTint) {
+    case MON_ICON_TINT_NORMAL:
+      break;
+    case MON_ICON_TINT_BLACK:
+      TintPalette_CustomTone(d.monIconPals, 96, 0, 0, 0);
+      break;
+    case MON_ICON_TINT_PINK:
+      TintPalette_CustomTone(d.monIconPals, 96, 500, 330, 310);
+      break;
+    case MON_ICON_TINT_SEPIA:
+      TintPalette_SepiaTone(d.monIconPals, 96);
+      break;
+  }
+  LoadPalette(d.monIconPals, BG_PLTT_ID(5), d.monIconPals.length * 2);
+  for (let i = 0; i < PARTY_SIZE; i++) LoadBgTiles(3, GetMonIconTiles(d.trainerCard.monSpecies[i], false), 512, 16 * i + 32);
+}
+
+/** PrintStickersOnCard: the Four Island sticker man's stickers (the brag vars: 0 none, else the sticker's palette). */
+function PrintStickersOnCard(): void {
+  const d = sd();
+  if (d.cardType !== CARD_TYPE_FRLG || !d.trainerCard.shouldDrawStickers) return;
+  for (let i = 0; i < TRAINER_CARD_STICKER_TYPES; i++) {
+    const sticker = d.trainerCard.stickers[i];
+    if (sticker) WriteSequenceToBgTilemapBuffer(3, i * 4 + 320, i * 3 + 2, 2, 2, 2, sStickerPalSlots[sticker - 1] ?? 0, 1);
+  }
+}
 
 /**
  * LoadStickerGfx. LoadBgTiles reads 1024 bytes from stickerTiles (512 bytes long), so the second half is the start
@@ -955,6 +1282,29 @@ function DrawStarsAndBadgesOnCard(): void {
   CopyBgTilemapBufferToVram(3);
 }
 
+/** DrawCardBackStats: the stat lines' end tiles (none for the player: trades, Berry Crush and Union Room are 0). */
+function DrawCardBackStats(): void {
+  const d = sd();
+  if (d.cardType !== CARD_TYPE_RSE) {
+    if (d.hasTrades) {
+      FillBgTilemapBufferRect(3, 141, 26, 9, 1, 1, 1);
+      FillBgTilemapBufferRect(3, 157, 26, 10, 1, 1, 1);
+    }
+    if (d.trainerCard.berryCrushPoints) {
+      FillBgTilemapBufferRect(3, 141, 21, 13, 1, 1, 1);
+      FillBgTilemapBufferRect(3, 157, 21, 14, 1, 1, 1);
+    }
+    if (d.trainerCard.unionRoomNum) {
+      FillBgTilemapBufferRect(3, 141, 27, 11, 1, 1, 1);
+      FillBgTilemapBufferRect(3, 157, 27, 12, 1, 1, 1);
+    }
+  } else if (d.hasTrades) {
+    FillBgTilemapBufferRect(3, 141, 26, 9, 1, 1, 0);
+    FillBgTilemapBufferRect(3, 157, 26, 10, 1, 1, 0);
+  }
+  CopyBgTilemapBufferToVram(3);
+}
+
 /** BlinkTimeColon (VBlank): the colon toggles every 61 frames. */
 function BlinkTimeColon(): void {
   // The VBlank after CloseTrainerCard still runs this callback; the C reads the freed struct there.
@@ -966,6 +1316,161 @@ function BlinkTimeColon(): void {
     d.timeColonNeedDraw = true;
   }
 }
+
+// ------------------------------------------------------------------ the flip
+
+const tFlipState = 0;
+const tCardTop = 1;
+
+type FlipFunc = (task: Task) => boolean;
+
+/** FlipTrainerCard */
+function FlipTrainerCard(): void {
+  const taskId = CreateTask(Task_DoCardFlipTask, 0);
+  Task_DoCardFlipTask(taskId);
+  SetHBlankCB_TrainerCard(true); // SetHBlankCallback(HBlankCB_TrainerCard)
+}
+
+/** IsCardFlipTaskActive: TRUE once the flip task is gone (sic). */
+function IsCardFlipTaskActive(): boolean {
+  return FindTaskIdByFunc(Task_DoCardFlipTask) === TASK_NONE;
+}
+
+/** Task_DoCardFlipTask: every step returns FALSE, so one step per frame. */
+function Task_DoCardFlipTask(taskId: number): void {
+  const task = gTasks[taskId];
+  while (sTrainerCardFlipTasks[task.data[tFlipState]](task));
+}
+
+/** Task_BeginCardFlip */
+function Task_BeginCardFlip(task: Task): boolean {
+  HideBg(1);
+  HideBg(3);
+  ScanlineEffect_Stop();
+  ScanlineEffect_Clear();
+  gScanlineEffectRegBuffers[1].fill(0, 0, 160);
+  task.data[tFlipState]++;
+  return false;
+}
+
+/**
+ * The squash both ways (Task_AnimateCardFlipDown / Up, in their u32 arithmetic): the card's rows between cardTop and
+ * 160 - cardTop show the whole card, `down` packing rows tighter towards the bottom, up towards the top.
+ */
+function SetCardFlipScanlines(cardTop: number, down: boolean): void {
+  const buf = gScanlineEffectRegBuffers[0];
+  const r7 = cardTop;
+  const r9 = 160 - r7;
+  const r4 = r9 - r7;
+  let r6 = (-r7 << 16) >>> 0;
+  let r5 = (Math.floor(0xa00000 / r4) + 0xffff0000) >>> 0;
+  const var24 = (r6 + Math.imul(r5, r4)) >>> 0;
+  const r10 = Math.floor(r5 / r4);
+  r5 = down ? (r5 * 2) >>> 0 : r5 >>> 1;
+  let i = 0;
+  for (; i < r7; i++) buf[i] = -i;
+  for (; i < r9; i++) {
+    buf[i] = r6 >>> 16;
+    r6 = (r6 + r5) >>> 0;
+    r5 = (down ? r5 - r10 : r5 + r10) >>> 0;
+  }
+  for (; i < 160; i++) buf[i] = var24 >>> 16;
+}
+
+/** Task_AnimateCardFlipDown: the card closes 7 lines from each edge per frame, to a line at 77. */
+function Task_AnimateCardFlipDown(task: Task): boolean {
+  const d = sd();
+  d.allowDMACopy = false;
+  if (task.data[tCardTop] >= 77) task.data[tCardTop] = 77;
+  else task.data[tCardTop] += 7;
+  d.cardTop = task.data[tCardTop];
+  UpdateCardFlipRegs(task.data[tCardTop]);
+  SetCardFlipScanlines(task.data[tCardTop], true);
+  d.allowDMACopy = true;
+  if (task.data[tCardTop] >= 77) task.data[tFlipState]++;
+  return false;
+}
+
+/** Task_DrawFlippedCardSide: the other side's text and tiles, one print a frame (no link, so no waiting on it). */
+function Task_DrawFlippedCardSide(task: Task): boolean {
+  const d = sd();
+  d.allowDMACopy = false;
+  for (;;) {
+    switch (d.flipDrawState) {
+      case 0:
+        FillWindowPixelBuffer(1, PIXEL_FILL(0));
+        FillBgTilemapBufferRect_Palette0(3, 0, 0, 0, 32, 32);
+        break;
+      case 1:
+        if (!d.onBack) {
+          if (!PrintAllOnCardBack()) return false;
+        } else if (!PrintAllOnCardFront()) {
+          return false;
+        }
+        break;
+      case 2:
+        if (!d.onBack) DrawCardFrontOrBack(d.backTilemap);
+        else DrawTrainerCardWindow(1);
+        break;
+      case 3:
+        if (!d.onBack) DrawCardBackStats();
+        else FillWindowPixelBuffer(2, PIXEL_FILL(0));
+        break;
+      case 4:
+        if (d.onBack) CreateTrainerCardTrainerPic();
+        break;
+      default:
+        task.data[tFlipState]++;
+        d.allowDMACopy = true;
+        d.flipDrawState = 0;
+        return false;
+    }
+    d.flipDrawState++;
+  }
+}
+
+/** Task_SetCardFlipped: going to the front, its BGs are drawn again here. */
+function Task_SetCardFlipped(task: Task): boolean {
+  const d = sd();
+  d.allowDMACopy = false;
+  if (d.onBack) {
+    DrawTrainerCardWindow(2);
+    DrawCardScreenBackground(d.bgTilemap);
+    DrawCardFrontOrBack(d.frontTilemap);
+    DrawStarsAndBadgesOnCard();
+  }
+  DrawTrainerCardWindow(1);
+  d.onBack = !d.onBack;
+  task.data[tFlipState]++;
+  d.allowDMACopy = true;
+  PlaySE(K.SE_CARD_FLIPPING);
+  return false;
+}
+
+/** Task_AnimateCardFlipUp: the card opens 5 lines per frame. */
+function Task_AnimateCardFlipUp(task: Task): boolean {
+  const d = sd();
+  d.allowDMACopy = false;
+  if (task.data[tCardTop] <= 5) task.data[tCardTop] = 0;
+  else task.data[tCardTop] -= 5;
+  d.cardTop = task.data[tCardTop];
+  UpdateCardFlipRegs(task.data[tCardTop]);
+  SetCardFlipScanlines(task.data[tCardTop], false);
+  d.allowDMACopy = true;
+  if (task.data[tCardTop] <= 0) task.data[tFlipState]++;
+  return false;
+}
+
+/** Task_EndCardFlip */
+function Task_EndCardFlip(_task: Task): boolean {
+  ShowBg(1);
+  ShowBg(3);
+  SetHBlankCB_TrainerCard(false); // SetHBlankCallback(NULL)
+  DestroyTask(FindTaskIdByFunc(Task_DoCardFlipTask));
+  return false;
+}
+
+const sTrainerCardFlipTasks: FlipFunc[] = [Task_BeginCardFlip, Task_AnimateCardFlipDown, Task_DrawFlippedCardSide, Task_SetCardFlipped, Task_AnimateCardFlipUp, Task_EndCardFlip];
 
 // ------------------------------------------------------------------ open
 
@@ -992,6 +1497,8 @@ export function ShowPlayerTrainerCard(callback: MainCallback): void {
     hasTrades: false,
     hasBadge: new Array(NUM_BADGES).fill(false),
     easyChatProfile: Array.from({ length: TRAINER_CARD_PROFILE_LENGTH }, () => [EOS]),
+    strings: Array.from({ length: TRAINER_CARD_STRING_COUNT }, () => [EOS]),
+    monIconPals: new Uint16Array(16 * PARTY_SIZE),
     flipBlendY: 0,
     cardType: CARD_TYPE_FRLG,
     callback2: callback,
@@ -1052,6 +1559,24 @@ export function trainerCardProbe():
       mainState: number;
       /** The front takes input (STATE_HANDLE_INPUT_FRONT) and no fade runs. */
       ready: boolean;
+      /** The back takes input (STATE_HANDLE_INPUT_BACK) and no fade runs. */
+      backReady: boolean;
+      onBack: boolean;
+      /**
+       * While Task_DoCardFlipTask runs: its step (tFlipState: 1 closing, 2 drawing the other side, 4 opening), the
+       * card's top line, BLDY, and whether BG0VOFS is set per line (the squash) with its offsets on lines 0-159.
+       */
+      flip: { state: number; cardTop: number; blendY: number; squash: boolean; vofs: number[] } | undefined;
+      /** BG0VOFS is set per line (the flip's squash is still on) */
+      squashActive: boolean;
+      /** BG palette 5 (the first mon icon palette), as the hardware has it */
+      iconPalette: number[];
+      /** Per photo slot: the icon species, and the BG palette its tiles are drawn with on BG3 (-1 if not drawn) */
+      monSpecies: number[];
+      drawnIcons: number[];
+      /** Per sticker slot: the brag var, and the BG palette its tiles are drawn with on BG3 (-1 if not drawn) */
+      stickers: number[];
+      drawnStickers: number[];
       cardType: number;
       stars: number;
       /** hasBadge per badge, and which badges' tiles are on BG3 */
@@ -1086,9 +1611,24 @@ export function trainerCardProbe():
   let picPixels = 0;
   if (pic) for (const b of pic) picPixels += (b & 0xf ? 1 : 0) + (b >> 4 ? 1 : 0);
   const rse = d.trainerCard.rse;
+  const flipTask = FindTaskIdByFunc(Task_DoCardFlipTask);
+  const squash = hblankRegs.get(REG_OFFSET_BG0VOFS);
+  const drawnAt = (x: number, y: number, tile: number) => ((entry(x, y) & 0x3ff) === tile ? entry(x, y) >> 12 : -1);
   return {
     mainState: d.mainState,
     ready: d.mainState === STATE_HANDLE_INPUT_FRONT && !gPaletteFade.active,
+    backReady: d.mainState === STATE_HANDLE_INPUT_BACK && !gPaletteFade.active,
+    onBack: d.onBack,
+    flip:
+      flipTask === TASK_NONE
+        ? undefined
+        : { state: gTasks[flipTask].data[tFlipState], cardTop: d.cardTop, blendY: d.flipBlendY, squash: squash === gScanlineEffectRegBuffers[1], vofs: squash ? Array.from(squash.subarray(0, 160), (v) => (v << 16) >> 16) : [] },
+    squashActive: hblankRegs.has(REG_OFFSET_BG0VOFS),
+    iconPalette: Array.from(pltt.subarray(BG_PLTT_ID(5), BG_PLTT_ID(5) + 16)),
+    monSpecies: [...d.trainerCard.monSpecies],
+    drawnIcons: Array.from({ length: PARTY_SIZE }, (_, i) => drawnAt(sPokemonIconXOffsets[i] + 3, 15, 224 + 16 * i)),
+    stickers: [...d.trainerCard.stickers],
+    drawnStickers: Array.from({ length: TRAINER_CARD_STICKER_TYPES }, (_, i) => drawnAt(i * 3 + 2, 2, 320 + 4 * i)),
     cardType: d.cardType,
     stars: rse.stars,
     badges: [...d.hasBadge],
