@@ -27,7 +27,9 @@ async function useFirstItem(game: Game, pocket: 'items' | 'key') {
   await game.eval((t) => t.waitFrames(10));
   await game.press('DOWN'); // BAG (no POKéDEX yet)
   await game.press('A');
-  await game.eval((t) => t.waitFrames(60)); // the bag fades in
+  // The bag's graphics load asynchronously, so a fixed wait can end before it's up on a loaded machine.
+  await game.waitFor((t) => t.gbaScreen() === 'CB2_BagMenuRun', { what: 'the bag' });
+  await game.eval((t) => t.waitFrames(30)); // the bag's fade in
   if (pocket === 'key') {
     await game.press('RIGHT');
     await game.eval((t) => t.waitFrames(20));
