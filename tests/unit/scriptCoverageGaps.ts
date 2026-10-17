@@ -24,8 +24,6 @@ export interface KnownGap {
 
 export const KNOWN_GAPS: KnownGap[] = [
   // ---------------------------------------------------------------- main: on the main path to the Hall of Fame. BLOCKER in the note = the story can't go on without it.
-  { kind: 'command', name: 'call_if_defeated', tag: 'main', where: "FiveIsland_LostCave_Room10, FiveIsland_RocketWarehouse, RocketHideout_B4F", note: "BLOCKER: Rocket Hideout B4F counts the two door grunts with it (OnLoad and after each battle); the barrier to Giovanni never opens" },
-  { kind: 'command', name: 'call_if_not_defeated', tag: 'main', where: "RocketHideout_B1F", note: "Rocket Hideout B1F OnLoad: the barrier is never set. The decomp has no comma between its args, so the extractor reads them as one (split_args)" },
   { kind: 'command', name: 'incrementgamestat', tag: 'main', where: "CeladonCity_PokemonCenter_1F, CeruleanCity_PokemonCenter_1F, CinnabarIsland_PokemonCenter_1F, FiveIsland_PokemonCenter_1F, FourIsland_PokemonCenter_1F, ... (22 in all)", note: "the Pokémon Center nurse (GAME_STAT_USED_POKECENTER), the daycare" },
   { kind: 'special', name: 'AnimateTeleporterCable', tag: 'main', where: "Route25_SeaCottage", note: "Bill's cell separator (Route 25 Sea Cottage), visual only" },
   { kind: 'special', name: 'AnimateTeleporterHousing', tag: 'main', where: "Route25_SeaCottage", note: "Bill's cell separator (Route 25 Sea Cottage), visual only" },

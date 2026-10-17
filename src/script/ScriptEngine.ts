@@ -700,6 +700,16 @@ export class ScriptEngine {
     goto_if_not_defeated(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
       if (!this.trainerDefeated(a[0])) this.jump(ctx, a[1]);
     },
+    /** event.inc's call_if_defeated: checktrainerflag + call_if TRUE (Rocket Hideout B4F's door grunts). */
+    call_if_defeated(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      ctx.cmp = this.trainerDefeated(a[0]) ? Cmp.Equal : Cmp.Less;
+      if (this.test(ctx, 'TRUE')) this.call(ctx, a[1]);
+    },
+    /** call_if_not_defeated: checktrainerflag + call_if FALSE (Rocket Hideout B1F's barrier). */
+    call_if_not_defeated(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      ctx.cmp = this.trainerDefeated(a[0]) ? Cmp.Equal : Cmp.Less;
+      if (this.test(ctx, 'FALSE')) this.call(ctx, a[1]);
+    },
     callstd(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
       const label = this.data.stdScripts[this.defines.get(a[0]) ?? -1];
       if (label) this.call(ctx, label);
