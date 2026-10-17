@@ -21,7 +21,8 @@ from extract import read_jasc
 # screen, the PC storage system and item PC, the evolution scene, the field's tilesets and object event pics, which the buy menu's map view draws from VRAM,
 # field effect pics, door animation tiles, the cave entrance transition, and the weather fog and palette that
 # Haze and Mist Ball load, the main menu's palettes, the title screen and Oak's speech, the Hall of Fame and the
-# credits, and the region map (town map / fly map) with the dungeon map previews it shows).
+# credits, the region map (town map / fly map) with the dungeon map previews it shows, and the Pokédex screen
+# with the mons' footprints).
 GFX_PREFIXES = (
     "graphics/battle_interface/",
     "graphics/battle_terrain/",
@@ -55,10 +56,9 @@ GFX_PREFIXES = (
     "graphics/credits/",
     "graphics/region_map/",
     "graphics/map_preview/",
+    "graphics/pokedex/",
     "data/tilesets/",
 )
-# Footprints are 1bpp and unused so far.
-SKIP_SUFFIXES = ("footprint.1bpp",)
 
 # (also `[][16]`-shaped arrays such as the storage system's wallpaper palettes)
 INCBIN = re.compile(r"(\w+)\s*(?:\[[^\]]*\])+\s*=\s*INCBIN_U(?:8|16|32)\(((?:\s*\"[^\"]+\"\s*,?)+)\)")
@@ -151,6 +151,25 @@ def png_tiles(img, px, bpp, mwidth=1, mheight=1, num_tiles=None):
     return bytes(out)
 
 
+def png_tiles_1bpp(img):
+    """gbagfx ConvertToTiles1Bpp: 8x8 tiles in raster order, a byte per row with the leftmost pixel in bit 0.
+    gbagfx inverts greyscale PNGs (no palette), so the footprints' black pixels become set bits."""
+    invert = img.mode != "P"
+    if img.mode not in ("P", "1", "L"):
+        return None
+    px = img.load()
+    out = bytearray()
+    for ty in range(img.height // 8):
+        for tx in range(img.width // 8):
+            for y in range(8):
+                byte = 0
+                for x in range(8):
+                    bit = 1 if px[tx * 8 + x, ty * 8 + y] else 0
+                    byte |= (bit ^ invert) << x
+                out.append(byte)
+    return bytes(out)
+
+
 def bgr555(colors):
     return b"".join(struct.pack("<H", (r >> 3) | ((g >> 3) << 5) | ((b >> 3) << 10)) for r, g, b in colors)
 
@@ -167,6 +186,9 @@ class GfxBuilder:
             return None if any(p is None for p in parts) else b"".join(parts)
         path = self.decomp / rel
         stem, ext = path.with_suffix(""), path.suffix
+        if ext == ".1bpp":
+            png = stem.with_suffix(".png")
+            return png_tiles_1bpp(Image.open(png)) if png.exists() else None
         if ext in (".4bpp", ".8bpp"):
             png = stem.with_suffix(".png")
             if not png.exists():
@@ -226,7 +248,7 @@ def incbin_symbols(decomp):
         text = firered_only(f.read_text(errors="replace"))
         for sym, paths in INCBIN.findall(text) + INCBIN_ARRAY.findall(text):
             files = re.findall(r"\"([^\"]+)\"", paths)
-            if not all(p.startswith(GFX_PREFIXES) for p in files) or any(p.endswith(SKIP_SUFFIXES) for p in files):
+            if not all(p.startswith(GFX_PREFIXES) for p in files):
                 continue
             if sym in syms and syms[sym] != files:
                 print(f"  gfx: duplicate symbol {sym} ({f.name}); keeping first")
