@@ -348,7 +348,7 @@ test('catching a new species shows its habitat page and Pokédex page, then the 
   await game.eval((t) => t.state!.bag.add(t.define('ITEM_MASTER_BALL'), 1));
   await game.eval((t) => t.startWildBattle({ species: 'PIDGEY', level: 2 }));
   await game.chooseAction('BAG');
-  await game.eval((t) => t.waitFrames(60)); // the bag fades in
+  await game.waitForBag();
   await game.pressTimes('RIGHT', 2);
   await game.pressTimes('A', 2);
 

@@ -262,10 +262,36 @@ export class Game {
   }
 
   /** Poll `fn(__test)` until it returns something truthy; returns that value. */
-  async waitFor<R>(fn: (t: TestApi) => R, opts: WaitOptions & { raw?: boolean } = {}): Promise<Truthy<R>> {
+  waitFor<R>(fn: (t: TestApi) => R, opts: WaitOptions & { raw?: boolean } = {}): Promise<Truthy<R>> {
+    const expr = opts.raw ? `(${fn.toString()})()` : `(${fn.toString()})(window.__test)`;
+    return this.poll(expr, { ...opts, what: opts.what ?? fn.toString() });
+  }
+
+  /**
+   * Wait until the GBA-layer screen whose main callback is `callback2` (`t.gbaScreen()`) runs and its palette
+   * fade is over, i.e. it takes input: the bag (`CB2_BagMenuRun`, item_menu.c's Task_BagMenu_HandleInput
+   * returns while gPaletteFade.active), the party menu (`CB2_UpdatePartyMenu`). The screens load their
+   * graphics asynchronously, so a fixed wait after opening one can end before it's up on a loaded machine.
+   */
+  async waitForScreen(callback2: string, opts: WaitOptions = {}): Promise<void> {
+    const expr = `window.__test.gbaScreen() === ${JSON.stringify(callback2)} && !window.__test.paletteFadeActive()`;
+    await this.poll(expr, { what: `${callback2} to take input`, ...opts });
+  }
+
+  /** The bag is up and has faded in (see waitForScreen). */
+  waitForBag(opts: WaitOptions = {}): Promise<void> {
+    return this.waitForScreen('CB2_BagMenuRun', { what: 'the bag to take input', ...opts });
+  }
+
+  /** The party menu is up and has faded in (see waitForScreen). */
+  waitForPartyMenu(opts: WaitOptions = {}): Promise<void> {
+    return this.waitForScreen('CB2_UpdatePartyMenu', { what: 'the party menu to take input', ...opts });
+  }
+
+  /** Poll a page expression until it's truthy (errors propagate unless `raw`). */
+  private async poll<R>(expr: string, opts: WaitOptions & { raw?: boolean }): Promise<Truthy<R>> {
     const timeout = opts.timeout ?? 30_000;
     const end = Date.now() + timeout;
-    const expr = opts.raw ? `(${fn.toString()})()` : `(${fn.toString()})(window.__test)`;
     let last: unknown;
     while (Date.now() < end) {
       try {
@@ -276,7 +302,7 @@ export class Game {
       }
       await sleep(20);
     }
-    throw new Error(`Timed out after ${timeout} ms waiting for ${opts.what ?? fn.toString()}${await this.context()}`);
+    throw new Error(`Timed out after ${timeout} ms waiting for ${opts.what}${await this.context()}`);
   }
 
   /** Field position, current scenes and the last few events, for error messages. */

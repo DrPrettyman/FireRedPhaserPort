@@ -20,8 +20,7 @@ async function useFieldMove(game: Game) {
   await game.press('START');
   await game.eval((t) => t.waitFrames(10));
   await game.press('A'); // POKéMON
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu', { what: 'the party menu' });
-  await game.eval((t) => t.waitFrames(40));
+  await game.waitForPartyMenu();
   await game.press('A'); // the mon's action menu
   await game.eval((t) => t.waitFrames(10));
   await game.press('DOWN');

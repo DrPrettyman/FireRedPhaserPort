@@ -27,8 +27,7 @@ async function useFieldMove(game: Game) {
   await game.press('START');
   await game.eval((t) => t.waitFrames(10));
   await game.press('A'); // POKéMON
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu', { what: 'the party menu' });
-  await game.eval((t) => t.waitFrames(40));
+  await game.waitForPartyMenu();
   await game.press('A'); // the mon's action menu
   await game.eval((t) => t.waitFrames(10));
   await game.press('DOWN');
@@ -56,9 +55,7 @@ async function useTownMap(game: Game) {
   await game.eval((t) => t.waitFrames(10));
   await game.press('DOWN');
   await game.press('A'); // BAG
-  // The bag's scene loads its graphics first: wait for it to run, then for its fade in.
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_BagMenuRun', { what: 'the bag' });
-  await game.eval((t) => t.waitFrames(60));
+  await game.waitForBag();
   await game.press('RIGHT'); // KEY ITEMS
   await game.eval((t) => t.waitFrames(20));
   await game.press('A'); // TOWN MAP
@@ -91,9 +88,8 @@ test('the Town Map opens from the bag on the player\'s town, shows a dungeon\'s 
 
   // B closes the map (the close animation) and goes back to the bag.
   await game.press('B');
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_BagMenuRun', { what: 'back to the bag' });
+  await game.waitForBag({ what: 'back to the bag' });
   expect(await game.eval((t) => t.regionMap())).toBeUndefined();
-  await game.eval((t) => t.waitFrames(30));
   await game.press('B');
   await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the field' });
 });
@@ -202,8 +198,7 @@ test('a town not visited yet can\'t be chosen; B goes back to the party menu', a
   await game.eval((t) => t.waitFrames(30));
   expect(await game.eval((t) => t.regionMap())).toMatchObject({ ready: true, cursor: { x: 4, y: 4 } }); // still choosing
   await game.press('B');
-  await game.waitFor((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu', { what: 'the party menu again (CB2_ReturnToPartyMenuFromFlyMap)' });
-  await game.eval((t) => t.waitFrames(40));
+  await game.waitForPartyMenu({ what: 'the party menu again (CB2_ReturnToPartyMenuFromFlyMap)' });
   await game.mashUntil((t) => t.gbaScreen() === undefined && t.idle(), { button: 'B', what: 'back on the field' });
   expect(await game.eval((t) => t.field()!.map)).toBe('PalletTown');
 });

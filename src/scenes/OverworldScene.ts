@@ -31,6 +31,7 @@ import type { BgEventData } from '../data/types';
 import { WildEncounters } from '../world/WildEncounters';
 import { World } from '../world/World';
 import { StartMenu } from '../ui/StartMenu';
+import { helpMessageWindowGfxSymbols } from '../ui/HelpMessageWindow';
 import { SAVECB_RETURN_CANCEL, SAVECB_RETURN_CONTINUE, SaveDialog } from '../ui/SaveDialog';
 import { ClearContinueGameWarpStatus, gSave, UseContinueGameWarp } from '../state/save';
 import { fromSaveData, type SaveData } from '../state/saveData';
@@ -54,7 +55,7 @@ import { PlayerPcMenu } from '../ui/PlayerPcMenu';
 import { ItemPc_SetInitializedFlag } from '../menus/itemPc';
 import { CountItemsInPC } from '../state/pcItems';
 import { GetPreviousBoxOption } from '../menus/pokemonStorage';
-import { MenuWindow } from '../ui/MenuWindow';
+import { MenuWindow, setUserFrameTypeSource } from '../ui/MenuWindow';
 import { MapNamePopup } from '../ui/MapNamePopup';
 import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
 import { gFieldCallback, gFieldCallback2, type FieldCallbackHost } from '../menus/fieldCallbacks';
@@ -308,7 +309,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     });
     this.gbaScreen = new FieldGbaScreen(this, DEPTH_FADE + 10);
     setTransitionFieldCamera(() => this.gbaScreen.cameraPixelOffset());
-    await loadGfx([...mapTransitionGfxSymbols, ...fieldListMenuGfxSymbols]);
+    await loadGfx([...mapTransitionGfxSymbols, ...fieldListMenuGfxSymbols, ...helpMessageWindowGfxSymbols]);
+    setUserFrameTypeSource(() => this.state.optionsWindowFrameType + 1); // the options' FRAME for field windows
     this.flash = new FieldFlash(this);
     this.fonts = new Fonts(this, this.assets.fonts);
     this.messageBox = new MessageBox(this, this.fonts, this.buttons, charmap, this.state);
@@ -1507,6 +1509,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         if (r === 'POKEDEX') this.openFieldMenu('pokedex');
         else if (r === 'POKEMON') this.openFieldMenu('party');
         else if (r === 'BAG') this.openFieldMenu('bag');
+        else if (r === 'OPTION') this.openFieldMenu('options'); // StartMenuOptionCallback
+        else if (r === 'PLAYER') this.openFieldMenu('trainerCard'); // StartMenuPlayerCallback
         else if (r === 'RETIRE') this.startFieldScript('SafariZone_EventScript_RetirePrompt'); // SafariZoneRetirePrompt
         else if (r === 'SAVE') this.openSaveDialog();
         else if (r !== 'close') this.showNotice(`${r} isn't implemented yet.`);
@@ -1552,11 +1556,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /**
    * StartMenu_FadeScreenIfLeavingOverworld + StartMenuPokedexCallback / StartMenuPokemonCallback /
-   * StartMenuBagCallback: fade to black, then hand over to the Pokédex, party menu or bag (FieldMenuScene). They
-   * come back through CB2_ReturnToFieldWithOpenMenu (start menu reopened while the field fades in) or
-   * CB2_ReturnToField.
+   * StartMenuBagCallback / StartMenuOptionCallback / StartMenuPlayerCallback: fade to black, then hand over to the
+   * Pokédex, party menu, bag, option menu or trainer card (FieldMenuScene). They come back through
+   * CB2_ReturnToFieldWithOpenMenu (start menu reopened while the field fades in) or CB2_ReturnToField.
    */
-  private openFieldMenu(menu: 'party' | 'bag' | 'pokedex'): void {
+  private openFieldMenu(menu: 'party' | 'bag' | 'pokedex' | 'options' | 'trainerCard'): void {
     const d = this.defines;
     this.screenFade.begin(d.require('FADE_TO_BLACK'));
     let launched = false;

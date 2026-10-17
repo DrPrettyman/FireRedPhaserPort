@@ -77,7 +77,7 @@ async function useOnlyItemFromBag(game: Game) {
   await game.eval((t) => t.waitFrames(10));
   await game.press('DOWN');
   await game.press('A');
-  await game.eval((t) => t.waitFrames(60)); // the bag fades in
+  await game.waitForBag();
   await game.pressTimes('A', 3);
 
   await game.mashUntil((t) => t.gbaScreen()?.startsWith('CB2_EvolutionSceneUpdate'), { what: 'the evolution scene' });
@@ -85,7 +85,7 @@ async function useOnlyItemFromBag(game: Game) {
 
   // Back to the bag (gPartyMenu.exitCallback), then out to the field.
   await game.mashUntil((t) => t.gbaScreen() !== undefined && !t.gbaScreen()!.startsWith('CB2_EvolutionScene'), { what: 'the bag after the evolution' });
-  await game.eval((t) => t.waitFrames(60));
+  await game.waitForBag();
   await game.press('B'); // close the bag: back to the start menu
   await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the field' });
   return evolved;

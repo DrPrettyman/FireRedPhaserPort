@@ -47,7 +47,7 @@ test('Growl plays, then the stat change anim lowers the target', async () => {
 async function throwFirstBall(game: Game): Promise<number> {
   await game.chooseAction('BAG');
   const since = await game.mark();
-  await game.eval((t) => t.waitFrames(60)); // the bag fades in
+  await game.waitForBag();
   await game.pressTimes('RIGHT', 2);
   // A (item) then A (USE); presses during the pocket slide are dropped, so keep pressing until the throw starts
   await game.mashUntil((t) => t.events().some((e) => e.type === 'battleAnim' && e.label === 'Special_BallThrow'), { what: 'the ball throw' });
@@ -95,7 +95,7 @@ test('switching out plays the ball effect and shrinks the mon', async () => {
   await game.eval((t) => t.startWildBattle({ species: 'MAGIKARP', level: 30 }));
   await game.chooseAction('POKEMON');
   const since = await game.mark();
-  await game.eval((t) => t.waitFrames(60)); // the party menu fades in
+  await game.waitForPartyMenu();
   await game.press('DOWN');
   await game.press('A'); // PIDGEY
   await game.eval((t) => t.waitFrames(10));

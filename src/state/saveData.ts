@@ -16,9 +16,9 @@ import type { BoxPokemon } from './PokemonStorage';
 
 /**
  * Bump when SaveData changes shape; fromSaveData refuses other versions. Older versions that only lack fields
- * are brought up to date by `upgradeSave` (version 1 had no gameStats).
+ * are brought up to date by `upgradeSave` (version 1 had no gameStats, version 2 no options.sound).
  */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /** The localStorage key of the one save slot. */
 export const SAVE_STORAGE_KEY = 'firered-phaser:save';
@@ -75,6 +75,8 @@ export interface SaveData {
     buttonMode: number;
     battleStyleSet: boolean;
     battleSceneOff: boolean;
+    /** OPTIONS_SOUND_MONO / _STEREO; since version 3. */
+    sound: number;
   };
   /** struct Pokedex: seen / caught national dex numbers, ascending; nationalMagic as a flag. */
   pokedex: { seen: number[]; caught: number[]; nationalDexEnabled: boolean };
@@ -169,6 +171,7 @@ export function toSaveData(state: GameState): SaveData {
       buttonMode: state.optionsButtonMode,
       battleStyleSet: state.battleStyleSet,
       battleSceneOff: state.battleSceneOff,
+      sound: state.optionsSound,
     },
     pokedex: {
       seen: [...state.dexSeen].sort((a, b) => a - b),
@@ -228,6 +231,7 @@ export function fromSaveData(data: SaveData, state: GameState): GameState {
   state.optionsButtonMode = data.options.buttonMode;
   state.battleStyleSet = data.options.battleStyleSet;
   state.battleSceneOff = data.options.battleSceneOff;
+  state.optionsSound = data.options.sound;
   state.dexSeen.clear();
   for (const n of data.pokedex.seen) state.dexSeen.add(n);
   state.dexCaught.clear();
@@ -267,6 +271,8 @@ export function fromSaveData(data: SaveData, state: GameState): GameState {
 /** Bring a save of an older version that only lacks fields up to SAVE_VERSION (other saves are returned as they are). */
 export function upgradeSave(data: SaveData): SaveData {
   if (data?.version === 1) data = { ...data, version: 2, gameStats: new Array<number>(64).fill(0) };
+  // OPTIONS_SOUND_MONO, the new-game default
+  if (data?.version === 2) data = { ...data, version: 3, options: { ...data.options, sound: 0 } };
   return data;
 }
 

@@ -13,6 +13,7 @@ import { g } from '../battle/env';
 import { getBattlerSide } from '../battle/util';
 import { GetGpuReg } from '../gba/hw';
 import { gMain } from '../gba/main';
+import { gPaletteFade } from '../gba/palette';
 import { gSprites } from '../gba/sprite';
 import { gTasks } from '../gba/task';
 import { gPaletteFade } from '../gba/palette';
@@ -35,12 +36,15 @@ import { creditsProbe, creditsSkipToClosing } from '../menus/credits';
 import { pokedexAreaProbe } from '../menus/pokedexArea';
 import { pokedexScreenProbe } from '../menus/pokedexScreen';
 import { regionMapProbe } from '../menus/regionMap';
+import { trainerCardProbe } from '../menus/trainerCard';
 import { mainMenuProbe } from '../menus/mainMenu';
 import { titleScreenProbe } from '../menus/titleScreen';
 import { clearSaveDataProbe } from '../menus/clearSaveDataScreen';
 import { oakSpeechProbe } from '../menus/oakSpeech';
 import { saveDialogProbe } from '../ui/SaveDialog';
 import { startMenuProbe } from '../ui/StartMenu';
+import { helpMessageWindowProbe } from '../ui/HelpMessageWindow';
+import { optionMenuProbe } from '../menus/optionMenu';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -412,6 +416,8 @@ function createApi(game: Phaser.Game) {
     /** Tap buttons together for `frames` ticks (default 2), then release for `gap` ticks (default 2). */
     press: (buttons: Button | Button[], frames = 2, gap = 2) => pad.press(Array.isArray(buttons) ? buttons : [buttons], frames, gap),
     hold: (b: Button) => pad.hold(b),
+    /** Hold `b` on every tick that `keep()` is true at its start; let go for good the first tick it isn't. */
+    holdWhile: (b: Button, keep: () => boolean) => pad.holdWhile(b, keep),
     release: (b?: Button) => pad.release(b),
     waitFrames: (n: number) => pad.waitFrames(n),
     /** A tile of a tileset as the field's BG VRAM holds it now (tile animations write there), as hex. */
@@ -470,10 +476,16 @@ function createApi(game: Phaser.Game) {
       await pad.press([DIR_BUTTON[dir]], 1, 1);
       await pad.until(() => !field()?.moving);
     },
-    /** Resolves at the start of the first tick where `pred()` is true (checked every tick, in the page). */
+    /**
+     * Resolves at the start of the first tick where `pred()` is true (checked every tick, in the page), with
+     * whether it was (false after `maxFrames`). The result is the one from that tick: the promise settles after
+     * the frame's batch of ticks, when a short-lived state can be over, so it isn't checked again then. Read
+     * anything else you need from that tick inside `pred`.
+     */
     until: (pred: () => unknown, maxFrames = 3600) => {
       const deadline = pad.frame + maxFrames;
-      return pad.until(() => !!pred() || pad.frame >= deadline).then(() => !!pred());
+      let held = false;
+      return pad.until(() => (held = !!pred()) || pad.frame >= deadline).then(() => held);
     },
 
     // --- events
@@ -484,6 +496,8 @@ function createApi(game: Phaser.Game) {
     scenes: () => game.scene.getScenes(true).map((s) => s.scene.key),
     /** The GBA-layer screen running (gMain.callback2's name, e.g. BattleMainCB2, CB2_NamingScreen), if any. */
     gbaScreen: () => (game.scene.isActive('Battle') || game.scene.isActive('FieldMenu') || game.scene.isActive('MainMenu') ? gMain.callback2?.name : undefined),
+    /** gPaletteFade.active: a GBA-layer screen fading in or out (menus ignore input until it's done). */
+    paletteFadeActive: () => gPaletteFade.active,
     /** The main menu while it takes input: menu type (0 NEW GAME only, 1 CONTINUE / NEW GAME), cursor, fading, the CONTINUE values. */
     mainMenu: () => {
       const p = game.scene.isActive('MainMenu') ? mainMenuProbe() : undefined;
@@ -500,6 +514,13 @@ function createApi(game: Phaser.Game) {
     },
     /** The field start menu while it's open: its items and cursor. */
     startMenu: () => startMenuProbe(),
+    /** The help window's text while it's up (the start menu's description in the HELP button mode), decoded. */
+    helpMessage: () => {
+      const text = helpMessageWindowProbe();
+      return text && decode(text);
+    },
+    /** The option menu while it's up (menus/optionMenu.ts): Task_OptionMenu's loadState (2 = input), the cursor and the settings shown. */
+    optionMenu: () => optionMenuProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */
     saveDialog: () => {
       const p = saveDialogProbe();
@@ -577,6 +598,15 @@ function createApi(game: Phaser.Game) {
      * icon, and the two silhouettes (OAM, matrix scale, y2).
      */
     pokedexArea: () => pokedexAreaProbe(),
+    /**
+     * The trainer card while it's up (menus/trainerCard.ts): its state, `ready` (the front takes input, no fade), the
+     * stars and badges it has and draws, which card palette is loaded, the trainer pic's pixels and what the front
+     * printed, decoded.
+     */
+    trainerCard: () => {
+      const p = trainerCardProbe();
+      return p && { ...p, printed: Object.fromEntries(Object.entries(p.printed).map(([k, v]) => [k, decode(v!)])) as Record<string, string> };
+    },
     /** The item PC's list (WITHDRAW ITEM, item_pc.c) while it runs: its task, scroll/row and item count. */
     itemPc: () => (gMain.callback2?.name === 'ItemPc_MainCB' ? itemPcProbe() : undefined),
     /** The TM case while it's open (menus/tmCase.ts): TMCASE_* type, task, scroll/row and the pocket's item ids in list order. */

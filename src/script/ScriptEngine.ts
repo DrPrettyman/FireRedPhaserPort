@@ -593,6 +593,11 @@ export class ScriptEngine {
     return m ? Number(m[1]) - 1 : (this.defines.get(token) ?? 0);
   }
 
+  /** The script commands this interpreter handles (tests/unit/scriptCoverage.test.ts). */
+  get commandNames(): string[] {
+    return Object.keys(this.commands);
+  }
+
   private callSpecial(name: string): number | void {
     if (TRAINER_SPECIALS.has(name)) return this.trainerSpecial(name);
     const special = SPECIALS[name];
@@ -1464,8 +1469,8 @@ export class ScriptEngine {
   }
 }
 
-/** Specials handled by ScriptEngine.trainerSpecial (some return nothing). */
-const TRAINER_SPECIALS = new Set([
+/** Specials handled by ScriptEngine.trainerSpecial (some return nothing). Exported for tests/unit/scriptCoverage. */
+export const TRAINER_SPECIALS: ReadonlySet<string> = new Set([
   'Script_HasTrainerBeenFought',
   'SetBattledTrainerFlag',
   'GetTrainerBattleMode',

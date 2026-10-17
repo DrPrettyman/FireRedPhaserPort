@@ -64,17 +64,21 @@ export class TextWindow implements TextSurface {
     this.dirty = true;
   }
 
-  /** CopyGlyphToWindow: the whole glyph cell (width x font height) is written, background included. */
+  /**
+   * CopyGlyphToWindow: the whole glyph cell (width x font height) is written, background included, except
+   * pixels in colour 0 (TEXT_COLOR_TRANSPARENT), which GLYPH_COPY leaves as they were.
+   */
   drawGlyph(font: Font, code: number, x: number, y: number, fg: number, bg: number, shadow: number): number {
     const w = font.width(code);
-    const map = [this.colors[bg], this.colors[fg], this.colors[shadow]];
+    const indices = [bg, fg, shadow];
     for (let gy = 0; gy < font.height; gy++) {
       const py = y + gy;
       if (py < 0 || py >= this.height) continue;
       for (let gx = 0; gx < w; gx++) {
         const px = x + gx;
         if (px < 0 || px >= this.width) continue;
-        this.buf[py * this.width + px] = map[font.pixel(code, gx, gy)];
+        const ci = indices[font.pixel(code, gx, gy)];
+        if (ci !== 0) this.buf[py * this.width + px] = this.colors[ci];
       }
     }
     this.dirty = true;

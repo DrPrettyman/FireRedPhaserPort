@@ -19,6 +19,9 @@ damage formula. `gameData.ts` builds the same objects the game does (`newGame()`
 PokemonData, GameState; `newBattleEnv()` also runs `initBattleEnv` with the battle JSON) from
 `public/gen`. Modules that import Phaser can't be loaded here; test those end to end.
 
+`scriptCoverage.test.ts` checks the decomp's scripts against what the port handles; see docs/DEV_NOTES.md
+("Script coverage") for what to do when it fails.
+
 Expected values should come from somewhere other than the code under test: a formula written out
 independently, a value from the games (e.g. a level-100 Mewtwo's stats), or the decomp.
 
@@ -59,6 +62,7 @@ sent as source text, so it can't use the test file's variables: pass them as arg
 | **Events** | Milestones the game reports: `map`, `script`, `trainerApproach`, `battleTransition` (`transition`), `battleTransitionEnd` (`black`: share of black pixels in its last frame), `battleStart`, `battleEnd`, `whiteOut`, `evolution` (`from`, `to`, `stopped`), `mapTransition` (a cave's flash screen: `from`, `to`), `barnDoorWipe`, `multichoice` (a multichoice menu opened: `mcId`), `titleScreen`, `titleScene` (`scene`: each SetTitleScreenScene), `mainMenu`, `oakSpeech`. Use `game.mark()` then `game.waitForEvent(type, { since })`. |
 | **Setup** | `t.setParty([...])`, `t.startWildBattle({ species, level })`, `t.forceBattleTransition('SWIRL')` (every battle uses B_TRANSITION_SWIRL), `t.seed(n)`, `t.state.bag.add(...)`. |
 | **Battle** | `game.chooseAction('FIGHT' \| 'BAG' \| 'POKEMON' \| 'RUN')` waits for the action menu. Pressing A at the menu picks FIGHT and then the first move, so `mashUntil(battleEnd)` fights a battle to the end. |
+| **Screens** | `game.waitForBag()` / `game.waitForPartyMenu()` after opening the bag or the party menu (from the start menu, in battle, from an item): they wait until its main callback runs (`t.gbaScreen()` is `CB2_BagMenuRun` / `CB2_UpdatePartyMenu`) and its palette fade is over (`t.paletteFadeActive()`), which is when it takes input. `game.waitForScreen('CB2_...')` does the same for another GBA-layer screen. Don't use a fixed `waitFrames` instead: the screens load their graphics asynchronously, so under load it can end before they're up. |
 
 A test fails if the page throws or logs `console.error`. When a test fails, the harness saves a screenshot to
 `tests/e2e/__output__/<test name>.png` and prints the page's last console lines.

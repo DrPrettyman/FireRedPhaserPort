@@ -19,8 +19,9 @@ test('a tap turns the player on the spot; holding walks', async () => {
   // PlayerTurnInPlace: an 8-frame walk in place, and no step
   const turning = await game.eval(async (t) => {
     const press = t.press('LEFT', 1, 1);
-    await t.until(() => t.field()?.avatar.action === 'WALK_IN_PLACE_FAST_LEFT', 10);
-    const f = t.field()!;
+    // the field as it was in that tick (read later, the 8-frame turn can be over)
+    let f = t.field()!;
+    await t.until(() => (f = t.field()!).avatar.action === 'WALK_IN_PLACE_FAST_LEFT', 10);
     await press;
     return f;
   });
@@ -133,7 +134,7 @@ async function useFirstKeyItem(game: Game, again = false) {
   await game.eval((t) => t.waitFrames(10));
   if (!again) await game.press('DOWN');
   await game.press('A');
-  await game.eval((t) => t.waitFrames(60)); // the bag fades in
+  await game.waitForBag();
   if (!again) {
     await game.press('RIGHT');
     await game.eval((t) => t.waitFrames(20));
@@ -308,12 +309,12 @@ test('with Strength in use, walking into a boulder pushes it, and it can fall th
   // Up the column to the hole: HandleBoulderFallThroughHole removes it and reveals its twin on B1F.
   expect(await game.eval((t) => t.walkTo(21, 13))).toMatchObject({ arrived: true });
   await game.eval((t) => t.face('up'));
-  // Hold, watch and release in one eval: released any later, the player walks on into the hole and falls to
-  // B1F, where the revealed twin boulder stands at (22, 8).
+  // Hold UP only while the boulder is still there (holdWhile checks at the start of each tick): released any
+  // later, even at the end of the frame's batch of ticks, the player walks on into the hole and falls to B1F,
+  // where the revealed twin boulder stands at (22, 8).
   await game.eval(async (t) => {
-    t.hold('UP');
+    t.holdWhile('UP', () => !t.flag('FLAG_HIDE_SEAFOAM_1F_BOULDER_1'));
     await t.until(() => t.flag('FLAG_HIDE_SEAFOAM_1F_BOULDER_1'), 900);
-    t.release();
   });
   await game.waitIdle();
   expect(await game.eval((t) => t.field()?.map)).toBe('SeafoamIslands_1F');

@@ -26,6 +26,8 @@ export class GameState {
   optionsButtonMode = 0;
   /** gSaveBlock2Ptr->optionsWindowFrameType (frame 1 = 0) */
   optionsWindowFrameType = 0;
+  /** gSaveBlock2Ptr->optionsSound (OPTIONS_SOUND_MONO = 0 / _STEREO): stored only, no audio yet */
+  optionsSound = 0;
   /**
    * gSaveBlock1Ptr->dynamicWarp: where a MAP_DYNAMIC warp leads (an elevator's door back to the floor it
    * was entered from). Set on entering a map by a warp whose counterpart is dynamic, or by `setdynamicwarp`.
