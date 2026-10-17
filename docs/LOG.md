@@ -1460,3 +1460,6 @@ end to end.
 - From batch 3's lessons: duplicated building blocks (affine BGs, top bar window, SoftReset), workers dismissing
   flakes as load, a stacked branch in the same worktree, the ~10-minute full suite.
 - CLAUDE.md and STATUS.md point to it.
+- `/get-on` (`.claude/skills/get-on/SKILL.md`, WORKFLOW.md section 0): the user's session as main coordinator,
+  one background sub-coordinator per batch (plan, workers, merge, docs), workers under it. Agents can start agents
+  (checked: a subagent's subagent ran).

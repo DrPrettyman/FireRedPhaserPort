@@ -24,6 +24,7 @@ FireRed rebuilt in Phaser 3 + TypeScript (Vite). See README.md for setup and arc
 ## Git
 
 Big pieces of work run as parallel batches (a coordinator, up to four workers, a merger): see docs/WORKFLOW.md.
+`/get-on` ("get on with the project") runs batches back to back on its own (`.claude/skills/get-on/`).
 
 - New feature work:
   - Work in a new branch in a worktree, started from an up-to-date `origin/master`. The user works on master in the

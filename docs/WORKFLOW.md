@@ -4,6 +4,22 @@ How big pieces of work get done here: one session (the coordinator) plans a batc
 parallel, then merges their PRs. Used for BATTLE_ANIMS_PLAN.md (PRs #6-#13) and MAIN_PATH_PLAN.md batches 1-3
 (PRs #14-#28). The git rules in CLAUDE.md still apply; this file adds what's specific to running a batch.
 
+## 0. Running it autonomously
+
+`/get-on` (or "get on with the project") runs batches back to back without the user: see
+`.claude/skills/get-on/SKILL.md`. Three levels of agents:
+
+- **Main coordinator:** the user's session. Starts one sub-coordinator per batch, waits for its report, updates the
+  user, and starts the next one until a stop condition (a batch count, something that needs the user, nothing
+  merged twice in a row).
+- **Sub-coordinator:** a background agent that runs one batch end to end: open PRs first, then sections 1-4 below,
+  including the docs-only plan and STATUS PRs. It takes the reasonable call on open questions and records it in
+  the plan's "Decisions" for the user to revisit.
+- **Workers:** started by the sub-coordinator (section 2). They don't start agents themselves.
+
+Sections 1-4 are written for whoever coordinates the batch: the sub-coordinator, or the user's session when a
+batch is run by hand.
+
 ## 1. Coordinator: plan the batch
 
 1. **Read STATUS.md and the current plan.** List the candidate work.
