@@ -48,6 +48,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     still held when the bag returns; here the field's overlay held the controls until then). RemoveUsedItem after
     the bag has closed skips the bag display's item counts (the GBA writes them through a freed NULL pointer). Berry powder reads as 0. The TM case
     and berry pouch can't be opened to give from (the PC box's GIVE, GoToTMCase_PCBox / GoToBerryPouch_PCBox).
+    (rods, Escape Rope, Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail, berry pouch,
+    registered SELECT items) log "not implemented" and return to the bag. Berry powder reads as 0. The berry
+    pouch can't be opened to give from (GoToBerryPouch_Give / _PCBox).
+  - TM case (menus/tmCase.ts): silent (SE_SELECT, SE_SHOP); no quest log (RecordItemTransaction). Not ported:
+    the Pokédude's Teachy TV demo (TMCASE_POKEDUDE), the Union Room's GIVE / EXIT menu (no link play) and opening
+    it as a registered item from the field (Task_InitTMCaseFromField: there are no registered SELECT items yet).
   - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
     overworld's ScreenFade.
   - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;
@@ -95,7 +101,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
     GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
-    Selling the TM case / berry pouch logs "not implemented" (those screens don't exist).
+    Selling from the berry pouch logs "not implemented" (that screen doesn't exist yet).
   - Field steps: eggs count down egg cycles, but the daycare (breeding,
     its mons' steps) and the hatching scene (`special EggHatch`) aren't ported. A finished VS Seeker charge would
     start EventScript_VsSeekerChargingDone, whose specials aren't ported; only the (unported) VS Seeker starts one.

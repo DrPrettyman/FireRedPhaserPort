@@ -327,10 +327,11 @@ export class TextPrinter {
     }
   }
 
-  private clearSpan(width: number): void {
-    const font = this.fonts.get(this.glyphId);
-    this.window.fillRect(this.currentX, this.currentY, width, font.info.maxLetterHeight, this.bg);
-  }
+  /**
+   * ClearTextSpan: an empty function in FRLG's text_printer.c, so CLEAR / CLEAR_TO / MIN_LETTER_SPACING only move
+   * the cursor and leave what's under it (the TM case's HM icon sits under an HM's {CLEAR_TO 18}).
+   */
+  private clearSpan(_width: number): void {}
 
   // -------------------------------------------------------------- down arrow (TextPrinterDrawDownArrow)
 

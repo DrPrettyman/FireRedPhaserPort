@@ -1492,3 +1492,43 @@ end to end.
   back, a rod facing land refused in the bag, the Escape Rope from Mt. Moon to Route 4, refused on Route 1), plus
   playerAvatar / surf / wildBattle / fieldMoves / fieldEffects / fly e2e; screenshots of the cast facing down from
   the bank and left/right while surfing.
+### TM case (SCREENS_PLAN.md batch 1, W-tmcase unit 1)
+
+- `menus/tmCase.ts` ports tm_case.c: InitTMCase for TMCASE_FIELD (the bag's KEY ITEMS → TM CASE → OPEN:
+  FieldUseFunc_TmCase / InitTMCaseFromBag), TMCASE_GIVE_PARTY (GoToTMCase_Give), TMCASE_GIVE_PC (GoToTMCase_PCBox),
+  TMCASE_SELL (GoToTMCase_Sell) and TMCASE_REOPENING (CB2_ReturnToTMCaseMenu, which used to fall back to the bag).
+  The list (SortPocketAndPlaceHMsFirst, "No01 MOVE", ×quantity or the HM tile), the description and move info
+  windows, the disc sprite tinted by type sliding in and out of the case (SpriteCB_SwapDisc), USE / GIVE / EXIT
+  (USE → the party menu's ItemUseCB_TMHM; GIVE → CB2_ChooseMonToGiveItem), the sell flow (how many, the money box,
+  YES/NO, "Oh no, I can't buy that" for HMs). The Pokédude demo and the Union Room menu are left out.
+- Graphics: `graphics/tm_case/` added to extract_gfx.py's prefixes (gTMCase_*, gTMCaseDisc*, gTMCaseHM_Gfx);
+  `menuGfxSymbols` preloads them for every GBA menu host.
+- Fix found on the way: FRLG's ClearTextSpan (text_printer.c) is empty, but the port's TextPrinter filled the span
+  for CLEAR / CLEAR_TO / MIN_LETTER_SPACING with the background colour. That erased the TM case's HM tile under an
+  HM's `{CLEAR_TO 18}`; now it only moves the cursor, like the GBA.
+- No list_menu.c cursor objects needed (the TM case uses cursorKind 0, the printed arrow).
+- Verified: tests/e2e/tmCase.test.ts (from the bag: HM01 → USE teaches CHARMANDER CUT and comes back to the TM case,
+  PIDGEY can't learn it, TM28 → GIVE; at the Pewter Mart: SELL → TM case, an HM it won't buy, two TM28s sold for
+  half price), screenshots of the list, context menu and quantity box; the bag / mart / PC / evolution e2e files
+  (pokemart, pcStorage, evolution, listMenuFlash, saveContinue) and the unit tests still pass.
+### Pokédex area data and markers (W-dexarea unit 1, batch 1 of SCREENS_PLAN.md)
+
+- `menus/wildPokemonArea.ts`: wild_pokemon_area.c (GetSpeciesPokedexAreaMarkers, GetRoamerIndex /
+  GetRoamerPokedexAreaMarkers, IsSpeciesOnMap, IsSpeciesInEncounterTable, GetMapSecIdFromWildMonHeader,
+  FindDexAreaByMapSec), plus GetStarterSpecies and roamer.c's GetRoamerLocationMapSectionId (an unset roamer
+  location is map 0/0, as after a reboot on the GBA). IsSpeciesOnMap's fishing search reads 12 slots of a 10-slot
+  table in the C; the extra two are never a species, so the port searches the table's own length (same result).
+- `menus/pokedexArea.ts`: pokedex_area_markers.c (CreatePokedexAreaMarkers, Task_ShowAreaMarkers,
+  DestroyPokedexAreaMarkers, GetAreaMarkerSubsprite, GetNumPokedexAreaMarkers). There's no blink: the task only
+  makes the sprite visible on its first run.
+- GetUnlockedSeviiAreas (field_specials.c) in `world/regionMap.ts` rather than menus/regionMap.ts, so the marker
+  code stays loadable in the Node unit tests (menus/regionMap.ts pulls in Phaser through world/fly.ts).
+- Extractor: menus.json `pokedexArea` (`pokedex_area_data` in extract_menus.py); `graphics/pokedex/` in
+  extract_gfx.py (pokedex_screen.c's INCBINs and the markers). Fixed on the way: extract_gfx.py's make-variable
+  parsing kept only a variable's first word and didn't expand nested `$(VAR)`s, so `cat` rules over a variable list
+  (POKEDEXAREAMARKERFILES → marker.4bpp) produced nothing; no existing symbol changed. Rerun `npm run extract`.
+- Shared: OverworldScene (`initWildPokemonArea` at init), menus/data.ts (`pokedexArea` type), world/regionMap.ts.
+- Tests: tests/unit/pokedexArea.test.ts (9: Pidgey on 13 Kanto routes and the Sevii areas as islands unlock,
+  Magikarp by rod only, no areas, Slugma only once One Island is unlocked, Altering Cave's sets, the roamer at its
+  location / the unpaired roamers / inactive, the markers' OBJ-window OAM). typecheck, `npm test` (100) and
+  mapNamePopup e2e pass. The e2e (tests/e2e/pokedexArea.test.ts) comes with the area page in unit 2.

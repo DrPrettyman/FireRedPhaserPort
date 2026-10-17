@@ -38,3 +38,14 @@ export function cacheMapSection(mapId: string, mapsec: number): void {
 export function GetMapSectionOfMap(mapId: string | undefined): number {
   return (mapId !== undefined ? mapSections.get(mapId) : undefined) ?? K.MAPSEC_NONE;
 }
+
+/**
+ * GetUnlockedSeviiAreas (field_specials.c): bit i set once FLAG_WORLD_MAP_<i+1>_ISLAND is (the island's town was
+ * visited). The Pokédex area page draws those islands' maps and searches their sDexAreas_Sevii* tables.
+ */
+export function GetUnlockedSeviiAreas(): number {
+  const islands = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN'];
+  let result = 0;
+  for (let i = 0; i < islands.length; i++) if (state.getFlag(`FLAG_WORLD_MAP_${islands[i]}_ISLAND`) === true) result |= 1 << i;
+  return result;
+}

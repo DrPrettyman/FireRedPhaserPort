@@ -257,6 +257,15 @@ this is the next level down. When you add or change a subsystem, update its entr
   `LoadFieldTilesetsForShop` puts the map's tiles/palettes where the overworld would have left them in VRAM.
   `menus/objectEventGraphics.ts` is CreateObjectGraphicsSprite for any GBA-layer screen that needs NPC sprites.
   Test: `?start=after-rival&map=PewterCity_Mart&x=4&y=3`, face left, A (TM layout: Celadon Dept. Store 2F, x=3 y=6).
+- **TM case:** `menus/tmCase.ts` is tm_case.c. `InitTMCase(type, exitCallback, allowSelectClose)` runs on whichever
+  GBA host has the bag (FieldMenuScene); `menuGfxSymbols` preloads `TM_CASE_GFX`. Ways in: the bag's KEY ITEMS → TM
+  CASE → OPEN (`FieldUseFunc_TmCase` in menus/itemUse.ts → TMCASE_FIELD, back to CB2_BagMenuFromStartMenu), the
+  bag's GIVE from the party menu / PC box (`GoToTMCase_Give` / `GoToTMCase_PCBox`) and the Poké Mart's SELL
+  (`GoToTMCase_Sell`), all in menus/itemMenu.ts. USE sets ItemUseCB_TMHM and opens CB2_ShowPartyMenuForItemUse,
+  whose exit callback for the TM case pocket is CB2_ReturnToTMCaseMenu (TMCASE_REOPENING: same type, list position
+  and exit callback). `SortPocketAndPlaceHMsFirst` / `SortAndCompactBagPocket` (item.c) live there too. Probe
+  `__test.tmCase()` (TMCASE_* type, the screen task's name, `fading`, scroll/row, the pocket's item ids in list
+  order). Tests: tests/e2e/tmCase.test.ts.
 - **Naming screen:** `DoNamingScreen` (`menus/namingScreen.ts`) runs on any GBA host. From a script, use
   `ScriptHost.doNamingScreen` (FieldMenuScene `naming`). Oak's speech calls it with NAMING_SCREEN_PLAYER
   (monSpecies = the player's gender) and NAMING_SCREEN_RIVAL on MainMenuScene, preloading `namingScreenGfxSymbols`
@@ -330,6 +339,21 @@ this is the next level down. When you add or change a subsystem, update its entr
   (`regionMapGfxSymbols`, preloaded by FieldMenuScene). The screen re-copies its tilemaps at VBlank (see
   DEVIATIONS: the port's DMA is immediate). Probe `__test.regionMap()` (type, task, `ready`, cursor, `moving`,
   player icon, section and its MAPSECTYPE_*, fly icons, map name, top bar text). Tests: tests/e2e/fly.test.ts.
+- **Pokédex area markers:** `menus/wildPokemonArea.ts` is wild_pokemon_area.c (GetSpeciesPokedexAreaMarkers:
+  every gWildMonHeaders table holding the species → its map's mapsec → sDexAreas_Kanto / the unlocked
+  sDexAreas_Sevii* → DEX_AREA_* markers; Altering Cave by VAR_ALTERING_CAVE_WILD_SET; the roamer paired with the
+  starter at its current map). It reads wild_encounters.json through `initWildPokemonArea` (OverworldScene, next to
+  initRoamerTables) and menus.json `pokedexArea` (tools/extract_menus.py `pokedex_area_data`: the dex area tables,
+  sRoamerPairs, sAreaMarkers, sSubsprites, every map's mapsec, `firstMap` for the roamer's unset location).
+  `menus/pokedexArea.ts` is pokedex_area_markers.c: CreatePokedexAreaMarkers(species, tilesTag, palIdx, y) makes
+  one OBJ-window sprite at (104, y + 32) whose subsprites are the markers, fills BG1 with tile 0x00F from char
+  base 0 and sets the window/blend registers (BG1 blended 12/8 inside the markers); the sprite shows on the
+  task's first run; DestroyPokedexAreaMarkers puts BG1 (char base 2) and the registers back. Preload
+  `pokedexAreaMarkerGfxSymbols` (sMarkerTiles, sMarkerPal). GetUnlockedSeviiAreas (field_specials.c) is in
+  `world/regionMap.ts` (importable in Node, unlike menus/regionMap.ts). The area page (DexScreen_DrawMonAreaPage,
+  W-dexarea unit 2) goes in `menus/pokedexArea.ts` too; its graphics are already extracted (graphics/pokedex/:
+  sTilemap_AreaMap_Kanto and the seven islands' sTilemap_AreaMap_*, sBlitTiles_WideEllipse, sPalette_Silhouette).
+  Tests: tests/unit/pokedexArea.test.ts (the marker lists, and the sprite's OAM in Node).
 - **Hall of Fame and credits:** the room's script (PokemonLeague_HallOfFame_EventScript_EnterRoom) runs
   `dofieldeffect FLDEFF_HALL_OF_FAME_RECORD` (`world/hallOfFameRecord.ts`: the machine's Poké Balls and monitor,
   CreateGlowingPokeballsEffect's states, drawn as FieldEffectSprites from the GBA pics at screen coordinates; the

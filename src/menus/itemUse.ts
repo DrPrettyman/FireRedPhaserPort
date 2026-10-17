@@ -1,7 +1,7 @@
 // item_use.c: what Use does for each item, from the bag (tasks' data[3] == 0) and in battle. The
 // functions are looked up by the names in the item table (fieldUseFunc / battleUseFunc). Uses that
 // need overworld systems that don't exist yet (Itemfinder, VS Seeker, Fame Checker, Teachy TV, mail,
-// TM case, berry pouch) aren't in the tables; the bag logs them.
+// berry pouch) aren't in the tables; the bag logs them.
 
 import { K } from '../battle/constants';
 import { g, state } from '../battle/env';
@@ -42,6 +42,7 @@ import {
 } from './itemMenu';
 import { SpecialVar } from './itemMenuState';
 import { InitRegionMapWithExitCB, REGIONMAP_TYPE_NORMAL } from './regionMap';
+import { InitTMCase, TMCASE_FIELD } from './tmCase';
 import {
   CB2_ShowPartyMenuForItemUse,
   EnterPartyFromItemMenuInBattle,
@@ -221,6 +222,24 @@ function FieldUseFunc_TownMap(taskId: number): void {
 /** UseTownMapFromBag */
 function UseTownMapFromBag(): void {
   InitRegionMapWithExitCB(REGIONMAP_TYPE_NORMAL, CB2_BagMenuFromStartMenu);
+}
+
+/**
+ * FieldUseFunc_TmCase: from the bag, the TM case, which returns to the bag. (Its registered-item branch,
+ * Task_InitTMCaseFromField, opens it from the field with SELECT, which the port doesn't have yet.)
+ */
+function FieldUseFunc_TmCase(taskId: number): void {
+  if (!inField(taskId)) {
+    ItemMenu_SetExitCallback(InitTMCaseFromBag);
+    ItemMenu_StartFadeToExitCallback(taskId);
+  } else {
+    console.warn('[item_use] using registered items from the field is not implemented');
+  }
+}
+
+/** InitTMCaseFromBag */
+function InitTMCaseFromBag(): void {
+  InitTMCase(TMCASE_FIELD, CB2_BagMenuFromStartMenu, false);
 }
 
 function FieldUseFunc_CoinCase(taskId: number): void {
@@ -491,6 +510,7 @@ export const FIELD_USE_FUNCS: Record<string, TaskFunc> = {
   FieldUseFunc_Rod,
   ItemUseOutOfBattle_EscapeRope,
   FieldUseFunc_TownMap,
+  FieldUseFunc_TmCase,
   FieldUseFunc_CoinCase,
   FieldUseFunc_PowderJar,
   FieldUseFunc_PokeFlute,

@@ -308,9 +308,15 @@ test('with Strength in use, walking into a boulder pushes it, and it can fall th
   // Up the column to the hole: HandleBoulderFallThroughHole removes it and reveals its twin on B1F.
   expect(await game.eval((t) => t.walkTo(21, 13))).toMatchObject({ arrived: true });
   await game.eval((t) => t.face('up'));
-  await game.eval((t) => t.hold('UP'));
-  await game.eval((t) => t.until(() => t.flag('FLAG_HIDE_SEAFOAM_1F_BOULDER_1'), 900));
-  await game.eval((t) => t.release());
+  // Hold, watch and release in one eval: released any later, the player walks on into the hole and falls to
+  // B1F, where the revealed twin boulder stands at (22, 8).
+  await game.eval(async (t) => {
+    t.hold('UP');
+    await t.until(() => t.flag('FLAG_HIDE_SEAFOAM_1F_BOULDER_1'), 900);
+    t.release();
+  });
+  await game.waitIdle();
+  expect(await game.eval((t) => t.field()?.map)).toBe('SeafoamIslands_1F');
   expect(await game.eval((t) => t.flag('FLAG_HIDE_SEAFOAM_1F_BOULDER_1'))).toBe(true);
   expect(await game.eval((t) => t.flag('FLAG_HIDE_SEAFOAM_B1F_BOULDER_1'))).toBe(false);
   expect(await boulder()).toBeUndefined();

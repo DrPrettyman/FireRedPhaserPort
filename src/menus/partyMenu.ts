@@ -166,6 +166,7 @@ import { GetMapName, GetMapSectionOfMap } from '../world/regionMap';
 import { CB2_BagMenuFromBattle, CB2_SetUpReshowBattleScreenAfterMenu, GoToBagMenu } from './itemMenu';
 import { SpecialVar } from './itemMenuState';
 import { CheckIfItemIsTMHMOrEvolutionStone } from './itemUse';
+import { InitTMCase, TMCASE_KEEP_PREV, TMCASE_REOPENING } from './tmCase';
 import { BeginEvolutionScene, setCB2_AfterEvolution } from './evolutionScene';
 import { CreateMonIcon, LoadMonIconPalettes, SetPartyHPBarSprite, SpriteCB_MonIcon, UpdateMonIconFrame } from './pokemonIcon';
 import { testEvent } from '../dev/testHooks';
@@ -3045,12 +3046,12 @@ function CB2_ReturnToBagMenu(): void {
   GoToBagMenu(K.ITEMMENULOCATION_LAST, K.OPEN_BAG_LAST, null);
 }
 
-/** CB2_ReturnToTMCaseMenu / CB2_ReturnToBerryPouchMenu: those screens don't exist, so back to the bag. */
+/** CB2_ReturnToTMCaseMenu */
 function CB2_ReturnToTMCaseMenu(): void {
-  console.warn('[party_menu] the TM case is not implemented; returning to the bag');
-  CB2_ReturnToBagMenu();
+  InitTMCase(TMCASE_REOPENING, null, TMCASE_KEEP_PREV);
 }
 
+/** CB2_ReturnToBerryPouchMenu: the berry pouch doesn't exist yet, so back to the bag. */
 function CB2_ReturnToBerryPouchMenu(): void {
   console.warn('[party_menu] the berry pouch is not implemented; returning to the bag');
   CB2_ReturnToBagMenu();

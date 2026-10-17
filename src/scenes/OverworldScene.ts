@@ -79,6 +79,7 @@ import { MultichoiceGridMenu, MultichoiceMenu } from '../ui/MultichoiceMenu';
 import type { ShopFieldView } from '../menus/shop';
 import { setBgMosaic } from '../world/BgMosaic';
 import { initRoamerTables, roamerMove, roamerMoveToOtherLocationSet, updateLocationHistoryForRoamer } from '../world/roamer';
+import { initWildPokemonArea } from '../menus/wildPokemonArea';
 import {
   checkForTrainersWantingBattle,
   COLLISION_FLAG_ELEVATION_MISMATCH,
@@ -325,6 +326,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       isWarpDoor: (behavior) => this.behaviors.isDoor(behavior),
     });
     initRoamerTables(this.assets.wildEncounters);
+    initWildPokemonArea(this.assets.wildEncounters);
     this.wild = new WildEncounters(this.assets.wildEncounters, this.state, this.defines, {
       startWildBattle: (mon) => this.startWildBattle(mon),
       startRoamerBattle: (mon) => this.runWildBattle(this.defines.require('BATTLE_TYPE_ROAMER'), mon), // StartRoamerBattle
