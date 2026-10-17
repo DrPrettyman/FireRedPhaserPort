@@ -27,6 +27,7 @@ import type { FieldListMenuProbe } from '../ui/FieldListMenu';
 import { storageProbe } from '../menus/pokemonStorage';
 import { itemPcProbe } from '../menus/itemPc';
 import { tmCaseProbe } from '../menus/tmCase';
+import { berryPouchProbe } from '../menus/berryPouch';
 import { hallOfFameProbe } from '../menus/hallOfFame';
 import { creditsProbe, creditsSkipToClosing } from '../menus/credits';
 import { regionMapProbe } from '../menus/regionMap';
@@ -543,6 +544,8 @@ function createApi(game: Phaser.Game) {
     itemPc: () => (gMain.callback2?.name === 'ItemPc_MainCB' ? itemPcProbe() : undefined),
     /** The TM case while it's open (menus/tmCase.ts): TMCASE_* type, task, scroll/row and the pocket's item ids in list order. */
     tmCase: () => (gMain.callback2?.name === 'CB2_Idle' ? tmCaseProbe() : undefined),
+    /** The berry pouch while it's open (menus/berryPouch.ts): BERRYPOUCH_* type, task, scroll/row and the pocket's berries in list order. */
+    berryPouch: () => (gMain.callback2?.name === 'CB2_BerryPouchIdle' ? berryPouchProbe() : undefined),
     /** The map name popup while Task_MapNamePopup runs: its text, decoded, and how many px of it are on screen. */
     mapNamePopup: () => {
       const f = field();
