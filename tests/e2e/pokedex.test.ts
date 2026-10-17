@@ -1,8 +1,9 @@
 // The Pokédex screen (menus/pokedexScreen.ts, pokedex_screen.c) from the start menu: the top menu with its seen /
 // owned counts, the numerical lists (Kanto, and national with the National Dex), scrolling them, the mon page
-// (up/down through the seen mons, back to the list), the search lists (A TO Z, LIGHTEST), and closing back to the
-// start menu and the field. The screen is on the GBA layer: its state comes from `t.pokedex()`; `ready` means its
-// task takes input.
+// (up/down through the seen mons, back to the list), the search lists (A TO Z, LIGHTEST), the habitat pages (from
+// the top menu and from a search list's A), closing back to the start menu and the field, and the "registered" page
+// after catching a new species. The screen is on the GBA layer: its state comes from `t.pokedex()`; `ready` means
+// its task takes input.
 
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
@@ -14,6 +15,7 @@ const DEX_MODE_NUMERICAL_KANTO = 9;
 const DEX_MODE_NUMERICAL_NATIONAL = 14;
 const DEX_MODE_ATOZ = 10;
 const DEX_MODE_LIGHTEST = 12;
+const DEX_CATEGORY_FOREST = 1;
 
 /** Replace the Pokédex flags with these national dex numbers; `national` turns on the National Dex (EnableNationalPokedex). */
 async function setDex(game: Game, seen: number[], caught: number[], national = false) {
@@ -251,4 +253,120 @@ test('the search lists: A TO Z lists the seen mons by name, LIGHTEST the caught 
   await game.screenshot('pokedex-lightest');
   await game.press('B');
   await waitReady(game, 'Task_PokedexScreen');
+});
+
+/** Wait (in the page) until the habitat page takes input on `page` with the cursor on `cursor`. */
+async function waitCategoryPage(game: Game, page: number, cursor: number) {
+  await game.eval(
+    (t, page, cursor) =>
+      t.until(() => {
+        const p = t.pokedex();
+        return p?.task === 'Task_DexScreen_CategorySubmenu' && p.state === 5 && p.ready && p.categoryPage?.pageNum === page && p.categoryPage.cursor === cursor;
+      }),
+    page,
+    cursor,
+  );
+  return (await game.eval((t) => t.pokedex()))!.categoryPage!;
+}
+
+test('a habitat shows its seen mons page by page; A zooms into a mon\'s page, B goes back', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown', x: 12, y: 14 });
+  // Forest's pages: [Caterpie, Metapod, Butterfree], [Weedle, Kakuna, Beedrill], two Hoenn pages, [Pidgey, ...].
+  // Seen: Caterpie, Butterfree, Weedle, Pidgey (caught: Caterpie). The Hoenn pages stay locked without the National Dex.
+  await setDex(game, [10, 12, 13, 16], [10]);
+  await openPokedex(game);
+  await selectMode(game, DEX_CATEGORY_FOREST);
+  await game.press('A');
+  let page = await waitCategoryPage(game, 0, 0);
+  expect(page).toMatchObject({ category: DEX_CATEGORY_FOREST, firstPage: 0, lastPage: 5, species: [10, 12] });
+  expect(page.picPixels.every((n) => n > 300)).toBe(true);
+  await game.screenshot('pokedex-habitat-forest');
+
+  // RIGHT moves the cursor to Butterfree, then flips to the next unlocked page (Weedle) with the cursor on its first mon.
+  await game.press('RIGHT');
+  await waitCategoryPage(game, 0, 1);
+  await game.press('RIGHT');
+  page = await waitCategoryPage(game, 1, 0);
+  expect(page.species).toEqual([13]);
+  // RIGHT again skips the locked Hoenn pages to Pidgey's page.
+  await game.press('RIGHT');
+  page = await waitCategoryPage(game, 4, 0);
+  expect(page.species).toEqual([16]);
+  // LEFT flips back to Weedle's page, the cursor on its last mon.
+  await game.press('LEFT');
+  await waitCategoryPage(game, 1, 0);
+  await game.press('LEFT');
+  page = await waitCategoryPage(game, 0, 1);
+  expect(page.species).toEqual([10, 12]);
+
+  // With BUTTON MODE LR, R and L flip pages too (DexScreen_InputHandler_GetShoulderInput).
+  await game.eval((t) => (t.state!.optionsButtonMode = t.define('OPTIONS_BUTTON_MODE_LR')));
+  await game.press('R');
+  await waitCategoryPage(game, 1, 0);
+  await game.press('L');
+  await waitCategoryPage(game, 0, 1);
+
+  // A on Butterfree: its page zooms out of the box.
+  await game.press('A');
+  await game.eval((t) => t.until(() => t.pokedex()?.task === 'Task_DexScreen_CategorySubmenu' && t.pokedex()?.state === 17 && !!t.pokedex()?.ready));
+  const mon = (await game.eval((t) => t.pokedex()))!.monPage!;
+  expect(mon).toMatchObject({ species: 12, name: 'BUTTERFREE', category: '??????????? POKéMON' });
+  expect(mon.picPixels).toBeGreaterThan(500);
+  // B zooms back into the habitat page on Butterfree.
+  await game.press('B');
+  await waitCategoryPage(game, 0, 1);
+  // B leaves the habitat for the top menu, still on FOREST.
+  await game.press('B');
+  expect((await waitReady(game, 'Task_PokedexScreen')).modeSelect?.selected).toBe(DEX_CATEGORY_FOREST);
+});
+
+test('A on a search list opens the mon\'s habitat page; B goes back to the list', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown', x: 12, y: 14 });
+  await setDex(game, [10, 12, 13, 16], [10]);
+  await openPokedex(game);
+  await selectMode(game, DEX_MODE_ATOZ);
+  await game.press('A');
+  // BUTTERFREE, CATERPIE, PIDGEY, WEEDLE
+  let list = (await waitReady(game, 'Task_DexScreen_CharacteristicOrder')).orderedList!;
+  expect(list.items).toEqual([12, 10, 16, 13]);
+  // A on BUTTERFREE: Forest's first page, the cursor on it (after Caterpie).
+  await game.press('A');
+  const page = await waitCategoryPage(game, 0, 1);
+  expect(page).toMatchObject({ category: DEX_CATEGORY_FOREST, species: [10, 12] });
+  // B: back to A TO Z on BUTTERFREE (parentOfCategoryMenu = 1).
+  await game.press('B');
+  list = (await waitReady(game, 'Task_DexScreen_CharacteristicOrder')).orderedList!;
+  expect(list).toMatchObject({ order: 1, species: 12 });
+  await game.press('B');
+  await waitReady(game, 'Task_PokedexScreen');
+});
+
+test('catching a new species shows its habitat page and Pokédex page, then the nickname prompt', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'Route1', x: 12, y: 7, party: [{ species: 'MEWTWO', level: 100, moves: ['PSYCHIC'] }] });
+  // Pidgeotto seen: the registered page is Pidgey's habitat page [Pidgey, Pidgeotto].
+  await setDex(game, [17], []);
+  await game.eval((t) => t.state!.bag.add(t.define('ITEM_MASTER_BALL'), 1));
+  await game.eval((t) => t.startWildBattle({ species: 'PIDGEY', level: 2 }));
+  await game.chooseAction('BAG');
+  await game.eval((t) => t.waitFrames(60)); // the bag fades in
+  await game.pressTimes('RIGHT', 2);
+  await game.pressTimes('A', 2);
+
+  // "Gotcha! PIDGEY was caught!", "PIDGEY's data was added to the POKéDEX." → the registered page.
+  await game.mashUntil((t) => t.pokedex()?.task === 'Task_DexScreen_RegisterMonToPokedex', { what: 'the registered page' });
+  await game.eval((t) => t.until(() => !!t.pokedex()?.ready));
+  const dex = (await game.eval((t) => t.pokedex()))!;
+  expect(dex.categoryPage).toMatchObject({ category: DEX_CATEGORY_FOREST, pageNum: 4, species: [16, 17], cursor: 0 });
+  expect(dex.monPage).toMatchObject({ species: 16, name: 'PIDGEY', category: 'TINY POKéMON' });
+  expect(dex.monPage!.flavorText).not.toBe('');
+  expect(await game.eval((t) => t.state!.dexCaught.has(16))).toBe(true);
+  await game.screenshot('pokedex-registered-pidgey');
+
+  // A closes it; the battle comes back with "Give a nickname to the captured PIDGEY?" (B: no).
+  await game.press('A');
+  await game.waitFor((t) => !t.pokedex() && /nickname/i.test(t.battle()?.message ?? ''), { what: 'the nickname prompt' });
+  await game.screenshot('pokedex-registered-back-to-battle');
+  await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the field after the battle' });
+  const party = await game.eval((t) => t.party());
+  expect(party[1]).toMatchObject({ species: 'PIDGEY', nickname: 'PIDGEY' });
 });

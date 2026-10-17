@@ -1,14 +1,14 @@
 // pokedex_screen.c on the GBA layer: the Pokédex from the start menu (CB2_OpenPokedexFromStartMenu → the top menu
 // (Task_PokedexScreen) → the numerical lists (Task_DexScreen_NumericalOrder) → the mon page
-// (Task_DexScreen_ShowMonPage); the search lists (Task_DexScreen_CharacteristicOrder); CB2_ClosePokedex back to the
-// field with the start menu open).
+// (Task_DexScreen_ShowMonPage); the habitat pages (Task_DexScreen_CategorySubmenu, from the top menu's habitats and
+// from A on a search list); the search lists (Task_DexScreen_CharacteristicOrder); CB2_ClosePokedex back to the
+// field with the start menu open), and the "registered in the Pokédex" page after a catch
+// (DexScreen_RegisterMonToPokedex, from the battle's Cmd_displaydexinfo).
 //
-// Structure (for the units that add the rest): `sPokedexScreenData` is struct PokedexScreenData, allocated by
-// DexScreen_LoadResources. The screen is one task whose function is swapped like the C's (`gTasks[taskId].func =
-// Task_DexScreen_X; sPokedexScreenData.state = 0`), each task a `switch (state)`. Not ported yet (later units):
-// Task_DexScreen_CategorySubmenu (the habitat pages, which the search lists' A also opens), the area page
-// (DexScreen_DrawMonAreaPage, A on the mon page) and the registering after a catch. Picking them leaves the screen
-// where it is (see the STUB comments).
+// Structure: `sPokedexScreenData` is struct PokedexScreenData, allocated by DexScreen_LoadResources. The screen is
+// one task whose function is swapped like the C's (`gTasks[taskId].func = Task_DexScreen_X;
+// sPokedexScreenData.state = 0`), each task a `switch (state)`. The area page (DexScreen_DrawMonAreaPage) is a
+// placeholder until W-dexarea's area page replaces it.
 //
 // The data (gPokedexEntries, the orders, the categories, the footprints) comes from menus/pokedex.ts. No audio:
 // the SE_* and cry calls are no-ops.
@@ -21,8 +21,10 @@ import {
   BG_TILE_H_FLIP,
   ChangeBgY,
   CopyBgTilemapBufferToVram,
+  CopyToBgTilemapBufferRect_ChangePalette,
   FillBgTilemapBufferRect,
   FillBgTilemapBufferRect_Palette0,
+  GetBgTilemapBuffer,
   HideBg,
   InitBgsFromTemplates,
   IsDma3ManagerBusyWithBgCopy,
@@ -33,26 +35,30 @@ import {
   type BgTemplate,
 } from '../gba/bg';
 import { gfx, gfx16, hasGfx, isGfxLoaded, loadGfx } from '../gba/gfx';
-import { ClearGpuRegBits, DISPCNT_WIN0_ON, DISPCNT_WIN1_ON, PALETTES_ALL, REG_OFFSET_BLDALPHA, REG_OFFSET_BLDCNT, REG_OFFSET_BLDY, REG_OFFSET_DISPCNT, RGB_BLACK, RGB_WHITE, SetGpuReg, SetGpuRegBits } from '../gba/hw';
+import { ClearGpuRegBits, DISPCNT_WIN0_ON, DISPCNT_WIN1_ON, PALETTES_ALL, REG_OFFSET_BLDALPHA, REG_OFFSET_BLDCNT, REG_OFFSET_BLDY, REG_OFFSET_DISPCNT, RGB, RGB_BLACK, RGB_WHITE, SetGpuReg, SetGpuRegBits } from '../gba/hw';
 import {
   BlitMenuInfoIcon,
   DestroyListMenuTask,
   LIST_CANCEL,
   LIST_HEADER,
   ListMenu_ProcessInput,
+  ListMenuAddCursorObjectInternal,
   ListMenuDefaultCursorMoveFunc,
   ListMenuGetScrollAndRow,
   ListMenuInit,
   ListMenuInitInRect,
   ListMenuLoadStdPalAt,
   ListMenuOverrideSetColors,
+  ListMenuRemoveCursorObject,
+  ListMenuUpdateCursorObject,
+  type CursorStruct,
   type ListMenuItem,
   type ListMenuTemplate,
   type ListMenuWindowRect,
 } from '../gba/listMenu';
-import { A_BUTTON, B_BUTTON, DPAD_DOWN, DPAD_UP, gMain, JOY_NEW, SetMainCallback2, SetVBlankCallback, START_BUTTON } from '../gba/main';
+import { A_BUTTON, B_BUTTON, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT, DPAD_UP, gMain, JOY_HELD, JOY_NEW, JOY_REPT, L_BUTTON, R_BUTTON, SetMainCallback2, SetVBlankCallback, START_BUTTON } from '../gba/main';
 import { DecompressAndCopyTileDataToVram, TEXT_COLOR_LIGHT_GRAY, TEXT_COLOR_TRANSPARENT, TEXT_COLOR_WHITE } from '../gba/menu';
-import { BeginNormalPaletteFade, BG_PLTT_ID, gPaletteFade, LoadPalette, PLTT_SIZE_4BPP, ResetPaletteFade, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
+import { BeginNormalPaletteFade, BG_PLTT_ID, gPaletteFade, LoadPalette, OBJ_PLTT_ID, PLTT_ID, PLTT_SIZE_4BPP, ResetPaletteFade, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
 import { ScanlineEffect_Stop } from '../gba/scanline';
 import { PlayCry_NormalNoDucking, PlaySE } from '../gba/sound';
 import { AnimateSprites, BuildOamBuffer, ProcessSpriteCopyRequests, ResetSpriteData } from '../gba/sprite';
@@ -82,10 +88,10 @@ import {
 import { isNationalDexEnabled } from '../script/specials';
 import { EOS, EXT_CTRL_CODE_BEGIN } from '../text/charmap';
 import { FONT_NORMAL, FONT_SMALL } from '../text/Font';
-import { encodeRaw, speciesName, text } from './common';
+import { concat, ConvertIntToDecimalStringN, encodeRaw, speciesName, STR_CONV_MODE_RIGHT_ALIGN, text } from './common';
 import { CB2_ReturnToFieldWithOpenMenu } from './fieldCallbacks';
 import { RemoveScrollIndicatorArrowPair, AddScrollIndicatorArrowPair, type ScrollArrowsTemplate } from './menuIndicators';
-import { DexScreen_GetSetPokedexFlag, FLAG_GET_CAUGHT, FLAG_GET_SEEN, NationalPokedexNumToSpecies, pokedexData } from './pokedex';
+import { DexScreen_GetSetPokedexFlag, FLAG_GET_CAUGHT, FLAG_GET_SEEN, FLAG_SET_CAUGHT, FLAG_SET_SEEN, NationalPokedexNumToSpecies, pokedexData } from './pokedex';
 
 // include/pokedex_screen.h
 const DEX_CATEGORY_COUNT = 9;
@@ -149,6 +155,8 @@ export interface PokedexScreenData {
   orderedDexCount: number;
   windowIds: number[];
   dexSpecies: number;
+  /** The page turn's copy of BG3 / BG2 / BG1's tilemaps (0x400 entries each), while a page flips */
+  bgBufsMem: Uint16Array | null;
   scrollArrowsTaskId: number;
   categoryPageCursorTaskId: number;
   modeSelectCursorPosBak: number;
@@ -206,6 +214,7 @@ function initialState(): PokedexScreenData {
     orderedDexCount: 0,
     windowIds: new Array(16).fill(WINDOW_NONE),
     dexSpecies: 0,
+    bgBufsMem: null,
     scrollArrowsTaskId: 0xff,
     categoryPageCursorTaskId: 0xff,
     modeSelectCursorPosBak: 0,
@@ -388,6 +397,64 @@ const sCategoryPageIconCoords: [number, number, number, number][][] = [
   ],
 ];
 
+/** sDexScreen_CategoryCursorPals: the page's unselected frame colours, then the selection's pulse (4 steps) */
+const sDexScreen_CategoryCursorPals = [
+  RGB(24, 22, 17), RGB(26, 24, 20),
+  RGB(26, 20, 15), RGB(27, 23, 19),
+  RGB(28, 18, 15), RGB(28, 22, 19),
+  RGB(30, 16, 13), RGB(29, 21, 18),
+  RGB(28, 18, 15), RGB(28, 22, 19),
+  RGB(26, 20, 15), RGB(27, 23, 19),
+]; // prettier-ignore
+
+/** sWindowTemplate_CategoryMonIcon / sWindowTemplate_CategoryMonInfo (placed per slot) */
+const sWindowTemplate_CategoryMonIcon: WindowTemplate = { bg: 2, tilemapLeft: 0, tilemapTop: 0, width: 8, height: 8, paletteNum: 0, baseBlock: 0x0000 };
+const sWindowTemplate_CategoryMonInfo: WindowTemplate = { bg: 1, tilemapLeft: 0, tilemapTop: 0, width: 8, height: 5, paletteNum: 0, baseBlock: 0x0000 };
+
+/** sDexCategoryNamePtrs */
+const sDexCategoryNamePtrs = [
+  'gText_DexCategory_GrasslandPkmn',
+  'gText_DexCategory_ForestPkmn',
+  'gText_DexCategory_WatersEdgePkmn',
+  'gText_DexCategory_SeaPkmn',
+  'gText_DexCategory_CavePkmn',
+  'gText_DexCategory_MountainPkmn',
+  'gText_DexCategory_RoughTerrainPkmn',
+  'gText_DexCategory_UrbanPkmn',
+  'gText_DexCategory_RarePkmn',
+];
+
+/** sDexScreenPageTurnColumns[step][column]: the old page's column shown there (30 = blank) */
+const sDexScreenPageTurnColumns: number[][] = [
+  [30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+  [5, 11, 17, 23, 29, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+  [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+  [2, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+  [2, 4, 5, 7, 8, 10, 11, 13, 14, 16, 17, 19, 20, 22, 23, 25, 26, 28, 29, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30],
+  [1, 2, 3, 4, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 19, 20, 21, 23, 24, 25, 27, 28, 29, 30, 30, 30, 30, 30, 30, 30],
+  [1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 21, 22, 23, 25, 26, 27, 28, 29, 30, 30, 30, 30],
+  [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 30, 30],
+  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30],
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29],
+];
+
+const sScrollArrowsTemplate_CategoryMenu: ScrollArrowsTemplate = {
+  firstArrowType: 0,
+  firstX: 16,
+  firstY: 80,
+  secondArrowType: 1,
+  secondX: 224,
+  secondY: 80,
+  fullyUpThreshold: 0,
+  fullyDownThreshold: 0,
+  tileTag: 2000,
+  palTag: 0xffff,
+  palNum: 1,
+};
+
+/** sCursorStruct_CategoryPage: the red outline around the selected mon's info box */
+const sCursorStruct_CategoryPage: CursorStruct = { left: 0, top: 160, rowWidth: 64, rowHeight: 40, tileTag: 2002, palTag: 0xffff, palNum: 4 };
+
 /** Every graphics symbol the screen loads (preload them before it opens). */
 export function pokedexScreenGfxSymbols(): string[] {
   const syms = new Set([
@@ -403,6 +470,11 @@ export function pokedexScreenGfxSymbols(): string[] {
     'gMenuInfoElements2_Pal',
     'sRedArrowOtherGfx',
     'sRedArrowPal',
+    // the habitat pages
+    'sCategoryMonInfoBgTiles',
+    'sCategoryPageIconWindowBg',
+    'sDexScreen_CaughtIcon',
+    'sSelectorOutlineGfx',
   ]);
   for (const [tiles, pal] of sTopMenuSelectionIconGfxPtrs) syms.add(tiles).add(pal);
   return [...syms];
@@ -577,9 +649,10 @@ function Task_PokedexScreen(taskId: number): void {
           d.state = 1;
         } else if (input >= K.DEX_CATEGORY_GRASSLAND && input <= K.DEX_CATEGORY_RARE) {
           if (DexScreen_IsCategoryUnlocked(input)) {
-            // STUB (W-dex unit 3): Task_DexScreen_CategorySubmenu isn't ported, so a habitat stays inert. The C:
-            // RemoveScrollIndicatorArrowPair; d.category = input; fade out; state 7.
-            console.warn('[pokedex] the habitat pages are not implemented yet');
+            RemoveScrollIndicatorArrowPair(d.scrollArrowsTaskId);
+            d.category = input;
+            BeginNormalPaletteFade(~0x8000 >>> 0, 0, 0, 16, RGB_WHITEALPHA);
+            d.state = 7;
           }
         } else if (input === DEX_MODE(DEX_ORDER_NUMERICAL_KANTO) || input === DEX_MODE(DEX_ORDER_NUMERICAL_NATIONAL)) {
           RemoveScrollIndicatorArrowPair(d.scrollArrowsTaskId);
@@ -598,7 +671,17 @@ function Task_PokedexScreen(taskId: number): void {
       if (JOY_NEW(B_BUTTON)) d.state = 1;
       break;
     case 7:
-      // Task_DexScreen_CategorySubmenu: W-dex unit 3 (see case 6).
+      destroyModeSelectList(d);
+      FillBgTilemapBufferRect_Palette0(1, 0, 0, 0, 32, 20);
+      CopyBgTilemapBufferToVram(1);
+      DexScreen_RemoveWindow(d, 'modeSelectWindowId');
+      DexScreen_RemoveWindow(d, 'selectionIconWindowId');
+      DexScreen_RemoveWindow(d, 'dexCountsWindowId');
+      d.pageNum = 0;
+      d.categoryCursorPosInPage = 0;
+      d.parentOfCategoryMenu = 0;
+      gTasks[taskId].func = Task_DexScreen_CategorySubmenu;
+      d.state = 0;
       break;
     case 8:
       destroyModeSelectList(d);
@@ -954,10 +1037,9 @@ function Task_DexScreen_CharacteristicOrder(taskId: number): void {
         // A opens the mon's habitat page (DexScreen_LookUpCategoryBySpecies picks the category, page and slot),
         // where A again shows the mon page.
         if ((d.characteristicMenuInput >>> 16) & 1 && !DexScreen_LookUpCategoryBySpecies(d.characteristicMenuInput & 0xffff)) {
-          // STUB (W-dex unit 3): Task_DexScreen_CategorySubmenu isn't ported, so A stays inert here. The C:
-          // RemoveScrollIndicatorArrowPair(d.scrollArrowsTaskId); BeginNormalPaletteFade(~0x8000, 0, 0, 16,
-          // RGB_WHITEALPHA); d.state = 7;
-          console.warn('[pokedex] the habitat pages are not implemented yet');
+          RemoveScrollIndicatorArrowPair(d.scrollArrowsTaskId);
+          BeginNormalPaletteFade(~0x8000 >>> 0, 0, 0, 16, RGB_WHITEALPHA);
+          d.state = 7;
         }
       } else if (JOY_NEW(B_BUTTON)) {
         RemoveScrollIndicatorArrowPair(d.scrollArrowsTaskId);
@@ -966,10 +1048,13 @@ function Task_DexScreen_CharacteristicOrder(taskId: number): void {
       }
       break;
     case 7:
-      // STUB (W-dex unit 3), the C: DexScreen_DestroyDexOrderListMenu(d.dexOrderId);
-      // FillBgTilemapBufferRect_Palette0(1, 0, 0, 0, 32, 20); CopyBgTilemapBufferToVram(1);
-      // DexScreen_RemoveWindow(d, 'numericalOrderWindowId'); d.parentOfCategoryMenu = 1;
-      // gTasks[taskId].func = Task_DexScreen_CategorySubmenu; d.state = 0;
+      DexScreen_DestroyDexOrderListMenu(d.dexOrderId);
+      FillBgTilemapBufferRect_Palette0(1, 0x000, 0, 0, 32, 20);
+      CopyBgTilemapBufferToVram(1);
+      DexScreen_RemoveWindow(d, 'numericalOrderWindowId');
+      d.parentOfCategoryMenu = 1;
+      gTasks[taskId].func = Task_DexScreen_CategorySubmenu;
+      d.state = 0;
       break;
   }
 }
@@ -1018,6 +1103,726 @@ function DexScreen_LookUpCategoryBySpecies(species: number): boolean {
     }
   }
   return true;
+}
+
+// ------------------------------------------------------------------ the habitat pages
+
+/** u8 arithmetic for sPokedexScreenData->data[] */
+const u8 = (v: number) => v & 0xff;
+
+/**
+ * Port: the pics, palettes and footprints of the mons on a habitat page load on demand (see DexScreen_LoadMonGfx).
+ * Starts their loads and returns whether they're all in.
+ */
+function DexScreen_LoadCategoryPageGfx(category: number, pageNum: number): boolean {
+  const page = pokedexData.categories[category]?.[pageNum] ?? [];
+  return page.map((species) => !(DexScreen_CanShowMonInDex(species) && DexScreen_GetSetPokedexFlag(state, species, FLAG_GET_SEEN, true)) || DexScreen_LoadMonGfx(species)).every(Boolean);
+}
+
+/** The graphics the registered page after catching `species` draws: the screen's and its habitat page's mons'. */
+export function dexRegisterGfxSymbols(species: number): string[] {
+  const syms = new Set(pokedexScreenGfxSymbols());
+  for (const category of pokedexData.categories) {
+    for (const page of category) {
+      if (!page.includes(species)) continue;
+      for (const s of page) dexMonGfxSymbols(s).forEach((sym) => syms.add(sym));
+    }
+  }
+  return [...syms];
+}
+
+/** Task_DexScreen_CategorySubmenu: a habitat's pages (from the top menu, or a search list's A), and its mons' pages */
+function Task_DexScreen_CategorySubmenu(taskId: number): void {
+  const d = sd();
+  switch (d.state) {
+    case 0:
+      HideBg(3);
+      HideBg(2);
+      HideBg(1);
+      DexScreen_GetPageLimitsForCategory(d.category);
+      if (d.pageNum < d.firstPageInCategory) d.pageNum = d.firstPageInCategory;
+      d.state = 2;
+      break;
+    case 1:
+      DexScreen_DestroyCategoryPageMonIconAndInfoWindows();
+      HideBg(2);
+      HideBg(1);
+      switch (d.parentOfCategoryMenu) {
+        case 0:
+        default:
+          gTasks[taskId].func = Task_PokedexScreen;
+          break;
+        case 1:
+          gTasks[taskId].func = Task_DexScreen_CharacteristicOrder;
+          break;
+      }
+      d.state = 0;
+      break;
+    case 2:
+      // Port: wait for the page's mon graphics (a frame or two the first time)
+      if (!DexScreen_LoadCategoryPageGfx(d.category, d.pageNum)) break;
+      DexScreen_CreateCategoryListGfx(false);
+      CopyBgTilemapBufferToVram(3);
+      CopyBgTilemapBufferToVram(2);
+      CopyBgTilemapBufferToVram(1);
+      DexScreen_CreateCategoryPageSelectionCursor(0xff);
+      d.state = 3;
+      break;
+    case 3:
+      BeginNormalPaletteFade(~0x8000 >>> 0, 0, 16, 0, RGB_WHITEALPHA);
+      ShowBg(3);
+      ShowBg(2);
+      ShowBg(1);
+      d.state = 4;
+      break;
+    case 4:
+      d.scrollArrowsTaskId = DexScreen_CreateCategoryMenuScrollArrows();
+      d.categoryPageCursorTaskId = ListMenuAddCursorObjectInternal(sCursorStruct_CategoryPage, 0);
+      d.state = 5;
+      break;
+    case 5: {
+      DexScreen_CreateCategoryPageSelectionCursor(d.categoryCursorPosInPage);
+      DexScreen_UpdateCategoryPageCursorObject(d.categoryPageCursorTaskId, d.categoryCursorPosInPage, d.numMonsOnPage);
+      d.modeSelectCursorPosBak = d.pageNum;
+      let pageFlipCmd = 0;
+      if (JOY_NEW(A_BUTTON) && DexScreen_GetSetPokedexFlag(state, d.pageSpecies[d.categoryCursorPosInPage], FLAG_GET_SEEN, true)) {
+        RemoveScrollIndicatorArrowPair(d.scrollArrowsTaskId);
+        ListMenuRemoveCursorObject(d.categoryPageCursorTaskId, 0);
+        d.state = 12;
+        break;
+      }
+      if (!JOY_HELD(R_BUTTON) && JOY_REPT(DPAD_LEFT)) {
+        if (d.categoryCursorPosInPage !== 0) {
+          d.categoryCursorPosInPage--;
+          PlaySE(K.SE_SELECT);
+          break;
+        } else {
+          pageFlipCmd = 1;
+        }
+      }
+      if (!JOY_HELD(R_BUTTON) && JOY_REPT(DPAD_RIGHT)) {
+        if (d.categoryCursorPosInPage < d.numMonsOnPage - 1) {
+          d.categoryCursorPosInPage++;
+          PlaySE(K.SE_SELECT);
+          break;
+        } else {
+          pageFlipCmd = 2;
+        }
+      }
+      if (pageFlipCmd === 0) pageFlipCmd = DexScreen_InputHandler_GetShoulderInput();
+      switch (pageFlipCmd) {
+        case 0: // No action
+          break;
+        case 1: // Left: the previous unlocked page, or leave the habitat at the first
+          while (d.pageNum > d.firstPageInCategory) {
+            d.pageNum--;
+            if (DexScreen_IsPageUnlocked(d.category, d.pageNum)) {
+              d.state = 8;
+              break;
+            }
+          }
+          if (d.state !== 8) d.state = 6;
+          break;
+        case 2: // Right: the next unlocked page, or leave the habitat at the last
+          while (d.pageNum < d.lastPageInCategory - 1) {
+            d.pageNum++;
+            if (DexScreen_IsPageUnlocked(d.category, d.pageNum)) {
+              d.state = 10;
+              break;
+            }
+          }
+          if (d.state !== 10) d.state = 6;
+          break;
+      }
+      if (JOY_NEW(B_BUTTON)) d.state = 6;
+      break;
+    }
+    case 6:
+    case 7:
+      RemoveScrollIndicatorArrowPair(d.scrollArrowsTaskId);
+      ListMenuRemoveCursorObject(d.categoryPageCursorTaskId, 0);
+      BeginNormalPaletteFade(~0x8000 >>> 0, 0, 0, 16, RGB_WHITEALPHA);
+      d.state = 1;
+      break;
+    case 8:
+    case 10:
+      DexScreen_DestroyCategoryPageMonIconAndInfoWindows();
+      DexScreen_CreateCategoryPageSelectionCursor(0xff);
+      ListMenuUpdateCursorObject(d.categoryPageCursorTaskId, 0, 0xa0, 0);
+      d.categoryPageSelectionCursorTimer = 0;
+      d.data[0] = 0;
+      d.state++;
+      break;
+    case 9:
+      if (DexScreen_FlipCategoryPageInDirection(0)) {
+        d.categoryCursorPosInPage = d.numMonsOnPage - 1;
+        d.state = 5;
+      }
+      break;
+    case 11:
+      if (DexScreen_FlipCategoryPageInDirection(1)) {
+        d.categoryCursorPosInPage = 0;
+        d.state = 5;
+      }
+      break;
+    case 12:
+      d.dexSpecies = d.pageSpecies[d.categoryCursorPosInPage];
+      PlaySE(K.SE_SELECT);
+      d.state = 14;
+      break;
+    case 13:
+      RemoveDexPageWindows();
+      d.state = 4;
+      break;
+    case 14:
+      if (!DexScreen_LoadMonGfx(d.dexSpecies)) break; // port: loaded with the page already
+      DexScreen_DrawMonDexPage(false);
+      d.state = 15;
+      break;
+    case 15:
+      d.data[0] = 0;
+      d.data[1] = 0;
+      d.state++;
+    // fallthrough
+    case 16:
+      if (!DexScreen_ZoomInFrame()) break;
+      CopyBgTilemapBufferToVram(3);
+      CopyBgTilemapBufferToVram(2);
+      CopyBgTilemapBufferToVram(1);
+      CopyBgTilemapBufferToVram(0);
+      PlayCry_NormalNoDucking(d.dexSpecies, 0, K.CRY_VOLUME_RS, K.CRY_PRIORITY_NORMAL);
+      d.data[0] = 0;
+      d.state = 17;
+      break;
+    case 17:
+      if (JOY_NEW(A_BUTTON)) {
+        RemoveDexPageWindows();
+        FillBgTilemapBufferRect_Palette0(1, 0x000, 0, 2, 30, 16);
+        CopyBgTilemapBufferToVram(1);
+        d.state = 21;
+      } else if (JOY_NEW(B_BUTTON)) {
+        d.state = 18;
+      } else {
+        DexScreen_InputHandler_StartToCry();
+      }
+      break;
+    case 18:
+      DexScreen_CreateCategoryListGfx(false);
+      DexScreen_DexPageZoomEffectFrame(0, 6);
+      CopyBgTilemapBufferToVram(3);
+      CopyBgTilemapBufferToVram(2);
+      CopyBgTilemapBufferToVram(1);
+      CopyBgTilemapBufferToVram(0);
+      d.state = 19;
+      break;
+    case 19:
+      d.data[0] = 0;
+      d.data[1] = 6;
+      d.state++;
+    // fallthrough
+    case 20:
+      if (d.data[1]) {
+        if (d.data[0]) {
+          d.data[1]--;
+          FillBgTilemapBufferRect_Palette0(0, 0x000, 0, 2, 30, 16);
+          DexScreen_DexPageZoomEffectFrame(0, d.data[1]);
+          CopyBgTilemapBufferToVram(0);
+          d.data[0] = 1;
+        } else {
+          d.data[0] = u8(d.data[0] - 1);
+        }
+      } else {
+        FillBgTilemapBufferRect_Palette0(0, 0x000, 0, 2, 30, 16);
+        CopyBgTilemapBufferToVram(0);
+        d.state = 13;
+      }
+      break;
+    // The area page (DexScreen_DrawMonAreaPage / DexScreen_DestroyAreaScreenResources)
+    case 21:
+      DexScreen_DrawMonAreaPage();
+      d.state = 22;
+      break;
+    case 22:
+      CopyBgTilemapBufferToVram(3);
+      CopyBgTilemapBufferToVram(2);
+      CopyBgTilemapBufferToVram(1);
+      CopyBgTilemapBufferToVram(0);
+      d.state = 23;
+      break;
+    case 23:
+      if (JOY_NEW(A_BUTTON) || JOY_NEW(B_BUTTON)) {
+        const back = JOY_NEW(B_BUTTON) && !JOY_NEW(A_BUTTON);
+        FillBgTilemapBufferRect_Palette0(2, 0x000, 0, 2, 30, 16);
+        FillBgTilemapBufferRect_Palette0(1, 0x000, 0, 2, 30, 16);
+        FillBgTilemapBufferRect_Palette0(0, 0x000, 0, 2, 30, 16);
+        CopyBgTilemapBufferToVram(2);
+        CopyBgTilemapBufferToVram(1);
+        CopyBgTilemapBufferToVram(0);
+        d.state = back ? 24 : 26; // A: back to the habitat page; B: back to the mon page
+      } else {
+        DexScreen_InputHandler_StartToCry();
+      }
+      break;
+    case 24:
+      DexScreen_DestroyAreaScreenResources();
+      d.state = 25;
+      break;
+    case 25:
+      DexScreen_DrawMonDexPage(false);
+      CopyBgTilemapBufferToVram(3);
+      CopyBgTilemapBufferToVram(2);
+      CopyBgTilemapBufferToVram(1);
+      CopyBgTilemapBufferToVram(0);
+      d.state = 17;
+      break;
+    case 26:
+      DexScreen_DestroyAreaScreenResources();
+      d.state = 18;
+      break;
+  }
+}
+
+/**
+ * The mon page's zoom in (Task_DexScreen_CategorySubmenu 16 / Task_DexScreen_RegisterMonToPokedex 10): the frame
+ * grows from the selected box over 6 steps (one wait frame first, data[0] being a u8). TRUE once it's done and BG0's
+ * frame is cleared (the full-size one is on BG3).
+ */
+function DexScreen_ZoomInFrame(): boolean {
+  const d = sd();
+  if (d.data[1] < 6) {
+    if (d.data[0]) {
+      DexScreen_DexPageZoomEffectFrame(0, d.data[1]);
+      CopyBgTilemapBufferToVram(0);
+      d.data[0] = 4;
+      d.data[1]++;
+    } else {
+      d.data[0] = u8(d.data[0] - 1);
+    }
+    return false;
+  }
+  FillBgTilemapBufferRect_Palette0(0, 0x000, 0, 2, 30, 16);
+  return true;
+}
+
+/** DexScreen_CreateCategoryMenuScrollArrows: the left / right arrows, hidden at the first / last unlocked page */
+function DexScreen_CreateCategoryMenuScrollArrows(): number {
+  const d = sd();
+  const template = { ...sScrollArrowsTemplate_CategoryMenu, fullyUpThreshold: d.firstPageInCategory, fullyDownThreshold: d.lastPageInCategory - 1 };
+  d.modeSelectCursorPosBak = d.pageNum;
+  return AddScrollIndicatorArrowPair(template, () => sd().modeSelectCursorPosBak);
+}
+
+/** DexScreen_InputHandler_GetShoulderInput: 1 flips left, 2 right, 0 nothing (only with BUTTON MODE LR or L=A) */
+function DexScreen_InputHandler_GetShoulderInput(): number {
+  switch (state.optionsButtonMode) {
+    case K.OPTIONS_BUTTON_MODE_L_EQUALS_A:
+      if (gMain.heldKeys & R_BUTTON && gMain.newKeys & DPAD_LEFT) return 1;
+      else if (gMain.heldKeys & R_BUTTON && gMain.newKeys & DPAD_RIGHT) return 2;
+      else return 0;
+    case K.OPTIONS_BUTTON_MODE_LR:
+      if (gMain.newKeys & L_BUTTON) return 1;
+      else if (gMain.newKeys & R_BUTTON) return 2;
+      else return 0;
+    case K.OPTIONS_BUTTON_MODE_HELP:
+    default:
+      return 0;
+  }
+}
+
+/** DexScreen_DrawMonPicInCategoryPage: the slot's round pic window (BG2) and its info box (BG1: No., name, caught ball) */
+function DexScreen_DrawMonPicInCategoryPage(species: number, slot: number, numSlots: number): boolean {
+  const d = sd();
+  const coords = sCategoryPageIconCoords[numSlots - 1][slot];
+  CopyToBgTilemapBufferRect_ChangePalette(3, gfx16('sCategoryPageIconWindowBg'), coords[0], coords[1], 8, 8, slot + 5);
+  if (d.categoryMonWindowIds[slot] === WINDOW_NONE) {
+    const template = { ...sWindowTemplate_CategoryMonIcon, tilemapLeft: coords[0], tilemapTop: coords[1], paletteNum: slot + 1, baseBlock: slot * 64 + 8 };
+    d.categoryMonWindowIds[slot] = AddWindow(template);
+    FillWindowPixelBuffer(d.categoryMonWindowIds[slot], PIXEL_FILL(0));
+    DexScreen_LoadMonPicInWindow(d.categoryMonWindowIds[slot], species, slot * 16 + 16);
+    PutWindowTilemap(d.categoryMonWindowIds[slot]);
+    CopyWindowToVram(d.categoryMonWindowIds[slot], COPYWIN_GFX);
+  } else {
+    PutWindowTilemap(d.categoryMonWindowIds[slot]);
+  }
+
+  if (d.categoryMonInfoWindowIds[slot] === WINDOW_NONE) {
+    if (species !== K.SPECIES_NONE) {
+      const template = { ...sWindowTemplate_CategoryMonInfo, tilemapLeft: coords[2], tilemapTop: coords[3], baseBlock: slot * 40 + 0x108 };
+      const win = (d.categoryMonInfoWindowIds[slot] = AddWindow(template));
+      CopyToWindowPixelBuffer(win, gfx('sCategoryMonInfoBgTiles'), 0, 0);
+      DexScreen_PrintMonDexNo(win, FONT_SMALL, species, 12, 0);
+      DexScreen_AddTextPrinterParameterized(win, FONT_NORMAL, speciesName(species), 2, 13, 0);
+      if (DexScreen_GetSetPokedexFlag(state, species, FLAG_GET_CAUGHT, true)) BlitBitmapRectToWindow(win, gfx('sDexScreen_CaughtIcon'), 0, 0, 8, 8, 2, 3, 8, 8);
+      PutWindowTilemap(win);
+      CopyWindowToVram(win, COPYWIN_GFX);
+    }
+  } else {
+    PutWindowTilemap(d.categoryMonInfoWindowIds[slot]);
+  }
+  return true;
+}
+
+/** DexScreen_DestroyCategoryPageMonIconAndInfoWindows */
+function DexScreen_DestroyCategoryPageMonIconAndInfoWindows(): void {
+  const d = sd();
+  for (let i = 0; i < 4; i++) {
+    for (const ids of [d.categoryMonWindowIds, d.categoryMonInfoWindowIds]) {
+      if (ids[i] !== WINDOW_NONE) {
+        RemoveWindow(ids[i]);
+        ids[i] = WINDOW_NONE;
+      }
+    }
+  }
+}
+
+/** DexScreen_PrintCategoryPageNumbers: "PAGE  1/ 3" on the top bar's right (x / y are unused, as in the C) */
+function DexScreen_PrintCategoryPageNumbers(_windowId: number, currentPage: number, totalPages: number, _x: number, _y: number): void {
+  const buffer = concat(text('gText_Page'), ConvertIntToDecimalStringN(currentPage, STR_CONV_MODE_RIGHT_ALIGN, 2), [K.CHAR_SLASH, EOS], ConvertIntToDecimalStringN(totalPages, STR_CONV_MODE_RIGHT_ALIGN, 2));
+  DexScreen_PrintStringWithAlignment(buffer, TEXT_RIGHT);
+}
+
+/** DexScreen_CreateCategoryListGfx: the habitat page (justRegistered: the name centred, no page numbers or controls) */
+function DexScreen_CreateCategoryListGfx(justRegistered: boolean): boolean {
+  const d = sd();
+  FillBgTilemapBufferRect_Palette0(3, 2, 0, 0, 30, 20);
+  FillBgTilemapBufferRect_Palette0(2, 0, 0, 0, 32, 20);
+  FillBgTilemapBufferRect_Palette0(1, 0, 0, 0, 32, 20);
+  DexScreen_CreateCategoryPageSpeciesList(d.category, d.pageNum);
+  FillWindowPixelBuffer(0, PIXEL_FILL(15));
+  if (justRegistered) {
+    DexScreen_PrintStringWithAlignment(text(sDexCategoryNamePtrs[d.category]), TEXT_CENTER);
+  } else {
+    DexScreen_PrintStringWithAlignment(text(sDexCategoryNamePtrs[d.category]), TEXT_LEFT);
+    DexScreen_PrintCategoryPageNumbers(0, DexScreen_PageNumberToRenderablePages(d.pageNum), DexScreen_PageNumberToRenderablePages(d.lastPageInCategory - 1), 160, 2);
+  }
+  CopyWindowToVram(0, COPYWIN_GFX);
+  FillWindowPixelBuffer(1, PIXEL_FILL(15));
+  if (!justRegistered) DexScreen_PrintControlInfo(text('gText_PickFlipPageCheckCancel'));
+  CopyWindowToVram(1, COPYWIN_GFX);
+  for (let i = 0; i < 4; i++) {
+    if (d.pageSpecies[i] !== 0xffff) DexScreen_DrawMonPicInCategoryPage(d.pageSpecies[i], i, d.numMonsOnPage);
+  }
+  return false;
+}
+
+/**
+ * DexScreen_CreateCategoryPageSelectionCursor: the round windows' frame colours (BG palettes 5-8, colours 2 and 8);
+ * the selected slot's pulse every 4 frames, and the outline cursor's colour (OBJ palette 4, colour 1). 0xFF resets.
+ */
+function DexScreen_CreateCategoryPageSelectionCursor(cursorPos: number): void {
+  const d = sd();
+  const pal = (i: number) => [sDexScreen_CategoryCursorPals[i]];
+  if (cursorPos === 0xff) {
+    for (let i = 0; i < 4; i++) {
+      LoadPalette(pal(0), PLTT_ID(i) + PLTT_ID(5) + 2, 2);
+      LoadPalette(pal(1), PLTT_ID(i) + PLTT_ID(5) + 8, 2);
+    }
+    LoadPalette(pal(0), 0x141, 2);
+    d.categoryPageSelectionCursorTimer = 0;
+  } else {
+    d.categoryPageSelectionCursorTimer++;
+    if (d.categoryPageSelectionCursorTimer === 16) d.categoryPageSelectionCursorTimer = 0;
+    const palIdx = d.categoryPageSelectionCursorTimer >> 2;
+    for (let i = 0; i < 4; i++) {
+      if (i === cursorPos) {
+        LoadPalette(pal(2 * palIdx + 2), PLTT_ID(i) + PLTT_ID(5) + 2, 2);
+        LoadPalette(pal(2 * palIdx + 3), PLTT_ID(i) + PLTT_ID(5) + 8, 2);
+      } else {
+        LoadPalette(pal(0), PLTT_ID(i) + PLTT_ID(5) + 2, 2);
+        LoadPalette(pal(1), PLTT_ID(i) + PLTT_ID(5) + 8, 2);
+      }
+    }
+    LoadPalette(pal(2 * palIdx + 2), OBJ_PLTT_ID(4) + 1, 2);
+  }
+}
+
+/** DexScreen_UpdateCategoryPageCursorObject: the outline around the selected slot's info box */
+function DexScreen_UpdateCategoryPageCursorObject(taskId: number, cursorPos: number, numMonsInPage: number): void {
+  const coords = sCategoryPageIconCoords[numMonsInPage - 1][cursorPos];
+  ListMenuUpdateCursorObject(taskId, coords[2] * 8, coords[3] * 8, 0);
+}
+
+/** DexPage_TileBuffer_CopyCol: one 20-tile column of a 32-wide tilemap */
+function DexPage_TileBuffer_CopyCol(srcBuf: Uint16Array, srcCol: number, dstBuf: Uint16Array, dstCol: number): boolean {
+  for (let i = 0; i < 20; i++) dstBuf[dstCol + i * 32] = srcBuf[srcCol + i * 32];
+  return false;
+}
+
+/** DexPage_TileBuffer_FillCol */
+function DexPage_TileBuffer_FillCol(tileNo: number, tileBuf: Uint16Array, x: number): boolean {
+  for (let i = 0; i < 20; i++) tileBuf[x + i * 32] = tileNo;
+  return false;
+}
+
+/** DexScreen_TurnCategoryPage_BgEffect: step `page` of the page turn (the saved page squeezed into the left columns) */
+function DexScreen_TurnCategoryPage_BgEffect(page: number): boolean {
+  const d = sd();
+  const bg1buff = GetBgTilemapBuffer(1)!;
+  const bg2buff = GetBgTilemapBuffer(2)!;
+  const bg3buff = GetBgTilemapBuffer(3)!;
+  const mem = d.bgBufsMem!;
+  const bg1mem = mem.subarray(0x800);
+  const bg2mem = mem.subarray(0x400);
+  const bg3mem = mem.subarray(0x000);
+  for (let dstCol = 0; dstCol < 30; dstCol++) {
+    const srcCol = sDexScreenPageTurnColumns[page][dstCol];
+    if (srcCol === 30) {
+      DexPage_TileBuffer_FillCol(0x000, bg1buff, dstCol);
+      DexPage_TileBuffer_FillCol(0x000, bg2buff, dstCol);
+      DexPage_TileBuffer_FillCol(0x00c, bg3buff, dstCol);
+    } else {
+      DexPage_TileBuffer_CopyCol(bg1mem, srcCol, bg1buff, dstCol);
+      DexPage_TileBuffer_CopyCol(bg2mem, srcCol, bg2buff, dstCol);
+      DexPage_TileBuffer_CopyCol(bg3mem, srcCol, bg3buff, dstCol);
+    }
+  }
+  CopyBgTilemapBufferToVram(1);
+  CopyBgTilemapBufferToVram(2);
+  CopyBgTilemapBufferToVram(3);
+  return false;
+}
+
+/**
+ * DexScreen_FlipCategoryPageInDirection: 0 = left (the new page unfolds from the left), 1 = right (the old page
+ * folds away to the left, then the new one fades in). TRUE when done.
+ */
+function DexScreen_FlipCategoryPageInDirection(direction: number): boolean {
+  const d = sd();
+  const color = gfx16(isNationalDexEnabled(state) ? 'sNationalDexPalette' : 'sKantoDexPalette')[7];
+  const saveTilemaps = () => {
+    const mem = d.bgBufsMem!;
+    mem.set(GetBgTilemapBuffer(3)!.subarray(0, 0x400), 0x000);
+    mem.set(GetBgTilemapBuffer(2)!.subarray(0, 0x400), 0x400);
+    mem.set(GetBgTilemapBuffer(1)!.subarray(0, 0x400), 0x800);
+  };
+  switch (d.data[0]) {
+    case 0:
+      // Port: the new page's mon graphics load first (a frame or two the first time)
+      if (!DexScreen_LoadCategoryPageGfx(d.category, d.pageNum)) break;
+      d.bgBufsMem = new Uint16Array((3 * BG_SCREEN_SIZE) / 2);
+      d.data[0] = direction ? 6 : 2;
+      break;
+    case 1:
+      d.bgBufsMem = null;
+      return true;
+    // Go left
+    case 2:
+      BeginNormalPaletteFade(0x00007fff, 0, 0, 16, color);
+      d.data[0]++;
+      break;
+    case 3:
+      FillBgTilemapBufferRect_Palette0(3, 0x00c, 0, 0, 30, 20);
+      FillBgTilemapBufferRect_Palette0(2, 0x000, 0, 0, 32, 20);
+      FillBgTilemapBufferRect_Palette0(1, 0x000, 0, 0, 32, 20);
+      CopyBgTilemapBufferToVram(1);
+      CopyBgTilemapBufferToVram(2);
+      CopyBgTilemapBufferToVram(3);
+      d.data[0]++;
+      break;
+    case 4:
+      BeginNormalPaletteFade(0x00007fff, 0, 0, 0, color);
+      DexScreen_CreateCategoryListGfx(false);
+      saveTilemaps();
+      FillBgTilemapBufferRect_Palette0(3, 0x00c, 0, 0, 30, 20);
+      FillBgTilemapBufferRect_Palette0(2, 0x000, 0, 0, 32, 20);
+      FillBgTilemapBufferRect_Palette0(1, 0x000, 0, 0, 32, 20);
+      d.data[1] = 0;
+      d.data[0]++;
+      PlaySE(K.SE_BALL_TRAY_ENTER);
+      break;
+    case 5:
+      if (d.data[1] < 10) {
+        DexScreen_TurnCategoryPage_BgEffect(d.data[1]);
+        d.data[1]++;
+      } else {
+        d.data[0] = 1;
+      }
+      break;
+    // Go right
+    case 6:
+      saveTilemaps();
+      d.data[1] = 9;
+      d.data[0]++;
+      PlaySE(K.SE_BALL_TRAY_ENTER);
+      break;
+    case 7:
+      if (d.data[1] !== 0) {
+        DexScreen_TurnCategoryPage_BgEffect(d.data[1]);
+        d.data[1]--;
+      } else {
+        // Not BUGFIX: data[0] (7) instead of step 0, so the old page's last step shows a 7-step squeeze
+        DexScreen_TurnCategoryPage_BgEffect(d.data[0]);
+        BeginNormalPaletteFade(0x00007fff, 0, 16, 16, color);
+        d.data[0]++;
+      }
+      break;
+    case 8:
+      gPaletteFade.bufferTransferDisabled = true;
+      DexScreen_CreateCategoryListGfx(false);
+      CopyBgTilemapBufferToVram(1);
+      CopyBgTilemapBufferToVram(2);
+      CopyBgTilemapBufferToVram(3);
+      d.data[0]++;
+      break;
+    case 9:
+      gPaletteFade.bufferTransferDisabled = false;
+      BeginNormalPaletteFade(0x00007fff, 0, 16, 0, color);
+      d.data[0] = 1;
+      break;
+  }
+  return false;
+}
+
+/** DexScreen_CreateCategoryPageSpeciesList: the page's mons that can be shown (seen; Kanto without the National Dex) */
+function DexScreen_CreateCategoryPageSpeciesList(categoryNum: number, pageNum: number): void {
+  const d = sd();
+  const page = pokedexData.categories[categoryNum][pageNum];
+  d.numMonsOnPage = 0;
+  for (let i = 0; i < 4; i++) d.pageSpecies[i] = 0xffff;
+  for (const species of page) {
+    if (DexScreen_CanShowMonInDex(species) && DexScreen_GetSetPokedexFlag(state, species, FLAG_GET_SEEN, true)) {
+      d.pageSpecies[d.numMonsOnPage] = species;
+      d.numMonsOnPage++;
+    }
+  }
+}
+
+/** DexScreen_GetPageLimitsForCategory: the first and (one past the) last unlocked page; TRUE if none */
+function DexScreen_GetPageLimitsForCategory(category: number): boolean {
+  const d = sd();
+  const count = pokedexData.categories[category].length;
+  let firstPage = 0xff;
+  let lastPage = 0xff;
+  for (let i = 0; i < count; i++) {
+    if (DexScreen_IsPageUnlocked(category, i)) {
+      if (firstPage === 0xff) firstPage = i;
+      lastPage = i;
+    }
+  }
+  if (lastPage !== 0xff) {
+    d.firstPageInCategory = firstPage;
+    d.lastPageInCategory = lastPage + 1;
+    return false;
+  }
+  d.firstPageInCategory = 0;
+  d.lastPageInCategory = 0;
+  return true;
+}
+
+/** DexScreen_PageNumberToRenderablePages: the page's number counting only the unlocked pages */
+function DexScreen_PageNumberToRenderablePages(page: number): number {
+  const d = sd();
+  let count = 0;
+  for (let i = 0; i < page; i++) if (DexScreen_IsPageUnlocked(d.category, i)) count++;
+  return count + 1;
+}
+
+// ------------------------------------------------------------------ registering a catch
+
+/**
+ * DexScreen_RegisterMonToPokedex: sets the seen / caught flags and starts the "registered" page on the GBA layer
+ * (called from the battle's Cmd_displaydexinfo, which waits until the returned task ends). A non-Kanto mon before the
+ * National Dex only gets a task that ends at once.
+ */
+export function DexScreen_RegisterMonToPokedex(species: number): number {
+  DexScreen_GetSetPokedexFlag(state, species, FLAG_SET_SEEN, true);
+  DexScreen_GetSetPokedexFlag(state, species, FLAG_SET_CAUGHT, true);
+  if (!isNationalDexEnabled(state) && state.pokemon.nationalDex(species) > K.KANTO_DEX_COUNT) {
+    return CreateTask(Task_DexScreen_RegisterNonKantoMonBeforeNationalDex, 0);
+  }
+  DexScreen_LoadResources();
+  gTasks[sd().taskId].func = Task_DexScreen_RegisterMonToPokedex;
+  DexScreen_LookUpCategoryBySpecies(species);
+  return sd().taskId;
+}
+
+/** Task_DexScreen_RegisterNonKantoMonBeforeNationalDex */
+function Task_DexScreen_RegisterNonKantoMonBeforeNationalDex(taskId: number): void {
+  DestroyTask(taskId);
+}
+
+/** Task_DexScreen_RegisterMonToPokedex: the mon's habitat page with it selected, then its page zooming in; A / B close */
+function Task_DexScreen_RegisterMonToPokedex(taskId: number): void {
+  const d = sd();
+  switch (d.state) {
+    case 0:
+      DexScreen_GetPageLimitsForCategory(d.category);
+      if (d.pageNum < d.firstPageInCategory) d.pageNum = d.firstPageInCategory;
+      d.state = 3;
+      break;
+    case 1:
+      RemoveDexPageWindows();
+      DexScreen_DestroyCategoryPageMonIconAndInfoWindows();
+      gMain.state = 0;
+      d.state = 2;
+      break;
+    case 2:
+      if (DoClosePokedex()) DestroyTask(taskId);
+      break;
+    case 3:
+      // Port: wait for the page's mon graphics (the battle preloads them: dexRegisterGfxSymbols)
+      if (!DexScreen_LoadCategoryPageGfx(d.category, d.pageNum)) break;
+      DexScreen_CreateCategoryListGfx(true);
+      PutWindowTilemap(0);
+      PutWindowTilemap(1);
+      CopyBgTilemapBufferToVram(3);
+      CopyBgTilemapBufferToVram(2);
+      CopyBgTilemapBufferToVram(1);
+      CopyBgTilemapBufferToVram(0);
+      DexScreen_CreateCategoryPageSelectionCursor(0xff);
+      d.state = 4;
+      break;
+    case 4:
+      gPaletteFade.bufferTransferDisabled = false;
+      BeginNormalPaletteFade(PALETTES_ALL, 0, 16, 0, 0xffff);
+      ShowBg(3);
+      ShowBg(2);
+      ShowBg(1);
+      ShowBg(0);
+      d.state = 5;
+      break;
+    case 5:
+      gTasks[taskId].data[0] = 30;
+      d.categoryPageCursorTaskId = ListMenuAddCursorObjectInternal(sCursorStruct_CategoryPage, 0);
+      d.state = 6;
+      break;
+    case 6:
+      DexScreen_CreateCategoryPageSelectionCursor(d.categoryCursorPosInPage);
+      DexScreen_UpdateCategoryPageCursorObject(d.categoryPageCursorTaskId, d.categoryCursorPosInPage, d.numMonsOnPage);
+      if (gTasks[taskId].data[0]) {
+        gTasks[taskId].data[0]--;
+      } else {
+        ListMenuRemoveCursorObject(d.categoryPageCursorTaskId, 0);
+        d.state = 7;
+      }
+      break;
+    case 7:
+      d.dexSpecies = d.pageSpecies[d.categoryCursorPosInPage];
+      d.state = 8;
+      break;
+    case 8:
+      DexScreen_DrawMonDexPage(true);
+      d.state = 9;
+      break;
+    case 9:
+      d.data[0] = 0;
+      d.data[1] = 0;
+      d.state++;
+    // fallthrough
+    case 10:
+      if (!DexScreen_ZoomInFrame()) break;
+      CopyBgTilemapBufferToVram(3);
+      CopyBgTilemapBufferToVram(2);
+      CopyBgTilemapBufferToVram(1);
+      CopyBgTilemapBufferToVram(0);
+      PlayCry_NormalNoDucking(d.dexSpecies, 0, K.CRY_VOLUME_RS, K.CRY_PRIORITY_NORMAL);
+      d.data[0] = 0;
+      d.state = 11;
+      break;
+    case 11:
+      if (JOY_NEW(A_BUTTON | B_BUTTON)) d.state = 2;
+      break;
+  }
 }
 
 // ------------------------------------------------------------------ the mon page
@@ -1224,8 +2029,9 @@ function DexScreen_InputHandler_StartToCry(): void {
  */
 export function DexScreen_DexPageZoomEffectFrame(bg: number, scale: number): void {
   const d = sd();
-  // The C indexes past sPageIconCoords_1Mon when the cursor isn't on slot 0; the clamps make that not matter at
-  // scale 6 (the only scale the mon page uses), so the port clamps the index.
+  // From the numerical lists (numMonsOnPage = 1) the C indexes past sPageIconCoords_1Mon when a habitat page left
+  // the cursor off slot 0; the clamps make that not matter at scale 6 (the only scale that page uses), so the port
+  // clamps the index. The habitat and registered pages zoom from their selected slot (scales 0-6).
   const coords = d.numMonsOnPage ? sCategoryPageIconCoords[d.numMonsOnPage - 1] : sCategoryPageIconCoords[0];
   const [, , tileLeft, tileTop] = coords[Math.min(d.numMonsOnPage ? d.categoryCursorPosInPage : 0, coords.length - 1)];
 
@@ -1617,12 +2423,25 @@ function windowPixelsInRect(windowId: number, x0: number, y0: number, w: number,
   return n;
 }
 
-/** The screen while it's up: the task and its state, the counts, the top menu, the ordered lists, the mon page. */
+/** The states each task takes input in (the C's; the others take it in state 6). */
+const sInputStates: Record<string, number[]> = {
+  Task_DexScreen_ShowMonPage: [5],
+  Task_DexScreen_CategorySubmenu: [5, 17],
+  Task_DexScreen_RegisterMonToPokedex: [11],
+};
+
+/**
+ * The screen while it's up: the task and its state, the counts, the top menu, the ordered lists, the habitat page,
+ * the mon page.
+ */
 export function pokedexScreenProbe():
   | {
       task: string;
       state: number;
-      /** The task takes input (Task_PokedexScreen / the ordered lists in state 6, the mon page in 5) and no fade runs. */
+      /**
+       * The task takes input (Task_PokedexScreen / the ordered lists in state 6, the mon page in 5, the habitat page in 5
+       * and its mon page in 17, the registered page in 11) and no fade runs.
+       */
       ready: boolean;
       counts: { seenKanto: number; ownedKanto: number; seenNational: number; ownedNational: number };
       unlockedCategories: number;
@@ -1638,17 +2457,22 @@ export function pokedexScreenProbe():
        * pixels the pic and the footprint drew.
        */
       monPage?: { species: number; name: string; category: string; height: string; weight: string; flavorText: string; picPixels: number; footprintPixels: number };
+      /**
+       * The habitat page (Task_DexScreen_CategorySubmenu / Task_DexScreen_RegisterMonToPokedex): DEX_CATEGORY_*, the
+       * page and the unlocked pages' range, the shown mons, the selected slot, and how many pixels each slot's pic drew.
+       */
+      categoryPage?: { category: number; pageNum: number; firstPage: number; lastPage: number; species: number[]; cursor: number; picPixels: number[] };
     }
   | undefined {
   const d = sPokedexScreenData;
   if (!d) return undefined;
   const task = gTasks[d.taskId];
   const taskName = task.isActive ? task.func.name : '';
-  const inputState = taskName === 'Task_DexScreen_ShowMonPage' ? 5 : 6;
+  const inputStates = sInputStates[taskName] ?? [6];
   const result: ReturnType<typeof pokedexScreenProbe> = {
     task: taskName,
     state: d.state,
-    ready: task.isActive && d.state === inputState && !gPaletteFade.active,
+    ready: task.isActive && inputStates.includes(d.state) && !gPaletteFade.active,
     counts: { seenKanto: d.numSeenKanto, ownedKanto: d.numOwnedKanto, seenNational: d.numSeenNational, ownedNational: d.numOwnedNational },
     unlockedCategories: d.unlockedCategories,
   };
@@ -1672,7 +2496,18 @@ export function pokedexScreenProbe():
       items: d.listItems.slice(0, d.orderedDexCount).map((item) => item.index & 0xffff),
     };
   }
-  if (taskName === 'Task_DexScreen_ShowMonPage' && d.windowIds[1] !== WINDOW_NONE && sMonPageText) {
+  if (d.categoryMonWindowIds[0] !== WINDOW_NONE) {
+    result.categoryPage = {
+      category: d.category,
+      pageNum: d.pageNum,
+      firstPage: d.firstPageInCategory,
+      lastPage: d.lastPageInCategory,
+      species: d.pageSpecies.slice(0, d.numMonsOnPage),
+      cursor: d.categoryCursorPosInPage,
+      picPixels: d.categoryMonWindowIds.slice(0, d.numMonsOnPage).map((id) => (id === WINDOW_NONE ? 0 : windowPixelsInRect(id, 0, 0, 64, 64))),
+    };
+  }
+  if (d.windowIds[1] !== WINDOW_NONE && sMonPageText) {
     result.monPage = {
       species: d.dexSpecies,
       ...sMonPageText,
