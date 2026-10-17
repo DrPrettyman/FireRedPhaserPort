@@ -9,8 +9,13 @@ Things that are placeholders or approximations, so they aren't mistaken for port
 - **Placeholders (not in the decomp):**
   - Naming screen: the help context, SeedRngAndSetTrainerId after naming the player and the REVISION >= 0xA
     bad-word check aren't ported.
-  - Pokémon Center heal: the healing machine (`dofieldeffect FLDEFF_POKECENTER_HEAL`) and the nurse's bow
-    (`nurse_joy_bow`) are skipped; the heal itself happens.
+  - Pokémon Center nurse: the heal machine's SE_BALL and MUS_HEAL are silent (no audio);
+    SetUsedPkmnCenterQuestLogEvent is a no-op (no quest log) and BufferUnionRoomPlayerName always says no wireless
+    player was seen.
+  - The S.S. Anne leaving (`special DoSSAnneDepartureCutscene`, ss_anne.c) isn't ported: the ship doesn't sail off
+    (no wake or smoke sprites), the script's `waitstate` passes at once and `removeobject` hides it. Its graphics
+    (graphics/ss_anne/) aren't extracted yet.
+  - Lt. Surge's trash cans, Bill's cell separator: silent (SE_PIN, SE_UNLOCK, SE_BALL, SE_WARP_IN).
   - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
   - VS Seeker (world/vsSeeker.ts): silent (SE_CONTEST_MONS_TURN, SE_PIN); no quest log event. Task_VsSeeker_0
     takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for
@@ -50,8 +55,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Field moves (world/fieldMoves.ts, world/fieldMoveShowMon.ts): no audio (the cry in the banner, SE_M_CUT,
     SE_M_ROCK_THROW, SE_M_SWEET_SCENT, the warp sounds) and no GAME_STAT_USED_CUT / _ROCK_SMASH. The field
     effect scripts' palette commands (loadfadedpal, ...) do nothing: the field's sprites are Phaser textures. A
-    `callnative` that isn't ported warns once and the effect ends at once (FLDEFF_POKECENTER_HEAL, the emote
-    icons from scripts). Sweet Scent's
+    `callnative` that isn't ported warns once and the effect ends at once (the emote icons from scripts). Sweet Scent's
     red fade is an overlay under the player instead of a fade of every other palette, so the player is also drawn
     over the map's top layer meanwhile, and the field is its normal colour during the battle transition that
     follows. The show-mon banner's graphics load while the player's pose plays, so a very slow load would hold the
@@ -204,10 +208,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     aren't kept; Spinda's spots aren't drawn anywhere). The anticheat's second and third copies of the seen flags
     aren't kept (one `dexSeen` set), so "caught" just needs "seen" too. The Pokédex keeps the field's DISPCNT,
     which the port sets in FieldMenuScene since the field isn't on the GBA layer.
-  - Trainer card (menus/trainerCard.ts): no audio (SE_CARD_OPEN / SE_CARD_FLIP); no help system context. The back
-    and the flip aren't ported yet (A on the front does nothing). The berry picking and Pokémon Jump records (a
-    star for 200 of each) and the link stats are always 0 (no link minigames); the easy chat profile isn't kept
-    (only a link card prints it).
+  - Trainer card (menus/trainerCard.ts): no audio (SE_CARD_OPEN / SE_CARD_FLIP / SE_CARD_FLIPPING); no help system
+    context. The berry picking and Pokémon Jump records (a star for 200 of each) and the link stats are always 0 (no
+    link minigames), so the back never shows its link battle / trade / Berry Crush / Union Room lines; the easy chat
+    profile isn't kept (only a link card prints it). The flip's per-line BG0VOFS gives line L buffer[L] (the PPU's
+    HBlank convention), where the GBA's HBlank interrupt sets it for the line after, a one-line shift of the squash.
+    LoadMonIconGfx's 96 colours read 48 past gMonIconPalettes on the GBA; those palettes (BG 8-10) are zeros here and
+    no icon uses them. The photo's icons need special UpdateTrainerCardPhotoIcons (the Celadon Game Corner printer),
+    which isn't in specials.ts yet, so they only show with the vars set by hand.
   - Credits (menus/credits.ts): no audio (MUS_CREDITS, the cries). A map scene loads asynchronously, so it can start
     a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
     GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.

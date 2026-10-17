@@ -281,6 +281,7 @@ export class ScriptEngine {
         this.start(label);
       },
       disableMsgBoxWalkaway: () => (this.msgBoxWalkawayDisabled = true),
+      setWalkingIntoSignVars: () => this.setWalkingIntoSignVars(),
       input,
       hideFieldMessageBox: () => this.messageBox.hide(),
       encodeText: (label) => this.charmap.encodePlain(this.strings[label] ?? ''),
@@ -699,6 +700,16 @@ export class ScriptEngine {
     },
     goto_if_not_defeated(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
       if (!this.trainerDefeated(a[0])) this.jump(ctx, a[1]);
+    },
+    /** event.inc's call_if_defeated: checktrainerflag + call_if TRUE (Rocket Hideout B4F's door grunts). */
+    call_if_defeated(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      ctx.cmp = this.trainerDefeated(a[0]) ? Cmp.Equal : Cmp.Less;
+      if (this.test(ctx, 'TRUE')) this.call(ctx, a[1]);
+    },
+    /** call_if_not_defeated: checktrainerflag + call_if FALSE (Rocket Hideout B1F's barrier). */
+    call_if_not_defeated(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      ctx.cmp = this.trainerDefeated(a[0]) ? Cmp.Equal : Cmp.Less;
+      if (this.test(ctx, 'FALSE')) this.call(ctx, a[1]);
     },
     callstd(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
       const label = this.data.stdScripts[this.defines.get(a[0]) ?? -1];
@@ -1230,6 +1241,10 @@ export class ScriptEngine {
     cleartrainerflag(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       const start = this.defines.get('TRAINER_FLAGS_START') ?? 0;
       this.state.setFlag(start + this.state.value(a[0]), false);
+    },
+    /** ScrCmd_incrementgamestat → IncrementGameStat (the Pokémon Center nurse: GAME_STAT_USED_POKECENTER) */
+    incrementgamestat(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      this.state.incrementGameStat(this.state.value(a[0]));
     },
 
     // ------------------------------------------------ audio (not implemented yet)

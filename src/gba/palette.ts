@@ -406,6 +406,36 @@ export function TintPalette_GrayScale2(palette: Uint16Array, offset: number, cou
   }
 }
 
+/** TintPalette_SepiaTone: the first `count` colours of `palette`, in place. */
+export function TintPalette_SepiaTone(palette: Uint16Array, count: number): void {
+  for (let i = 0; i < count; i++) {
+    const c = palette[i];
+    // Q_8_8(0.3), Q_8_8(0.59), Q_8_8(0.1133)
+    const gray = (r5(c) * 76 + g5(c) * 151 + b5(c) * 29) >> 8;
+    // Q_8_8(1.2), Q_8_8(1.0), Q_8_8(0.94), each (u16)(tone * gray) >> 8
+    let r = ((307 * gray) & 0xffff) >> 8;
+    const g = ((256 * gray) & 0xffff) >> 8;
+    const b = ((240 * gray) & 0xffff) >> 8;
+    if (r > 31) r = 31;
+    palette[i] = r | (g << 5) | (b << 10);
+  }
+}
+
+/** TintPalette_CustomTone: the first `count` colours of `palette`, in place, to grey times each Q_8_8 tone. */
+export function TintPalette_CustomTone(palette: Uint16Array, count: number, rTone: number, gTone: number, bTone: number): void {
+  for (let i = 0; i < count; i++) {
+    const c = palette[i];
+    const gray = (r5(c) * 76 + g5(c) * 151 + b5(c) * 29) >> 8;
+    let r = ((rTone * gray) & 0xffff) >> 8;
+    let g = ((gTone * gray) & 0xffff) >> 8;
+    let b = ((bTone * gray) & 0xffff) >> 8;
+    if (r > 31) r = 31;
+    if (g > 31) g = 31;
+    if (b > 31) b = 31;
+    palette[i] = r | (g << 5) | (b << 10);
+  }
+}
+
 // BlendPalettesGradually
 const tCoeff = 0, tCoeffTarget = 1, tCoeffDelta = 2, tDelay = 3, tDelayTimer = 4, tColor = 7, tId = 8;
 

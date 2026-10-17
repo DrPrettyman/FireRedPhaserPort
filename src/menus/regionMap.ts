@@ -86,7 +86,7 @@ import {
 } from '../gba/hw';
 import { A_BUTTON, B_BUTTON, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT, DPAD_UP, gMain, JOY_HELD, JOY_NEW, JOY_REPT, SELECT_BUTTON, SetHBlankCallback, SetMainCallback2, SetVBlankCallback, START_BUTTON, type MainCallback } from '../gba/main';
 import { FreeTempTileDataBuffersIfPossible, ResetTempTileDataBuffers } from '../gba/menu';
-import { BeginNormalPaletteFade, BG_PLTT_ID, BlendPalettes, gPaletteFade, LoadPalette, PLTT_SIZE_4BPP, ResetPaletteFade, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
+import { BeginNormalPaletteFade, BG_PLTT_ID, BlendPalettes, gPaletteFade, LoadPalette, PLTT_SIZE_4BPP, ResetPaletteFade, TintPalette_CustomTone, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
 import { ScanlineEffect_Stop } from '../gba/scanline';
 import { PlaySE } from '../gba/sound';
 import {
@@ -564,24 +564,6 @@ function TintMapEdgesPalette(): void {
   RegionMap_DarkenPalette(mapEdgesPal, mapEdgesPal.length, 95);
   LoadPalette(mapEdgesPal, BG_PLTT_ID(2), 32);
   LoadPalette(regionMapPal.subarray(0x2f, 0x30), BG_PLTT_ID(2) + 15, 2);
-}
-
-/** TintPalette_CustomTone (palette.c) */
-function TintPalette_CustomTone(palette: Uint16Array, count: number, rTone: number, gTone: number, bTone: number): void {
-  for (let i = 0; i < count; i++) {
-    const r0 = palette[i] & 0x1f;
-    const g0 = (palette[i] >> 5) & 0x1f;
-    const b0 = (palette[i] >> 10) & 0x1f;
-    // Q_8_8(0.3) = 76, Q_8_8(0.59) = 151, Q_8_8(0.1133) = 29
-    const gray = (r0 * 76 + g0 * 151 + b0 * 29) >> 8;
-    let r = ((rTone * gray) & 0xffff) >> 8;
-    let g = ((gTone * gray) & 0xffff) >> 8;
-    let b = ((bTone * gray) & 0xffff) >> 8;
-    if (r > 31) r = 31;
-    if (g > 31) g = 31;
-    if (b > 31) b = 31;
-    palette[i] = r | (g << 5) | (b << 10);
-  }
 }
 
 // ------------------------------------------------------------------ opening and closing

@@ -1,6 +1,8 @@
-// field_effect.c's FLDEFF_HALL_OF_FAME_RECORD (FldEff_HallOfFameRecord): the Hall of Fame room's machine takes
-// the party's Poké Balls one by one, they flash, and the monitor above lights up. The Poké Ball glow
-// (CreateGlowingPokeballsEffect and its sprite states) is the same machinery FLDEFF_POKECENTER_HEAL uses.
+// field_effect.c's FLDEFF_HALL_OF_FAME_RECORD (FldEff_HallOfFameRecord) and FLDEFF_POKECENTER_HEAL
+// (FldEff_PokecenterHeal): the Hall of Fame room's machine / the Pokémon Center's heal machine takes the party's
+// Poké Balls one by one, they flash, and the monitor lights up. Both run the Poké Ball glow
+// (CreateGlowingPokeballsEffect and its sprite states); the Pokémon Center's monitor (sPokecenterMonitor_Gfx)
+// shares the glow's palette (tag 0x1007), so it flashes with the balls.
 //
 // The sprites aren't object events or gFieldEffectObjectTemplate_*s, so they're drawn here as FieldEffectSprites
 // with textures built from the GBA pics (sPokeballGlow_Gfx, sHofMonitor_Gfx) and their palettes. The glow's
@@ -15,7 +17,7 @@ import { CreateTask } from './fieldMoves';
 import { FieldEffectActiveListRemove, registerFieldEffectNatives } from './fieldEffectScripts';
 
 /** Graphics the effect draws (preload at boot). */
-export const HALL_OF_FAME_RECORD_GFX = ['sPokeballGlow_Gfx', 'sPokeballGlow_Pal', 'sHofMonitor_Gfx', 'sHofMonitor_Pal'];
+export const HALL_OF_FAME_RECORD_GFX = ['sPokeballGlow_Gfx', 'sPokeballGlow_Pal', 'sHofMonitor_Gfx', 'sHofMonitor_Pal', 'sPokecenterMonitor_Gfx'];
 
 export interface HallOfFameRecordHost {
   scene: Phaser.Scene;
@@ -35,10 +37,20 @@ export function setHallOfFameRecordHost(h: HallOfFameRecordHost): void {
 
 const BALL_TEXTURE = 'fldeff_pokeball_glow';
 const MONITOR_TEXTURE = 'fldeff_hof_monitor';
+const PC_MONITOR_TEXTURE = 'fldeff_pokecenter_monitor';
 
 // sAnims_Flicker[0] (sAnim_Static) and sAnim_HofMonitor, in FieldEffectSprite's command format
 const sAnim_Static: [number, number, number, number] | ['jump', number] = [0, 1, 0, 0];
 const sAnims_PokeballGlow = [[sAnim_Static, ['jump', 0] as ['jump', number]]];
+// sAnims_Flicker: sAnim_Static, sAnim_Flicker (the Pokémon Center monitor)
+const sAnims_Flicker = [
+  [sAnim_Static, ['jump', 0] as ['jump', number]],
+  [[1, 5, 0, 0], [2, 5, 0, 0], [3, 7, 0, 0], [2, 5, 0, 0], [1, 5, 0, 0], [0, 5, 0, 0], ['loop', 3], ['end']] as (
+    | [number, number, number, number]
+    | ['loop', number]
+    | ['end']
+  )[],
+];
 const sAnims_HofMonitor = [
   [[3, 8, 0, 0], [2, 8, 0, 0], [1, 8, 0, 0], [0, 8, 0, 0], [1, 8, 0, 0], [2, 8, 0, 0], ['loop', 2], [1, 8, 0, 0], [0, 8, 0, 0], ['end']] as (
     | [number, number, number, number]
@@ -112,9 +124,17 @@ class GlowPalette {
   readonly faded: Uint16Array;
   private dirty = true;
 
+  /** Other sprites on this palette (the Pokémon Center monitor): texture, gfx symbol, frame size and count. */
+  private readonly others: [Phaser.Textures.CanvasTexture, string, number, number, number][] = [];
+
   constructor(private readonly tex: Phaser.Textures.CanvasTexture) {
     this.unfaded = gfx16('sPokeballGlow_Pal').slice(0, 16);
     this.faded = this.unfaded.slice();
+  }
+
+  share(tex: Phaser.Textures.CanvasTexture, sym: string, w: number, h: number, frames: number): void {
+    this.others.push([tex, sym, w, h, frames]);
+    this.dirty = true;
   }
 
   /** MultiplyInvertedPaletteRGBComponents(OBJ_PLTT_ID(...) + i, r, g, b) */
@@ -138,6 +158,7 @@ class GlowPalette {
     if (!this.dirty) return;
     this.dirty = false;
     drawFrames(this.tex, gfx('sPokeballGlow_Gfx'), this.faded, 8, 8, 1);
+    for (const [tex, sym, w, h, frames] of this.others) drawFrames(tex, gfx(sym), this.faded, w, h, frames);
   }
 }
 
@@ -242,29 +263,41 @@ class GlowingPokeballsEffect {
   }
 }
 
-/** One running FLDEFF_HALL_OF_FAME_RECORD: Task_HallOfFameRecord, its sprites and the glow palette. */
+/**
+ * One running FLDEFF_HALL_OF_FAME_RECORD (Task_HallOfFameRecord) or FLDEFF_POKECENTER_HEAL (Task_PokecenterHeal):
+ * the task, its sprites and the glow palette.
+ */
 class RecordEffect {
   readonly palette: GlowPalette;
   private readonly sprites: FieldEffectSprite[] = [];
   private glow?: GlowingPokeballsEffect;
+  /** tMonitorSpriteId (Pokémon Center) */
+  private monitor?: FieldEffectSprite;
+  /** the monitor's sStartFlash */
+  private startFlash = false;
   private tState = 0;
   private done = false;
 
   constructor(
     private readonly h: HallOfFameRecordHost,
+    private readonly fldEff: 'FLDEFF_HALL_OF_FAME_RECORD' | 'FLDEFF_POKECENTER_HEAL',
     private readonly tNumMons: number,
     private readonly tFirstBallX: number,
     private readonly tFirstBallY: number,
   ) {
     const ballTex = canvasTexture(h.scene, BALL_TEXTURE, 8, 8, 1);
     this.palette = new GlowPalette(ballTex);
-    const monitorTex = canvasTexture(h.scene, MONITOR_TEXTURE, 16, 16, 4);
-    drawFrames(monitorTex, gfx('sHofMonitor_Gfx'), gfx16('sHofMonitor_Pal'), 16, 16, 4);
+    if (fldEff === 'FLDEFF_HALL_OF_FAME_RECORD') {
+      const monitorTex = canvasTexture(h.scene, MONITOR_TEXTURE, 16, 16, 4);
+      drawFrames(monitorTex, gfx('sHofMonitor_Gfx'), gfx16('sHofMonitor_Pal'), 16, 16, 4);
+    } else {
+      this.palette.share(canvasTexture(h.scene, PC_MONITOR_TEXTURE, 32, 16, 4), 'sPokecenterMonitor_Gfx', 32, 16, 4);
+    }
   }
 
   createSprite(texture: string, w: number, hgt: number, anims: unknown[][], x: number, y: number, subpriority: number, priority: number): FieldEffectSprite {
     const o = this.h.screenOrigin();
-    const s = new FieldEffectSprite(this.h.scene, 'FLDEFF_HALL_OF_FAME_RECORD', texture, { frameWidth: w, frameHeight: hgt, anims: anims as never }, o.x + x, o.y + y, subpriority, () => {});
+    const s = new FieldEffectSprite(this.h.scene, this.fldEff, texture, { frameWidth: w, frameHeight: hgt, anims: anims as never }, o.x + x, o.y + y, subpriority, () => {});
     s.priority = priority;
     this.sprites.push(s);
     return s;
@@ -284,17 +317,23 @@ class RecordEffect {
     return this.done && this.sprites.every((s) => !s.inUse);
   }
 
-  /** SpriteCB_PokeballGlow / SpriteCB_HallOfFameMonitor */
+  /** SpriteCB_PokeballGlow / SpriteCB_HallOfFameMonitor / SpriteCB_PokecenterMonitor */
   private spriteCallback(s: FieldEffectSprite): void {
     if (s.width === 8) {
       if (this.glow && this.glow.sState > 4) s.destroy(); // FieldEffectFreeGraphicsResources
-    } else if (s.animEnded) {
-      s.destroy();
+      return;
     }
+    if (s === this.monitor && this.startFlash) {
+      this.startFlash = false;
+      s.invisible = false;
+      s.startAnim(1);
+    }
+    if (s.animEnded) s.destroy();
   }
 
   private runTask(): void {
     if (this.done) return;
+    if (this.fldEff === 'FLDEFF_POKECENTER_HEAL') return this.runPokecenterHealTask();
     switch (this.tState) {
       case 0: // HallOfFameRecordEffect_Init
         this.tState++;
@@ -319,14 +358,51 @@ class RecordEffect {
         break;
     }
   }
+
+  /** Task_PokecenterHeal (sPokecenterHealEffectFuncs) */
+  private runPokecenterHealTask(): void {
+    switch (this.tState) {
+      case 0: // PokecenterHealEffect_Init
+        this.tState++;
+        this.glow = new GlowingPokeballsEffect(this, this.tNumMons, this.tFirstBallX, this.tFirstBallY, true);
+        // CreatePokecenterMonitorSprite(128, 24): oam.priority 2, invisible until the balls flash
+        this.monitor = this.createSprite(PC_MONITOR_TEXTURE, 32, 16, sAnims_Flicker, 128, 24, 0, 2);
+        this.monitor.invisible = true;
+        break;
+      case 1: // PokecenterHealEffect_WaitForBallPlacement
+        if (this.glow!.sState >= 2) {
+          this.startFlash = true;
+          this.tState++;
+        }
+        break;
+      case 2: // PokecenterHealEffect_WaitForBallFlashing
+        if (this.glow!.sState > 4) this.tState++;
+        break;
+      case 3: // PokecenterHealEffect_WaitForSoundAndEnd
+        if (this.glow!.sState > 6) {
+          this.glow = undefined;
+          FieldEffectActiveListRemove('FLDEFF_POKECENTER_HEAL');
+          this.done = true;
+        }
+        break;
+    }
+  }
+}
+
+/** FldEff_PokecenterHeal: the balls at (93, 36), the monitor at (128, 24). */
+function FldEff_PokecenterHeal(): boolean {
+  if (!host) throw new Error('[fldeff] no Hall of Fame record host');
+  const effect = new RecordEffect(host, 'FLDEFF_POKECENTER_HEAL', host.partyCount(), 93, 36);
+  CreateTask(() => effect.tick());
+  return false;
 }
 
 /** FldEff_HallOfFameRecord */
 function FldEff_HallOfFameRecord(): boolean {
   if (!host) throw new Error('[fldeff] no Hall of Fame record host');
-  const effect = new RecordEffect(host, host.partyCount(), 117, 60);
+  const effect = new RecordEffect(host, 'FLDEFF_HALL_OF_FAME_RECORD', host.partyCount(), 117, 60);
   CreateTask(() => effect.tick());
   return false;
 }
 
-registerFieldEffectNatives({ FldEff_HallOfFameRecord });
+registerFieldEffectNatives({ FldEff_HallOfFameRecord, FldEff_PokecenterHeal });

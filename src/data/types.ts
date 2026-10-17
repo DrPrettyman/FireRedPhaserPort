@@ -203,6 +203,8 @@ export interface ObjectEventGbaInfo {
 export interface Constants {
   newGameFlags: string[];
   metatileBehaviors: Record<string, number>;
+  /** gInitialMovementTypeFacingDirections: MOVEMENT_TYPE_* -> DIR_* */
+  initialMovementTypeFacing: Record<string, string>;
 }
 
 /** gSpeciesInfo entry + name + level-up learnset (pokemon/species.json, indexed by SPECIES_* id). */

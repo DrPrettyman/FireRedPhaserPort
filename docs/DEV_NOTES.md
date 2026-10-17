@@ -460,7 +460,7 @@ this is the next level down. When you add or change a subsystem, update its entr
 - **Hall of Fame and credits:** the room's script (PokemonLeague_HallOfFame_EventScript_EnterRoom) runs
   `dofieldeffect FLDEFF_HALL_OF_FAME_RECORD` (`world/hallOfFameRecord.ts`: the machine's Poké Balls and monitor,
   CreateGlowingPokeballsEffect's states, drawn as FieldEffectSprites from the GBA pics at screen coordinates; the
-  same glow would serve FLDEFF_POKECENTER_HEAL) and `special EnterHallOfFame` → `OverworldScene.enterHallOfFame`:
+  same file runs FLDEFF_POKECENTER_HEAL, whose monitor shares the glow's palette) and `special EnterHallOfFame` → `OverworldScene.enterHallOfFame`:
   post_battle_event_funcs.c's set-up (`EnterHallOfFame` in `menus/hallOfFame.ts`), `storeLocationForSave`, then
   FieldMenuScene 'hallOfFame' runs CB2_DoHallOfFameScreen. `hofEnv` is what the screen needs from its host: saving
   (TrySavingData(SAVE_HALL_OF_FAME)), DoWarp (FieldMenuStart.onExit's `warp`: the field loads Indigo Plateau with
@@ -563,13 +563,24 @@ this is the next level down. When you add or change a subsystem, update its entr
   (name, ID, money, Pokédex once FLAG_SYS_POKEDEX_GET is set, the live play time with BlinkTimeColon's colon, from
   the VBlank callback), the badges (FLAG_BADGE01-08_GET) on BG3, the player's pic drawn into window 2
   (`CreateTrainerCardTrainerPicSprite` in menus/picSprites.ts, which also has PlayerGenderToFrontTrainerPicId now).
-  Not yet (W-tcard unit 2): the back (PrintAllOnCardBack, BufferTextForCardBack, DrawCardBackStats, the stickers'
-  and mon icons' tiles: LoadMonIconGfx is a stub, LoadStickerGfx is ported) and the flip (A on the front does
-  nothing; the flip's HBlankCB_TrainerCard sets BG0VOFS per scanline, and the port doesn't run HBlank callbacks:
-  scanline effects go through gba/hw.ts's `hblankRegs`). Probe
-  `__test.trainerCard()` (mainState, `ready`, the stars and badges it has and the ones drawn on BG3, which card
-  palette is in the hardware palettes, the female background, the pic's pixel count, what the front printed,
-  decoded). Tests: tests/e2e/trainerCard.test.ts, tests/unit/trainerCard.test.ts (the stars).
+  The back (BufferTextForCardBack at init, PrintAllOnCardBack when flipping): the name, the Hall of Fame debut once
+  GAME_STAT_ENTERED_HOF is set, the link battle / trade / Berry Crush / Union Room lines only when not 0 (so never,
+  without link play), DrawCardBackStats (their end tiles), the photo's mon icons (VAR_TRAINER_CARD_MON_ICON_*, mail
+  species, tinted by VAR_TRAINER_CARD_MON_ICON_TINT_IDX: LoadMonIconGfx puts the icon palettes in BG palettes 5-10
+  and the tiles at BG3 tile 224 + 16 * i; trainerCardGfxSymbols preloads those icons) and the Four Island stickers
+  (the brag vars; palettes 11-14, tiles at 320). BG3 tilemap entries leave out its baseTile (192): badges 192+,
+  icons 224+, stickers 320+. The flip (FlipTrainerCard → Task_DoCardFlipTask, one step a frame): hide BG1/BG3, the
+  card closes 7 lines a frame from each edge to 77 (UpdateCardFlipRegs: WIN0V and the BLDY darkening), the other
+  side is drawn, then it opens 5 lines a frame. HBlankCB_TrainerCard's per-line BG0VOFS is modelled as an HBlank
+  DMA table (gba/hw.ts `hblankRegs` on `gScanlineEffectRegBuffers[1]`, which VBlankCB_TrainerCard copies buffer 0
+  into while `allowDMACopy`), not a real HBlank callback: the PPU runs callbacks only for the frames the host draws,
+  so a register written per line could be left mid-flip when the flip ends between two drawn frames. Input as in
+  the C: A on the front flips, on the back B flips back and A closes; B on the front closes. Probe
+  `__test.trainerCard()` (mainState, `ready` / `backReady`, `onBack`, `flip` while the flip task runs (step,
+  cardTop, BLDY, the per-line offsets), the stars and badges it has and the ones drawn on BG3, the back's icons and
+  stickers drawn on BG3 and BG palette 5, which card palette is in the hardware palettes, the female background,
+  the pic's pixel count, what each side printed, decoded). Tests: tests/e2e/trainerCard.test.ts (front, back, the
+  flip both ways, closing from each side, the photo and stickers), tests/unit/trainerCard.test.ts (the stars).
 - **Evolution scene:** `menus/evolutionScene.ts` + `menus/evolutionGraphics.ts` run on whichever GBA host is up
   (BattleScene after TryEvolvePokemon, FieldMenuScene from the party menu) and hand back through
   `gCB2_AfterEvolution` (`setCB2_AfterEvolution`). It draws on the battle BG/window layout, so the field host
@@ -703,6 +714,31 @@ this is the next level down. When you add or change a subsystem, update its entr
   a new gap (it prints a ready-made entry with the maps; pick the tag from the decomp scripts) and on a fixed one
   (take it off the list). Porting a special in a Phaser module: register it with `registerSpecials({ ... })` as an
   object literal so the test can read its keys.
+- **Story checks:** `tests/e2e/story.test.ts` (Brock to Lt. Surge; later stretches in their own
+  `story*.test.ts`). Each gym starts on its map with the state the story has by then (`setFlags` for the earlier
+  badges and story flags, a Lv. 100 Mewtwo), walks the gym (`walkFighting` lets trainers spot the player and fights
+  them; `beatTrainers` sets their flags instead), then `beatLeader(game, x, y, from)` talks to the leader, fights
+  to the end and presses through the badge and TM text; assert the badge flag, FLAG_DEFEATED_*, the TM
+  (`t.itemCount('TM34')`). Story events between gyms are walked from map to map with `takeWarp(game, x, y, map)`
+  (doors and mats warp by themselves; stairs get a push once the player has stood still for 30 frames) and
+  `talk` / `approach`. Read the decomp map scripts first for the coord events and flags on the way (e.g. Vermilion's
+  ticket check, VAR_MAP_SCENE_*). New story specials go in `script/storySpecials.ts` (STORY_SPECIALS, spread into
+  SPECIALS); ones that draw with Phaser use `registerSpecials` from their own module.
+- **Script argument expressions:** `Defines.get` folds constant expressions over known names (`FALSE | (TRUE <<
+  1)`, `(MAX_COINS + 1) - 20`), as GAS does; before, the Pokémon Center nurse's `multichoice` threw.
+- **Story checks (Erika to Sabrina):** `tests/e2e/storyCeladonSaffron.test.ts` plays each required story event
+  from a `?map=` start with the state the story would have (badges and hide flags with `setFlag`, the area's
+  trainers marked beaten with the TRAINER_FLAGS_START offset, a level-100 Mewtwo with PSYCHIC + CUT) and checks what
+  the player gets: Celadon Gym (the Cut tree, Erika, the badge, TM19), the Game Corner grunt and poster switch
+  (FLAG_OPENED_ROCKET_HIDEOUT, the stair warp to B1F), Rocket Hideout B1F / B4F's barriers, the hideout lift,
+  Giovanni and the Silph Scope, Mr. Fuji → the Poké Flute, the Tea and the Route 5 gate guard, Silph Co. 7F's rival
+  and 11F's Giovanni + Master Ball, Saffron Gym's pads and Sabrina. The ghost Marowak (pokemonTower.test.ts),
+  Snorlax with the flute (scriptedBattles.test.ts) and the card key doors (mainPathLeftovers.test.ts) have their own
+  files. Helpers in the file: `warp` (OverworldScene.warp, to reload a map after changing flags its ON_LOAD reads),
+  `talkFrom(x, y, dir)`, `winBattle` (A through a trainer battle; mashUntil's predicate runs in the page, so the
+  start mark goes through `window.__storySince`). Stair warps (MB_*_STAIR_WARP) and gate exits need
+  `t.enterWarp()` after `walkTo`; walking onto them doesn't warp. A `special` whose C sets gSpecialVar_Result must
+  set VAR_RESULT itself in specials.ts: `special` drops the function's return value (only `specialvar` stores it).
 - **Bugs that depend on world position:** `?map=` always loads at origin 0, so maps that are far from the origin in
   a real playthrough (e.g. Viridian at y = -80 after walking up from Pallet) need either a real walk or
   `await s.world.load(name, ox, oy)`, then `s.player.setPosition(...)` and `await s.onMapLoaded(false)`.

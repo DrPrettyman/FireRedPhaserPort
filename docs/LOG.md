@@ -1873,3 +1873,109 @@ end to end.
   checks the bag never shows, the objects frozen / controls locked on return, then released, and a step works; run
   3 times), tmCase, berryPouch, fly, fieldItems, trainerCard (33 in all). Screenshots of the three screens opened
   from the field match the bag's.
+### Story checks Brock to Lt. Surge (W-story unit 2)
+
+- `tests/e2e/story.test.ts` (new, 7 tests): Lt. Surge's gym (the trash can puzzle: first switch, a wrong second
+  can resets the locks and picks new cans, both switches open the beam; then Surge, FLAG_BADGE03_GET, TM34); Misty
+  (her gym walked, the trainers spot the player and are fought, then Misty, FLAG_BADGE02_GET, TM03,
+  `set_gym_trainers 2`); Bill's Sea Cottage (Bill the Clefairy into the teleporter, the PC's cell separator, Bill
+  out, the S.S. Ticket); the S.S. Anne (Vermilion's ticket check, aboard, the rival on 2F, the captain's HM01, out
+  again: SSAnne_Exterior_ExitSSAnne and back on the pier with VAR_MAP_SCENE_VERMILION_CITY 3); Cut on the tree in
+  front of Vermilion Gym and in through the door; face_original_direction (Pewter's Nidoran); the Pokémon Center
+  nurse (heal machine sprites, bow, the party healed, GAME_STAT_USED_POKECENTER).
+- Ported: `special SetVermilionTrashCans` (field_specials.c; the gym's BLOCKER), AnimateTeleporterHousing /
+  AnimateTeleporterCable (special_field_anim.c), SetWalkingIntoSignVars, and the nurse's pieces:
+  FLDEFF_POKECENTER_HEAL (FldEff_PokecenterHeal in `world/hallOfFameRecord.ts`, sharing the Hall of Fame record's
+  glow; the monitor is sPokecenterMonitor_Gfx on the glow's palette), `nurse_joy_bow` (sAnim_NurseBow),
+  `incrementgamestat`, IsPlayerNotInTrainerTowerLobby, BufferUnionRoomPlayerName (no wireless: 0),
+  SetUsedPkmnCenterQuestLogEvent (no-op). `movement face_original_direction`: gInitialMovementTypeFacingDirections is
+  extracted (`constants.json` `initialMovementTypeFacing`), NpcBrain sets `ObjectEvent.originalFacing` from the
+  movement type. The new story specials live in `script/storySpecials.ts` (STORY_SPECIALS, spread into SPECIALS).
+- Found on the way: every Pokémon Center nurse threw `Unknown constant FALSE | (TRUE << 1)` at her YES/NO
+  (`multichoice ..., FALSE | (TRUE << 1)`): script arguments can be constant expressions, which GAS folds.
+  `Defines.get` now folds them (names and numbers, + - * / % << >> & | ^ ~ and parentheses; tests/unit/defines.test.ts);
+  that also fixes `(MAX_COINS + 1) - 20` in the Game Corner and `(NUM_TRAINER_FAN_CLUB_MEMBERS - 1)`.
+- Gap list: 11 entries off (main: 6 left: call_if_defeated / call_if_not_defeated for unit 3,
+  DoSSAnneDepartureCutscene, DoPokemonLeagueLightingEffect, GetStarterSpecies, Script_TryGainNewFanFromCounter).
+  The S.S. Anne's departure isn't ported (needs graphics/ss_anne/ extracted and the boat's sprite offset); it's
+  visual only, the story goes on (DEVIATIONS).
+- A race in the test's own warp helper: walking onto Vermilion Gym's door, the field looked idle during the door
+  warp, so the helper pushed as for stairs (`t.enterWarp()`), whose final wait has no frame limit and hung. It now
+  pushes only after the player has stood still on the old map for 30 frames.
+- Verified: typecheck; `npm test` (18 files, 156 tests); e2e story.test.ts (7, twice in a row) plus hallOfFame,
+  field, fieldMoves, vsSeeker, trainerBattle, newGame.
+
+### Story checks Erika to Sabrina (W-story unit 3)
+
+- Extractor: `split_args` splits macro arguments like gas (macro.c's get_any_string ends an argument at a blank
+  between two operands; the scrubber keeps blanks only between symbol characters), so the two decomp lines without
+  a comma now extract as three arguments: Rocket Hideout B1F's `call_if_not_defeated TRAINER_TEAM_ROCKET_GRUNT_12
+  RocketHideout_B1F_EventScript_SetBarrier` and the nurse's `case 1 EventScript_PkmnCenterNurse_Goodbye` (NO at a
+  Pokémon Center nurse now says goodbye instead of ending on a missing label). Expressions (`(MAX_COINS + 1) - 500`,
+  `A | B`, battle script flags) stay one argument. Checked by diffing the whole of public/gen before and after: only
+  those two instructions in scripts.json changed.
+- ScriptEngine: `call_if_defeated` / `call_if_not_defeated` (event.inc: checktrainerflag + call_if TRUE / FALSE).
+  Rocket Hideout B4F's barrier to Giovanni opens once both door grunts are beaten (was a BLOCKER), and B1F's OnLoad
+  barrier is set until grunt 12 is beaten. Both gap entries removed.
+- Fixed on the way: `special GetQuestLogState` returned 0 instead of writing VAR_RESULT (quest_log.c sets
+  gSpecialVar_Result; `special` drops return values), so EventScript_DoNoIntroTrainerBattle read a stale VAR_RESULT
+  and, when it was 2, went to EventScript_EndQuestLogBattle: no battle, the script ended and talking again restarted
+  it. Hit by Giovanni in Rocket Hideout B4F after the two grunt battles (a BLOCKER); any `trainerbattle_no_intro`
+  could hit it (every rival battle after Oak's lab, Blaine, the Elite Four, Silph Co.'s Giovanni, Mt. Moon's
+  Miguel), depending on what VAR_RESULT last held.
+- e2e `tests/e2e/storyCeladonSaffron.test.ts` (new, 10 tests): Erika (Cut tree, badge, TM19); the Game Corner grunt,
+  poster switch and stair warp to the hideout; B1F's barrier with and without grunt 12; the hideout lift B1F → B4F;
+  B4F's door grunts, the barrier, Giovanni and the Silph Scope, and the barrier staying open on reload; Mr. Fuji's
+  warp home and the Poké Flute; the Tea, the Route 5 gate guard turning the player back without it and letting
+  them through with it; Silph Co. 7F's rival trigger battle; 11F's Giovanni and the president's Master Ball;
+  Saffron Gym's teleport pads to Sabrina, the badge and TM04. Nothing else on this stretch blocked.
+- Verified: typecheck; `npm test` (17 files, 155 tests, incl. the coverage test); e2e storyCeladonSaffron (10,
+  twice), field, trainerBattle, mainPathLeftovers, pokemonTower, scriptedBattles (24).
+
+### Four e2e races fixed (W-flaky, SCREENS_PLAN.md batch 2)
+
+Each failed once with other workers' e2e runs on the machine and passed alone; tests only, no game changes.
+- battleAnims.3e3a "Baton Pass": read `spriteInvisible` from Node after the `battleAnimEnd` poll, by when the party
+  screen (openpartyscreen, right after waitanimation) could have replaced the battle sprites (it read false). Now an
+  in-page `t.until` started before the move reads it in the tick after the anim ends.
+- mainPathLeftovers "Field_AskSaveTheGame: YES": `mashUntil(battle mode menu opened)` then `press('A')` for SINGLE
+  BATTLE. The battle mode menu has no sDelay and takes input in the tick it opens (as on the GBA: the multichoice
+  task runs in the frame the script creates it), and the mash's last A landed on that tick in 7 of 9 traced runs,
+  so the mash picked SINGLE BATTLE itself and the extra A went to the save prompt: harmless while it was still
+  printing, YES once under load it came after the YES/NO was up. Now it mashes A until the save window is up.
+- fieldEffects "water and flower tiles animate": the two tile reads were separate evals 40 ticks apart plus the
+  round trip; at 80 ticks (a whole 5-frame flower cycle) or 128 (the 8-frame water cycle) they matched. Now both
+  reads are in one `until` predicate, exactly 40 ticks apart.
+- fieldEffects "leaving a house": the 600-tick limits for the hidden arrival and the door ran out. The game keeps
+  ticking while the next map loads: ~185 ticks to the arrival on an idle machine, 1,221 under load (reproduced with
+  six CPU hogs and two other e2e files). Limits raised to 20000.
+- Same kinds fixed in transitions.test.ts (not seen failing): the Mt. Moon exit's fade-in watcher had a 600-tick
+  limit across Route 4's load, started only after a Node poll saw the flash, and read `fadeWhite` in a later eval;
+  the walk into Mt. Moon read `fadeWhite` after its `until` resolved, with a 120-tick limit across the map load that
+  comes before the fade out. Both now start before the warp, read the colour in the predicate, limit 20000.
+- tests/README.md "Writing a new scenario": comparing two reads n ticks apart and reading inside the predicate
+  (5), a mash press picking from a menu in the tick it opens (6), tick limits across loads (7).
+- Verified: typecheck; `npm test` (17 files, 155 tests); e2e battleAnims.3e3a, mainPathLeftovers, fieldEffects and
+  transitions (30 tests) three times, once under load (load average ~170).
+### Trainer card back and flip (W-tcard unit 2, SCREENS_PLAN.md batch 2)
+
+- `menus/trainerCard.ts`: the card back (BufferTextForCardBack and its Buffer* functions, PrintAllOnCardBack: the
+  name, the Hall of Fame debut, the link battle / trade / Berry Crush / Union Room lines, which FRLG prints only when
+  not 0, so never for the port's player; DrawCardBackStats; PrintPokemonIconsOnCard / LoadMonIconGfx with the photo's
+  tints; PrintStickersOnCard), the flip (FlipTrainerCard, Task_DoCardFlipTask and its six steps, UpdateCardFlipRegs,
+  VBlankCB_TrainerCard's buffer copy) and Task_TrainerCard states 11-13. As in the C, A on the front flips to the
+  back, B on the back flips back and A on the back closes the card (B on the front closes it).
+  MailSpeciesToIconSpecies is ported for the photo vars (Unown is stored as 30000 + its letter);
+  trainerCardGfxSymbols preloads the photo's icons.
+- HBlankCB_TrainerCard's per-line BG0VOFS goes through gba/hw.ts `hblankRegs` (an HBlank DMA table on
+  gScanlineEffectRegBuffers[1]) rather than SetHBlankCallback: the PPU does run HBlank callbacks, but only for the
+  frames the host draws, so with several ticks per drawn frame the register could be left at a mid-flip offset when
+  the flip ends.
+- gba/palette.ts: TintPalette_CustomTone (moved from menus/regionMap.ts, which imports it now) and
+  TintPalette_SepiaTone.
+- Verified: typecheck; `npm test` (150); e2e tests/e2e/trainerCard.test.ts (3 tests: the boy's card flips to the
+  back (name, Hall of Fame debut 12:34:56, no link / trade lines, no icons or stickers), back to the front (badges,
+  stars, pic), to the back again and A closes it; each flip watched in the page: steps 1/2/4, the card closing to
+  77, BLDY up to 11 and back to 0, BG0VOFS offsets per line, nothing left per line afterwards; the girl's card; a
+  photo in sepia (Pikachu, Bulbasaur, Unown C in slot 4) and two stickers on the back), fly.test.ts (the region
+  map's tint). Screenshots of the back, the photo back and mid-flip frames look like FRLG's.

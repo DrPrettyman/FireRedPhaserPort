@@ -598,9 +598,10 @@ function createApi(game: Phaser.Game) {
      */
     pokedexArea: () => pokedexAreaProbe(),
     /**
-     * The trainer card while it's up (menus/trainerCard.ts): its state, `ready` (the front takes input, no fade), the
-     * stars and badges it has and draws, which card palette is loaded, the trainer pic's pixels and what the front
-     * printed, decoded.
+     * The trainer card while it's up (menus/trainerCard.ts): its state, `ready` / `backReady` (that side takes input,
+     * no fade), `onBack`, the flip while it runs (step, card top, BLDY, the per-line BG0VOFS), the stars and badges it
+     * has and draws, the back's mon icons and stickers, which card palette is loaded, the trainer pic's pixels and
+     * what each side printed, decoded.
      */
     trainerCard: () => {
       const p = trainerCardProbe();
