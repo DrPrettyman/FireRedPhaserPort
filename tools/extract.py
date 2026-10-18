@@ -769,6 +769,24 @@ def asm_condition(cond, known):
     return v != 0 if isinstance(v, int) else True
 
 
+# The assembler symbols the decomp's build defines for the version the port follows (Makefile ASFLAGS:
+# --defsym FIRERED=1, REVISION=0 as in tools/extract_battle_anims.py, ENGLISH=1, MODERN=0); BUGFIX isn't.
+BUILD_SYMBOLS = {"FIRERED": 1, "REVISION": 0, "ENGLISH": 1, "MODERN": 0}
+# Conditionals at the top level of a script file (gas .ifdef/.if, and cpp #ifdef since data/*.s go through cpp).
+BUILD_CONDITIONALS = (".if", ".ifdef", ".ifndef", "#if", "#ifdef", "#ifndef", ".else", ".elseif", ".endif", "#else", "#elif", "#endif")
+
+
+def build_condition(directive, rest):
+    """Whether a top-level `.ifdef X` / `.ifndef X` / `.if EXPR` (or the cpp forms) holds for BUILD_SYMBOLS."""
+    if directive in (".ifdef", "#ifdef"):
+        return rest.split()[0] in BUILD_SYMBOLS
+    if directive in (".ifndef", "#ifndef"):
+        return rest.split()[0] not in BUILD_SYMBOLS
+    expr = re.sub(r"\b[A-Za-z_]\w*", lambda m: str(BUILD_SYMBOLS.get(m.group(0), 0)), rest)
+    expr = expr.replace("&&", " and ").replace("||", " or ").replace("!=", " NE ").replace("!", " not ").replace(" NE ", "!=")
+    return bool(eval(expr, {"__builtins__": {}}, {}))
+
+
 def expand_conditionals(lines, known):
     """Keep the lines of a macro body whose .if/.elseif/.else/.endif branch is taken."""
     out, stack = [], []  # stack entries: [this branch active, some branch already taken, parent active]
@@ -884,9 +902,27 @@ def extract_scripts(decomp, out):
                 return
             code.append([op] + [subst(a) for a in args])
 
+        cond = []  # the file's .ifdef / #ifdef / .if stack, as in expand_conditionals
         for raw in path.read_text(encoding="utf-8").splitlines():
             line = strip_comment(raw).strip()
-            if line:
+            if not line:
+                continue
+            d = line.split(None, 1)
+            if st["macro"] is None and d[0] in BUILD_CONDITIONALS:
+                active = all(e[0] for e in cond)
+                rest = d[1] if len(d) > 1 else ""
+                if d[0] in (".endif", "#endif"):
+                    cond.pop()
+                elif d[0] in (".else", "#else"):
+                    cond[-1] = [cond[-1][2] and not cond[-1][1], True, cond[-1][2]]
+                elif d[0] in (".elseif", "#elif"):
+                    ok = cond[-1][2] and not cond[-1][1] and build_condition(d[0], rest)
+                    cond[-1] = [ok, cond[-1][1] or ok, cond[-1][2]]
+                else:
+                    ok = active and build_condition(d[0], rest)
+                    cond.append([ok, ok, active])
+                continue
+            if all(e[0] for e in cond):
                 handle(line)
 
     # Event macros that are pure sequences of other script commands are expanded like the assembler

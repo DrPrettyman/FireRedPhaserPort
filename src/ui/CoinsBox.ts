@@ -8,6 +8,8 @@ import { MenuWindow } from './MenuWindow';
 /** coins.c's field coins box: "COINS" over "   N COINS", in a std-framed 8x3 window (ShowCoinsWindow). */
 export class CoinsBox {
   private win: MenuWindow;
+  /** The amount printed last (for tests). */
+  amount = 0;
 
   constructor(
     scene: Phaser.Scene,
@@ -27,6 +29,7 @@ export class CoinsBox {
 
   /** PrintCoinsString: "{STR_VAR_1} COINS" (4 digits, right-aligned with spaces) right-aligned to x 64, y 12. */
   change(amount: number): void {
+    this.amount = amount;
     const digits = ConvertIntToDecimalStringN(amount, STR_CONV_MODE_RIGHT_ALIGN, 4);
     // StringExpandPlaceholders(gStringVar4, gText_Coins)
     const [before, after] = this.strings.gText_Coins.split('{STR_VAR_1}');
