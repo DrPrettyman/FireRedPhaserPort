@@ -68,21 +68,17 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Battles: no audio through BattleScene's `ui.play*` (the controllers' and scripts' SEs, cries and music are
     no-ops until W-sound 5-6, so their cry waits end at once); the battle anims' sound tasks call gba/sound.ts
     directly, so Howl / Roar / Growl / Hyper Voice's cries and their IsCryPlaying waits time as on the GBA.
-  - Field sounds: doors (SE_DOOR / SE_SLIDING_DOOR) and puddle splashes (SE_PUDDLE) are silent.
-  - Evolution scene: silent until the mixer (its two cries hold the scene as on the GBA);
-  - Battles: no audio (PlaySE/cries/BGM are no-ops, so anim SE waits and cry waits end at once).
   - Field sounds: puddles: UpdateFeetInFlowingWaterFieldEffect's SE_PUDDLE checks the splash's `invisible`, which
     the port never sets for an object off screen (UpdateObjectEventSpriteInvisibility's bounds check).
-  - Evolution scene: no PSG parts until W-m4a 4; the cries count as finished at once (W-sound 2) and
-    EVOSTATE_RESTORE_SCREEN's `if (IsSEPlaying())` after SE_EXP goes on unchecked (W-sound 7); the intro jingle
-    (MUS_EVOLUTION_INTRO) and the other IsSEPlaying waits hold the scene as on the GBA; the help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
   - Audio output (audio/output.ts, audio/worklet.ts): the PCM plays at 224 samples per 60 Hz frame, 13,440 Hz,
     not the GBA's 13,379 Hz: the port's frame is 60 Hz rather than 59.7275 Hz, so the output keeps the GBA's
     samples per frame and music is 0.46% (8 cents) higher and faster, like all the port's timing. The worklet also
     nudges its playback rate by up to ±0.5% to keep its 3-4 frame buffer filled (the page's frame loop and the
     audio clock drift apart); an underrun plays silence, a stall drops the oldest frames. The analog filtering
     after the GBA's DAC isn't modelled (sample-and-hold straight to the speakers, AUDIO_PLAN.md decision 8).
-  - Evolution scene: the help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
+  - Evolution scene: no PSG parts until W-m4a 4; EVOSTATE_RESTORE_SCREEN's `if (IsSEPlaying())` after SE_EXP goes
+    on unchecked (W-sound 7); the cries, the intro jingle (MUS_EVOLUTION_INTRO) and the other IsSEPlaying waits
+    hold the scene as on the GBA. The help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
     from the field uses fresh battle globals, so the backdrop follows the map's battle scene (gyms etc.) but not the
     last battle's type flags, which the GBA keeps (e.g. a Rare Candy right after a gym leader would draw the
     Leader terrain there). Mons have no language, markings, ribbons or mail, so EvolutionRenameMon always treats
@@ -165,7 +161,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     same frame, but Fishing11 / Fishing16 see a finished message a frame later than RunTextPrinters would. The
     player's sprite anim (AnimateSprites) is run by the fishing task after its state functions, as the GBA's sprite
     pass would after the tasks.
-  - Surf and Waterfall (world/surf.ts): the banner's cry is a stub until W-sound 2; no HELPCONTEXT_SURFING, no quest log (`goto_if_questlog` never branches). FldEff_UseSurf takes the
+  - Surf and Waterfall (world/surf.ts): no HELPCONTEXT_SURFING, no quest log (`goto_if_questlog` never branches). FldEff_UseSurf takes the
     field controls lock at once: the C holds FieldCallback_PrepareFadeInFromMenu's (or the script's) lock until
     the task takes it, which the port's hand-offs don't. Like CreateFieldEffectShowMon, the banner waits for its
     graphics to load (UseSurfEffect_3, waterfall_1). The surf blob is the player's only `fieldEffectSpriteId`
@@ -181,12 +177,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
     GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
-  - Egg hatching (menus/eggHatch.ts): silent until the mixer (SE_BALL / SE_EGG_HATCH, MUS_EVOLUTION, the MUS_EVOLVED
-    fanfare, which holds "X hatched from the EGG!" for sFanfares' 220 frames as on the GBA, and the cry, which holds
-    the scene as on the GBA). The C
-  - Egg hatching (menus/eggHatch.ts): no PSG parts until W-m4a 4 (SE_BALL / SE_EGG_HATCH, MUS_EVOLUTION, the MUS_EVOLVED
-    fanfare, which holds "X hatched from the EGG!" for sFanfares' 220 frames as on the GBA); the cry is a stub that
-    ends at once (W-sound 2). The C
+  - Egg hatching (menus/eggHatch.ts): no PSG parts until W-m4a 4 (SE_BALL / SE_EGG_HATCH, MUS_EVOLUTION, the
+    MUS_EVOLVED fanfare, which holds "X hatched from the EGG!" for sFanfares' 220 frames as on the GBA, and the cry,
+    which holds the scene as on the GBA). The C
     loads five palettes from gTradeGba2_Pal, two of them past the file's end (ROM that follows); the port loads
     the file's three (the shadow tilemap uses none of the other two). BG palette 15 (the YES/NO's text) is loaded
     with the field's message box palette, which the GBA field leaves there. The mon sprite buffers are freed on
