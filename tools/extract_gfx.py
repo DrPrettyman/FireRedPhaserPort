@@ -65,6 +65,7 @@ GFX_PREFIXES = (
     "graphics/trainer_card/",
     "graphics/learn_move/",
     "graphics/script_menu/",  # the museum's fossil pics (script_menu.c)
+    "graphics/trade/gba", "graphics/trade/shadow_map",  # the egg hatch scene's mon shadow (daycare.c)
     "data/tilesets/",
 )
 
