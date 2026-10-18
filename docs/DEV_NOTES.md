@@ -472,9 +472,10 @@ this is the next level down. When you add or change a subsystem, update its entr
   photo printer). To wait for a message's `\p` in a test without a press reaching the menu after it, wait in the
   page for `messageBox.waitingForButton` (TextPrinter.waitingForButton).
 - **Seagallop ferry:** `menus/seagallop.ts` is seagallop.c; `script/ferrySpecials.ts` (FERRY_SPECIALS, spread into
-  SPECIALS) has its specials and script_menu.c's Rainbow Pass menu. `special DoSeagallopFerryScene` ends the script
-  (the scene leaves through a warp, whose CB2_LoadMap would reset the script context) and runs
-  `host.runScreenFromScript(DoSeagallopFerryScene, SEAGALLOP_GFX)`: CB2_SetUpSeagallopScene (states 0-7: BG3 water
+  SPECIALS) has its specials and script_menu.c's Rainbow Pass menu. `special DoSeagallopFerryScene` runs
+  `host.runScreenFromScript(DoSeagallopFerryScene, SEAGALLOP_GFX)` and keeps the script in its `waitstate` until the
+  scene warps (`SeagallopWarpWait`). Don't end the script at the special: the field runs out the frame's ticks
+  after it, and the player's input there starts other scripts (the HoF's EnterHallOfFame still does that): CB2_SetUpSeagallopScene (states 0-7: BG3 water
   from graphics/seagallop with the WB or EB tilemap, the ferry and wake sheets, WIN0 letterboxing lines 24-136),
   then Task_Seagallop_1 scrolls BG3 6 px a frame for 140 frames and fades out, and Task_Seagallop_3 warps to
   sSeag[VAR_0x8006] through CB2_LoadMap → `fieldReturn.warp` (menus/fieldCallbacks.ts; FieldMenuScene exits with

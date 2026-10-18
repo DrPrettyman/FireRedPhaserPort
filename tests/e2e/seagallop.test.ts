@@ -50,20 +50,34 @@ interface FerryFrame {
 async function rideFerry(game: Game, what: string, button: 'A' | 'B' = 'A') {
   const watcher = game.eval(async (t) => {
     const seen: FerryFrame[] = [];
-    await t.until(() => t.seagallop()?.running, 20000);
-    (window as any).__ferrySince = t.lastSeq();
+    let up = false;
     await t.until(() => {
       const s = t.seagallop();
-      if (!s) return true;
+      if (!s?.running) return up; // (not yet, or over)
+      if (!up) (window as any).__ferrySince = t.lastSeq();
+      up = true;
       seen.push({ frames: s.frames, bg3X: s.bg3X, x2: s.ferry?.x2, ferryX: s.ferry?.x, hFlip: s.ferry?.hFlip, wakes: s.wakes, eastbound: s.eastbound });
       return false;
-    }, 20000);
+    }, 40000);
     return seen;
   });
   await game.mashUntil((t) => t.seagallop() !== undefined, { what: `${what}: the ferry scene`, button });
   const frames = (await watcher) as FerryFrame[];
   // The map Task_Seagallop_3 warped to (not one loaded before the scene, e.g. leaving a Pokémon Center)
-  const arrival = await game.waitForEvent('map', { since: await game.eval(() => (window as any).__ferrySince as number) });
+  const sceneUp = await game.eval(() => (window as any).__ferrySince as number);
+  const arrival = await game.waitForEvent('map', { since: sceneUp });
+  // The script that ran DoSeagallopFerryScene stays stopped until the warp, so the mash can't start another one on
+  // the way (an A press used to talk to the Vermilion sailor, whose script then ran on at the destination): what
+  // runs once the departing script has reached its `end` (a few ticks after the warp) is the destination's own.
+  const running = await game.eval(async (t, map) => {
+    let label: string | undefined;
+    await t.until(() => {
+      label = t.field()?.script;
+      return !label || label.startsWith(map);
+    }, 120);
+    return label;
+  }, arrival.map as string);
+  if (running) expect(running.startsWith(arrival.map as string), running).toBe(true);
   await game.eval((t) => t.until(() => t.field()?.map !== undefined && !t.field()?.fading, 20000));
   return { frames, map: arrival.map as string };
 }
@@ -85,7 +99,8 @@ function checkRide(frames: FerryFrame[], eastbound: boolean) {
   expect(withFerry.length).toBeGreaterThan(0);
   for (const f of withFerry) {
     expect(f.ferryX).toBe(eastbound ? 0 : 240);
-    expect(f.hFlip).toBe(eastbound);
+    // (the anim's flip reaches the OAM in the first AnimateSprites, after the frame the sprite was made in)
+    if (f.frames > 0) expect(f.hFlip).toBe(eastbound);
     expect(Math.abs(f.x2!)).toBeLessThanOrEqual(300);
   }
   expect(frames.some((f) => f.frames > 100 && f.x2 === undefined)).toBe(true);
@@ -100,23 +115,10 @@ test("Bill's trip: YES on Cinnabar, the Seagallop arrives, the ferry to One Isla
   // CinnabarIsland_EventScript_BillScene: Bill walks up, "Come with me to ONE ISLAND?" YES; the Seagallop sails in
   // from (30, 8) and both board it.
   await game.mashUntil((t) => t.message()?.includes('ONE ISLAND'), { what: "Bill's question" });
-  const seagallop = game.eval(async (t) => {
-    await t.until(() => (t.objects() as { localId?: number; graphicsId?: string }[]).some((o) => o.graphicsId === 'OBJ_EVENT_GFX_SEAGALLOP'), 20000);
-    const boat = () => (t.objects() as { graphicsId?: string; x: number; y: number }[]).find((o) => o.graphicsId === 'OBJ_EVENT_GFX_SEAGALLOP');
-    const start = boat();
-    await t.until(() => !boat() || boat()!.x !== start!.x, 20000);
-    let end = boat();
-    await t.until(() => {
-      const b = boat();
-      if (b) end = b;
-      return t.seagallop() !== undefined;
-    }, 20000);
-    return { start, end };
-  });
+  const seagallop = watchSeagallopObject(game);
   const ride = await rideFerry(game, 'Bill');
-  const boat = await seagallop;
-  expect(boat.start).toMatchObject({ x: 30, y: 8 });
-  expect(boat.end).toMatchObject({ x: 25, y: 8 }); // CinnabarIsland_Movement_BoatArrive: 5 steps left
+  // CinnabarIsland_Movement_BoatArrive: 5 steps left
+  expect(await seagallop).toEqual({ start: { x: 30, y: 8 }, end: { x: 25, y: 8 } });
   checkRide(ride.frames, true); // Cinnabar → One Island is eastbound (sTravelDirectionMatrix)
   expect(await game.eval((t) => [t.var('VAR_MAP_SCENE_CINNABAR_ISLAND'), t.flag('FLAG_HIDE_CINNABAR_SEAGALLOP')])).toEqual([2, true]);
   expect(ride.map).toBe('OneIsland_Harbor');
@@ -141,18 +143,20 @@ test("Bill's trip: YES on Cinnabar, the Seagallop arrives, the ferry to One Isla
 
 /** The Seagallop object on the field from when it appears until the ferry scene starts: where it came and stopped. */
 function watchSeagallopObject(game: Game) {
+  // Read inside the predicate, tick by tick: after an `await` the page may be a whole frame batch further on.
   return game.eval(async (t) => {
     type Obj = { graphicsId?: string; x: number; y: number };
-    const boat = () => (t.objects() as Obj[]).find((o) => o.graphicsId === 'OBJ_EVENT_GFX_SEAGALLOP');
-    await t.until(() => boat() !== undefined, 20000);
-    const start = { ...boat()! };
-    let end = start;
+    let start: { x: number; y: number } | undefined;
+    let end: { x: number; y: number } | undefined;
     await t.until(() => {
-      const b = boat();
-      if (b) end = { ...b };
-      return t.seagallop() !== undefined;
-    }, 20000);
-    return { start: { x: start.x, y: start.y }, end: { x: end.x, y: end.y } };
+      const b = (t.objects() as Obj[]).find((o) => o.graphicsId === 'OBJ_EVENT_GFX_SEAGALLOP');
+      if (b) {
+        start ??= { x: b.x, y: b.y };
+        end = { x: b.x, y: b.y };
+      }
+      return start !== undefined && t.seagallop() !== undefined;
+    }, 40000);
+    return { start, end };
   });
 }
 
@@ -171,7 +175,10 @@ test("declining Bill: he waits in the Pokémon Center; from there the ferry leav
   // In the Pokémon Center: Bill at (11, 5). Talking from the east (facing west): ExitWithBillWest, then the warp
   // out to (14, 11) with VAR_MAP_SCENE_CINNABAR_ISLAND_2 = 1.
   await warp(game, 'MAP_CINNABAR_ISLAND_POKEMON_CENTER_1F', 12, 6);
-  expect(await game.eval((t) => t.walkTo(12, 5))).toMatchObject({ arrived: true });
+  // (the Gentleman wanders around (9, 7) and can be in the way: try again)
+  let to: { arrived: boolean } | undefined;
+  for (let i = 0; i < 10 && !to?.arrived; i++) to = await game.eval((t) => t.walkTo(12, 5));
+  expect(to).toMatchObject({ arrived: true });
   await game.eval((t) => t.face('left'));
   const boat = watchSeagallopObject(game);
   const ride = await rideFerry(game, 'Bill in the Pokémon Center');

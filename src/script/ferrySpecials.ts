@@ -13,6 +13,7 @@ import {
   SEAGALLOP_SEVEN_ISLAND,
   SEAGALLOP_SIX_ISLAND,
   SEAGALLOP_VERMILION_CITY,
+  SeagallopWarpWait,
 } from '../menus/seagallop';
 import { EOS } from '../text/charmap';
 import { SCR_MENU_CANCEL, SCR_MENU_UNSET } from '../ui/MultichoiceMenu';
@@ -75,11 +76,16 @@ export function GetSelectedSeagallopDestination(result: number, origin: number, 
 export const FERRY_SPECIALS: Record<string, Special> = {
   /**
    * DoSeagallopFerryScene: SetMainCallback2(CB2_SetUpSeagallopScene) (menus/seagallop.ts). The scene ends in a
-   * warp (WarpIntoMap + CB2_LoadMap), whose ScriptContext_Init ends the script that waited on it with `waitstate`.
+   * warp (WarpIntoMap + CB2_LoadMap), whose ScriptContext_Init ends the script that waits on it with `waitstate`.
+   * Until then the script stays stopped, which keeps the field's controls from the player: the field runs out the
+   * frame's ticks after the special, and an A press there talked to the Vermilion sailor in front of the player,
+   * whose script then ran on at the destination. Once the warp has started, the wait ends and the script reaches
+   * its `end`.
    */
-  DoSeagallopFerryScene({ host, endScript }) {
-    endScript();
+  DoSeagallopFerryScene({ host, setWaitState }) {
+    const warped = SeagallopWarpWait();
     host.runScreenFromScript(DoSeagallopFerryScene, SEAGALLOP_GFX);
+    setWaitState(warped);
   },
 
   /** GetSeagallopNumber: the ferry's number for "All aboard SEAGALLOP HI-SPEED ##" (VAR_0x8004 → VAR_0x8006). */

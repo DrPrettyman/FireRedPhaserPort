@@ -319,11 +319,25 @@ function Task_Seagallop_3(): void {
   FreeAllWindowBuffers();
 }
 
+/** Set once the scene hands over to CB2_LoadMap (the script that started it is still stopped until then). */
+let sWarpStarted = false;
+
+/**
+ * For DoSeagallopFerryScene's `waitstate`: a wait that ends once this ride's scene has warped (CB2_LoadMap, whose
+ * ScriptContext_Init ends the script; until then the script stays stopped, so the field takes no input). Call it
+ * when the special runs, before the screen starts: the flag still holds the last ride's warp until then.
+ */
+export function SeagallopWarpWait(): () => boolean {
+  sWarpStarted = false;
+  return () => sWarpStarted;
+}
+
 /** CB2_LoadMap from this screen: the field loads the map Task_Seagallop_3 chose. */
 function CB2_LoadMap(): void {
   const warp = sWarpDestination!;
   sWarpDestination = null;
   SetMainCallback2(null);
+  sWarpStarted = true;
   fieldReturn.warp(warp);
 }
 

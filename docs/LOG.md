@@ -2344,6 +2344,10 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   script a frame later; DrawSeagallopDestinationMenu's wait now ends the frame after the choice (as `yesnobox`
   does since #67). The `multichoice` command still resumes in the same tick (DEVIATIONS; only the event tickets'
   menus lead into another menu).
+- Found on the way: ending the script at DoSeagallopFerryScene (as EnterHallOfFame does) let the field take input
+  in the frame's remaining ticks: under load, the e2e's A press talked to the Vermilion sailor the player faced,
+  and his script ran on at Two Island. The script now stays stopped in its `waitstate` until the scene warps; the
+  e2e checks that what runs on arrival is the destination's own script.
 - Verified: typecheck; `npm test` (27 files, 235 tests, incl. tests/unit/seagallop.test.ts: GetSeagallopNumber,
   the direction matrix, both menu pages and the row → destination mapping for every origin, the SEAGALLOP_* ids
   against the extracted defines); e2e `tests/e2e/seagallop.test.ts` (5 tests: Bill's scene after Blaine → YES →
@@ -2352,5 +2356,6 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   → the leave scene → the westbound ferry → Cinnabar (21, 7) → Bill's goodbye; declining Bill and the trip from
   the Pokémon Center along FLAG_TEMP_2's path; Vermilion → Two Island with the Tri-Pass and back; cancelling left
   of the sailor walks up the pier, from above him it just ends; the Rainbow Pass menu's two pages to Five Island),
-  plus hallOfFame and sideSpecials for the screen-exit change. Screenshots of the scene and both menu pages
+  plus hallOfFame and sideSpecials for the screen-exit change. seagallop.test.ts green 3 runs in a row, two of
+  them beside `npm test` loops for load. Screenshots of the scene and both menu pages
   checked by eye.

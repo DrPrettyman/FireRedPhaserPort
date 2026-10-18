@@ -36,8 +36,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Seagallop ferry (menus/seagallop.ts, script/ferrySpecials.ts): silent (SE_SHIP, SE_EXIT,
     PlayRainStoppingSoundEffect, Overworld_FadeOutMapMusic), so Task_Seagallop_2 waits only for the palette fade, not
     BGMusicStopped; no help system (HelpSystem_Disable / Enable) and no quest log (DrawSeagallopDestinationMenu's
-    QL_AvoidDisplay). The script that ran DoSeagallopFerryScene ends there (as CB2_LoadMap's ScriptContext_Init
-    would end it) instead of sitting in its `waitstate`. The scene's WarpFadeOutScreen is a plain palette fade to
+    QL_AvoidDisplay). The script that ran DoSeagallopFerryScene stays in its `waitstate` until the scene warps, then
+    runs on to its `end` (in C, CB2_LoadMap's ScriptContext_Init drops it). The scene's WarpFadeOutScreen is a plain palette fade to
     black (FadeScreen's white fade is for underwater maps, and no harbor is one).
   - Script timing: the `multichoice` command (ScriptEngine) resumes the script in the tick of the choice; the C's
     Task_MultichoiceMenu_HandleInput calls ScriptContext_Enable, so the script runs on a frame later. The case seen:
