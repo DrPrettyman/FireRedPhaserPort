@@ -75,6 +75,8 @@ import { FreeAllWindowBuffers } from '../gba/window';
 import type { WarpData } from '../state/GameState';
 import { fieldReturn, gFieldCallback } from './fieldCallbacks';
 import { ResetAllPicSprites } from './picSprites';
+import { BGMusicStopped } from '../gba/sound'; // Task_Seagallop_2's wait (W-sound 3)
+import { Overworld_FadeOutMapMusic } from '../gba/overworldMusic';
 
 const TILESTAG_FERRY = 3000;
 const TILESTAG_WAKE = 4000;
@@ -273,7 +275,7 @@ const Task_Seagallop_1: TaskFunc = (taskId) => {
   const task = gTasks[taskId];
   ScrollBG();
   if (++task.data[1] === 140) {
-    // Overworld_FadeOutMapMusic: no audio
+    Overworld_FadeOutMapMusic();
     WarpFadeOutScreen();
     task.func = Task_Seagallop_2;
   }
@@ -281,8 +283,7 @@ const Task_Seagallop_1: TaskFunc = (taskId) => {
 
 const Task_Seagallop_2: TaskFunc = (taskId) => {
   ScrollBG();
-  // BGMusicStopped(): no audio, so only the fade
-  if (!gPaletteFade.active) {
+  if (BGMusicStopped() && !gPaletteFade.active) {
     Task_Seagallop_3();
     // HelpSystem_Enable: no help system
     DestroyTask(taskId);

@@ -32,6 +32,8 @@ import {
   playerObj,
   SetPlayerAvatarStateMask,
 } from './playerAvatar';
+import { Overworld_ChangeMusicTo } from '../gba/sound';
+import { Overworld_ClearSavedMusic, Overworld_MusicCanOverrideMapMusic } from '../gba/overworldMusic';
 
 /** What Surf needs from the field beyond the player avatar's host. Implemented by OverworldScene. */
 export interface SurfHost {
@@ -132,11 +134,13 @@ function FieldCallback_Waterfall(): void {
 
 /**
  * FldEff_UseSurf → Task_FldEffUseSurf (UseSurfEffect_1..5): the player's field move pose, the mon's banner,
- * then a jump onto the water with the surf blob under them. gFieldEffectArguments[0] is the party index.
- * (Overworld_ClearSavedMusic / MUS_SURF and SetHelpContext(HELPCONTEXT_SURFING): no audio, no help system.)
+ * then a jump onto the water with the surf blob under them. gFieldEffectArguments[0] is the party index. The music
+ * fades to MUS_SURF at once (where it may override the map's). (SetHelpContext(HELPCONTEXT_SURFING): no help system.)
  */
 function FldEff_UseSurf(): boolean {
   const data15 = gFieldEffectArguments[0];
+  Overworld_ClearSavedMusic();
+  if (Overworld_MusicCanOverrideMapMusic(K.MUS_SURF)) Overworld_ChangeMusicTo(K.MUS_SURF);
   // The C holds FieldCallback_PrepareFadeInFromMenu's lock (or the script's) until UseSurfEffect_1 takes it;
   // the port's hand-offs don't, so it's taken now.
   LockPlayerFieldControls();

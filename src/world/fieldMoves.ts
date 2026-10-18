@@ -49,6 +49,8 @@ import { directionalAction } from '../entities/movementActions';
 import { SetUpFieldMove_Strength } from './strength'; // fldeff_strength.c (W-strength)
 import { registerFallWarp } from './fallWarp'; // DoFallWarp (W-misc)
 import { registerDive } from './dive'; // FLDEFF_USE_DIVE (W-unused)
+import { PlaySE } from '../gba/sound'; // the warp tasks' SEs (W-sound 3)
+import { Overworld_PlaySpecialMapMusic } from '../gba/overworldMusic';
 
 /** What the field moves need from the field (OverworldScene). */
 export interface FieldMoveHost {
@@ -93,8 +95,11 @@ export interface FieldMoveHost {
   stopGbaScreen(): void;
   /** The camera's top edge in world pixels (gSpriteCoordOffsetY's counterpart). */
   cameraTop(): number;
-  /** WarpFadeOutScreen toward a map (to white into a cave); the wait is !gPaletteFade.active. */
-  warpFadeOutScreen(mapId: string): () => boolean;
+  /**
+   * WarpFadeOutScreen toward a map (to white into a cave); the wait is !gPaletteFade.active. With `fadeOutMusic`,
+   * TryFadeOutOldMapMusic (gba/overworldMusic.ts) starts with it and the wait also needs BGMusicStopped.
+   */
+  warpFadeOutScreen(mapId: string, fadeOutMusic?: boolean): () => boolean;
   /**
    * WarpIntoMap + SetMainCallback2(CB2_LoadMap) to a map position (warp id -1), from the faded screen,
    * with gFieldCallback = `fieldCallback`, which runs once the map is loaded instead of the default exit.
@@ -820,7 +825,7 @@ function CreateTeleportFieldEffectTask(): void {
           data[1] = 4;
           data[2] = 8;
           data[3] = 1;
-          // PlaySE(SE_WARP_IN)
+          PlaySE(K.SE_WARP_IN);
         }
         return false;
       case 2: // TeleportFieldEffectTask3
@@ -841,10 +846,10 @@ function CreateTeleportFieldEffectTask(): void {
         if (data[4] >= 0xa8) {
           stage++;
           // TryFadeOutOldMapMusic; WarpFadeOutScreen
-          fadeOut = field().warpFadeOutScreen(lastHealMap());
+          fadeOut = field().warpFadeOutScreen(lastHealMap(), true);
         }
         return false;
-      case 3: // TeleportFieldEffectTask4
+      case 3: // TeleportFieldEffectTask4: !gPaletteFade.active, BGMusicStopped
         if (!fadeOut()) return false;
         // SetWarpDestinationToLastHealLocation; WarpIntoMap; CB2_LoadMap; gFieldCallback = FieldCallback_TeleportIn
         player.fixedPriority = false;
@@ -870,6 +875,7 @@ function warpIntoMap(dest: { map: string; x: number; y: number } | undefined, fi
 
 /** FieldCallback_TeleportIn → Task_DoTeleportInFieldEffect: drop in from above the screen, spinning, then face the old way. */
 function FieldCallback_TeleportIn(): void {
+  Overworld_PlaySpecialMapMusic();
   const fadeIn = field().warpFadeInScreen();
   LockPlayerFieldControls();
   avatarField().freezeObjectEvents();
@@ -890,7 +896,7 @@ function FieldCallback_TeleportIn(): void {
         data[1] = 8;
         data[2] = 1;
         data[15] = dirNum(GetPlayerFacingDirection());
-        // PlaySE(SE_WARP_IN)
+        PlaySE(K.SE_WARP_IN);
         return false;
       case 1: // TeleportInFieldEffectTask2
         y2 += data[1];
@@ -990,13 +996,14 @@ function StartEscapeRopeFieldEffect(): void {
     SpinObjectEvent(player, spin);
     if (timer < 60) {
       timer++;
-      // (timer 20: PlaySE(SE_WARP_IN))
+      if (timer === 20) PlaySE(K.SE_WARP_IN);
     } else if (!offscreen && !WarpOutObjectEventUpwards()) {
       // TryFadeOutOldMapMusic; WarpFadeOutScreen
-      fadeOut = field().warpFadeOutScreen(escapeWarpDest().map);
+      fadeOut = field().warpFadeOutScreen(escapeWarpDest().map, true);
       offscreen = true;
     }
     if (offscreen && fadeOut()) {
+      // (!gPaletteFade.active && BGMusicStopped())
       // SetObjectEventDirection(DIR_NONE); SetWarpDestinationToEscapeWarp; WarpIntoMap
       player.fixedPriority = false;
       warpIntoMap(escapeWarpDest(), FieldCallback_EscapeRopeExit);
@@ -1029,6 +1036,7 @@ function SpinObjectEvent(player: ObjectEvent, spin: { delay: number; turns: numb
 
 /** FieldCallback_EscapeRopeExit → Task_EscapeRopeWarpIn: drop in from 88 px up while spinning, then face the old way. */
 function FieldCallback_EscapeRopeExit(): void {
+  Overworld_PlaySpecialMapMusic();
   const fadeIn = field().warpFadeInScreen();
   LockPlayerFieldControls();
   avatarField().freezeObjectEvents();
@@ -1047,7 +1055,7 @@ function FieldCallback_EscapeRopeExit(): void {
     if (stage === 0) {
       // EscapeRopeWarpInEffect_Init
       if (!fadeIn()) return false;
-      // PlaySE(SE_WARP_OUT)
+      PlaySE(K.SE_WARP_OUT);
       originalDir = GetPlayerFacingDirection();
       stage++;
       return false;
@@ -1073,7 +1081,7 @@ function FieldCallback_EscapeRopeExit(): void {
       case 2:
         offsetY += 4;
         if (offsetY >= 0) {
-          // PlaySE(SE_CLICK); CameraObjectReset1
+          PlaySE(K.SE_CLICK); // CameraObjectReset1
           movingState = 3;
           moving = false;
         }

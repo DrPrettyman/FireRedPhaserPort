@@ -19,6 +19,9 @@ import {
   playerObj,
   SetPlayerAvatarTransitionFlags,
 } from './playerAvatar';
+import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound';
+import { Overworld_PlaySpecialMapMusic } from '../gba/overworldMusic';
 
 /**
  * DoFallWarp: DoDiveWarp (world/dive.ts: LockPlayerFieldControls, WarpFadeOutScreen, Task_Teleport2Warp: once
@@ -44,6 +47,7 @@ function setPlayerSpriteY2(y2: number): void {
  * ground effect) and the camera shakes.
  */
 function FieldCB_FallWarpExit(): void {
+  Overworld_PlaySpecialMapMusic();
   const host = fieldMoveHost();
   const fadeIn = host.warpFadeInScreen();
   LockPlayerFieldControls();
@@ -73,7 +77,7 @@ function FieldCB_FallWarpExit(): void {
           data[1] = 1;
           data[2] = 0;
           player.setVisible(true);
-          // PlaySE(SE_FALL)
+          PlaySE(K.SE_FALL);
           data[0]++;
           return false;
         case 3: // FallWarpEffect_4
@@ -88,7 +92,7 @@ function FieldCB_FallWarpExit(): void {
             player.triggerGroundEffectsOnMove = true;
           }
           if (y2 >= 0) {
-            // PlaySE(SE_M_STRENGTH)
+            PlaySE(K.SE_M_STRENGTH);
             player.triggerGroundEffectsOnStop = true;
             player.landingJump = true;
             y2 = 0;

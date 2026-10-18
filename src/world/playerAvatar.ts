@@ -18,6 +18,7 @@ import { directionalAction, movementAction } from '../entities/movementActions';
 import type { Behaviors } from './behaviors';
 import { BikeClearState, Bike_HandleBumpySlopeJump, Bike_UpdateBikeCounterSpeed, IsRunningDisallowed, MovePlayerOnBike } from './bike';
 import { DELTA, type Direction } from './direction';
+import { Overworld_ChangeMusicToDefault, Overworld_ClearSavedMusic } from '../gba/overworldMusic'; // CreateStopSurfingTask (W-sound 3)
 
 /** A d-pad direction, or DIR_NONE. */
 export type Dir = Direction | undefined;
@@ -832,7 +833,8 @@ export function CreateStopSurfingTask(direction: Direction): void {
   const f = avatarField();
   f.lockPlayerFieldControls();
   f.freezeObjectEvents();
-  // Overworld_ClearSavedMusic / Overworld_ChangeMusicToDefault: no audio
+  Overworld_ClearSavedMusic();
+  Overworld_ChangeMusicToDefault();
   gPlayerAvatar.flags &= ~F.SURFING;
   gPlayerAvatar.flags |= F.ON_FOOT;
   gPlayerAvatar.preventStep = true;

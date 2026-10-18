@@ -31,6 +31,7 @@ import {
 } from './fieldMoves';
 import { avatarField, GetPlayerAvatarGraphicsIdByStateId, gPlayerAvatar, PLAYER_AVATAR_FLAG, playerObj, SetPlayerAvatarStateMask, SetPlayerAvatarTransitionFlags } from './playerAvatar';
 import { BOB_MON_ONLY, BOB_NONE, BOB_PLAYER_AND_MON, SetPlayerSurfBlobBobState } from './surf';
+import { Overworld_PlaySpecialMapMusic } from '../gba/overworldMusic'; // FieldCallback_FlyIntoMap (W-sound 3)
 
 // ------------------------------------------------------------------ party menu, fly map
 
@@ -106,7 +107,9 @@ function warpToDestination(): void {
 
 /** FieldCallback_FlyIntoMap → Task_FlyIntoMap */
 function FieldCallback_FlyIntoMap(): void {
-  // Overworld_PlaySpecialMapMusic: no audio; FadeInFromBlack (an outdoor arrival: WarpFadeInScreen fades from black)
+  // Fly fades nothing out before the warp (no TryFadeOutOldMapMusic): the new map's music starts at once.
+  Overworld_PlaySpecialMapMusic();
+  // FadeInFromBlack (an outdoor arrival: WarpFadeInScreen fades from black)
   const fadeIn = flyHost().warpFadeInScreen();
   const player = playerObj();
   player.setVisible(false);

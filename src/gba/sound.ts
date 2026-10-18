@@ -4,8 +4,8 @@
 // from audio/frame.ts's AgbMainFrameEnd. The engine's logic always runs, so every wait here times like the GBA
 // whether or not anything is heard (AUDIO_PLAN.md decision 2).
 //
-// Not here yet: the cries (sound.c:344-537, W-sound 2: the functions at the bottom are still stubs) and overworld.c's
-// map music (W-sound 3: GetCurrLocationDefaultMusic, savedMusic, gDisableMapMusicChangeOnMapLoad).
+// Not here yet: the cries (sound.c:344-537, W-sound 2: the functions at the bottom are still stubs). overworld.c's
+// map music (which song a map plays, savedMusic, the warps' fade-out) is gba/overworldMusic.ts.
 
 import {
   gMPlayInfo_BGM,
@@ -158,6 +158,22 @@ let sFanfareCounter = 0;
 /** gDisableMusic: nothing in FRLG sets it. */
 let gDisableMusic = false;
 
+/** MUSIC_DISABLE_* (overworld.h): gDisableMapMusicChangeOnMapLoad's values. */
+export const MUSIC_DISABLE_OFF = 0;
+export const MUSIC_DISABLE_STOP = 1;
+export const MUSIC_DISABLE_KEEP = 2;
+
+/**
+ * gDisableMapMusicChangeOnMapLoad (overworld.c's EWRAM): KEEP from the Hall of Fame's warp to the end of the
+ * credits (the map loads keep the music, PlaySE is skipped), STOP for the quest log (not ported). Here rather than
+ * in overworldMusic.ts so PlaySE can read it without an import cycle; set it with SetDisableMapMusicChangeOnMapLoad.
+ */
+export let gDisableMapMusicChangeOnMapLoad = MUSIC_DISABLE_OFF;
+
+export function SetDisableMapMusicChangeOnMapLoad(value: number): void {
+  gDisableMapMusicChangeOnMapLoad = value;
+}
+
 /** gDisableHelpSystemVolumeReduce (help_system.c, not ported): the help system halves the BGM unless it's set. */
 let gDisableHelpSystemVolumeReduce = false;
 
@@ -194,6 +210,7 @@ export function ResetSoundState(): void {
   sSoundTasks = [];
   sFanfareCounter = 0;
   gDisableHelpSystemVolumeReduce = false;
+  gDisableMapMusicChangeOnMapLoad = MUSIC_DISABLE_OFF; // EWRAM, cleared by SoftReset(RESET_ALL)
   InitMapMusic();
 }
 
@@ -302,8 +319,7 @@ export function IsNotWaitingForBGMStop(): boolean {
   return true;
 }
 
-// overworld.c's two one-line wrappers over the above. W-sound 3 (overworld.c's map music) may move them next to the
-// rest of that block.
+// overworld.c's two one-line wrappers over the above. The rest of overworld.c's map music is gba/overworldMusic.ts.
 
 /** BGMusicStopped (overworld.c): the warp tasks wait on it. */
 export function BGMusicStopped(): boolean {
@@ -432,9 +448,10 @@ export function PlayBGM(songNum: number): void {
 // ---------------------------------------------------------------------------------------------------------------
 // Sound effects
 
-/** PlaySE. The C skips it while gDisableMapMusicChangeOnMapLoad is set (the Hall of Fame, the credits: W-sound 3
- *  ports that flag) and during the quest log's playback (not ported). */
+/** PlaySE: skipped while gDisableMapMusicChangeOnMapLoad is set (from the Hall of Fame's warp through the credits)
+ *  and during the quest log's playback (not ported). */
 export function PlaySE(songNum: number): void {
+  if (gDisableMapMusicChangeOnMapLoad !== MUSIC_DISABLE_OFF) return;
   startSong(songNum, 'se');
 }
 
@@ -504,6 +521,7 @@ export function soundProbe() {
     fanfareCounter: sFanfareCounter,
     fanfareTaskActive: !IsFanfareTaskInactive(),
     helpSystemVolumeReduceDisabled: gDisableHelpSystemVolumeReduce,
+    disableMapMusicChangeOnMapLoad: gDisableMapMusicChangeOnMapLoad,
   };
 }
 

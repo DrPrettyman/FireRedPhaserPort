@@ -23,6 +23,7 @@ import { FieldEffectActiveListContains, FieldEffectStart, gFieldEffectArguments 
 import { SetEscapeWarp } from '../world/fieldMoves';
 import { scriptGiveEgg } from '../world/daycare';
 import { FadeInBGM, FadeOutBGMTemporarily, IsBGMPausedOrStopped, IsFanfareTaskInactive, IsSEPlaying, Overworld_ChangeMusicTo, PlayFanfare, PlayNewMapMusic, PlaySE } from '../gba/sound';
+import { Overworld_ChangeMusicToDefault, Overworld_SetSavedMusic } from '../gba/overworldMusic';
 
 export interface ScriptsData {
   code: Instruction[];
@@ -76,7 +77,8 @@ export interface ScriptHost {
   doorAnimationRunning(): boolean;
   /** setdooropen / setdoorclosed (FieldSetDoorOpened / FieldSetDoorClosed), map-local coords */
   setDoor(x: number, y: number, open: boolean): void;
-  warp(mapId: string, warpId: number, x: number, y: number): void;
+  /** DoWarp (`kind` 'warp'), DoDiveWarp ('silent': no SE_EXIT) or DoDoorWarp ('door') to a map's warp or position. */
+  warp(mapId: string, warpId: number, x: number, y: number, kind?: 'warp' | 'silent' | 'door'): void;
   /** Map-local player coordinates. */
   playerLocal(): { x: number; y: number };
   /** DisplayYesNoMenuDefaultYes */
@@ -978,11 +980,13 @@ export class ScriptEngine {
       const { warpId, x, y } = this.warpArgs(a);
       this.host.setWarpDestination(a[0], warpId, x, y);
     },
+    /** ScrCmd_warpsilent: DoDiveWarp (no SE_EXIT) */
     warpsilent(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
-      this.doWarp(ctx, a);
+      this.doWarp(ctx, a, 'silent');
     },
+    /** ScrCmd_warpdoor: DoDoorWarp; the port goes straight to Task_DoorWarp's warp (no door anim; no FRLG script uses it) */
     warpdoor(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
-      this.doWarp(ctx, a);
+      this.doWarp(ctx, a, 'door');
     },
     /** ScrCmd_opendoor (PlaySE(GetDoorSoundEffect) is silent: no audio yet) */
     opendoor(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
@@ -1353,17 +1357,21 @@ export class ScriptEngine {
     waitse(this: ScriptEngine, ctx: ScriptContext) {
       SetupNativeScript(ctx, () => !IsSEPlaying());
     },
-    /** ScrCmd_playbgm: PlayNewMapMusic (the song starts in this frame's MapMusicMain). */
+    /** ScrCmd_playbgm: PlayNewMapMusic (the song starts in this frame's MapMusicMain); with `save` TRUE also
+     *  Overworld_SetSavedMusic, so the next map load plays it again (and the save keeps it). */
     playbgm(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       const songId = this.defines.require(a[0]);
-      // TODO(W-sound 3): `if (save == TRUE) Overworld_SetSavedMusic(songId)` (savedMusic, saved in the save file)
+      if ((this.defines.require(a[1] ?? 'FALSE') & 0xff) === 1) Overworld_SetSavedMusic(songId); // save == TRUE
       PlayNewMapMusic(songId);
     },
-    /** ScrCmd_savebgm: Overworld_SetSavedMusic. TODO(W-sound 3): overworld.c's savedMusic. */
-    savebgm() {},
-    /** ScrCmd_fadedefaultbgm: Overworld_ChangeMusicToDefault. TODO(W-sound 3): needs GetCurrLocationDefaultMusic
-     *  (the map's music, savedMusic, surf). */
-    fadedefaultbgm() {},
+    /** ScrCmd_savebgm: Overworld_SetSavedMusic (MUS_DUMMY clears it). */
+    savebgm(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      Overworld_SetSavedMusic(this.defines.require(a[0]));
+    },
+    /** ScrCmd_fadedefaultbgm: Overworld_ChangeMusicToDefault (fade to the map header's music at speed 8). */
+    fadedefaultbgm() {
+      Overworld_ChangeMusicToDefault();
+    },
     /** ScrCmd_fadenewbgm: Overworld_ChangeMusicTo */
     fadenewbgm(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       Overworld_ChangeMusicTo(this.defines.require(a[0]));
@@ -1399,9 +1407,9 @@ export class ScriptEngine {
     return name ?? token;
   }
 
-  private doWarp(ctx: ScriptContext, a: string[]): void {
+  private doWarp(ctx: ScriptContext, a: string[], kind: 'warp' | 'silent' | 'door' = 'warp'): void {
     const { warpId, x, y } = this.warpArgs(a);
-    this.host.warp(a[0], warpId, x, y);
+    this.host.warp(a[0], warpId, x, y, kind);
     ctx.done = true;
   }
 

@@ -114,6 +114,7 @@ import { EOS, GetMonNickname, gStringVar1, speciesName, StringExpandPlaceholders
 import { CreateMonPicSprite_HandleDeoxys, CreateTrainerPicSprite, FreeAndDestroyMonPicSprite, FreeAndDestroyTrainerPicSprite, PlayerGenderToFrontTrainerPicId, ResetAllPicSprites } from './picSprites';
 import { BeginPCScreenEffect_TurnOff, BeginPCScreenEffect_TurnOn, IsPCScreenEffectRunning_TurnOff, IsPCScreenEffectRunning_TurnOn } from './pcScreenEffect';
 import { CreateTopBarWindowLoadPalette, DestroyTopBarWindow, TopBarWindowPrintString, TopBarWindowPrintTwoStrings } from '../gba/topBarWindow';
+import { MUSIC_DISABLE_KEEP, SetDisableMapMusicChangeOnMapLoad } from '../gba/sound'; // SetWarpsToRollCredits (W-sound 3)
 
 const PARTY_SIZE = 6;
 const HALL_OF_FAME_BG_PAL = RGB(22, 24, 29);
@@ -543,7 +544,7 @@ function Task_Hof_HandleExit(taskId: number): void {
 function SetWarpsToRollCredits(): void {
   state.setVar('VAR_MAP_SCENE_INDIGO_PLATEAU_EXTERIOR', 1);
   state.setFlag('FLAG_DONT_SHOW_MAP_NAME_POPUP', true);
-  // gDisableMapMusicChangeOnMapLoad = 2: no audio
+  SetDisableMapMusicChangeOnMapLoad(MUSIC_DISABLE_KEEP); // gDisableMapMusicChangeOnMapLoad = 2
   hofEnv.doWarp('MAP_INDIGO_PLATEAU_EXTERIOR', -1, 11, 6);
 }
 
