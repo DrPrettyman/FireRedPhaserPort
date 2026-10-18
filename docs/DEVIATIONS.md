@@ -54,7 +54,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     them as English and Shedinja doesn't clear those fields.
   - Summary screen: no trade-screen view or multi-battle party order; the struct Pokemon fields the port doesn't
     store read as defaults (met game FireRed, no fateful-encounter flag, English).
-  - Party menu: mail, the move relearner, Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
+  - Move deleter (SelectMoveDeleterMove): on the GBA the script's `fadescreen FADE_FROM_BLACK` after the special
+    runs (unseen) before the summary screen takes over, and FieldCB_ContinueScriptHandleMusic fades the field in
+    afterwards. Here the script waits at the special and that `fadescreen` does the fade in (same on screen).
+  - Party menu: mail, the move relearner screen (ChooseMonForMoveRelearner opens the party menu, then warns), Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
     field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
   - Region map / Fly (menus/regionMap.ts, world/fly.ts): no audio (SE_DEX_SCROLL, SE_CARD_OPEN, SE_M_FLY, ...).
     The bird of Fly always uses the extracted bird sheet's own palette (Red's), where the GBA draws it in OBJ

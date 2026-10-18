@@ -1624,6 +1624,23 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /**
+   * A special's SetMainCallback2 from the field to a GBA-layer screen (menus/partyMenuSpecials.ts: ChoosePartyMon,
+   * SelectMoveDeleterMove, ChooseMonForMoveTutor). The field is gone (black) until the screen returns through
+   * CB2_ReturnToField; then RunFieldCallback runs gFieldCallback2 / gFieldCallback (or a plain fade in), and the
+   * wait ends once that has finished (its ScriptContext_Enable).
+   */
+  runScreenFromScript(init: () => void): Wait {
+    let overlay: { tick(): boolean } | undefined;
+    this.messageBox.hide(); // CleanupOverworldWindowsAndTilemaps
+    this.screenFade.fill(false); // CB2_ReturnToField reloads the field's palettes black
+    this.runFieldMenu({ menu: 'itemFromField', itemScreen: { init, gfxSymbols: [] } }, () => {
+      this.runFieldCallback(false);
+      overlay = this.overlay;
+    });
+    return () => overlay !== undefined && this.overlay !== overlay;
+  }
+
+  /**
    * Hand over to a GBA-layer screen (FieldMenuScene) from a black field. When it returns through
    * CB2_ReturnToField(WithOpenMenu), the field runs its return-to-field map scripts and calls `onReturn`
    * with the screen still black.

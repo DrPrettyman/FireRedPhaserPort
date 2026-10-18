@@ -375,6 +375,16 @@ this is the next level down. When you add or change a subsystem, update its entr
   `ScriptHost.doNamingScreen` (FieldMenuScene `naming`). Oak's speech calls it with NAMING_SCREEN_PLAYER
   (monSpecies = the player's gender) and NAMING_SCREEN_RIVAL on MainMenuScene, preloading `namingScreenGfxSymbols`
   after `setObjectEventGraphicsInfo` (the icons are object event graphics) and `loadMenusData` (the keyboard).
+- **Party selection from scripts, tutors, the move deleter:** `menus/partyMenuSpecials.ts` is
+  party_menu_specials.c (ChoosePartyMon, ChooseMonForMoveRelearner, SelectMoveDeleterMove, the deleter's
+  helpers) plus the ChooseMonForMoveTutor special; `PARTY_MENU_SPECIALS` is spread into SPECIALS. A special that
+  hands the field over to a GBA-layer screen calls `ScriptHost.runScreenFromScript(init)` (OverworldScene: field
+  black, FieldMenuScene `itemFromField` runs `init`; back through CB2_ReturnToField, RunFieldCallback runs
+  gFieldCallback2 / gFieldCallback, e.g. the party menu's CB2_FadeFromPartyMenu, and the wait ends when that has).
+  Followed by `waitstate`, pass the wait to `setWaitState`; without one (SelectMoveDeleterMove), to
+  `SpecialEnv.stopScript`. ChoosePartyMon leaves the slot in VAR_0x8004 (SLOT_CANCEL = PARTY_SIZE + 1 on B).
+  W-trade / W-daycare: `special ChoosePartyMon` + `waitstate` just works. Tests: tests/e2e/moveTutors.test.ts
+  (Route 4's Mega Punch tutor, the Fuchsia move deleter), tests/unit/partyMenuSpecials.test.ts.
 - **Boot, title screen and soft reset:** `BootScene` loads the extracted data and starts `MainMenuScene` on the
   title screen (`entry: 'title'`). MainMenuScene is one GbaHostScene for the boot screens, which hand over through
   gMain like the C: `menus/titleScreen.ts` (title_screen.c: CB2_InitTitleScreen, the intro scenes, the run scene
