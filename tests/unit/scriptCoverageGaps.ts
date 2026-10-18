@@ -29,10 +29,7 @@ export const KNOWN_GAPS: KnownGap[] = [
   // ---------------------------------------------------------------- side: optional content before the Hall of Fame (NPCs, trades, the Game Corner, the daycare, the Sevii 1-3 trip).
   { kind: 'command', name: 'adddecoration', tag: 'side', where: "(Std_ObtainDecoration)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
   { kind: 'command', name: 'bufferdecorationname', tag: 'side', where: "(EventScript_ObtainDecorMessage)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
-  { kind: 'command', name: 'hidecoinsbox', tag: 'side', where: "CeladonCity_GameCorner, CeladonCity_GameCorner_PrizeRoom" },
   { kind: 'command', name: 'playslotmachine', tag: 'side', where: "CeladonCity_GameCorner" },
-  { kind: 'command', name: 'showcoinsbox', tag: 'side', where: "CeladonCity_GameCorner, CeladonCity_GameCorner_PrizeRoom" },
-  { kind: 'command', name: 'updatecoinsbox', tag: 'side', where: "CeladonCity_GameCorner, CeladonCity_GameCorner_PrizeRoom" },
   { kind: 'special', name: 'BackupHelpContext', tag: 'side', where: "(EventScript_AccessHallOfFame), PalletTown_ProfessorOaksLab", note: "the Hall of Fame PC and the Pokédex rating; help system (a no-op like the other help specials)" },
   { kind: 'special', name: 'BufferBigGuyOrBigGirlString', tag: 'side', where: "ThreeIsland_BerryForest, ThreeIsland_House1, TwoIsland_JoyfulGameCorner" },
   { kind: 'special', name: 'BufferMoveDeleterNicknameAndMove', tag: 'side', where: "FuchsiaCity_House3" },
@@ -60,7 +57,6 @@ export const KNOWN_GAPS: KnownGap[] = [
   { kind: 'special', name: 'GetNumLevelsGainedForRoute5DaycareMon', tag: 'side', where: "Route5_PokemonDayCare" },
   { kind: 'special', name: 'GetNumMovesSelectedMonHas', tag: 'side', where: "FuchsiaCity_House3" },
   { kind: 'special', name: 'GetProfOaksRatingMessage', tag: 'side', where: "PalletTown_ProfessorOaksLab" },
-  { kind: 'special', name: 'GetRandomSlotMachineId', tag: 'side', where: "CeladonCity_GameCorner" },
   { kind: 'special', name: 'GetSeagallopNumber', tag: 'side', where: "BirthIsland_Harbor, FiveIsland_Harbor, FourIsland_Harbor, NavelRock_Harbor, OneIsland_Harbor, ... (10 in all)" },
   { kind: 'special', name: 'GetSelectedMonNicknameAndSpecies', tag: 'side', where: "FourIsland_PokemonDayCare, Route5_PokemonDayCare" },
   { kind: 'special', name: 'GetSelectedSeagallopDestination', tag: 'side', where: "FiveIsland_Harbor, FourIsland_Harbor, OneIsland_Harbor, SevenIsland_Harbor, SixIsland_Harbor, ... (8 in all)" },

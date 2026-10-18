@@ -1432,6 +1432,9 @@ def main():
     from extract_menus import extract_menus
 
     extract_menus(decomp, out)
+    from extract_slots import extract_slot_machine
+
+    extract_slot_machine(decomp, out)
     print("pokedex")
     from extract_pokedex import extract_pokedex
 
