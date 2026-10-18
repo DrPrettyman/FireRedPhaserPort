@@ -33,11 +33,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     heights the first time the guru measures (the script waits for it). The diploma returns through the field's
     plain fade from black rather than FieldCB_WarpExitFadeFromBlack's Task_ExitNonDoor (same look).
   - Fall warps (world/fallWarp.ts): silent (SE_FALL, SE_M_STRENGTH); no help context while surfing on Seafoam B4F.
-  - Easy Chat (menus/easyChat.ts, SIDE_PLAN.md W-easychat): the screen (`special ShowEasyChatScreen`,
-    easy_chat_2.c / easy_chat_3.c) isn't ported yet; it's a known gap the scripts run past, leaving VAR_0x8004 as the
-    script set it (EASY_CHAT_TYPE_PROFILE = 0), so the Pewter profile woman always takes the passphrase branch
-    ("I've heard that before") and the Viridian Mart questionnaire (VAR_0x8004 = EASY_CHAT_TYPE_QUESTIONNAIRE,
-    VAR_RESULT still YES from its msgbox) thanks the player for answers never given. ShowEasyChatMessage shows
+  - Easy Chat (menus/easyChat.ts, menus/easyChatScreen.ts, SIDE_PLAN.md W-easychat): the screen's word choosing
+    isn't ported yet (unit 4): A on a field (the groups / A-Z keyboard / word list, ECInterfaceCmd_09-22) logs
+    `[easy chat] ECInterfaceCmd_NN isn't ported yet` once and draws nothing, while the model moves into those input
+    states (B / A there still work blind). So far the screen only edits by DEL. ALL; the e2e test writes a changed
+    word into the buffer through the probe. The screen is silent (SE_SELECT).
+    ShowEasyChatScreen: on the GBA the script's `fadescreen FADE_FROM_BLACK` after the special
+    runs unseen before the screen takes over and FieldCB_ContinueScript fades the field in; here the script waits
+    at the special and that `fadescreen` does the fade in (as the move deleter; same on screen). The mail type isn't
+    modelled (the special does nothing for it). ShowEasyChatMessage shows
     its text like `messageautoscroll` does, as a plain field message (no auto-scroll; the profile's two lines fit one
     box). InitEasyChatPhrases doesn't clear the mail words (mail isn't modelled) and clears additionalPhrases only
     (the C's non-UBFIX loop clears 64 bytes, into the Mauville old man's data that's re-initialized right after).

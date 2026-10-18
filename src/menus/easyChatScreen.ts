@@ -138,7 +138,7 @@ export const EASY_CHAT_GFX = [
   'sText_Pal',
 ];
 
-/** FONT_NORMAL_COPY_1 (the port's fonts fall back to FONT_NORMAL's glyphs for the copies) */
+/** FONT_NORMAL_COPY_1 */
 const FONT_NORMAL_COPY_1 = 1;
 
 // characters.h

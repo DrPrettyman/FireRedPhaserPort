@@ -549,7 +549,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   `ScriptHost.doNamingScreen` (FieldMenuScene `naming`). Oak's speech calls it with NAMING_SCREEN_PLAYER
   (monSpecies = the player's gender) and NAMING_SCREEN_RIVAL on MainMenuScene, preloading `namingScreenGfxSymbols`
   after `setObjectEventGraphicsInfo` (the icons are object event graphics) and `loadMenusData` (the keyboard).
-- **Easy Chat (easy_chat.c; the screen is SIDE_PLAN.md W-easychat units 2-4):** `menus/easyChatData.ts` holds
+- **Easy Chat (easy_chat.c, easy_chat_2.c, easy_chat_3.c; SIDE_PLAN.md W-easychat, choosing words is unit 4):**
+  `menus/easyChatData.ts` holds
   public/gen/easyChat.json (tools/extract_easy_chat.py: sEasyChatGroups, the alphabetical word lists, the group
   names, the default words, plus easy_chat_2.c's screen templates and passphrases), set by Assets.init before any
   GameState exists (unit tests: gameData.ts), and InitEasyChatPhrases / InitQuestionnaireWords, which the GameState
@@ -580,6 +581,27 @@ this is the next level down. When you add or change a subsystem, update its entr
   the YES/NO the screen creates (initial cursor: NO for quit / DEL ALL, YES for confirm); without it a model of it
   reads the same keys (`GetEasyChatYesNoCursor`). Tests: tests/unit/easyChatScreen.test.ts (key presses through
   the fields, footer, groups, keyboard, blue box, word list, the YES/NO menus and both passphrases).
+  The screen, `menus/easyChatScreen.ts`, is easy_chat_2.c's task / CB2 wiring (ShowEasyChatScreen → DoEasyChatScreen
+  → Task_InitEasyChat, which runs the whole setup in one frame, → Task_RunEasyChat: fade in, joypad → command, fade
+  out, EasyChat_OnLeave, DismantleEasyChat → the callback) plus easy_chat_3.c (`sEasyChatGraphicsResources` is
+  struct ECWork). `special ShowEasyChatScreen` (script/easyChatSpecials.ts) runs it with
+  `host.runScreenFromScript(ShowEasyChatScreen, EASY_CHAT_GFX)` and `stopScript` (no `waitstate`, as
+  SelectMoveDeleterMove); it leaves through a local CB2_ReturnToFieldContinueScript (the field stays black and
+  Common_ShowEasyChatScreen's `fadescreen FADE_FROM_BLACK` fades it in). Graphics: `graphics/easy_chat/` in
+  extract_gfx.py's GFX_PREFIXES (gEasyChat* and easy_chat_3.c's static s* symbols; LoadSpriteGfx loads every sheet
+  and palette, the rectangle cursor / mode / button window ones for unit 4). Layers: BG3 the yellow window
+  (gEasyChatWindow_Tilemap) with the phrase window (sPhraseFrameDimensions[frameId], baseBlock 0x60) and the footer;
+  BG1 the orange text input frame (DrawECFrameInTilemapBuffer) and the title (window 0); BG0 the instructions
+  (window 1, the user's frame at tile 1 / palette 14) and the YES/NO (sEasyChatYesNoWindowTemplate); BG2 window 2
+  for unit 4's groups / keyboard / words, shown only inside WIN0 (WINOUT leaves BG2 out; WIN0 is empty until unit
+  4's frame animation sets it). Interface commands: `EasyChatInterfaceCommand_Setup(id)` / `_Run()`;
+  ECInterfaceCmd_01-08 are ported, 09-22 log once and return (unit 4 replaces them; UpdateVerticalScrollArrowVisibility
+  and UpdateStartSelectButtonSpriteVisibility are exported ready). Probe `__test.easyChat()`: the live model
+  (`screen`), `lastCommand`, the triangle cursor (x, y, x2, bouncing), START / SELECT visibility, `idle`
+  (Task_RunEasyChat reading keys, no fade) and `reprint()` (PrintECFields). Test: tests/e2e/easyChat.test.ts (the
+  Pewter profile woman: B → YES, the cursor over fields and footer, DEL. ALL, START → YES unchanged / changed /
+  MYSTERY EVENT IS EXCITING; the Pewter Mart questionnaire at (1, 4) with LINK TOGETHER WITH ALL). Wait for a
+  command with the probe (`lastCommand` + `screen.state` + `idle`), not a fixed number of frames.
 - **Party selection from scripts, tutors, the move deleter:** `menus/partyMenuSpecials.ts` is
   party_menu_specials.c (ChoosePartyMon, ChooseMonForMoveRelearner, SelectMoveDeleterMove, the deleter's
   helpers) plus the ChooseMonForMoveTutor special; `PARTY_MENU_SPECIALS` is spread into SPECIALS. A special that

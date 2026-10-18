@@ -182,3 +182,26 @@ test('MYSTERY EVENT IS EXCITING confirmed: EventScript_GaveSpecialProfile', asyn
   await game.mashUntil((t) => t.idle() && !t.field()!.script, { what: 'the script over', button: 'B' });
   expect(await game.eval((t) => t.var('VAR_TEMP_1'))).toBe(1);
 });
+
+test('the Pewter Mart questionnaire: LINK TOGETHER WITH ALL enables Mystery Gift (EventScript_EnableMysteryGift)', async () => {
+  // MB_QUESTIONNAIRE is the mart layout's (1, 4), on the counter's end (field_control_avatar.c → EventScript_Questionnaire).
+  const game = await session.start({ start: 'after-rival', map: 'PewterCity_Mart', x: 1, y: 5 });
+  await game.eval((t) => {
+    const d = t.state!.defines;
+    t.state!.questionnaireWords.splice(0, 4, ...['EC_WORD_LINK', 'EC_WORD_TOGETHER', 'EC_WORD_WITH', 'EC_WORD_ALL'].map((n) => d.require(n)));
+  });
+  await game.eval((t) => t.face('up'));
+  // "Would you like to fill out a questionnaire?" YES, then the screen (EASY_CHAT_TYPE_QUESTIONNAIRE).
+  await game.mashUntil((t) => t.gbaScreen() === 'CB2_EasyChatScreen', { what: 'the Easy Chat screen' });
+  await game.waitForScreen('CB2_EasyChatScreen');
+  await game.screenshot('easyChat-questionnaire');
+  await game.press('START');
+  await waitForCommand(game, CMD.PROMPT_CONFIRM, STATE.CONFIRM_YES_NO);
+  await game.press('A');
+  await waitForField(game);
+  // CompareQuestionnaireResponseWithPassphrase: VAR_0x8004 = 0 → the clerk turns, "!", "You know those words?"
+  await untilMessage(game, /those words/, 'Text_YouKnowThoseWords');
+  await game.mashUntil((t) => t.idle() && !t.field()!.script, { what: 'the script over', button: 'B' });
+  expect(await game.eval((t) => t.flag('FLAG_SYS_MYSTERY_GIFT_ENABLED'))).toBe(true);
+  expect(await game.eval((t) => t.flag('FLAG_SYS_SET_TRAINER_CARD_PROFILE'))).toBe(false);
+});

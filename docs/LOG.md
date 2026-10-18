@@ -2467,3 +2467,27 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   modes, page down on 25 and 9 words, DEL / DEL ALL, quit and confirm with and without changes, a profile of MYSTERY
   EVENT IS EXCITING typed on the keyboard, the questionnaire's LINK TOGETHER WITH ALL typed through the groups).
   No e2e: nothing user-visible changes until the screen (unit 3).
+
+### Easy Chat: the screen's main layer and ShowEasyChatScreen (W-easychat unit 3)
+
+- `menus/easyChatScreen.ts` (new): easy_chat_2.c's DoEasyChatScreen / Task_InitEasyChat / Task_RunEasyChat (fade in,
+  joypad → interface command, fade out, EasyChat_OnLeave) / DismantleEasyChat around unit 2's model, and easy_chat_3.c's
+  main layer: LoadEasyChatGraphics with the BG and window templates, the palettes, the title, the instructions in
+  the user's window frame, the phrase window and orange frame by sPhraseFrameDimensions[frameId], the fields (red /
+  green underscores for an empty one), the DEL. ALL / CANCEL / OK footer, the bouncing triangle cursor, the START /
+  SELECT and scroll arrow sprites (created hidden), the YES/NO window, ECInterfaceCmd_01-08. Commands 09-22 (groups,
+  keyboard, word list) log once and return: unit 4.
+- Graphics: `graphics/easy_chat/` in extract_gfx.py's GFX_PREFIXES (no symbol clashes).
+- `special ShowEasyChatScreen` (script/easyChatSpecials.ts): `runScreenFromScript` + `stopScript`, back through
+  CB2_ReturnToFieldContinueScript; off scriptCoverageGaps.ts. Probe `__test.easyChat()` (src/dev/testHooks.ts).
+- Found on the way: START → YES on an unchanged profile gives VAR_RESULT FALSE (Confirm_HandleYesNoMenu's
+  HasECMessageChanged), so the profile woman says "decided not to" (EventScript_CancelGiveProfile), as on the GBA;
+  EventScript_GaveProfile needs a changed word. The Pewter Mart questionnaire is reachable (GetMartClerkObjectId was
+  already in), so LINK TOGETHER WITH ALL now enables Mystery Gift through the screen.
+- Verified: typecheck; `npm test` (289); e2e easyChat.test.ts (6, rewritten: the profile woman's B → YES with the
+  NO / B round trip, the cursor positions on the fields (HELLO's 30 px + 17) and the footer (28 / 115 / 97), DEL. ALL
+  → YES and START asking "Quit editing?" on empty fields, START → YES unchanged, a changed word (written into the
+  buffer through the probe until unit 4 types it) → EventScript_GaveProfile and the saved profile read back, MYSTERY
+  EVENT IS EXCITING → EventScript_GaveSpecialProfile, the questionnaire's LINK TOGETHER WITH ALL →
+  FLAG_SYS_MYSTERY_GIFT_ENABLED), all green on the first run. Screenshots of the profile, the three prompts, the
+  empty fields and the questionnaire checked by eye against the C's layout.
