@@ -639,8 +639,8 @@ A): they need no unit, only a listen once sound.ts is real. Units 4-7 own disjoi
 | A | W-audiodata 1, W-audiodata 2, W-m4a 1 | nothing |
 | B | W-m4a 2, W-sound 1, W-out 1, W-ref 1 | W-m4a 2: W-m4a 1 + W-audiodata 2. W-sound 1: W-m4a 1 + W-audiodata 1 (its e2e times real SEs and fanfares). W-out 1: nothing (it could run in A; it waits for B to keep A to three workers). W-ref 1: W-m4a 1 (it measures the ROM; its cry numbers wait for W-sound 2) |
 | C | W-m4a 3, W-sound 2, W-sound 3, W-sound 4 | W-m4a 3: W-m4a 2 + W-out 1. W-sound 2: W-sound 1 + W-m4a 2 (it also pins W-ref 1's cry numbers). W-sound 3 and 4: W-sound 1 |
-| D | W-m4a 4, W-sound 5, W-sound 6, W-sound 7 | W-m4a 4: W-m4a 3. W-sound 5-7: W-sound 2 (cries) |
-| later | W-ref 2 | W-m4a 4 (the listening comparison needs the whole mix) |
+| D | W-m4a 4, W-sound 5, W-sound 6, W-sound 7 (split smaller as run: "Batch D as run") | W-m4a 4: W-m4a 3. W-sound 5-7: W-sound 2 (cries) |
+| D (end) | W-sound 8, W-ref 2 | W-sound 8: the rest of D. W-ref 2: W-m4a 4 (the listening comparison needs the whole mix) |
 
 Fourteen units in four batches, plus W-ref 1 (batch B) and W-ref 2 (later). Fanfare and `waitse` waits become GBA-accurate in batch B (W-sound 1), cry and
 warp (BGM fade) waits in batch C (W-sound 2 and 3); the first sound is heard in batch C (W-m4a 3). Every
@@ -698,6 +698,81 @@ Result (PRs #95-#98): all four units done. Notes for batch D from the workers:
   doesn't call Overworld_PlaySpecialMapMusic on return yet.
 - Text A presses play SE_SELECT on SE2 (and talking plays one), so a `waitse` right after a text box waits ~11
   frames, as on the GBA.
+
+### Batch D as run (W-m4a 4a-b, W-sound 5a-b, 6a-b, 7a-b, 8, W-ref 2)
+
+Checked against master `3515dfd`. In batch C the map music and cries units ran 82-90 minutes and 330-410k tokens,
+so batch D's units are split smaller (decision 20). One PR per unit; a unit that follows another in its
+workstream starts from master after the earlier one merged. "Owns" is by port file: a call lives in the file that
+ports its C file. Every unit calls `gba/sound.ts` directly with the C's arguments (species ids, `K.CRY_MODE_*`,
+pans), not through `ui.play*`.
+
+1. **W-m4a 4a: CgbSound, the engine side** (owns `src/audio/` except `outputCore.ts` / `worklet.ts`'s synth).
+   CgbSound (m4a.c:925, 309 lines: the per-frame software envelope, pseudo echo, the length counter, the
+   NRx0-NRx4 writes), MidiKeyToCgbFreq (m4a.c:810, gCgbFreqTable / gNoiseTable), CgbOscOff / CgbPan / CgbModVol,
+   the wave channel's wave load, ply_port / MPlayExtender's register writes: each frame's PSG register state goes
+   into `pushFrame`'s `psg` field (extend `PcmFrame` / `m4aPcmFrame()` / `AgbMainFrameEnd`; the PsgFrame shape is
+   W-m4a 4a's to fix). The mono routing is `gRegSoundCntH` as sent today; CgbPan reads `soundInfo.mode & 1`
+   (m4a.c:907). Unit tests: the register writes of a square note, a wave note and a noise note frame by frame
+   against the C; channel lifetimes with the release envelope; nothing audible yet. Replaces the placeholder's
+   lifetime part in docs/DEVIATIONS.md.
+2. **W-m4a 4b: the PSG synth** (owns `outputCore.ts`, `worklet.ts`, `tools/render-audio.ts`,
+   `tests/audioRender.ts`). The synth from the register frames (squares with duty and sweep, the wave channel's
+   32 4-bit samples and volume shifts, noise with both LFSR widths, the hardware envelope and length counter,
+   SOUNDCNT_L / SOUNDCNT_H volumes and routing), mixed with the DirectSound DAC as the GBA's sound circuit does
+   (poryaaaa's `m4a_channel.c` as the reference, MIT), in the worklet and the headless renderer. Checks without
+   listening: the PSG-only SEs (SE_SELECT, SE_DOOR, SE_EXIT, SE_PC_ON, SE_WALL_HIT, SE_FLEE) render with the
+   expected length and a non-trivial RMS; MUS_PALLET and MUS_TITLE gain their square / wave parts. Removes the
+   placeholder deviation and every "no PSG parts until W-m4a 4" clause in docs/DEVIATIONS.md. Music complete.
+3. **W-sound 5a: battle music, the hooks, the battle scripts** (owns `scenes/BattleScene.ts`,
+   `battle/battleUi.ts`, `battle/transition.ts`, `battle/main.ts`, `battle/bsCommands1-4.ts`, the battle-start
+   code in `scenes/OverworldScene.ts` and `script/specials.ts`). First, BattleScene's `ui.playSE / playCry /
+   playBGM / playFanfare` become pass-throughs to sound.ts (so callers not yet converted are heard); then
+   battle_setup.c's CreateBattleStartTask song (PlayMapChosenOrBattleBGM / GetBattleBGM, the scripted and
+   legendary battles' songs), battle_transition.c's SE_MUGSHOT, battle_main.c's calls (victory music,
+   FadeOutMapMusic, ...), battle_script_commands.c's (playse, fanfare, playfaintcry, the level-up
+   IsFanfareTaskInactive wait, the victory music in bsCommands2). battle-test.html plays the battle music too.
+   E2E: a wild and a trainer battle start their music in the transition, the victory music plays, the map music
+   is back after. Lengthens waits (level-up fanfare): full suite.
+4. **W-sound 5b: the controllers** (owns `battle/controllerPlayer.ts`, `controllerOakOldMan.ts`,
+   `controllerOpponent.ts`, `controllerSafari.ts`, `controllerCommon.ts`). Every call of
+   battle_controller_player.c, _oak_old_man.c, _opponent.c, _safari.c, battle_controllers.c: the menus' SEs, SE_EXP,
+   the intro cry and its IsCryPlayingOrClearCrySongs wait, Task_PlayerController_RestoreBgmAfterCry, the faint
+   cries, FadeOutMapMusic. Lengthens waits (battle intros): full suite.
+5. **W-sound 6a: balls, the low HP beep, the interface** (owns `battle/gfx.ts`, `battle/battleInterface.ts`, the
+   pokeball.c port, `menus/partyMenu.ts`'s HandleBattleLowHpMusicChange line). pokeball.c (the throw, wobbles,
+   the send-out SE and cry, its waits), battle_gfx_sfx_util.c (SE_LOW_HEALTH on SE3: HandleLowHpMusicChange /
+   BattleStopLowHpSound, the anim SE wait at :297), battle_interface.c. Lengthens waits: full suite.
+6. **W-sound 6b: the anim engine** (owns `battle/anim/`). battle_anim.c (PlaySE12WithPanning's pan through
+   BattleAnimAdjustPanning, SE12PanpotControl, the end-of-anim SE wait at :479, gMovesWithQuietBGM's BGM volume,
+   m4aMPlayStop of SE1 / SE2), battle_anim_sound_tasks.c, battle_anim_special.c (MUS_CAUGHT_INTRO, the ball
+   SEs), the type files' remaining `ui.playSE`. Lengthens waits (every anim): full suite.
+7. **W-sound 7a: evolution, egg hatching, trades, music after script screens** (owns `menus/evolutionScene.ts`,
+   `evolutionGraphics.ts`, `eggHatch.ts`, `tradeScene.ts`, `OverworldScene.runScreenFromScript`).
+   evolution_scene.c and evolution_graphics.c (the music, cries, the SE_EXP / IsSEPlaying waits incl.
+   `evolutionScene.ts:544`), egg_hatch (daycare.c), trade_scene.c's in-game path; the map music after the trades,
+   daycare, move relearner and slot machine as the C restores it. Lengthens waits: full suite.
+8. **W-sound 7b: Hall of Fame, credits, Pokédex, bag, title** (owns `menus/hallOfFame.ts`, `credits.ts`,
+   `pokedexScreen.ts`, `pokedexArea.ts`, `itemMenu.ts`, `itemUse.ts`, `titleScreen.ts`, `mainMenu.ts`,
+   `scenes/MainMenuScene.ts`, `trainerCard.ts`). hall_of_fame.c + hof_pc.c (MUS_HALL_OF_FAME, the cries,
+   SE_SAVE, SE_APPLAUSE, FadeOutBGM and the warp's fade), credits.c (the NoDucking cries), pokedex_screen.c (the
+   SE_DEX_* sounds, cries, the BGM volume calls), item_menu.c / item_use.c (the bike bell, ...), title_screen.c,
+   main_menu.c, trainer_card.c. Lengthens waits (the Hall of Fame's cries): full suite.
+9. **W-sound 8: the sweep** (after 1-8 merged). Every docs/DEVIATIONS.md entry and `src/` comment that says no
+   audio / silent / "until W-sound / W-m4a": check it against the code and the C, add the calls still missing
+   (Lt. Surge's trash cans, Bill's cell separator, Easy Chat, the TM case, berry pouch, Safari entrance, Storage
+   System, naming screen, ...), and remove the stale entries; delete BattleUi's `play*` hooks once nothing calls
+   them. At the end only "Not in this plan" and the agreed GBA-exact deviations remain.
+10. **W-ref 2: the listening comparison** (after W-m4a 4b merged; scripts and recordings in
+    `/Users/joshua/Coding/PokemonProjects/wref-scratch/`, outside the repos). The same songs, SEs and cries
+    recorded from the ROM in mGBA and rendered by the port; per item, where they differ (length, loudness
+    envelope, pitch / tempo, the 0.46% 60 Hz deviation aside); small engine fixes in its PR, the rest named.
+    Output: a results table in this file's W-ref section, and a listening page next to the recordings in
+    wref-scratch (decision 22). May hand back to a continuation (W-ref 2b) for fixes.
+
+Waves: 4a, 5a, 6b, 7a first (4a starts the critical path 4a → 4b → W-ref 2); 5b, 6a, 7b as workers finish, 4b
+once 4a merged; then W-sound 8 and W-ref 2. At most four at once; the units that lengthen waits take turns on the
+full suite through `/Users/joshua/Coding/PokemonProjects/.e2e-full.lock` (decision 19), and so does the merger.
 
 ### Shared building blocks and owners
 
@@ -838,6 +913,15 @@ None open (question 1 became decision 15).
     unit makes the mono bit audible and can check it.
 19. **Workers' full e2e runs take turns** (coordinator, revisit if you disagree): a lock directory outside the repos
     (`/Users/joshua/Coding/PokemonProjects/.e2e-full.lock`), since three units in batch C each run the full suite.
+20. **Batch D in smaller units** (coordinator, revisit if you disagree): W-m4a 4 in two (engine side, synth),
+    W-sound 5-7 in two each by file, plus W-sound 8, a sweep of what's left after them; ten units in place of
+    five, so none runs much past the hour (section 6, "Batch D as run").
+21. **BattleUi's `play*` hooks** (coordinator, revisit if you disagree): W-sound 5a makes them pass-throughs to
+    sound.ts at once; each battle unit then calls sound.ts directly in its own files (the hooks carry no cry mode
+    or pan), and W-sound 8 deletes them when nothing calls them.
+22. **W-ref 2's output** (coordinator, revisit if you disagree): the per-song / SE / cry findings as a table in
+    this file (W-ref section), the recordings and an HTML page to A/B them in wref-scratch, outside the repos.
+    Nothing recorded from the ROM goes into the repo (decision 13).
 
 ## Not in this plan
 
