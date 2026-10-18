@@ -2521,8 +2521,9 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   walk gave up at once (the walk onto Vermilion's ticket check never happened). The helpers moved to
   `tests/e2e/seagallopHelpers.ts`; `warp` now waits until the field takes input or a map script has started, and
   `talkToHarborSailor` waits for an idle field after a ride.
-- Verified: typecheck; `npm test` (29 files, 289 tests, after merging master); e2e seagallop.test.ts (8) and seviiQuest.test.ts (1), green
-  in two runs beside other e2e files for load (with storyCeladonSaffron + sideEvents, then gameCorner +
-  mainPathLeftovers: the e2e files with multichoice menus, all green). A first run beside five other files failed
-  three ferry tests on the `warp` race above, fixed before both green runs; green again alone after merging master. Screenshots of a harbor menu, Three
-  Island's bikers, Berry Forest and Navel Rock's harbor checked by eye.
+- Verified: typecheck; `npm test` (29 files, 289 tests, after merging master); e2e seagallop.test.ts (8) and
+  seviiQuest.test.ts (1), green in two runs beside other e2e files for load (with storyCeladonSaffron + sideEvents,
+  then gameCorner + mainPathLeftovers: the e2e files with multichoice menus, all green), and again alone after
+  merging master. A first run beside five other files failed three ferry tests on the `warp` race above, fixed
+  before the green runs. Screenshots of a harbor menu, Three Island's bikers, Berry Forest and Navel Rock's harbor
+  checked by eye.
