@@ -134,3 +134,62 @@ test('the fishing guru measures a Magikarp and keeps the record', async () => {
   await untilMessage(game, /same size as the one/, 'the tie (Route12_FishingHouse_Text_HuhXInchesSameSizeAsLast)');
   await scriptDone(game, 'the tie');
 });
+
+// ---------------------------------------------------------------- the diploma (CeladonCity_Condominiums_3F)
+
+/** Mark national dex numbers 1..n as seen and caught. */
+const catchDex = (game: Game, n: number) =>
+  game.eval((t, count) => {
+    const s = t.state!;
+    for (let i = 1; i <= count; i++) {
+      s.dexSeen.add(i);
+      s.dexCaught.add(i);
+    }
+    s.setFlag('FLAG_SYS_POKEDEX_GET', true);
+  }, n);
+
+test('the game designer hands over the diploma for a complete Kanto Pokédex', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'CeladonCity_Condominiums_3F', x: 3, y: 9, party: [MEWTWO] });
+  await catchDex(game, 150); // all but Mew: HasAllKantoMons
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await untilMessage(game, /Congratulations/i, 'the designer: "Congratulations!"');
+  // ShowDiploma: the screen fades in, then takes A (Task_HandleDiplomaInput)
+  const shown = await game.mashUntil((t) => t.gbaScreen() === 'CB2_Diploma' && !t.paletteFadeActive() && (t as any).diploma(), { what: 'the diploma', button: 'B' });
+  expect(shown.national).toBe(false); // the KANTO half (HasAllMons needs the Johto and Hoenn mons too)
+  await game.screenshot('diploma-kanto');
+  await game.mashUntil((t) => t.idle() && !t.field()!.script && t.field()!.map === 'CeladonCity_Condominiums_3F', { what: 'back on the field' });
+  expect(await game.eval((t) => (t as any).diploma())).toBeUndefined();
+});
+
+test('without a complete Kanto Pokédex the designer only asks to see it', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'CeladonCity_Condominiums_3F', x: 3, y: 9, party: [MEWTWO] });
+  await catchDex(game, 149);
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await untilMessage(game, /come tell me/, 'the designer: "When you finish, come tell me!"');
+  expect(await game.eval((t) => t.var('VAR_RESULT'))).toBe(0);
+  await scriptDone(game, 'the designer');
+});
+
+test('with every mon caught the diploma shows its NATIONAL half', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'CeladonCity_Condominiums_3F', x: 3, y: 9, party: [MEWTWO] });
+  await catchDex(game, 386); // HasAllMons (the event mons don't count, so catching them too is fine)
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  const shown = await game.mashUntil((t) => t.gbaScreen() === 'CB2_Diploma' && !t.paletteFadeActive() && (t as any).diploma(), { what: 'the diploma' });
+  expect(shown.national).toBe(true); // BG1HOFS 0x100
+  await game.mashUntil((t) => t.idle() && !t.field()!.script && t.field()!.map === 'CeladonCity_Condominiums_3F', { what: 'back on the field' });
+});
+
+// ---------------------------------------------------------------- SetSeenMon (SSAnne_2F_Room1)
+
+test("the S.S. Anne gentleman's Snorlax picture marks Snorlax as seen", async () => {
+  const game = await session.start({ start: 'after-rival', map: 'SSAnne_2F_Room1', x: 2, y: 4, party: [MEWTWO] });
+  const snorlax = await game.eval((t) => t.state!.pokemon.nationalDex(t.state!.defines.require('SPECIES_SNORLAX')));
+  expect(await game.eval((t, n) => t.state!.dexSeen.has(n), snorlax)).toBe(false);
+  await game.eval((t) => t.face('left'));
+  await game.press('A');
+  await scriptDone(game, 'the gentleman');
+  expect(await game.eval((t, n) => t.state!.dexSeen.has(n), snorlax)).toBe(true);
+});

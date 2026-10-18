@@ -46,6 +46,7 @@ import { startMenuProbe } from '../ui/StartMenu';
 import { helpMessageWindowProbe } from '../ui/HelpMessageWindow';
 import { optionMenuProbe } from '../menus/optionMenu';
 import { museumFossilPicProbe } from '../ui/MuseumFossilPic';
+import { diplomaProbe } from '../menus/diploma';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -534,6 +535,8 @@ function createApi(game: Phaser.Game) {
     optionMenu: () => optionMenuProbe(),
     /** The Pewter Museum's fossil pic (ui/MuseumFossilPic.ts), while one is up. */
     museumFossilPic: () => museumFossilPicProbe(),
+    /** The diploma screen (menus/diploma.ts): init / input state, NATIONAL or KANTO. */
+    diploma: () => diplomaProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */
     saveDialog: () => {
       const p = saveDialogProbe();
