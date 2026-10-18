@@ -348,7 +348,7 @@ this is the next level down. When you add or change a subsystem, update its entr
   `LoadFieldTilesetsForShop` puts the map's tiles/palettes where the overworld would have left them in VRAM.
   `menus/objectEventGraphics.ts` is CreateObjectGraphicsSprite for any GBA-layer screen that needs NPC sprites.
   Test: `?start=after-rival&map=PewterCity_Mart&x=4&y=3`, face left, A (TM layout: Celadon Dept. Store 2F, x=3 y=6).
-- **Game Corner (coins box, slot machine logic):** `ui/CoinsBox.ts` is coins.c's field window (ShowCoinsWindow /
+- **Game Corner (coins box, slot machine, photo printer):** `ui/CoinsBox.ts` is coins.c's field window (ShowCoinsWindow /
   PrintCoinsString / HideCoinsWindow), drawn like `ui/MoneyBox.ts`; the script commands `showcoinsbox` /
   `updatecoinsbox` / `hidecoinsbox` call `ScriptHost.showCoinsBox` etc. (OverworldScene; the box's last printed
   `amount` is the test probe). `menus/slotMachineLogic.ts` is slot_machine.c's game logic without the screen: a
@@ -358,11 +358,31 @@ this is the next level down. When you add or change a subsystem, update its entr
   GetWinFlagByLine; functions that roll take an optional `rand` (default Random()). Its tables (reel icons, payouts,
   bias chances, the line tables, field_specials.c's sSlotMachineIndices and the file-local enums) are extracted by
   `tools/extract_slots.py` to `slotMachine.json`, loaded by OverworldScene (`loadSlotMachineData`). Game Corner
-  specials go in `script/gameCornerSpecials.ts` (GAME_CORNER_SPECIALS, spread into SPECIALS): GetRandomSlotMachineId.
-  The screen (`playslotmachine`, CB2_InitSlotMachine, MainTask_*) is W-slots unit 2 and builds on this module.
+  specials go in `script/gameCornerSpecials.ts` (GAME_CORNER_SPECIALS, spread into SPECIALS): GetRandomSlotMachineId,
+  UpdateTrainerCardPhotoIcons (the photo printer: the party as mail species and the tint into the trainer card's
+  VAR_TRAINER_CARD_MON_ICON_* vars). The same file has the Game Corner scripts' field effect natives,
+  FldEff_SmileyFaceIcon (the field's Phaser emote over the object) and FldEff_PhotoFlash (a FADE_FROM_WHITE), which
+  `registerGameCornerFieldEffects(host, defines)` registers from the ScriptEngine constructor (they need the host).
+  The screen: `menus/slotMachine.ts` is the rest of slot_machine.c. `playslotmachine` (ScriptEngine →
+  `PlaySlotMachineFromScript`) loads `slotMachineGfxSymbols()`, then `host.runScreenFromScript` runs PlaySlotMachine
+  on FieldMenuScene with CB2_ReturnToFieldContinueScriptPlayMapMusic; the script waits (ScriptContext_Stop) until
+  the field has faded back in. Structure as in the C: a main task (MainTask_SlotsGameLoop and the others, switched by
+  SetMainTask), Task_SpinReels (the logic's SpinReels + UpdateReelIconSprites), and Task_SlotMachine running up to 8
+  setup tasks (SlotsTask_*, `SetSlotMachineSetupTask(funcno, slot)` / `IsSlotMachineSetupTaskActive(slot)`), whose
+  data (struct SlotMachineSetupTaskData) is the module's `sSetupTaskData`. The reels are 15 affine sprites sharing
+  OAM matrix 0; HBlankCB_SlotMachine writes its PA (`oamMatrices[0].a`) and BLDY per line, which squashes and darkens
+  the reels towards their top and bottom (BLDCNT darkens BG3, OBJ and the backdrop, which shows through BG2's reel
+  window). The help (RIGHT) slides BG1's combos window in through WIN0; the field leaves WIN0V at (0, 255), which
+  PlaySlotMachineFromScript sets since FieldMenuScene starts from reset registers. The slot machine's graphics come
+  from `graphics/slot_machine/`; its `sBg_Pal` clashes with main_menu.c's, so extract_gfx.py now also writes a
+  clashing static symbol as `<file stem>.<symbol>` (`slot_machine.sBg_Pal`; the plain name stays the first file's,
+  in sorted order). Probe `__test.slotMachine()`: the main task and step, `ready`, bet, reels, win flags, payout,
+  the CREDIT / PAYOUT digits drawn, Clefairy's anim, the help slide, the line lights' palettes, the reel buttons.
   Tests: `tests/unit/slotMachine.test.ts` (hand-worked reel positions), `tests/e2e/gameCorner.test.ts` (the coin
-  clerk, the prize room, the Fisher, hidden coins). To wait for a message's `\p` in a test without a press reaching
-  the menu after it, wait in the page for `messageBox.waitingForButton` (TextPrinter.waitingForButton).
+  clerk, the prize room, the Fisher, hidden coins; the slot machine: bet with R and DOWN, spins checked against a
+  payout worked out from the reel table, START to pay, the help window, YES/NO to quit, no coins; the smiley; the
+  photo printer). To wait for a message's `\p` in a test without a press reaching the menu after it, wait in the
+  page for `messageBox.waitingForButton` (TextPrinter.waitingForButton).
 - **TM case:** `menus/tmCase.ts` is tm_case.c. `InitTMCase(type, exitCallback, allowSelectClose)` runs on whichever
   GBA host has the bag (FieldMenuScene); `menuGfxSymbols` preloads `TM_CASE_GFX`. Ways in: the bag's KEY ITEMS → TM
   CASE → OPEN (`FieldUseFunc_TmCase` in menus/itemUse.ts → TMCASE_FIELD, back to CB2_BagMenuFromStartMenu), the

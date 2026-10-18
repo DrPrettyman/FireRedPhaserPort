@@ -227,8 +227,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     profile isn't kept (only a link card prints it). The flip's per-line BG0VOFS gives line L buffer[L] (the PPU's
     HBlank convention), where the GBA's HBlank interrupt sets it for the line after, a one-line shift of the squash.
     LoadMonIconGfx's 96 colours read 48 past gMonIconPalettes on the GBA; those palettes (BG 8-10) are zeros here and
-    no icon uses them. The photo's icons need special UpdateTrainerCardPhotoIcons (the Celadon Game Corner printer),
-    which isn't in specials.ts yet, so they only show with the vars set by hand.
+    no icon uses them.
   - Credits (menus/credits.ts): no audio (MUS_CREDITS, the cries). A map scene loads asynchronously, so it can start
     a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
     GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.
@@ -293,9 +292,16 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Castform's form change (HandleSpeciesGfxDataChange) takes the new form's palette row from that battler's own
     Castform palette. The GBA keeps one gBattleStruct->castformPalette, written by whichever Castform's gfx
     loaded last, so it only differs with two Castforms of different shininess on the field.
-  - Slot machine: `playslotmachine` (the screen) isn't ported yet (W-slots unit 2), nor FLDEFF_SMILEY_FACE_ICON
-    before it. In `menus/slotMachineLogic.ts` the state's machineBias, biasCooldown and reelStopOrder start at 0;
-    PlaySlotMachine Allocs the state without zeroing it, so on the GBA they start as whatever the heap held.
+  - Slot machine: in `menus/slotMachineLogic.ts` the state's machineBias, biasCooldown and reelStopOrder start at 0;
+    PlaySlotMachine Allocs the state without zeroing it, so on the GBA they start as whatever the heap held. The
+    screen (`menus/slotMachine.ts`) has no audio, and IsFanfareTaskInactive is always TRUE, so the payout counts up
+    (and START pays it at once) without waiting for MUS_SLOTS_WIN / MUS_SLOTS_JACKPOT. HBlankCB_SlotMachine's
+    per-line squash and darkening of the reels apply to the line REG_VCOUNT names (the PPU calls it before drawing
+    that line); the GBA's HBlank interrupt for line L sets them for line L + 1, a one-line shift. After
+    MainTask_ExitSlots frees the screen, the C's Task_SpinReels still runs that frame through the NULL gfx manager;
+    the port skips it. No quest log entry (SetQLPlayedTheSlots) and no GAME_STAT_SLOT_JACKPOTS.
+  - The Game Corner's photo printer flash (FldEff_PhotoFlash) is the field's FADE_FROM_WHITE (16 → 0 in steps of 2)
+    where the C fades from 15 to 0 in steps of 3, a few frames longer.
 - **Data:** Castform has no front pic (its `front.png` isn't in the decomp; it's built from per-form images).
 
 ## Deliberate QOL changes
