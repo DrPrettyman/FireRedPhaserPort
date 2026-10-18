@@ -50,6 +50,7 @@ import { optionMenuProbe } from '../menus/optionMenu';
 import { museumFossilPicProbe } from '../ui/MuseumFossilPic';
 import { daycareLevelMenuProbe } from '../ui/DaycareLevelMenu';
 import { diplomaProbe } from '../menus/diploma';
+import { seagallopProbe } from '../menus/seagallop';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -552,6 +553,8 @@ function createApi(game: Phaser.Game) {
     daycareLevelMenu: () => daycareLevelMenuProbe(),
     /** The diploma screen (menus/diploma.ts): init / input state, NATIONAL or KANTO. */
     diploma: () => diplomaProbe(),
+    /** The Seagallop ferry scene (menus/seagallop.ts) while it's up: setup state, frames, BG3's x, the ferry, wakes. */
+    seagallop: () => seagallopProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */
     saveDialog: () => {
       const p = saveDialogProbe();

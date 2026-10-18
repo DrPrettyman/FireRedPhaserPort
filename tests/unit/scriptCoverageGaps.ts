@@ -29,12 +29,7 @@ export const KNOWN_GAPS: KnownGap[] = [
   // ---------------------------------------------------------------- side: optional content before the Hall of Fame (NPCs, trades, the Game Corner, the daycare, the Sevii 1-3 trip).
   { kind: 'command', name: 'adddecoration', tag: 'side', where: "(Std_ObtainDecoration)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
   { kind: 'command', name: 'bufferdecorationname', tag: 'side', where: "(EventScript_ObtainDecorMessage)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
-  { kind: 'special', name: 'DoSeagallopFerryScene', tag: 'side', where: "BirthIsland_Harbor, CinnabarIsland, FiveIsland_Harbor, FourIsland_Harbor, NavelRock_Harbor, ... (12 in all)", note: "the ferry; Bill's One Island trip after Blaine can be declined, so it's off the main path" },
-  { kind: 'special', name: 'DrawSeagallopDestinationMenu', tag: 'side', where: "FiveIsland_Harbor, FourIsland_Harbor, OneIsland_Harbor, SevenIsland_Harbor, SixIsland_Harbor, ... (8 in all)" },
   { kind: 'special', name: 'GetMartClerkObjectId', tag: 'side', where: "(EventScript_Questionnaire)" },
-  { kind: 'special', name: 'GetSeagallopNumber', tag: 'side', where: "BirthIsland_Harbor, FiveIsland_Harbor, FourIsland_Harbor, NavelRock_Harbor, OneIsland_Harbor, ... (10 in all)" },
-  { kind: 'special', name: 'GetSelectedSeagallopDestination', tag: 'side', where: "FiveIsland_Harbor, FourIsland_Harbor, OneIsland_Harbor, SevenIsland_Harbor, SixIsland_Harbor, ... (8 in all)" },
-  { kind: 'special', name: 'IsPlayerLeftOfVermilionSailor', tag: 'side', where: "BirthIsland_Harbor, FiveIsland_Harbor, FourIsland_Harbor, NavelRock_Harbor, OneIsland_Harbor, ... (10 in all)" },
   { kind: 'special', name: 'ShowEasyChatMessage', tag: 'side', where: "PewterCity_PokemonCenter_1F" },
   { kind: 'special', name: 'ShowEasyChatScreen', tag: 'side', where: "PewterCity_PokemonCenter_1F" },
   { kind: 'fieldeffect', name: 'FLDEFF_USE_DIVE', tag: 'side', where: "(EventScript_DeepWater), (EventScript_TrySurface)", note: "EventScript_DeepWater / EventScript_TrySurface: no FRLG map has dive spots" },

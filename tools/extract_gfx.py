@@ -24,7 +24,8 @@ from extract import read_jasc
 # credits, the region map (town map / fly map) with the dungeon map previews it shows, the TM case, the berry
 # pouch, and the Pokédex (pokedex_screen.c with the mons' footprints, the area page's maps and
 # pokedex_area_markers.c's markers), the Itemfinder's arrows and star (itemfinder.c), and the trainer card
-# (trainer_card.c), the move relearner's scroll arrows (learn_move.c), and the slot machine (slot_machine.c).
+# (trainer_card.c), the move relearner's scroll arrows (learn_move.c), the slot machine (slot_machine.c), and the
+# Seagallop ferry scene (seagallop.c).
 GFX_PREFIXES = (
     "graphics/battle_interface/",
     "graphics/battle_terrain/",
@@ -68,6 +69,7 @@ GFX_PREFIXES = (
     "graphics/script_menu/",  # the museum's fossil pics (script_menu.c)
     "graphics/diploma/",  # diploma.c (W-misc)
     "graphics/slot_machine/",
+    "graphics/seagallop/",  # seagallop.c, the ferry scene (W-ferry)
     "data/tilesets/",
 )
 
