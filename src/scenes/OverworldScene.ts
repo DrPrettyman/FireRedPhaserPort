@@ -128,6 +128,7 @@ import { initGbaText } from '../gba/window';
 import { InitStandardTextBoxWindows, InitTextBoxGfxAndPrinters } from '../gba/menu';
 import { TEXT_SPEED } from '../text/TextPrinter';
 import { HALL_OF_FAME_RECORD_GFX, setHallOfFameRecordHost } from '../world/hallOfFameRecord';
+import { registerSSAnne, setSSAnneHost, SS_ANNE_GFX, ssAnneProbe } from '../world/ssAnne';
 import type { WarpData } from '../state/GameState';
 
 /** GBA runs at ~59.73Hz; we tick game logic at a fixed 60Hz regardless of display refresh. */
@@ -392,6 +393,15 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       partyCount: () => this.state.party.length,
     });
     await loadGfx(HALL_OF_FAME_RECORD_GFX);
+    // special DoSSAnneDepartureCutscene (world/ssAnne.ts) draws at screen coordinates too
+    setSSAnneHost({
+      scene: this,
+      screenOrigin: () => ({ x: this.cameras.main.scrollX, y: this.cameras.main.scrollY }),
+      cameraTop: () => this.field.cameraTop,
+      objectByLocalId: (localId) => this.npcByLocalId(localId)?.brain.obj,
+    });
+    registerSSAnne();
+    await loadGfx(SS_ANNE_GFX);
     this.cameras.main.startFollow(this.player.anchor, true, 1, 1, 0, CAMERA_FOLLOW_OFFSET_Y);
 
     if (start.continueGame) {
@@ -409,6 +419,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }
     this.busy = false;
     testEvent('ready');
+  }
+
+  /** Dev: the S.S. Anne's departure while it runs (world/ssAnne.ts), for `__test.ssAnne()`. */
+  testSSAnne() {
+    return ssAnneProbe();
   }
 
   /** Dev: what the field is doing, for the e2e tests' `__test.field()` / `__test.idle()`. */

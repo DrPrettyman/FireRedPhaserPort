@@ -25,7 +25,6 @@ export interface KnownGap {
 export const KNOWN_GAPS: KnownGap[] = [
   // ---------------------------------------------------------------- main: on the main path to the Hall of Fame. BLOCKER in the note = the story can't go on without it.
   { kind: 'special', name: 'DoPokemonLeagueLightingEffect', tag: 'main', where: "PokemonLeague_AgathasRoom, PokemonLeague_BrunosRoom, PokemonLeague_ChampionsRoom, PokemonLeague_LancesRoom, PokemonLeague_LoreleisRoom", note: "the Elite Four rooms (PokemonLeague_EventScript_DoLightingEffect), visual only" },
-  { kind: 'special', name: 'DoSSAnneDepartureCutscene', tag: 'main', where: "SSAnne_Exterior", note: "the S.S. Anne sails off after Cut; its waitstate passes, so the script runs on without the cutscene" },
   // ---------------------------------------------------------------- side: optional content before the Hall of Fame (NPCs, trades, the Game Corner, the daycare, the Sevii 1-3 trip).
   { kind: 'command', name: 'adddecoration', tag: 'side', where: "(Std_ObtainDecoration)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
   { kind: 'command', name: 'bufferdecorationname', tag: 'side', where: "(EventScript_ObtainDecorMessage)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
