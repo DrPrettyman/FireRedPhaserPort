@@ -25,8 +25,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - The Elite Four and Champion rooms' lighting (`special DoPokemonLeagueLightingEffect`, field_specials.c) isn't
     ported: the rooms keep their tileset's BG palette 7 (no sEliteFourLightingPalettes / sChampionRoomLightingPalettes
     cycle). It needs a runtime BG palette swap of the tileset atlases; visual only, the scripts go on.
-  - `special Script_TryGainNewFanFromCounter` (after Lance) is a no-op, like Script_UpdateTrainerFanClubGameClear:
-    the Trainer Fan Club isn't kept.
+  - Trainer Fan Club (script/miscSpecials.ts, trainer_fan_club.c): there are no link battle records, so
+    Script_BufferFanClubTrainerName always names the NPC trainer (the rival, LT. SURGE, KOGA), and the link-battle
+    fan updates (Special_UpdateTrainerFansAfterLinkBattle) never run.
+  - Side specials (script/miscSpecials.ts): silent (Daisy's MUS_HEAL fanfare is the script's; the diploma's
+    FANFARE_OBTAIN_BADGE); no quest log (QuestLog_CutRecording). The Magikarp size record loads pokedex.json for the
+    heights the first time the guru measures (the script waits for it). The diploma returns through the field's
+    plain fade from black rather than FieldCB_WarpExitFadeFromBlack's Task_ExitNonDoor (same look).
+  - Fall warps (world/fallWarp.ts): silent (SE_FALL, SE_M_STRENGTH); no help context while surfing on Seafoam B4F.
   - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
   - VS Seeker (world/vsSeeker.ts): silent (SE_CONTEST_MONS_TURN, SE_PIN); no quest log event. Task_VsSeeker_0
     takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for
@@ -225,8 +231,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     Ribbons (mons have no ribbons; REVISION 0 gives no event tickets either); the help system isn't toggled and the
     quest log isn't saved; a failed save carries on (no DoSaveFailedScreen / gGameContinueCallback).
     FLDEFF_HALL_OF_FAME_RECORD's SE_BALL is silent. Other game stats than GAME_STAT_ENTERED_HOF and
-    GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted. `special Script_UpdateTrainerFanClubGameClear` is a no-op (the Trainer
-    Fan Club isn't kept).
+    GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted.
   - Pokédex screen (menus/pokedexScreen.ts, menus/pokedexArea.ts): no audio (SE_SELECT, the SE_DEX_* sounds, the
     mon page's cries and START = CRY, the page turn's SE_BALL_TRAY_ENTER and the cry after registering a catch; the
     BGM volume calls are no-ops); no help system context. The mon page and the habitat pages load the shown mons'

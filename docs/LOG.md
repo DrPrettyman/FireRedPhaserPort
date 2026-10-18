@@ -2255,3 +2255,25 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   done; YES and "AA" through the naming screen) and daycare.test.ts, twice each. Screenshots: the cracked egg, the
   "BULBASAUR hatched from the EGG!" message over the shadow, the YES/NO, the naming screen with the mon icon.
 
+### Side specials: holes, Daisy, the Magikarp record, the diploma, the fan club (W-misc)
+
+- Fall warps: `world/fallWarp.ts` (new) is DoFallWarp (field_fadetransition.c) and FieldCB_FallWarpExit /
+  Task_FallWarpFieldEffect (field_effect.c). MB_FALL_WARP tiles were plain warps; now they run SetupWarp, then
+  EventScript_DoFallWarp (the player vanishes, waits, then the warp), and the player drops onto the floor below
+  with the camera shake. Landing in Seafoam B4F's water starts surfing and VAR_TEMP_1 hands over to the map's
+  current script. OverworldScene: `setupWarp` split out of `takeWarp`; FieldMoveHost gains `warpDestination`,
+  `setCameraPanning` and an optional warp id on `warpIntoMap`.
+- `script/miscSpecials.ts` (new, MISC_SPECIALS): DaisyMassageServices, GetLeadMonFriendship and the massage
+  cooldown step counter; CompareMagikarpSize / GetMagikarpSizeRecordInfo (pokemon_size_record.c, inches as the
+  English build); SetSeenMon, DoesPlayerPartyContainSpecies, BufferBigGuyOrBigGirlString, HasAllKantoMons,
+  ShowDiploma; the Trainer Fan Club's six specials (Script_UpdateTrainerFanClubGameClear and
+  Script_TryGainNewFanFromCounter were no-ops). No save format change: all of it lives in vars.
+- `menus/diploma.ts` (new): diploma.c, graphics through `graphics/diploma/` in extract_gfx.py.
+- 15 specials off scriptCoverageGaps.ts (DoFallWarp, the nine above, the four fan club ones);
+  CalculatePlayerPartyCount came with the Route 5 daycare.
+- Verified: typecheck; `npm test` (215, incl. the new miscSpecials.test.ts); e2e sideSpecials.test.ts (new, 8
+  tests: the Mansion hole with the drop and the shake, the Seafoam B4F current after falling, Daisy's rating and
+  grooming, the Magikarp record and a tie, the diploma KANTO / NATIONAL and without a full dex, SetSeenMon), plus
+  field, transitions, fieldMoves, strength, playerAvatar, mainPathLeftovers, hallOfFame (all green on the first
+  run). A screenshot of the KANTO diploma.
+

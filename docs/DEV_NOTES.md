@@ -164,6 +164,31 @@ this is the next level down. When you add or change a subsystem, update its entr
   extract_gfx.py (`graphics/script_menu/`), preloaded with the field's gfx. Probe: `__test.museumFossilPic()`.
   Tests: tests/e2e/sideEvents.test.ts (Oak in his lab at (6, 4), the Viridian PC, the museum's fossils from
   (5, 4) / (5, 7) facing left, the Cinnabar lab's fossil revival), tests/unit/sideSpecials.test.ts.
+  `script/miscSpecials.ts` (MISC_SPECIALS, spread into SPECIALS; W-misc) has more: Daisy's grooming
+  (DaisyMassageServices, GetLeadMonFriendship; RunMassageCooldownStepCounter runs on every step from
+  OverworldScene.processPlayerFieldInput), the Route 12 Magikarp size record (pokemon_size_record.c: GetMonSizeHash,
+  GetMonSize, FormatMonSizeRecord in inches; the record is VAR_MAGIKARP_SIZE_RECORD, so it's saved with the vars;
+  the heights come from pokedex.json, loaded on demand while the script waits), SetSeenMon,
+  DoesPlayerPartyContainSpecies, BufferBigGuyOrBigGirlString, HasAllKantoMons + ShowDiploma (`menus/diploma.ts`,
+  diploma.c; graphics `sDiploma*` from `graphics/diploma/`; probe `__test.diploma()`), and the Trainer Fan Club
+  (trainer_fan_club.c: struct TrainerFanClub packed in VAR_FANCLUB_FAN_COUNTER as on the GBA, the loss timer in
+  VAR_FANCLUB_LOSE_FAN_TIMER, play hours from `state.playTime`). The Compare/Get*SizeRecordInfo pair takes a var
+  name and species, so the postgame Heracross record is two more table entries.
+  Tests: tests/e2e/sideSpecials.test.ts (Daisy in PalletTown_RivalsHouse from (5, 5) facing up with
+  FLAG_SYS_GAME_CLEAR; the fishing guru at Route12_FishingHouse (4, 5); the designer at
+  CeladonCity_Condominiums_3F (3, 9); the S.S. Anne gentleman), tests/unit/miscSpecials.test.ts (the size formula,
+  the friendship rating, the fan club by hand).
+- **Fall warps (holes):** `world/fallWarp.ts`. Stepping onto an MB_FALL_WARP tile with a warp
+  (OverworldScene.tryStartWarpEventScript, TryStartWarpEventScript's branch) runs SetupWarp (`setupWarp`, shared
+  with takeWarp; the destination lands in `warpDestination` once its header has loaded: `warpSetup`) and
+  EventScript_DoFallWarp; its `special DoFallWarp` (registered with the field moves) is DoDiveWarp with
+  FieldCB_FallWarpExit: the fade out, `FieldMoveHost.warpIntoMap(..., warpId)`, then Task_FallWarpFieldEffect (the
+  player drops from the top of the screen, lands with the landing ground effect, the camera shakes 4/2/1 px through
+  `FieldMoveHost.setCameraPanning`; on Seafoam B3F/B4F water the player lands surfing with VAR_TEMP_1 = 1 for the
+  B4F current). The holes before the Hall of Fame: Seafoam Islands 1F-B3F, Pokémon Mansion 3F, Victory Road 3F;
+  Six Island's Dotted Hole after. Test events `fallWarp` (map), `fallWarpLanded`, `fallWarpDone`; the field probe's
+  `avatar.spriteY2` / `avatar.cameraPanY`. Tests: tests/e2e/sideSpecials.test.ts (Pokémon Mansion 3F (18, 17)
+  walking down; Seafoam B3F (6, 17) into the B4F current).
 - **Daycare:** `world/daycare.ts` is daycare.c's storage: `GameState.route5DayCareMon` (struct DaycareMon: a
   BoxPokemon or null, u32 steps; no mail) and `GameState.daycare` (struct DayCare, the Four Island daycare: two
   DaycareMons, offspringPersonality, the u8 egg-cycle stepCounter), both saved (SAVE_VERSION 4; a version 3 save
