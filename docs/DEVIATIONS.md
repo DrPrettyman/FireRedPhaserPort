@@ -167,6 +167,11 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     user, so it lives in surf.ts rather than on the ObjectEvent, and the player's sprite y2 it sets is applied
     to the Phaser sprite directly (ObjectEvent's depth ignores that 1 px). After a battle or field menu the blob
     is made again (the GBA rebuilds every sprite), so its animation restarts.
+  - Dive (world/dive.ts; an R/S leftover no FRLG map reaches): no audio (SE_M_DIVE, TryFadeOutOldMapMusic,
+    PlayRainStoppingSoundEffect). DiveFieldEffect_ShowMon waits for the banner's graphics to load, as Waterfall's
+    does. `setdivewarp` (ScrCmd_setdivewarp) isn't ported (no FRLG script uses it), so sFixedDiveWarp is always the
+    dummy warp and a map without a dive/emerge connection never dives. As in the C, that case leaves the player
+    locked (DiveFieldEffect_Init's preventStep and _ShowMon's LockPlayerFieldControls are never undone).
   - Object animations follow the step's progress (first half step frame, second half standing) instead of
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
