@@ -2786,7 +2786,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   MEMACC's true branch run ply_goto, so a GOTO is counted only on a 0xB2 command.
 - `tests/unit/m4aRom.test.ts`: the numbers as data, 65 tests on the engine (songs.json and the voice data; skipped
   without them).
-- Verified: typecheck; `npm test` (35 files, 465 tests). No game code changed, so no e2e.
+- Verified: typecheck; `npm test` (37 files, 491 tests, after merging master). No game code changed, so no e2e.
 
 ### W-sound 1: sound.c without the cries, the frame hook, the audio script commands (AUDIO_PLAN.md batch B)
 
