@@ -8,7 +8,7 @@ import { DELTA } from '../world/direction';
 import { animateElevator, getElevatorFloor, initElevatorFloorSelectMenuPos } from '../world/elevator';
 import { initRoamer } from '../world/roamer';
 import { isPoisoned } from '../world/stepCounters';
-import { directionId, type ScriptHost } from './ScriptEngine';
+import { directionId, type ScriptHost, type TrainerBattle } from './ScriptEngine';
 import { ListMenu, ReturnToListMenu } from '../ui/FieldListMenu';
 import { SAVECB_RETURN_CONTINUE, SAVECB_RETURN_OKAY } from '../ui/SaveDialog';
 import { ForcePlayerOntoBike, GetPlayerAvatarBike } from '../world/bike';
@@ -24,6 +24,7 @@ import { MISC_SPECIALS } from './miscSpecials';
 import { EGG_HATCH_SPECIALS } from '../menus/eggHatch';
 import { EASY_CHAT_SPECIALS } from './easyChatSpecials';
 import { FERRY_SPECIALS } from './ferrySpecials';
+import { AUDIO_SPECIALS } from './audioSpecials';
 
 export interface SpecialEnv {
   state: GameState;
@@ -49,6 +50,8 @@ export interface SpecialEnv {
   disableMsgBoxWalkaway(): void;
   /** SetWalkingIntoSignVars (script.c) */
   setWalkingIntoSignVars(): void;
+  /** The trainer battle the last `trainerbattle` configured (sTrainerBattleMode, gTrainerBattleOpponent_A). */
+  trainerBattle(): TrainerBattle | undefined;
   /** The extracted text `label` (e.g. gText_Ghost), encoded without the terminator. */
   encodeText(label: string): number[];
   /** The field's buttons (gMain.newKeys / heldKeys for specials' tasks). */
@@ -60,16 +63,14 @@ export interface SpecialEnv {
 /** A gSpecials entry (data/specials.inc). The return value is stored by `specialvar`. */
 export type Special = (env: SpecialEnv) => number | void;
 
-/** Specials with no effect yet because the system they feed (audio, quest log, help, fame checker) doesn't exist. */
+/** Specials with no effect yet because the system they feed (quest log, help, fame checker) doesn't exist. */
 const NO_OP = [
-  'PlayTrainerEncounterMusic', // audio
   'QuestLog_CutRecording', // quest log
   'SetHelpContextForMap', // help system
   'Script_SetHelpContext',
   'SetFlavorTextFlagFromSpecialVars', // fame checker
   'UpdatePickStateFromSpecialVar8005',
   'SetUnlockedPokedexFlags', // gcnLinkFlags, only used for GameCube link
-  'Script_FadeOutMapMusic', // audio: its waitstate ends at once
   'InitUnionRoom', // wireless only (and stubbed out from REVISION 0xA): CableClub_OnResume in every Pokémon Center
   'CloseLink', // link play: nothing was opened (TryBattleLinkup below never connects)
   'HelpSystem_Enable', // help system
@@ -88,6 +89,7 @@ export const SPECIALS: Record<string, Special> = {
   ...EGG_HATCH_SPECIALS, // menus/eggHatch.ts: daycare.c's EggHatch scene, ScriptHatchMon
   ...EASY_CHAT_SPECIALS, // easyChatSpecials.ts: easy_chat.c's ShowEasyChatMessage, BufferRandomHobbyOrLifestyleString
   ...FERRY_SPECIALS, // ferrySpecials.ts: the Seagallop ferry scene (menus/seagallop.ts) and the Rainbow Pass menu
+  ...AUDIO_SPECIALS, // audioSpecials.ts: PlayTrainerEncounterMusic, Script_FadeOutMapMusic
 
   // field_player_avatar.c / bike.c / field_specials.c's player avatar specials
   ForcePlayerOntoBike,

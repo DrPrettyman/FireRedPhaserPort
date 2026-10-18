@@ -1,3 +1,6 @@
+import { gMPlayInfo_BGM, m4aMPlayContinue, m4aMPlayStop } from '../audio/m4a';
+import { K } from '../battle/constants';
+import { IsSEPlaying, PlayBGM, PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import { CHAR_NEWLINE, CHAR_PROMPT_CLEAR, CHAR_PROMPT_SCROLL, EOS, EXT_CTRL_CODE_BEGIN, PLACEHOLDER_BEGIN } from './charmap';
 import type { Fonts } from './Font';
@@ -146,7 +149,7 @@ export class TextPrinter {
       case State.HandleChar:
         return this.handleChar();
       case State.Wait:
-        if (this.input.pressedAorB()) this.state = State.HandleChar;
+        if (this.textPrinterWait()) this.state = State.HandleChar;
         return Result.Update;
       case State.Clear:
         if (this.waitWithDownArrow()) {
@@ -175,7 +178,7 @@ export class TextPrinter {
         }
         return Result.Update;
       case State.WaitSe:
-        this.state = State.HandleChar; // no audio yet
+        if (!IsSEPlaying()) this.state = State.HandleChar;
         return Result.Update;
       case State.Pause:
         if (this.delayCounter) this.delayCounter--;
@@ -283,9 +286,21 @@ export class TextPrinter {
       case EXT.WAIT_SE:
         this.state = State.WaitSe;
         return Result.Update;
-      case EXT.PLAY_BGM:
-      case EXT.PLAY_SE:
-        this.pos += 2; // TODO: audio
+      case EXT.PLAY_BGM: {
+        const song = this.next() | (this.next() << 8);
+        PlayBGM(song); // the quest log's playback (which skips it) isn't ported
+        return Result.Repeat;
+      }
+      case EXT.PLAY_SE: {
+        const song = this.next() | (this.next() << 8);
+        PlaySE(song);
+        return Result.Repeat;
+      }
+      case EXT.PAUSE_MUSIC:
+        m4aMPlayStop(gMPlayInfo_BGM);
+        return Result.Repeat;
+      case EXT.RESUME_MUSIC:
+        m4aMPlayContinue(gMPlayInfo_BGM);
         return Result.Repeat;
       case EXT.ESCAPE:
         return undefined;
@@ -325,8 +340,6 @@ export class TextPrinter {
       case EXT.RESET_FONT:
       case EXT.JPN:
       case EXT.ENG:
-      case EXT.PAUSE_MUSIC:
-      case EXT.RESUME_MUSIC:
       default:
         return Result.Repeat;
     }
@@ -345,9 +358,18 @@ export class TextPrinter {
     this.arrowFrame = 0;
   }
 
+  /** TextPrinterWaitWithDownArrow: the arrow, and A or B goes on with SE_SELECT (gTextFlags.autoScroll isn't
+   *  ported: the link / recorded battles' auto mode). */
   private waitWithDownArrow(): boolean {
     this.drawDownArrow();
-    return this.input.pressedAorB();
+    return this.textPrinterWait();
+  }
+
+  /** TextPrinterWait: A or B goes on, with SE_SELECT (text.c:563, 581). */
+  private textPrinterWait(): boolean {
+    if (!this.input.pressedAorB()) return false;
+    PlaySE(K.SE_SELECT);
+    return true;
   }
 
   private drawDownArrow(): void {

@@ -7,8 +7,8 @@ import { DEPTH_UI, MenuWindow } from './MenuWindow';
  * ScriptMenu_ShowPokemonPic: an 8x8-tile std-framed window at tile (x+1, y+1) with the species'
  * front pic centred on it (CreateMonSprite_PicBox at 8x+40, 8y+40). Task_ScriptShowMonPic tears
  * it down over two frames once hidden: sprite first, then the window.
- * Differences: the sprite appears once its PNG has loaded (the GBA shows it immediately), and the
- * cry from ScrCmd_showmonpic isn't played (no audio).
+ * Difference: the sprite appears once its PNG has loaded (the GBA shows it immediately). The cry is
+ * ScrCmd_showmonpic's (PlayCry_Script, in script/ScriptEngine.ts).
  */
 export class MonPicBox {
   private win: MenuWindow;

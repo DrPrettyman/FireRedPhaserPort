@@ -39,6 +39,8 @@ import {
 import { MPT_FLG_EXIST, MUSICPLAYER_STATUS_TRACK, type MusicPlayerInfo } from '../../src/audio/m4aInternal';
 import type { SamplesJson, VoicegroupsJson, WavesJson } from '../../src/audio/m4aVoices';
 import { loadSongTable, type SongsJson } from '../../src/audio/songTable';
+import { AgbMainFrameEnd, AgbMainSoundInit } from '../../src/audio/frame';
+import { IsCryFinished, IsCryPlaying, PlayCry_ByMode } from '../../src/gba/sound';
 
 // ---------------------------------------------------------------------------------------------------------------
 // Measured on the ROM (mGBA 0.10.5, FireRed rev 1).
@@ -240,5 +242,65 @@ describe.skipIf(!haveVoices)('cries against the ROM', () => {
       if ((mplay.status & MUSICPLAYER_STATUS_TRACK) === 0) gotStopped = f;
     }
     expect({ fine: gotFine, stopped: gotStopped }).toEqual({ fine, stopped });
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// The same cries through sound.c's API (gba/sound.ts, W-sound 2): PlayCry_ByMode in frame 0's game logic, then one
+// AgbMainFrameEnd per frame (the sound tasks, MapMusicMain, m4aSoundMain: frame k's m4aSoundMain is "frame k" above).
+
+const CRY_SPECIES: Record<string, string> = {
+  Cry_Pidgey: 'SPECIES_PIDGEY',
+  Cry_NidoranF: 'SPECIES_NIDORAN_F',
+  Cry_Bulbasaur: 'SPECIES_BULBASAUR',
+  Cry_Pikachu: 'SPECIES_PIKACHU',
+  Cry_Charizard: 'SPECIES_CHARIZARD',
+  Cry_Onix: 'SPECIES_ONIX',
+  Cry_Mew: 'SPECIES_MEW',
+  Cry_Jynx: 'SPECIES_JYNX',
+};
+const SOUND_H_CRY_MODES: Record<CryModeName, number> = { NORMAL: 0, DOUBLES: 1, ENCOUNTER: 2, HIGH_PITCH: 3, FAINT: 5 };
+const SPECIES_JSON = resolve(__dirname, '../../public/gen/pokemon/species.json');
+
+describe.skipIf(!haveVoices || !existsSync(SPECIES_JSON))('cries against the ROM, through PlayCry_ByMode', () => {
+  const species = existsSync(SPECIES_JSON) ? (JSON.parse(readFileSync(SPECIES_JSON, 'utf8')) as { id: string }[]) : [];
+  const speciesId = (name: string) => species.findIndex((s) => s.id === name);
+
+  function playCry(sample: string, mode: CryModeName): void {
+    AgbMainSoundInit();
+    setVoiceData(readJson('voicegroups.json'), readJson('samples.json'), readJson('waves.json'));
+    PlayCry_ByMode(speciesId(CRY_SPECIES[sample]), 0, SOUND_H_CRY_MODES[mode]);
+  }
+
+  test.each(ROM_CRIES)('%s: IsCryPlaying FALSE after frame NORMAL %i, ENCOUNTER %i, FAINT %i, HIGH_PITCH %i, DOUBLES %i', (sample, ...want) => {
+    const got = MODE_ORDER.map((mode) => {
+      playCry(sample, mode);
+      for (let f = 1; f < 1000; f++) {
+        AgbMainFrameEnd();
+        if (!IsCryPlaying()) return f;
+      }
+      return -1;
+    });
+    expect(got).toEqual(want);
+  });
+
+  test.each(ROM_CRIES)('%s: IsCryFinished (Task_DuckBGMForPokemonCry gone) TRUE a frame after IsCryPlaying is FALSE', (sample, ...stops) => {
+    MODE_ORDER.forEach((mode, i) => {
+      playCry(sample, mode);
+      // DOUBLES doesn't duck the BGM, so there is no task to wait for: finished at once, as in the C.
+      if (mode === 'DOUBLES') {
+        expect(IsCryFinished()).toBe(true);
+        return;
+      }
+      // The task counts gPokemonCryBGMDuckingCounter down in the frames 0 and 1 hooks, then polls IsCryPlaying in
+      // each hook before m4aSoundMain: it sees the cry stopped in frame stop + 1's hook. A screen task checking
+      // IsCryFinished in a frame's logic (before the hook) sees it from frame stop + 2 on.
+      let f = 0;
+      while (!IsCryFinished()) {
+        f++;
+        AgbMainFrameEnd();
+      }
+      expect({ sample, mode, frame: f }).toEqual({ sample, mode, frame: stops[i] + 1 });
+    });
   });
 });

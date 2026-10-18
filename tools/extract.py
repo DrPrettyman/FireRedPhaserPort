@@ -1306,7 +1306,16 @@ def extract_pokemon(decomp, out):
         egg_moves += [defines[m] for m in re.findall(r"MOVE_\w+", body)]
     egg_moves.append(0xFFFF)
 
+    # sHoennSpeciesIdToCryId (data/pokemon/cry_ids.h; CRY_* is constants/hoenn_cries.h's enum), for SpeciesToCryId.
+    cry_src = (data_dir / "pokemon/cry_ids.h").read_text()
+    hoenn_start = int(re.search(r"#define HOENN_MON_SPECIES_START\s+(\d+)", cry_src).group(1))
+    hoenn_cries = {}
+    for name, cry in re.findall(r"\[(SPECIES_\w+)\s*-\s*HOENN_MON_SPECIES_START\]\s*=\s*(CRY_\w+)", cry_src):
+        hoenn_cries[defines[name] - hoenn_start] = defines[cry]
+    hoenn_species_cry_ids = [hoenn_cries[i] for i in range(len(hoenn_cries))]
+
     tables = {
+        "hoennSpeciesIdToCryId": hoenn_species_cry_ids,
         "experience": exp_tables,
         "eggMoves": egg_moves,
         "eggMovesSpeciesOffset": egg_offset,

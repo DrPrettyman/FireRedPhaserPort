@@ -4,16 +4,21 @@
 // from audio/frame.ts's AgbMainFrameEnd. The engine's logic always runs, so every wait here times like the GBA
 // whether or not anything is heard (AUDIO_PLAN.md decision 2).
 //
-// Not here yet: the cries (sound.c:344-537, W-sound 2: the functions at the bottom are still stubs) and overworld.c's
-// map music (W-sound 3: GetCurrLocationDefaultMusic, savedMusic, gDisableMapMusicChangeOnMapLoad).
+// The cries (PlayCry_*, IsCryFinished, Task_DuckBGMForPokemonCry) are at the bottom. Not here yet: overworld.c's map
+// music (W-sound 3: GetCurrLocationDefaultMusic, savedMusic, gDisableMapMusicChangeOnMapLoad).
 
 import {
+  gCryTable,
+  gCryTable_Reverse,
   gMPlayInfo_BGM,
   gMPlayInfo_SE1,
   gMPlayInfo_SE2,
   gMPlayInfo_SE3,
   gMPlayTable,
+  gPokemonCryMusicPlayers,
+  gPokemonCrySongs,
   gSongTable,
+  IsPokemonCryPlaying,
   m4aMPlayContinue,
   m4aMPlayFadeIn,
   m4aMPlayFadeOut,
@@ -24,8 +29,18 @@ import {
   m4aMPlayVolumeControl,
   m4aSongNumStart as m4aSongNumStartEngine,
   m4aSongNumStop,
+  SetPokemonCryChorus,
+  SetPokemonCryLength,
+  SetPokemonCryPanpot,
+  SetPokemonCryPitch,
+  SetPokemonCryPriority,
+  SetPokemonCryProgress,
+  SetPokemonCryRelease,
+  SetPokemonCryTone,
+  SetPokemonCryVolume,
 } from '../audio/m4a';
 import { MUSICPLAYER_STATUS_PAUSE, MUSICPLAYER_STATUS_TRACK, TRACKS_ALL, type MusicPlayerInfo } from '../audio/m4aInternal';
+import { SpeciesToCryId } from '../pokemon/Pokemon';
 
 /** MUS_DUMMY (constants/songs.h): song 0, no tracks, on the BGM player. */
 const MUS_DUMMY = 0;
@@ -40,11 +55,14 @@ export type SoundEventType = 'se' | 'bgm' | 'fanfare' | 'cry' | 'stop' | 'contin
 /** One m4aSongNumStart-level call (a start, a pause, a resume or a fade), for the tests. */
 export interface SoundEvent {
   type: SoundEventType;
-  /** The song started, or the song on the player for stop / continue / fade (-1: none). */
+  /** The song started, or the song on the player for stop / continue / fade (-1: none). A cry: the species. */
   id: number;
+  /** The song's name; a cry: its sample (Cry_Charizard). */
   name: string;
-  /** The music player: BGM, SE1, SE2, SE3 (cries: W-sound 2). */
+  /** The music player: BGM, SE1, SE2, SE3, or a cry player, CRY0 / CRY1. */
   player: string;
+  /** A cry: its CRY_MODE_*. */
+  mode?: number;
   pan?: number;
   /** A start: whether MPlayStart took the song (an SE player keeps a song of higher priority). */
   started?: boolean;
@@ -60,8 +78,10 @@ export function setSoundEventListener(fn: ((e: SoundEvent) => void) | undefined)
   soundEventListener = fn;
 }
 
-/** The short player name of a music player (BGM, SE1, ...). */
+/** The short player name of a music player (BGM, SE1, ..., CRY0 / CRY1 for gPokemonCryMusicPlayers). */
 export function musicPlayerName(info: MusicPlayerInfo): string {
+  const cry = gPokemonCryMusicPlayers.indexOf(info);
+  if (cry >= 0) return `CRY${cry}`;
   return info.name.replace(/^gMPlayInfo_/, '');
 }
 
@@ -72,7 +92,7 @@ export function songName(id: number): string {
 
 function playerEvent(type: SoundEventType, info: MusicPlayerInfo, extra: Partial<SoundEvent> = {}): void {
   if (!soundEventListener) return;
-  const song = info.songHeader ? gSongTable.findIndex((s) => s.header === info.songHeader) : -1;
+  const song = info.songHeader ? gSongTable.findIndex((s) => s.header === info.songHeader) : -1; // -1 for a cry
   soundEventListener({ type, id: song, name: song < 0 ? '' : songName(song), player: musicPlayerName(info), ...extra });
 }
 
@@ -162,7 +182,7 @@ let gDisableMusic = false;
 let gDisableHelpSystemVolumeReduce = false;
 
 // ---------------------------------------------------------------------------------------------------------------
-// The sound tasks (AUDIO_PLAN.md decision 5). Task_Fanfare (and W-sound 2's Task_DuckBGMForPokemonCry) are gTasks of
+// The sound tasks (AUDIO_PLAN.md decision 5). Task_Fanfare and Task_DuckBGMForPokemonCry are gTasks of
 // priority 80 in the C. The field doesn't run gTasks every frame, so they run from AgbMainFrameEnd instead, after
 // the frame's callbacks, where RunTasks would have run them. FuncIsActiveTask's meaning is kept: a task is active
 // from its CreateTask until its DestroyTask. Unlike a gTask, ResetTasks doesn't remove them (docs/DEVIATIONS.md).
@@ -193,6 +213,8 @@ export function RunSoundTasks(): void {
 export function ResetSoundState(): void {
   sSoundTasks = [];
   sFanfareCounter = 0;
+  gMPlay_PokemonCry = null;
+  gPokemonCryBGMDuckingCounter = 0;
   gDisableHelpSystemVolumeReduce = false;
   InitMapMusic();
 }
@@ -504,34 +526,274 @@ export function soundProbe() {
     fanfareCounter: sFanfareCounter,
     fanfareTaskActive: !IsFanfareTaskInactive(),
     helpSystemVolumeReduceDisabled: gDisableHelpSystemVolumeReduce,
+    cry: cryProbe(),
   };
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Cries: still stubs (W-sound 2 ports sound.c:344-537 on W-m4a 2's cry players).
+// Cries (sound.c:316-580): PlayCryInternal sets the cry song up through the engine's SetPokemonCry* setters and
+// starts it on a cry player (SetPokemonCryTone); PlayCry_Normal / _ByMode / _Script duck the BGM to 85 / 256 while
+// it plays, and Task_DuckBGMForPokemonCry (a sound task, like Task_Fanfare) restores it once the cry's channel is
+// gone. IsCryFinished is "that task is gone"; IsCryPlaying reads the cry player itself (IsPokemonCryPlaying).
 
-/** PlayCry_ByMode: no cries yet. */
-export function PlayCry_ByMode(_species: number, _pan: number, _mode: number): void {}
+// constants/sound.h (fixed numbers, like MUS_DUMMY above: the title screen cries before the defines are loaded;
+// tests/unit/soundCries.test.ts checks them against the extracted ones)
+const CRY_MODE_NORMAL = 0;
+const CRY_MODE_DOUBLES = 1;
+const CRY_MODE_ENCOUNTER = 2;
+const CRY_MODE_HIGH_PITCH = 3;
+const CRY_MODE_ECHO_START = 4;
+const CRY_MODE_FAINT = 5;
+const CRY_MODE_ECHO_END = 6;
+const CRY_MODE_ROAR_1 = 7;
+const CRY_MODE_ROAR_2 = 8;
+const CRY_MODE_GROWL_1 = 9;
+const CRY_MODE_GROWL_2 = 10;
+const CRY_MODE_WEAK = 11;
+const CRY_MODE_WEAK_DOUBLES = 12;
+const CRY_PRIORITY_NORMAL = 10;
+const CRY_VOLUME = 120;
+export const SOUND_CONSTANTS = {
+  CRY_MODE_NORMAL, CRY_MODE_DOUBLES, CRY_MODE_ENCOUNTER, CRY_MODE_HIGH_PITCH, CRY_MODE_ECHO_START, CRY_MODE_FAINT,
+  CRY_MODE_ECHO_END, CRY_MODE_ROAR_1, CRY_MODE_ROAR_2, CRY_MODE_GROWL_1, CRY_MODE_GROWL_2, CRY_MODE_WEAK,
+  CRY_MODE_WEAK_DOUBLES, CRY_PRIORITY_NORMAL, CRY_VOLUME,
+} as const;
 
-/** PlayCry_Normal: no cries yet. */
-export function PlayCry_Normal(_species: number, _pan: number): void {}
+/** gMPlay_PokemonCry: the cry player of the last cry (SetPokemonCryTone's), NULL before the first. */
+let gMPlay_PokemonCry: MusicPlayerInfo | null = null;
+/** gPokemonCryBGMDuckingCounter: Task_DuckBGMForPokemonCry's first frames, before it polls the cry. */
+let gPokemonCryBGMDuckingCounter = 0;
 
-/** PlayCry_NormalNoDucking: no cries yet. */
-export function PlayCry_NormalNoDucking(_species: number, _pan: number, _volume: number, _priority: number): void {}
+/** PlayCry_Normal: the cry at CRY_VOLUME with the BGM ducked to 85 until it ends. */
+export function PlayCry_Normal(species: number, pan: number): void {
+  m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 85);
+  PlayCryInternal(species, pan, CRY_VOLUME, CRY_PRIORITY_NORMAL, CRY_MODE_NORMAL);
+  gPokemonCryBGMDuckingCounter = 2;
+  RestoreBGMVolumeAfterPokemonCry();
+}
 
-/** IsCryFinished: TRUE once the cry has stopped (no cries yet, so always). */
+/** PlayCry_NormalNoDucking: the Pokédex and the credits: no ducking, so no ducking task (IsCryFinished is TRUE). */
+export function PlayCry_NormalNoDucking(species: number, pan: number, volume: number, priority: number): void {
+  PlayCryInternal(species, pan, volume, priority, CRY_MODE_NORMAL);
+}
+
+/** PlayCry_ByMode: PlayCry_Normal with a mode; CRY_MODE_DOUBLES doesn't duck the BGM. */
+export function PlayCry_ByMode(species: number, pan: number, mode: number): void {
+  if (mode === CRY_MODE_DOUBLES) {
+    PlayCryInternal(species, pan, CRY_VOLUME, CRY_PRIORITY_NORMAL, mode);
+  } else {
+    m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 85);
+    PlayCryInternal(species, pan, CRY_VOLUME, CRY_PRIORITY_NORMAL, mode);
+    gPokemonCryBGMDuckingCounter = 2;
+    RestoreBGMVolumeAfterPokemonCry();
+  }
+}
+
+/** PlayCry_ReleaseDouble: releasing two mons at once in battle. It ducks the BGM without the task that restores it
+ *  (the C's own quirk). The C skips the ducking in multi battles (gBattleTypeFlags & BATTLE_TYPE_MULTI), which are
+ *  link only and never set in the port. */
+export function PlayCry_ReleaseDouble(species: number, pan: number, mode: number): void {
+  if (mode === CRY_MODE_DOUBLES) {
+    PlayCryInternal(species, pan, CRY_VOLUME, CRY_PRIORITY_NORMAL, mode);
+  } else {
+    m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 85);
+    PlayCryInternal(species, pan, CRY_VOLUME, CRY_PRIORITY_NORMAL, mode);
+  }
+}
+
+/** PlayCry_Script: `playmoncry` and `showmonpic`. Centred, ducked; the quest log's playback (which skips the cry
+ *  but still starts the task) isn't ported. */
+export function PlayCry_Script(species: number, mode: number): void {
+  m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 85);
+  PlayCryInternal(species, 0, CRY_VOLUME, CRY_PRIORITY_NORMAL, mode);
+  gPokemonCryBGMDuckingCounter = 2;
+  RestoreBGMVolumeAfterPokemonCry();
+}
+
+/**
+ * PlayCryInternal: the mode's length (ticks, one a frame), reverse, release, pitch (1/256 semitones: 15360 = key
+ * 60), chorus and volume into gPokemonCrySong, then SetPokemonCryTone(gCryTable[SpeciesToCryId(species - 1)]).
+ */
+export function PlayCryInternal(species: number, pan: number, volume: number, priority: number, mode: number): void {
+  species = (species - 1) & 0xffff;
+
+  // Default values, overridden by the mode.
+  let length = 140;
+  let reverse = false;
+  let release = 0;
+  let pitch = 15360;
+  let chorus = 0;
+
+  switch (mode) {
+    case CRY_MODE_NORMAL:
+      break;
+    case CRY_MODE_DOUBLES:
+      length = 20;
+      release = 225;
+      break;
+    case CRY_MODE_ENCOUNTER:
+      release = 225;
+      pitch = 15600;
+      chorus = 20;
+      volume = 90;
+      break;
+    case CRY_MODE_HIGH_PITCH:
+      length = 50;
+      release = 200;
+      pitch = 15800;
+      chorus = 20;
+      volume = 90;
+      break;
+    case CRY_MODE_ECHO_START:
+      length = 25;
+      reverse = true;
+      release = 100;
+      pitch = 15600;
+      chorus = 192;
+      volume = 90;
+      break;
+    case CRY_MODE_FAINT:
+      release = 200;
+      pitch = 14440;
+      break;
+    case CRY_MODE_ECHO_END:
+      release = 220;
+      pitch = 15555;
+      chorus = 192;
+      volume = 90; // FR/LG changed this from 70 to 90
+      break;
+    case CRY_MODE_ROAR_1:
+      length = 10;
+      release = 100;
+      pitch = 14848;
+      break;
+    case CRY_MODE_ROAR_2:
+      length = 60;
+      release = 225;
+      pitch = 15616;
+      break;
+    case CRY_MODE_GROWL_1:
+      length = 15;
+      reverse = true;
+      release = 125;
+      pitch = 15200;
+      break;
+    case CRY_MODE_GROWL_2:
+      length = 100;
+      release = 225;
+      pitch = 15200;
+      break;
+    case CRY_MODE_WEAK_DOUBLES:
+      length = 20;
+      release = 225;
+    // fallthrough
+    case CRY_MODE_WEAK:
+      pitch = 15000;
+      break;
+  }
+
+  SetPokemonCryVolume(volume);
+  SetPokemonCryPanpot(pan);
+  SetPokemonCryPitch(pitch);
+  SetPokemonCryLength(length);
+  SetPokemonCryProgress(0);
+  SetPokemonCryRelease(release);
+  SetPokemonCryChorus(chorus);
+  SetPokemonCryPriority(priority);
+
+  // The C picks one of four 128-entry tables (index = id % 128, table = id / 128); an id past them plays nothing.
+  const cryId = SpeciesToCryId(species);
+  const tone = cryId < 4 * 128 ? (reverse ? gCryTable_Reverse : gCryTable)[cryId] : undefined;
+  if (!tone) return; // no cry tables loaded (unit tests without the audio data)
+  gMPlay_PokemonCry = SetPokemonCryTone(tone);
+  if (soundEventListener) {
+    const wav = tone.wav as { name?: string } | null;
+    soundEventListener({
+      type: 'cry',
+      id: (species + 1) & 0xffff,
+      name: typeof wav?.name === 'string' ? wav.name : '',
+      player: musicPlayerName(gMPlay_PokemonCry),
+      ...(pan !== 0 ? { pan } : {}),
+      mode,
+    });
+  }
+}
+
+/** IsCryFinished: TRUE once Task_DuckBGMForPokemonCry is gone (then it clears the cry songs). A cry without the
+ *  task (NoDucking, DOUBLES) counts as finished at once, as in the C. */
 export function IsCryFinished(): boolean {
+  if (FuncIsActiveSoundTask(Task_DuckBGMForPokemonCry)) return false;
+  ClearPokemonCrySongs();
   return true;
 }
 
-export function StopCryAndClearCrySongs(): void {}
+/** StopCryAndClearCrySongs: pause the cry player (its channels released) and clear the cry songs. */
+export function StopCryAndClearCrySongs(): void {
+  StopCry();
+  ClearPokemonCrySongs();
+}
 
-/** IsCryPlaying: FALSE (no cries yet) */
-export function IsCryPlaying(): boolean {
+/** StopCry */
+export function StopCry(): void {
+  if (!gMPlay_PokemonCry) return; // the C's m4aMPlayStop(NULL) writes into the BIOS area: nothing
+  m4aMPlayStop(gMPlay_PokemonCry);
+  playerEvent('stop', gMPlay_PokemonCry);
+}
+
+/** IsCryPlayingOrClearCrySongs: IsCryPlaying, and the cry songs cleared once it isn't. */
+export function IsCryPlayingOrClearCrySongs(): boolean {
+  if (IsCryPlaying()) return true;
+  ClearPokemonCrySongs();
   return false;
 }
 
-/** IsCryPlayingOrClearCrySongs: TRUE while a cry is playing. */
-export function IsCryPlayingOrClearCrySongs(): boolean {
-  return false;
+/** IsCryPlaying: the last cry's first track still has its channel (until its FINE or the sample's end, the frame
+ *  after: not the release tail). */
+export function IsCryPlaying(): boolean {
+  return gMPlay_PokemonCry !== null && IsPokemonCryPlaying(gMPlay_PokemonCry);
+}
+
+/** Task_DuckBGMForPokemonCry: waits gPokemonCryBGMDuckingCounter frames, then until the cry has stopped, and
+ *  restores the BGM's volume. */
+function Task_DuckBGMForPokemonCry(): void {
+  if (gPokemonCryBGMDuckingCounter) {
+    gPokemonCryBGMDuckingCounter--;
+    return;
+  }
+  if (!IsCryPlaying()) {
+    m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 256);
+    DestroySoundTask(Task_DuckBGMForPokemonCry);
+  }
+}
+
+/** RestoreBGMVolumeAfterPokemonCry: CreateTask(Task_DuckBGMForPokemonCry, 80) unless it's running. */
+function RestoreBGMVolumeAfterPokemonCry(): void {
+  if (!FuncIsActiveSoundTask(Task_DuckBGMForPokemonCry)) CreateSoundTask(Task_DuckBGMForPokemonCry);
+}
+
+/**
+ * ClearPokemonCrySongs (main.c): CpuFill16(0) over gPokemonCrySongs, the cry players' song copies. A cry track still
+ * in its xWAIT (the sample ran out before the length did) then reads a 0 byte on its next tick: running status
+ * XCMD with argument 0, ply_xxx, which runs ply_fine. So the cry song ends there and its player is free a tick
+ * later (SetPokemonCryTone prefers a free player).
+ */
+export function ClearPokemonCrySongs(): void {
+  for (const song of gPokemonCrySongs) {
+    if (!song) continue;
+    song.data.fill(0);
+    song.trackCount = 0;
+    song.blockCount = 0;
+    song.priority = 0;
+    song.reverb = 0;
+  }
+}
+
+/** The test hooks' view of the cry state (__test.audio().sound.cry). */
+function cryProbe() {
+  return {
+    player: gMPlay_PokemonCry ? musicPlayerName(gMPlay_PokemonCry) : null,
+    playing: IsCryPlaying(),
+    duckTaskActive: FuncIsActiveSoundTask(Task_DuckBGMForPokemonCry),
+    duckingCounter: gPokemonCryBGMDuckingCounter,
+  };
 }

@@ -23,6 +23,7 @@ import { FieldEffectActiveListContains, FieldEffectStart, gFieldEffectArguments 
 import { SetEscapeWarp } from '../world/fieldMoves';
 import { scriptGiveEgg } from '../world/daycare';
 import { FadeInBGM, FadeOutBGMTemporarily, IsBGMPausedOrStopped, IsFanfareTaskInactive, IsSEPlaying, Overworld_ChangeMusicTo, PlayFanfare, PlayNewMapMusic, PlaySE } from '../gba/sound';
+import { IsCryFinished, PlayCry_Script } from '../gba/sound'; // the cries (W-sound 2)
 
 export interface ScriptsData {
   code: Instruction[];
@@ -321,6 +322,7 @@ export class ScriptEngine {
       },
       disableMsgBoxWalkaway: () => (this.msgBoxWalkawayDisabled = true),
       setWalkingIntoSignVars: () => this.setWalkingIntoSignVars(),
+      trainerBattle: () => this.battle,
       input,
       hideFieldMessageBox: () => this.messageBox.hide(),
       encodeText: (label) => this.charmap.encodePlain(this.strings[label] ?? ''),
@@ -1291,8 +1293,11 @@ export class ScriptEngine {
     getpartysize(this: ScriptEngine) {
       this.state.setVar('VAR_RESULT', this.state.party.length);
     },
+    /** ScrCmd_showmonpic: ScriptMenu_ShowPokemonPic, then PlayCry_Script(species, CRY_MODE_NORMAL). */
     showmonpic(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
-      this.host.showMonPic(this.state.value(a[0]), this.defines.get(a[1]) ?? 0, this.defines.get(a[2]) ?? 0);
+      const species = this.state.value(a[0]);
+      this.host.showMonPic(species, this.defines.get(a[1]) ?? 0, this.defines.get(a[2]) ?? 0);
+      PlayCry_Script(species, this.defines.require('CRY_MODE_NORMAL'));
     },
     hidemonpic(this: ScriptEngine, ctx: ScriptContext) {
       const w = this.host.hideMonPic();
@@ -1387,8 +1392,14 @@ export class ScriptEngine {
     waitfanfare(this: ScriptEngine, ctx: ScriptContext) {
       SetupNativeScript(ctx, IsFanfareTaskInactive);
     },
-    playmoncry() {},
-    waitmoncry() {},
+    /** ScrCmd_playmoncry: PlayCry_Script(species, mode) (the BGM ducked until Task_DuckBGMForPokemonCry ends). */
+    playmoncry(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      PlayCry_Script(this.state.value(a[0]), this.state.value(a[1]));
+    },
+    /** ScrCmd_waitmoncry: SetupNativeScript(IsCryFinished) */
+    waitmoncry(this: ScriptEngine, ctx: ScriptContext) {
+      SetupNativeScript(ctx, IsCryFinished);
+    },
   };
 
   /** A `dofieldeffect` / `waitfieldeffect` argument (FLDEFF_* or a var holding one) as its FLDEFF_* name. */

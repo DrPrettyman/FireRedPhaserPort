@@ -14,6 +14,9 @@ const CONSTANT_NAMES = [
   'MON_FEMALE',
   'MON_GENDERLESS',
   'SPECIES_SHEDINJA',
+  'SPECIES_UNOWN',
+  'SPECIES_OLD_UNOWN_B',
+  'SPECIES_OLD_UNOWN_Z',
   'SPECIES_EGG',
   'ITEM_POKE_BALL',
   'MON_GIVEN_TO_PARTY',
@@ -88,6 +91,22 @@ export interface CreateMonOptions {
   metLocation: string;
 }
 
+/** What SpeciesToCryId reads: set by the PokemonData constructor (the species constants, cry_ids.h's table). */
+let sCryIds: { unown: number; oldUnownB: number; oldUnownZ: number; hoennSpeciesIdToCryId: readonly number[] } | undefined;
+
+/**
+ * SpeciesToCryId (pokemon.c): the gCryTable index of `species`, which PlayCryInternal (gba/sound.ts) has already
+ * decremented (species - 1). Gen I-II species are their own cry id, the old Unown letters share Unown's, and the
+ * Hoenn species go through sHoennSpeciesIdToCryId. Before any PokemonData exists (the title screen's Charizard)
+ * only the first rule applies, which covers every species below the old Unown letters.
+ */
+export function SpeciesToCryId(species: number): number {
+  if (!sCryIds || species < sCryIds.oldUnownB - 1) return species;
+  if (species <= sCryIds.oldUnownZ - 1) return sCryIds.unown - 1;
+  // past the table (SPECIES_EGG and beyond) the C reads whatever follows it; no caller cries for those
+  return sCryIds.hoennSpeciesIdToCryId[species - (sCryIds.oldUnownZ + 1 - 1)] ?? species;
+}
+
 /** Species/move/item tables plus the pokemon.c functions that read them. */
 export class PokemonData {
   private names = new Map<number, number[]>();
@@ -99,7 +118,14 @@ export class PokemonData {
     readonly items: ItemInfo[],
     readonly tables: PokemonTables,
     private charmap: Charmap,
-  ) {}
+  ) {
+    sCryIds = {
+      unown: c.SPECIES_UNOWN,
+      oldUnownB: c.SPECIES_OLD_UNOWN_B,
+      oldUnownZ: c.SPECIES_OLD_UNOWN_Z,
+      hoennSpeciesIdToCryId: tables.hoennSpeciesIdToCryId,
+    };
+  }
 
   /** gSpeciesNames[species], encoded without the terminator. */
   speciesName(species: number): number[] {

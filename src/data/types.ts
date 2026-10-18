@@ -283,4 +283,6 @@ export interface PokemonTables {
   eggMoves: number[];
   /** EGG_MOVES_SPECIES_OFFSET (data/pokemon/egg_moves.h) */
   eggMovesSpeciesOffset: number;
+  /** sHoennSpeciesIdToCryId (data/pokemon/cry_ids.h): the cry id of SPECIES_TREECKO onwards (SpeciesToCryId). */
+  hoennSpeciesIdToCryId: number[];
 }
