@@ -175,6 +175,8 @@ export interface MultichoiceRequest {
   initPos: number;
   /** multichoicegrid's column count */
   columns?: number;
+  /** A window of a fixed size and row height (a special's own CreateWindowFromRect: DrawSeagallopDestinationMenu). */
+  layout?: { width: number; height: number; rowHeight: number };
 }
 
 export interface TrainerBattleRun {

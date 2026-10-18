@@ -25,15 +25,21 @@ class TileStore {
   readonly metatiles: Uint16Array;
   /** Tiles that no longer match the atlas PNGs (written by an animation at least once). */
   readonly modified = new Set<number>();
+  /** The palettes as BG palette RAM holds them now: `basePalettes` with any `loadBgPalette` on top. */
+  readonly palettes: number[][];
+  /** Palette slots that no longer match the atlas PNGs (`loadBgPalette`). */
+  readonly modifiedPalettes = new Set<number>();
 
   constructor(
     readonly name: string,
     tilesSymbol: string,
     metatilesSymbol: string,
-    readonly palettes: number[][],
+    /** The tileset's own palettes (palettes.json), which the atlases were drawn with. */
+    readonly basePalettes: number[][],
   ) {
     this.tiles = gfx(tilesSymbol).slice();
     this.metatiles = gfx16(metatilesSymbol);
+    this.palettes = basePalettes.slice();
   }
 
   get tileCount(): number {
@@ -109,6 +115,8 @@ export function renderMetatile(
 class AtlasCanvas {
   /** Global tile index (0..1023) → the slots whose metatile uses it. */
   private tileSlots = new Map<number, Set<number>>();
+  /** Palette slot (0..15) → the slots whose metatile uses it. */
+  private paletteSlots = new Map<number, Set<number>>();
   private textures: Record<AtlasLayer, Phaser.Textures.CanvasTexture>;
   private dirty = false;
 
@@ -130,12 +138,58 @@ class AtlasCanvas {
         let set = this.tileSlots.get(tile);
         if (!set) this.tileSlots.set(tile, (set = new Set()));
         set.add(slot);
+        const pal = store.metatiles[offset + i] >> 12;
+        let pset = this.paletteSlots.get(pal);
+        if (!pset) this.paletteSlots.set(pal, (pset = new Set()));
+        pset.add(slot);
       }
     });
   }
 
   uses(store: TileStore): boolean {
     return store === this.primary || store === this.secondary;
+  }
+
+  /** The store this atlas takes palette slot `pal` from (a pair atlas: the primary's 0-6, the secondary's 7-15). */
+  paletteStore(pal: number): TileStore {
+    return this.secondary && pal >= NUM_PALS_IN_PRIMARY ? this.secondary : this.primary;
+  }
+
+  /** Redraw every slot using palette slot `pal`. */
+  redrawPalette(pal: number): void {
+    for (const s of this.paletteSlots.get(pal) ?? []) this.redrawSlot(s);
+  }
+
+  /**
+   * Dev: a pixel the atlas drew with palette slot `pal` (the first one in slot order, of colour index
+   * `colorIndex` if given, else any but 0), as the canvas holds it, with the colour index it was drawn from.
+   */
+  palettePixel(pal: number, colorIndex?: number): { rgb: number[]; colorIndex: number } | undefined {
+    for (const slot of this.paletteSlots.get(pal) ?? []) {
+      const s = this.slots[slot];
+      if (!s) continue;
+      const [offset, store, layerType] = s;
+      for (let i = 0; i < 8; i++) {
+        const entry = store.metatiles[offset + i];
+        if (entry >> 12 !== pal) continue;
+        const src = this.tile(entry & 0x3ff);
+        if (!src) continue;
+        const upper = i >= 4; // the two layers go to different atlases, so nothing is drawn over the pixel
+        for (let p = 0; p < 64; p++) {
+          const sx = p & 7, sy = p >> 3;
+          const b = src.data[src.offset + sy * 4 + (sx >> 1)];
+          const c = sx & 1 ? b >> 4 : b & 0xf;
+          if (!c || (colorIndex !== undefined && c !== colorIndex)) continue;
+          const x = (entry & 0x400 ? 7 - sx : sx) + (i & 1) * 8 + (slot % ATLAS_COLS) * 16;
+          const y = (entry & 0x800 ? 7 - sy : sy) + ((i >> 1) & 1) * 8 + Math.floor(slot / ATLAS_COLS) * 16;
+          const layer: AtlasLayer =
+            layerType === LAYER_COVERED ? (upper ? 'middle' : 'bottom') : layerType === LAYER_SPLIT ? (upper ? 'top' : 'bottom') : upper ? 'top' : 'middle';
+          const d = this.textures[layer].context.getImageData(x, y, 1, 1).data;
+          return { rgb: [d[0], d[1], d[2]], colorIndex: c };
+        }
+      }
+    }
+    return undefined;
   }
 
   /** Redraw every slot using one of `tiles` (global tile indices). */
@@ -171,6 +225,19 @@ class AtlasCanvas {
     if (!this.dirty) return;
     this.dirty = false;
     for (const layer of ATLAS_LAYERS) this.textures[layer].refresh();
+  }
+}
+
+function sameColors(a: number[], b: number[]): boolean {
+  return a === b || (a.length === b.length && a.every((c, i) => c === b[i]));
+}
+
+/** Redraw (and upload) what every live atlas drew with `store`'s palette `slot`. */
+function redrawPalette(store: TileStore, slot: number): void {
+  for (const atlas of atlases.values()) {
+    if (!atlas.uses(store) || atlas.paletteStore(slot) !== store) continue;
+    atlas.redrawPalette(slot);
+    atlas.flush();
   }
 }
 
@@ -243,11 +310,59 @@ export const tilesetVram = {
   addAtlas(atlas: AtlasCanvas, key: string): void {
     atlases.set(key, atlas);
     for (const store of [atlas.primary, atlas.secondary]) {
-      if (!store?.modified.size) continue;
+      if (!store) continue;
+      for (const pal of store.modifiedPalettes) if (atlas.paletteStore(pal) === store) atlas.redrawPalette(pal);
+      if (!store.modified.size) continue;
       const base = store === atlas.primary ? 0 : NUM_TILES_IN_PRIMARY;
       atlas.redrawTiles([...store.modified].map((t) => t + base));
     }
     atlas.flush();
+  },
+
+  /**
+   * LoadPalette(colors, BG_PLTT_ID(slot), PLTT_SIZE_4BPP) for the field's map BGs: the pair's palette slot
+   * (0-6 the primary's, 7-12 the secondary's) becomes `colors` (16 [r, g, b] in palettes.json's colour space),
+   * and the metatiles drawn with it are redrawn at once (the atlases become live canvases the first time).
+   * Loading the colours the slot already has costs nothing.
+   */
+  loadBgPalette(textures: Phaser.Textures.TextureManager, pair: TilesetPair, slot: number, colors: number[]): void {
+    const store = stores.get(slot < NUM_PALS_IN_PRIMARY ? pair.info.primary : pair.info.secondary);
+    if (!store || sameColors(store.palettes[slot], colors)) return;
+    store.palettes[slot] = colors;
+    if (sameColors(store.basePalettes[slot], colors)) store.modifiedPalettes.delete(slot);
+    else store.modifiedPalettes.add(slot);
+    this.makeAtlasesLive(textures, pair); // (redraws the slot when it makes them live)
+    redrawPalette(store, slot);
+  },
+
+  /**
+   * LoadMapTilesetPalettes, as far as `loadBgPalette` changed them: every tileset's palettes back to its own
+   * (a map load or a return to the field reloads BG palette RAM). Nothing to redraw if none was changed.
+   */
+  resetBgPalettes(): void {
+    for (const store of stores.values()) {
+      for (const slot of [...store.modifiedPalettes]) {
+        store.modifiedPalettes.delete(slot);
+        store.palettes[slot] = store.basePalettes[slot];
+        redrawPalette(store, slot);
+      }
+    }
+  },
+
+  /** A tileset's palette slot as BG palette RAM holds it now (16 [r, g, b]), or undefined if not loaded. */
+  bgPalette(name: string, slot: number): number[] | undefined {
+    return stores.get(name)?.palettes[slot];
+  },
+
+  /** The palette slots of a tileset that `loadBgPalette` changed, with their colours (the GBA layer's copy of the map). */
+  bgPaletteOverrides(name: string): Map<number, number[]> {
+    const store = stores.get(name);
+    return new Map(store ? [...store.modifiedPalettes].map((slot) => [slot, store.palettes[slot]]) : []);
+  },
+
+  /** Dev: a pixel the pair atlas drew with palette slot `pal`, as its canvas holds it (undefined if not live). */
+  palettePixel(pair: TilesetPair, pal: number, colorIndex?: number): { rgb: number[]; colorIndex: number } | undefined {
+    return atlases.get(pair.pairTexture('bottom'))?.palettePixel(pal, colorIndex);
   },
 
   /** DmaCopy16 into BG VRAM: `count` tiles of `src` to the named tileset's tile `destTile` (local index). */

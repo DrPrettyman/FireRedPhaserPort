@@ -68,8 +68,18 @@ test('leaving a house, the barn doors open while the field fades in', async () =
   const mark = await game.mark();
   const arrived = game.eval((t) => t.enterWarp());
   // SetUpWarpExitTask on a door: Task_ExitDoor starts DoOutwardBarnDoorWipe with a black fade in.
-  await game.waitForEvent('barnDoorWipe', { since: mark });
-  expect(await game.eval((t) => t.field())).toMatchObject({ map: 'PalletTown', fading: true, fadeWhite: false, playerVisible: false });
+  // Read the field in the page on the tick the wipe starts: a round trip after waitForEvent can land after the
+  // fade has ended under load (batch 2's merge run).
+  const atWipe = await game.eval(async (t, since) => {
+    let field: ReturnType<typeof t.field> | undefined;
+    await t.until(() => {
+      if (!t.events(since).some((e) => e.type === 'barnDoorWipe')) return false;
+      field = t.field();
+      return true;
+    });
+    return field;
+  }, mark);
+  expect(atWipe).toMatchObject({ map: 'PalletTown', fading: true, fadeWhite: false, playerVisible: false });
   await arrived;
   expect(await game.eval((t) => t.field())).toMatchObject({ map: 'PalletTown', x: 6, y: 8, playerVisible: true });
 });

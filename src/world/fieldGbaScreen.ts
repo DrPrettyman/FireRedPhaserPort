@@ -297,6 +297,15 @@ export class FieldGbaScreen {
     LoadPalette(primaryPals.subarray(1), BG_PLTT_ID(0) + 1, NUM_PALS_IN_PRIMARY * PLTT_SIZE_4BPP - 2);
     const secondaryPals = gfx16(secondary.symbols.palettes);
     LoadPalette(secondaryPals.subarray(NUM_PALS_IN_PRIMARY * 16), BG_PLTT_ID(NUM_PALS_IN_PRIMARY), (NUM_PALS_TOTAL - NUM_PALS_IN_PRIMARY) * PLTT_SIZE_4BPP);
+    // What the field loaded over them since (tilesetVram.loadBgPalette: the league lighting's palette 7), from
+    // the JASC colours back to BGR555 as gbagfx converts them (8 bits >> 3).
+    for (const ts of [primary, secondary]) {
+      for (const [slot, rgb] of tilesetVram.bgPaletteOverrides(ts.name)) {
+        if (slot < NUM_PALS_IN_PRIMARY !== (ts === primary)) continue;
+        const bgr555 = Array.from({ length: 16 }, (_, i) => (rgb[i * 3] >> 3) | ((rgb[i * 3 + 1] >> 3) << 5) | ((rgb[i * 3 + 2] >> 3) << 10));
+        LoadPalette(bgr555, BG_PLTT_ID(slot), PLTT_SIZE_4BPP);
+      }
+    }
   }
 
   /**

@@ -2,11 +2,18 @@
 // SetMainCallback2. The overworld isn't a GBA screen, so the menu host scene fills in what they do:
 // leave the menu scene and wake the field, optionally reopening the start menu.
 
+import type { WarpData } from '../state/GameState';
+
 export const fieldReturn = {
   /** CB2_ReturnToFieldWithOpenMenu: back to the field with the start menu open. */
   withOpenMenu: (): void => console.warn('[menus] CB2_ReturnToFieldWithOpenMenu: no field host'),
   /** CB2_ReturnToField */
   plain: (): void => console.warn('[menus] CB2_ReturnToField: no field host'),
+  /**
+   * WarpIntoMap + CB2_LoadMap from a screen (seagallop.c's Task_Seagallop_3): the field loads `warp` instead of
+   * coming back to the map it left, and arrives as FieldCB_DefaultWarpExit does.
+   */
+  warp: (_warp: WarpData): void => console.warn('[menus] CB2_LoadMap: no field host'),
 };
 
 export function CB2_ReturnToFieldWithOpenMenu(): void {

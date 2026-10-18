@@ -193,3 +193,50 @@ test("the S.S. Anne gentleman's Snorlax picture marks Snorlax as seen", async ()
   await scriptDone(game, 'the gentleman');
   expect(await game.eval((t, n) => t.state!.dexSeen.has(n), snorlax)).toBe(true);
 });
+
+// ---------------------------------------------------------------- the Trainer Fan Club (SaffronCity_PokemonTrainerFanClub, trainer_fan_club.c)
+
+test('the Trainer Fan Club: no fans before the Hall of Fame, the first three after it', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'SaffronCity_PokemonTrainerFanClub', x: 7, y: 14, party: [MEWTWO] });
+  // VAR_MAP_SCENE_SAFFRON_CITY_POKEMON_TRAINER_FAN_CLUB 0: the crush girl (FANCLUB_MEMBER1, above) isn't anyone's fan yet
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await untilMessage(game, /TRAINERS are so cool when\s+they.re battling/, 'the crush girl before the Hall of Fame');
+  await scriptDone(game, 'the crush girl');
+
+  // The Hall of Fame (EventScript_SetDefeatedEliteFourFlagsVars): special Script_UpdateTrainerFanClubGameClear
+  const club = await game.eval(async (t) => {
+    // (through Function, so vitest's transform leaves the page's dynamic import alone)
+    const { SPECIALS } = await new Function("return import('/src/script/specials.ts')")();
+    SPECIALS.Script_UpdateTrainerFanClubGameClear({ state: t.state });
+    return {
+      scene: t.var('VAR_MAP_SCENE_SAFFRON_CITY_POKEMON_TRAINER_FAN_CLUB'),
+      fans: SPECIALS.Script_GetNumFansOfPlayerInTrainerFanClub({ state: t.state }),
+      hidden: ['ROCKER', 'WOMAN', 'BEAUTY', 'BLACK_BELT'].map((m) => t.flag(`FLAG_HIDE_SAFFRON_FAN_CLUB_${m}`)),
+    };
+  });
+  expect(club).toEqual({ scene: 1, fans: 3, hidden: [false, false, false, false] });
+
+  // Coming in again: ON_TRANSITION seats members 4-8 at the far tables, ON_FRAME's MeetFirstFans walks the crush
+  // girl up to the player, and the scene moves on to 2.
+  const mark = await game.mark();
+  await game.eval((_t) => (window as any).game.scene.getScene('Overworld').warp('MAP_SAFFRON_CITY_POKEMON_TRAINER_FAN_CLUB', 0, -1, -1));
+  await game.waitForEvent('map', { since: mark, what: 'the fan club again' });
+  await untilMessage(game, /You are!/, 'MeetFirstFans');
+  await scriptDone(game, 'MeetFirstFans');
+  expect(await game.eval((t) => t.var('VAR_MAP_SCENE_SAFFRON_CITY_POKEMON_TRAINER_FAN_CLUB'))).toBe(2);
+  const objects = await game.eval((t) => t.objects().map((o) => [o.localId, o.x, o.y]));
+  // (local ids 2 and 5-8: the little girl, woman, rocker, beauty and black belt, FANCLUB_MEMBER4-8)
+  expect(objects).toEqual(expect.arrayContaining([[1, 6, 15], [2, 3, 4], [5, 10, 3], [6, 4, 6], [7, 7, 5], [8, 9, 6]]));
+
+  // The crush girl is a fan now (one of three); the rocker (FANCLUB_MEMBER5) isn't.
+  await game.eval((t) => t.face('right'));
+  await game.press('A');
+  await untilMessage(game, /always be cheering for you/, 'the crush girl, a fan');
+  await scriptDone(game, 'the crush girl, a fan');
+  expect(await game.eval((t) => t.walkTo(4, 7))).toMatchObject({ arrived: true });
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await untilMessage(game, /.s cool, huh\?\s+I love the way he talks/, 'the rocker, not a fan');
+  await scriptDone(game, 'the rocker');
+});

@@ -68,6 +68,10 @@ async function scriptDone(game: Game, what: string) {
 }
 
 /** Press A until `cond` holds (a gift, a switch), then B until the script is over. */
+// A whole battle mashed through runs ~10k frames; mashUntil's frame budget (maxFrames) is the real bound. Its
+// 120 s wall-clock default ran out on the Champion battle with the machine at load ~230 (batch 2's merge run).
+const BATTLE_WALL_TIMEOUT = 300_000;
+
 async function talkUntil(game: Game, cond: Parameters<Game['mashUntil']>[0], what: string) {
   await game.mashUntil(cond, { what });
   await scriptDone(game, `${what}: the end of the script`);
@@ -77,7 +81,7 @@ async function talkUntil(game: Game, cond: Parameters<Game['mashUntil']>[0], wha
 async function winBattle(game: Game, what: string) {
   const since = await game.mark();
   await game.eval((_t, s) => ((window as any).__storySince = s), since);
-  await game.mashUntil((t) => t.events((window as any).__storySince).some((e) => e.type === 'battleEnd'), { what: `${what}: the battle` });
+  await game.mashUntil((t) => t.events((window as any).__storySince).some((e) => e.type === 'battleEnd'), { what: `${what}: the battle`, timeout: BATTLE_WALL_TIMEOUT });
   const end = await game.waitForEvent('battleEnd', { since });
   expect(await game.eval((t, o) => t.nameOf('B_OUTCOME_', o), end.outcome as number)).toBe('B_OUTCOME_WON');
   await scriptDone(game, `${what}: the script after the battle`);
@@ -422,7 +426,7 @@ test('The Elite Four and the Champion: each room in turn, then Oak takes the pla
   await takeWarp(game, 6, 5, 'PokemonLeague_ChampionsRoom');
   const since = await game.mark();
   await game.eval((_t, s) => ((window as any).__storySince = s), since);
-  await game.mashUntil((t) => t.events((window as any).__storySince).some((e) => e.type === 'battleEnd'), { what: 'the Champion battle' });
+  await game.mashUntil((t) => t.events((window as any).__storySince).some((e) => e.type === 'battleEnd'), { what: 'the Champion battle', timeout: BATTLE_WALL_TIMEOUT });
   const end = await game.waitForEvent('battleEnd', { since });
   expect(await game.eval((t, o) => t.nameOf('B_OUTCOME_', o), end.outcome as number)).toBe('B_OUTCOME_WON');
   await game.mashUntil((t) => t.field()?.map === 'PokemonLeague_HallOfFame', { what: 'Oak and the warp to the Hall of Fame' });

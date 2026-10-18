@@ -105,6 +105,9 @@ A test fails if the page throws or logs `console.error`. When a test fails, the 
 7. A tick limit (`t.until(pred, maxFrames)`) that spans a warp or anything else that loads files has to allow
    for the load: the game keeps ticking while a map loads, so leaving the player's house took ~185 ticks idle
    and 1,221 under load. Use a generous limit (20000) there; it's only there to fail rather than hang.
+8. `mashUntil` / `waitFor` also have a wall-clock `timeout` (120 s by default). A whole battle mashed through runs
+   ~10k ticks, which at load ~230 took longer than that (storyLeague's Champion, batch 2 of SIDE_PLAN.md): give
+   long mashes a larger `timeout` and let the frame budget (`maxFrames`) be the real bound.
 
 Runs are close to deterministic, not exactly: the RNG is seeded, but the number of logic ticks between
 two harness calls depends on wall-clock time. Write scenarios that hold whatever the dice say.

@@ -159,6 +159,7 @@ export class FieldMenuScene extends GbaHostScene {
 
     fieldReturn.withOpenMenu = () => this.exit(true);
     fieldReturn.plain = () => this.exit(false);
+    fieldReturn.warp = (warp) => this.exit(false, warp);
     gMain.inBattle = false;
     SetMainCallback1(null);
     if (naming) {

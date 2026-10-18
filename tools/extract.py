@@ -1503,11 +1503,12 @@ def main():
     print("maps + tilesets")
     extract_maps(decomp, out, parse_tileset_symbols(decomp))
     print("field objects + doors")
-    from extract_field import extract_doors, extract_field_effect_objects
+    from extract_field import extract_doors, extract_field_effect_objects, extract_league_lighting
 
     defines = parse_defines(decomp)
     extract_field_effect_objects(decomp, out, defines)
     extract_doors(decomp, out, defines)
+    extract_league_lighting(decomp, out)
 
 
 if __name__ == "__main__":

@@ -32,6 +32,7 @@ import {
 import { CB2_ReturnToField, gFieldCallback, gFieldCallback2, type FieldCallbackHost } from './fieldCallbacks';
 import { GetOnOffBike, IsBikingDisallowedByPlayer } from '../world/bike';
 import { avatarField, ClearPlayerHeldMovement, PLAYER_AVATAR_FLAG, TestPlayerAvatarFlags } from '../world/playerAvatar';
+import { StopPokemonLeagueLightingEffectTask } from '../world/leagueLighting';
 import {
   Bag_BeginCloseWin0Animation,
   CB2_BagMenuFromBattle,
@@ -202,10 +203,10 @@ function FieldCB2_UseItemFromField(field: FieldCallbackHost): () => boolean {
 
 /**
  * The from-the-field branch of FieldUseFunc_TownMap / _TmCase / _BerryPouch (a registered item with SELECT):
- * StopPokemonLeagueLightingEffectTask (the league rooms' lighting isn't ported, so there's nothing to stop),
- * FadeScreen(FADE_TO_BLACK, 0), then `task` waits for the fade.
+ * StopPokemonLeagueLightingEffectTask, FadeScreen(FADE_TO_BLACK, 0), then `task` waits for the fade.
  */
 function FadeToScreenFromField(taskId: number, task: TaskFunc): void {
+  StopPokemonLeagueLightingEffectTask();
   fieldFuncs().FadeScreen(K.FADE_TO_BLACK, 0);
   gTasks[taskId].func = task;
 }

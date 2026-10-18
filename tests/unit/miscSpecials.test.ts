@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   FormatMonSizeRecord,
   GetLeadMonFriendship,
+  GetMartClerkObjectId,
   GetMonSize,
   GetMonSizeHash,
   GetNumFansOfPlayerInTrainerFanClub,
@@ -10,6 +11,8 @@ import {
   UpdateTrainerFanClubGameClear,
 } from '../../src/script/miscSpecials';
 import { newGame, type TestGame } from './gameData';
+import { readdirSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const mon = (t: TestGame, species: string, opts: { personality?: number; iv?: number } = {}) =>
   t.pokemon.createMon(t.d(species), 10, { otId: 1, otName: 'RED', otGender: 'male', metLocation: 'MAPSEC_PALLET_TOWN', ...opts });
@@ -101,5 +104,22 @@ describe('Trainer Fan Club', () => {
     TryLoseFansFromPlayTime(t.state);
     expect(GetNumFansOfPlayerInTrainerFanClub(t.state)).toBe(4);
     expect(t.state.getVar('VAR_FANCLUB_LOSE_FAN_TIMER')).toBe(200);
+  });
+});
+
+// GetMartClerkObjectId (sMartMaps): the local id is the mart's clerk in the extracted map (object events are local
+// ids 1, 2, ... in order); a map that isn't a mart gets 1.
+describe('GetMartClerkObjectId', () => {
+  test("every Poké Mart's clerk", () => {
+    const dir = resolve(__dirname, '../../public/gen/maps');
+    const marts = readdirSync(dir).filter((f) => /_Mart\.json$/.test(f));
+    expect(marts.length).toBe(12);
+    for (const file of marts) {
+      const map = JSON.parse(readFileSync(resolve(dir, file), 'utf8'));
+      const id = GetMartClerkObjectId(map.id);
+      expect(map.objectEvents[id - 1]?.graphics_id, map.id).toBe('OBJ_EVENT_GFX_CLERK');
+    }
+    expect(GetMartClerkObjectId('MAP_PEWTER_CITY_MART')).toBe(3);
+    expect(GetMartClerkObjectId('MAP_PALLET_TOWN')).toBe(1);
   });
 });
