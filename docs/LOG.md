@@ -2277,3 +2277,32 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   field, transitions, fieldMoves, strength, playerAvatar, mainPathLeftovers, hallOfFame (all green on the first
   run). A screenshot of the KANTO diploma.
 
+
+### Eggs and the Four Island daycare (W-daycare unit 3)
+
+- `world/daycare.ts`: the rest of daycare.c but the hatching scene. Egg production in TryProduceOrHatchEgg (the
+  GetDaycareCompatibilityScore roll when the second mon's steps reach 0xFF mod 256), _TriggerPendingDaycareEgg /
+  _TriggerPendingDaycareMaleEgg, EggGroupsOverlap, SetDaycareCompatibilityString (menus/common.ts's gStringVar4),
+  GetEggSpecies, DetermineEggSpeciesAndParentSlots, AlterEggSpeciesWithIncenseItem, SetInitialEggData, InheritIVs
+  (with the C's RemoveIVIndexFromList quirk: a stat can be picked twice), GetEggMoves / BuildEggMoveset,
+  _GiveEggFromDaycare, RemoveEggFromDayCare / RejectEggFromDayCare, CreateEgg, ScriptGiveEgg; the Four Island
+  storage (StoreSelectedPokemonInDaycare, TakePokemonFromDaycare, GetDaycareCost, GetNumLevelsGainedFromDaycare,
+  GetDaycareState, GetDaycarePokemonCount, GetDaycareMonNicknames); NameHasGenderSymbol / AppendGenderSymbol.
+- `script/daycareSpecials.ts`: the Four Island specials, ShowFieldMessageStringVar4 and
+  PlayerPartyContainsSpeciesWithPlayerID. `ui/DaycareLevelMenu.ts` (new): ShowDaycareLevelMenu and its input
+  task; FieldListMenu's template takes an `itemPrintFunc`. `giveegg` in ScriptEngine.ts.
+- Extractor: `tables.eggMoves` (gEggMoves, flat) and `eggMovesSpeciesOffset` in pokemon/tables.json;
+  daycare.c's sJapaneseEggNickname and trade.c's gender symbol strings in strings.json. SpeciesInfo types its
+  `eggGroups` (already extracted).
+- Fix on the way: `yesnobox` ran the script on in the frame the YES/NO's A press landed, so that press also
+  passed a `waitbuttonpress` right after (the "received the EGG" message never showed) or picked a menu's first
+  item (the level menu). It now resumes a frame later, as Task_HandleYesNoInput's ScriptContext_Enable does.
+- 13 entries off `scriptCoverageGaps.ts`. FourIsland_PokemonDayCare's, FourIsland's daycare man's and the Water
+  Labyrinth gentleman's scripts run end to end.
+- Verified: typecheck; `npm test` (229, incl. the new eggs.test.ts: 14 tests worked by hand from the C and the
+  data: egg species incl. Nidoran / Volbeat / Illumise / Ditto / incense, the compatibility scores and messages,
+  InheritIVs with two seeds, egg moves and BuildEggMoveset, the egg roll with seeds, the specials); e2e
+  daycare.test.ts (8 tests, 4 new: leave two at Four Island, the compatibility message, walk until an egg, take
+  it, refuse the next; take one back through the level menu and then the other; B in the level menu; the Togepi
+  egg from `giveegg`), eggHatch, sideSpecials, saveContinue, and for the `yesnobox` change inGameTrades,
+  moveTutors, sideEvents, mainPathLeftovers, fieldMoves, gameCorner, newGame (all green).
