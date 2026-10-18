@@ -1336,6 +1336,33 @@ or extend them:
   SE_SELECTs, the save dialog closing SE_SAVE's length + 60 frames after it, the heal machine's SE_BALLs 25 frames
   apart, MUS_HEAL 32 frames after the last, the effect running until the fanfare task resumes the BGM).
 
+### Battle sounds (W-sound 5a)
+
+- **Where:** each C call sits in the file that ports its C file and calls `gba/sound.ts` directly with the C's
+  arguments. The battle's music: `battle/battleBgm.ts` (pokemon.c's GetBattleBGM, PlayMapChosenOrBattleBGM; the
+  caller passes the battle type flags and the trainer's class, which the C reads from gBattleTypeFlags / gTrainers),
+  called by `OverworldScene.runBattle` (CreateBattleStartTask: before the transition, with `song`: 0 for the
+  default, MUS_VS_LEGEND for a roamer, StartLegendaryBattle's MUS_VS_MEWTWO / _VS_DEOXYS / _VS_LEGEND /
+  MUS_RS_VS_TRAINER through `script/specials.ts` and `ScriptHost.startScriptedBattle`'s `song`) and by
+  battle-test.html's `launch`. SE_MUGSHOT: `battle/transition.ts` (Mugshot_StartOpponentSlide). battle_main.c in
+  `battle/main.ts`: the victory music (HandleEndTurn_BattleWon: MUS_VICTORY_GYM_LEADER for leaders and the
+  Champion, else MUS_VICTORY_TRAINER), FadeOutMapMusic(5) at the end, SE_FLEE (the Safari run), SE_LOW_HEALTH's
+  stop on the way out. battle_script_commands.c in `battle/bsCommands1-4.ts`: getexp's MUS_VICTORY_WILD (not for a
+  level-100 mon: the C skips it there too), the level-up's HandleLowHpMusicChange (battle/gfx.ts), the yes / no
+  boxes' SE_SELECT, VARIOUS_WAIT_FANFARE (`waitfanfare`, only the Poké Flute's script uses it); `playse`, `fanfare`
+  and `playfaintcry` emit to the controllers, as in the C.
+- **The hooks:** BattleUi's `playSE / playCry / playBGM / playFanfare` pass through to sound.ts (PlayCry_Normal(species,
+  0): no mode or pan) for the callers not converted yet; new code calls sound.ts (AUDIO_PLAN.md decision 21: W-sound
+  8 deletes them). MainMenuScene's and tradeScene's BattleUi stand-ins keep no-op hooks.
+- **After the battle:** returnToField's Overworld_PlaySpecialMapMusic brings the map's music back (the battle song is
+  the map music state's current song, so it always differs). The level-up fanfare pauses the victory music for 80
+  frames but holds nothing: BattleScript_LevelUp has no `waitfanfare`.
+- **Tests:** `tests/unit/battleBgm.test.ts` (GetBattleBGM by flags and class), `tests/e2e/audioBattle.test.ts`
+  (a wild battle: MUS_VS_WILD before the transition, MUS_VICTORY_WILD, MUS_LEVEL_UP pausing it 80 frames,
+  FadeOutMapMusic's fade before the end, MUS_ROUTE1 after; a level-100 win without victory music; Rick:
+  MUS_ENCOUNTER_BOY, MUS_VS_TRAINER, MUS_VICTORY_TRAINER, MUS_VIRIDIAN_FOREST after; Lorelei's mugshot SE_MUGSHOT;
+  Zapdos's MUS_VS_LEGEND; the Poké Flute's `waitfanfare` holding "...awoke!" until MUS_POKE_FLUTE's 450 frames end).
+
 ## Game state
 
 - **PC boxes and save data:** `state/PokemonStorage.ts` is struct PokemonStorage (`state.storage`: 14 boxes of 30

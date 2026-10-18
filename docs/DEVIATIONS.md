@@ -65,9 +65,13 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Raise-hand movement types (entities/NpcBrain.ts, MOVEMENT_TYPE_RAISE_HAND_AND_*): leaving one zeroes the
     sprite's x2/y2 (the GBA keeps them unless ResetMovementOfRematchableTrainers zeroes them); a frozen jumper
     (any, not only `lock`'s selected object) lands before it holds still.
-  - Battles: no audio through BattleScene's `ui.play*` (the controllers' and scripts' SEs, cries and music are
-    no-ops until W-sound 5-6, so their cry waits end at once); the battle anims' sound tasks call gba/sound.ts
-    directly, so Howl / Roar / Growl / Hyper Voice's cries and their IsCryPlaying waits time as on the GBA.
+  - Battles: the calls not yet moved to gba/sound.ts (the controllers, battle/gfx.ts, battleInterface, the anims'
+    `ui.playSE`) go through BattleScene's `ui.play*` pass-throughs (AUDIO_PLAN.md decision 21): PlaySE without the
+    C's panning, and `ui.playCry` is PlayCry_Normal(species, 0), without the C's cry mode or pan (the intro's
+    CRY_MODE_ENCOUNTER, the faint cries, the wild mon's pan 25), while the controllers' cry waits end at once (W-sound
+    5b, 6a, 6b). No low HP beep, so the victory music's BattleStopLowHpSound is a TODO (W-sound 6a). The battle
+    anims' sound tasks call gba/sound.ts directly, so Howl / Roar / Growl / Hyper Voice's cries and their
+    IsCryPlaying waits time as on the GBA.
   - Field sounds: puddles: UpdateFeetInFlowingWaterFieldEffect's SE_PUDDLE checks the splash's `invisible`, which
     the port never sets for an object off screen (UpdateObjectEventSpriteInvisibility's bounds check).
   - Audio output (audio/output.ts, audio/worklet.ts): the PCM plays at 224 samples per 60 Hz frame, 13,440 Hz,
@@ -132,12 +136,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     overworld's ScreenFade.
   - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;
     HP-as-text (SwapHpBarsWithHpText) and link/multi battles aren't implemented.
-  - Battle transitions: no SE_MUGSHOT, and the battle music doesn't start with the transition.
   - Map preview screens (Mt. Moon, Rock Tunnel, Viridian Forest...) aren't ported: warps into those sections fade
     to black like the GBA and go straight to the map, without the banner (or the flash that follows it).
   - Wild encounters: GAME_STAT_* counters aren't kept.
-  - Scripted wild battles (`dowildbattle`, StartLegendaryBattle): no battle music (MUS_VS_MEWTWO / _VS_LEGEND /
-    ...), no GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES. `seteventmon` (CreateEnemyEventMon) doesn't set
+  - Scripted wild battles (`dowildbattle`, StartLegendaryBattle): no GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES. `seteventmon` (CreateEnemyEventMon) doesn't set
     MON_DATA_MODERN_FATEFUL_ENCOUNTER (the port keeps no such field; IsBattlerModernFatefulEncounter is always
     TRUE, so it makes no difference). Navel Rock and Birth Island need the Mystery Gift event tickets, which can't
     be had, so only a dev start reaches Lugia, Ho-Oh and Deoxys; Navel Rock's `special ShakeScreen` (and the
