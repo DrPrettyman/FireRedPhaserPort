@@ -223,11 +223,15 @@ this is the next level down. When you add or change a subsystem, update its entr
   diploma.c; graphics `sDiploma*` from `graphics/diploma/`; probe `__test.diploma()`), and the Trainer Fan Club
   (trainer_fan_club.c: struct TrainerFanClub packed in VAR_FANCLUB_FAN_COUNTER as on the GBA, the loss timer in
   VAR_FANCLUB_LOSE_FAN_TIMER, play hours from `state.playTime`). The Compare/Get*SizeRecordInfo pair takes a var
-  name and species, so the postgame Heracross record is two more table entries.
+  name and species, so the postgame Heracross record is two more table entries. GetMartClerkObjectId (sMartMaps)
+  is here too; its only caller is EventScript_Questionnaire, behind Easy Chat.
   Tests: tests/e2e/sideSpecials.test.ts (Daisy in PalletTown_RivalsHouse from (5, 5) facing up with
   FLAG_SYS_GAME_CLEAR; the fishing guru at Route12_FishingHouse (4, 5); the designer at
-  CeladonCity_Condominiums_3F (3, 9); the S.S. Anne gentleman), tests/unit/miscSpecials.test.ts (the size formula,
-  the friendship rating, the fan club by hand).
+  CeladonCity_Condominiums_3F (3, 9); the S.S. Anne gentleman; the Trainer Fan Club at
+  SaffronCity_PokemonTrainerFanClub (7, 14): the crush girl before the Hall of Fame, then
+  Script_UpdateTrainerFanClubGameClear called in the page, MeetFirstFans on the way back in, a fan and a non-fan),
+  tests/unit/miscSpecials.test.ts (the size formula, the friendship rating, the fan club by hand, every mart's
+  clerk).
 - **Fall warps (holes):** `world/fallWarp.ts`. Stepping onto an MB_FALL_WARP tile with a warp
   (OverworldScene.tryStartWarpEventScript, TryStartWarpEventScript's branch) runs SetupWarp (`setupWarp`, shared
   with takeWarp; the destination lands in `warpDestination` once its header has loaded: `warpSetup`) and
@@ -247,8 +251,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   SpriteCB_Egg_0..5, 19 shards, the white flash, the message, the nickname YES/NO → DoNamingScreen →
   EggHatchSetMonNickname), back through CB2_ReturnToField. AddHatchedMonToParty / ScriptHatchMon take the
   GameState and need no screen (unit tests). Probe `__test.eggHatch()` (CB2_state, the egg's anim and
-  visibility, the mon's, shards on screen / made). Test hook: a `MonSpec` with `egg: <cycles left>` is made as
-  CreateEgg would (isEgg, friendship = cycles); set `t.state.daycare.stepCounter = 254` so the next step counts
+  visibility, the mon's, shards on screen / made). Test hook: a `MonSpec` with `egg: <cycles left>` is made by
+  world/daycare.ts' `createEgg` (then friendship = cycles; `level` / `iv` / `shiny` don't apply); set `t.state.daycare.stepCounter = 254` so the next step counts
   the cycle. Tests: tests/unit/eggHatch.test.ts, tests/e2e/eggHatch.test.ts.
 - **Multichoice / elevators:** `ui/MultichoiceMenu.ts` (vertical list and grid, field windows); the script engine
   sets VAR_RESULT from `ScriptHost.openMultichoice`. `text/stringWidth.ts` is GetStringWidth for any font set
@@ -884,7 +888,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   `callnative`s against `registerFieldEffectNatives` (also read from the source). The extractor's `macros` key
   (asm/macros/event.inc + trainer_tower.inc, movement.inc, map.inc) tells commands from movement actions and map
   data; an op in none of them fails the test. The known gaps are `tests/unit/scriptCoverageGaps.ts`, each tagged
-  `main` / `side` / `postgame` / `link` with the maps that reach it (from each map's map scripts, object, coord and
+  `main` / `side` / `postgame` / `link` (or `unused`: shared with Emerald, reached by nothing in FRLG, not to be
+  ported) with the maps that reach it (from each map's map scripts, object, coord and
   bg event scripts, following every label argument) and a note (BLOCKER = the story stops there). The test fails on
   a new gap (it prints a ready-made entry with the maps; pick the tag from the decomp scripts) and on a fixed one
   (take it off the list). Porting a special in a Phaser module: register it with `registerSpecials({ ... })` as an

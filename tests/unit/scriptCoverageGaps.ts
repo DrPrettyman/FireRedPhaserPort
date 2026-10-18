@@ -7,11 +7,14 @@
 //   postgame  only after the Hall of Fame (Sevii 4-7, Trainer Tower, the event islands), incl. features that
 //             postgame areas share with the link rooms.
 //   link      link cable / wireless (union room, cable club, minigames, Mystery Gift, e-Reader).
+//   unused    nothing in FireRed reaches it: std scripts and field move scripts shared with Emerald that no FRLG
+//             map or C code calls (Std_ObtainDecoration, EventScript_DeepWater / EventScript_TrySurface). Not to
+//             be ported; listed so the coverage check still sees them.
 // `where` lists the maps whose scripts reach it, or `(Label)` for code no map reaches (started from C);
 // it isn't checked. When you port one, take it off the list (the test says so).
 
 export type GapKind = 'command' | 'special' | 'std' | 'movement' | 'fieldeffect';
-export type GapTag = 'main' | 'side' | 'postgame' | 'link';
+export type GapTag = 'main' | 'side' | 'postgame' | 'link' | 'unused';
 
 export interface KnownGap {
   kind: GapKind;
@@ -26,17 +29,13 @@ export const KNOWN_GAPS: KnownGap[] = [
   // ---------------------------------------------------------------- main: on the main path to the Hall of Fame. BLOCKER in the note = the story can't go on without it.
   { kind: 'special', name: 'DoSSAnneDepartureCutscene', tag: 'main', where: "SSAnne_Exterior", note: "the S.S. Anne sails off after Cut; its waitstate passes, so the script runs on without the cutscene" },
   // ---------------------------------------------------------------- side: optional content before the Hall of Fame (NPCs, trades, the Game Corner, the daycare, the Sevii 1-3 trip).
-  { kind: 'command', name: 'adddecoration', tag: 'side', where: "(Std_ObtainDecoration)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
-  { kind: 'command', name: 'bufferdecorationname', tag: 'side', where: "(EventScript_ObtainDecorMessage)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
   { kind: 'special', name: 'DoSeagallopFerryScene', tag: 'side', where: "BirthIsland_Harbor, CinnabarIsland, FiveIsland_Harbor, FourIsland_Harbor, NavelRock_Harbor, ... (12 in all)", note: "the ferry; Bill's One Island trip after Blaine can be declined, so it's off the main path" },
   { kind: 'special', name: 'DrawSeagallopDestinationMenu', tag: 'side', where: "FiveIsland_Harbor, FourIsland_Harbor, OneIsland_Harbor, SevenIsland_Harbor, SixIsland_Harbor, ... (8 in all)" },
-  { kind: 'special', name: 'GetMartClerkObjectId', tag: 'side', where: "(EventScript_Questionnaire)" },
   { kind: 'special', name: 'GetSeagallopNumber', tag: 'side', where: "BirthIsland_Harbor, FiveIsland_Harbor, FourIsland_Harbor, NavelRock_Harbor, OneIsland_Harbor, ... (10 in all)" },
   { kind: 'special', name: 'GetSelectedSeagallopDestination', tag: 'side', where: "FiveIsland_Harbor, FourIsland_Harbor, OneIsland_Harbor, SevenIsland_Harbor, SixIsland_Harbor, ... (8 in all)" },
   { kind: 'special', name: 'IsPlayerLeftOfVermilionSailor', tag: 'side', where: "BirthIsland_Harbor, FiveIsland_Harbor, FourIsland_Harbor, NavelRock_Harbor, OneIsland_Harbor, ... (10 in all)" },
   { kind: 'special', name: 'ShowEasyChatMessage', tag: 'side', where: "PewterCity_PokemonCenter_1F" },
   { kind: 'special', name: 'ShowEasyChatScreen', tag: 'side', where: "PewterCity_PokemonCenter_1F" },
-  { kind: 'fieldeffect', name: 'FLDEFF_USE_DIVE', tag: 'side', where: "(EventScript_DeepWater), (EventScript_TrySurface)", note: "EventScript_DeepWater / EventScript_TrySurface: no FRLG map has dive spots" },
   // ---------------------------------------------------------------- postgame: after the Hall of Fame (Sevii 4-7, Trainer Tower, the event islands) or the link features postgame areas share.
   { kind: 'command', name: 'braillemessage', tag: 'postgame', where: "MtEmber_RubyPath_B4F, MtEmber_RubyPath_B5F, SixIsland_DottedHole_B1F, SixIsland_DottedHole_B2F, SixIsland_DottedHole_B3F, ... (8 in all)" },
   { kind: 'command', name: 'doweather', tag: 'postgame', where: "NavelRock_Summit, SevenIsland_TanobyRuins_DilfordChamber, SevenIsland_TanobyRuins_LiptooChamber, SevenIsland_TanobyRuins_MoneanChamber, SevenIsland_TanobyRuins_RixyChamber, ... (8 in all)" },
@@ -125,4 +124,8 @@ export const KNOWN_GAPS: KnownGap[] = [
   { kind: 'special', name: 'TryJoinLinkGroup', tag: 'link', where: "CeladonCity_PokemonCenter_2F, CeruleanCity_PokemonCenter_2F, CinnabarIsland_PokemonCenter_2F, FiveIsland_PokemonCenter_2F, FourIsland_PokemonCenter_2F, ... (20 in all)" },
   { kind: 'special', name: 'ValidateEReaderTrainer', tag: 'link', where: "SevenIsland_House_Room1" },
   { kind: 'special', name: 'WonderNews_GetRewardInfo', tag: 'link', where: "CeruleanCity_House4" },
+  // ---------------------------------------------------------------- unused: shared with Emerald, reached by no FRLG map or C code.
+  { kind: 'command', name: 'adddecoration', tag: 'unused', where: "(Std_ObtainDecoration)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
+  { kind: 'command', name: 'bufferdecorationname', tag: 'unused', where: "(EventScript_ObtainDecorMessage)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
+  { kind: 'fieldeffect', name: 'FLDEFF_USE_DIVE', tag: 'unused', where: "(EventScript_DeepWater), (EventScript_TrySurface)", note: "EventScript_DeepWater / EventScript_TrySurface: GetInteractedWaterScript never returns them in FRLG (no dive spots)" },
 ];

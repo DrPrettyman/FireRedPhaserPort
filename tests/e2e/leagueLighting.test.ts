@@ -108,10 +108,14 @@ test("Lorelei's room: the cycle on its timers, the start menu stops it, the last
   await game.waitForBag();
   // Back on the field (CB2_ReturnToFieldWithOpenMenu): ON_RESUME starts it again from palette 0, and the map's
   // palettes are reloaded (LoadMapTilesetPalettes).
+  // (watched in the page: the new task's first palette lasts only 40 ticks once the fade-in is over)
+  const restarted = game.eval((t) =>
+    t.until(() => (t.leagueLighting()?.tasks.length ?? 0) > 0, 20000).then(() => t.leagueLighting()!),
+  );
   await game.press('B');
+  const back = await restarted;
   await game.waitFor((t) => t.field()?.map === 'PokemonLeague_LoreleisRoom' && t.startMenu() && !t.field()!.fading, { what: 'the field again' });
-  const back = await game.eval((t) => t.leagueLighting()!);
-  expect(back.tasks.map((x) => [x.func, x.count])).toEqual([['Task_RunPokemonLeagueLightingEffect', 11]]);
+  expect(back.tasks.map((x) => [x.func, x.index, x.count])).toEqual([['Task_RunPokemonLeagueLightingEffect', 0, 11]]);
   expect(back.palette7).toEqual(LIGHTING.eliteFourPalettes[0]);
   await game.press('B');
   await game.waitIdle();

@@ -2350,3 +2350,20 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   return restarting it from palette 0, the last palette after the battle; the Champion's room, 10 changes during the
   rival's intro, the last palette after the battle), field, fieldEffects, transitions, storyLeague (TilesetVram),
   scriptedBattles, playerAvatar, mainPathLeftovers (ON_RESUME on map loads): all green.
+
+### Side leftovers: GetMartClerkObjectId, the `unused` gap tag, a Trainer Fan Club e2e, the egg hook (W-league unit 2)
+
+- `special GetMartClerkObjectId` (field_specials.c sMartMaps, in script/miscSpecials.ts). Its only caller is
+  EventScript_Questionnaire, after the Easy Chat screen, so nothing reaches it yet.
+- `tests/unit/scriptCoverageGaps.ts`: a new tag, `unused`, for what FRLG shares with Emerald and nothing reaches
+  (checked in the decomp: no map or C code calls Std_ObtainDecoration or EventScript_DeepWater /
+  EventScript_TrySurface): `adddecoration`, `bufferdecorationname`, FLDEFF_USE_DIVE moved there from `side`.
+- tests/e2e/sideSpecials.test.ts: the Trainer Fan Club (SaffronCity_PokemonTrainerFanClub; the plan called it
+  Vermilion's, but trainer_fan_club.c is Saffron's): scene 0's crush girl, Script_UpdateTrainerFanClubGameClear
+  (scene 1, three fans, the hidden members shown), the way back in (ON_TRANSITION's seats, MeetFirstFans, scene
+  2), a fan's and a non-fan's lines.
+- The e2e hooks' `egg` MonSpec now comes from world/daycare.ts' `createEgg` instead of being built by hand.
+- Race found in my own new test: leagueLighting.test.ts read the restarted task after the start menu's bag with a
+  poll, which under load came after its first 40-tick palette; it's watched in the page now.
+- Verified: typecheck; `npm test` (230, incl. the clerk table against every mart map's objects); e2e
+  sideSpecials (9), daycare, eggHatch, leagueLighting: all green.

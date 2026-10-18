@@ -22,6 +22,7 @@ import type { GameState } from '../state/GameState';
 import { TEXT_SPEED, type TextSpeed } from '../text/TextPrinter';
 import { seedRng } from '../util/random';
 import { DELTA, type Direction } from '../world/direction';
+import { createEgg } from '../world/daycare';
 import { tilesetVram } from '../world/TilesetVram';
 import { SetPlayerAvatarTransitionFlags } from '../world/playerAvatar';
 import { DestroyPlayerSurfBlob } from '../world/surf';
@@ -306,7 +307,11 @@ export interface MonSpec {
   status?: string;
   /** A personality that makes it shiny (for the player's OT id). */
   shiny?: boolean;
-  /** An egg with this many egg cycles left, as CreateEgg makes it (isEgg, friendship = cycles, met level 0, Poké Ball, the Japanese egg nickname). */
+  /**
+   * An egg with this many egg cycles left (friendship), made by world/daycare.ts' createEgg (CreateEgg: level
+   * EGG_HATCH_LEVEL, met level 0, Poké Ball, the egg nickname, a random personality); `level`, `iv` and `shiny`
+   * don't apply to it.
+   */
   egg?: number;
 }
 
@@ -385,15 +390,19 @@ function createApi(game: Phaser.Game) {
   });
   const createMon = (spec: MonSpec): Pokemon => {
     const s = requireState();
-    const mon = s.pokemon.createMon(define(`SPECIES_${spec.species}`), spec.level, {
-      otId: s.trainerId,
-      otName: s.playerName,
-      otGender: s.playerGender,
-      metLocation: s.currentMapSection,
-      fixedIV: spec.iv,
-      // shiny value = otId hi ^ otId lo ^ personality hi ^ personality lo = 0
-      personality: spec.shiny ? ((((s.trainerId >>> 16) ^ (s.trainerId & 0xffff)) << 16) >>> 0) : undefined,
-    });
+    const species = define(`SPECIES_${spec.species}`);
+    const mon =
+      spec.egg !== undefined
+        ? createEgg(s, species, false)
+        : s.pokemon.createMon(species, spec.level, {
+            otId: s.trainerId,
+            otName: s.playerName,
+            otGender: s.playerGender,
+            metLocation: s.currentMapSection,
+            fixedIV: spec.iv,
+            // shiny value = otId hi ^ otId lo ^ personality hi ^ personality lo = 0
+            personality: spec.shiny ? ((((s.trainerId >>> 16) ^ (s.trainerId & 0xffff)) << 16) >>> 0) : undefined,
+          });
     if (spec.moves) {
       mon.moves = [0, 0, 0, 0];
       mon.pp = [0, 0, 0, 0];
@@ -404,14 +413,7 @@ function createApi(game: Phaser.Game) {
     }
     if (spec.item) mon.heldItem = define(`ITEM_${spec.item}`);
     if (spec.status) mon.status = define(`STATUS1_${spec.status}`);
-    if (spec.egg !== undefined) {
-      // CreateEgg (daycare.c)
-      mon.isEgg = true;
-      mon.friendship = spec.egg;
-      mon.metLevel = 0;
-      mon.pokeball = define('ITEM_POKE_BALL');
-      mon.nickname = s.pokemon.encodeName('タマゴ'); // sJapaneseEggNickname
-    }
+    if (spec.egg !== undefined) mon.friendship = spec.egg; // the egg cycles left
     return mon;
   };
 
