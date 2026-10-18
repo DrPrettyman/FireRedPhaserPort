@@ -3,18 +3,31 @@
 // m4aSoundMain() once per frame, where the GBA's VBlank does, whether or not anything is heard, so every wait on
 // the sound state (IsSEPlaying, the fanfares, the BGM fades) times the same headless and in the browser.
 //
-// What isn't here yet (AUDIO_PLAN.md section 6):
-// - W-m4a 2: notes get no channels. ply_note parses its arguments and sets the gate time, then stops where the
-//   asm looks up the voice (`_081DDB46`); the voice lookup, PCM channel allocation and stealing, the CGB channel
-//   claim, ChnVolSetAsm, MidiKeyToFreq, the envelopes and the cry songs (SetPokemonCryTone ...) come next. Every
-//   loop over a track's channels (MPlayMain's gate times and volume / pitch update, TrackStop, ply_fine,
-//   ply_endtie) is already ported and walks an empty list until then; the volume / pitch update per channel is
-//   the one stub (`ChnVolPitUpdate`).
-// - W-m4a 3: the mixer (SoundMainRAM, called at the end of SoundMain). W-m4a 4: CgbSound, CgbOscOff, the PSG.
+// Notes take channels (ply_note: the voice through keysplit and rhythm voices, a free or stolen DirectSound
+// channel, or the voice's CGB channel), and m4aMixer.ts's SoundMainRAM runs each DirectSound channel's envelope and
+// sample position every frame, so channels live and end as on the GBA. The cry songs (SetPokemonCryTone and the
+// SetPokemonCry* setters, IsPokemonCryPlaying) are at the end. The voices come from setVoiceData (m4aVoices.ts).
+//
+// What isn't here yet (AUDIO_PLAN.md section 6): W-m4a 3, the mixing itself (m4aMixer.ts keeps the bookkeeping);
+// W-m4a 4, the CGB channels' envelope, registers and frequencies (m4aCgb.ts is a placeholder).
 //
 // Naming follows the C. The asm's local labels are cited as `m4a_1.s _081DD8E0` and so on.
 
 import {
+  CGB_CHANNEL_MO_PIT,
+  CGB_CHANNEL_MO_VOL,
+  CRY_SONG_CONT,
+  CRY_SONG_GOTO_TARGET,
+  CRY_SONG_LENGTH,
+  CRY_SONG_PAN_VALUE,
+  CRY_SONG_PART0,
+  CRY_SONG_PART1,
+  CRY_SONG_RELEASE_VALUE,
+  CRY_SONG_TIE_KEY_VALUE,
+  CRY_SONG_TUNE_VALUE,
+  CRY_SONG_TUNE_VALUE2,
+  CRY_SONG_UNK_CMD_0D_PARAM,
+  CRY_SONG_VOLUME_VALUE,
   C_V,
   FADE_IN,
   FADE_VOL_SHIFT,
@@ -44,21 +57,45 @@ import {
   SOUND_MODE_REVERB_SET,
   SOUND_MODE_REVERB_VAL,
   TEMPORARY_FADE,
+  TONEDATA_P_S_PAN,
   TONEDATA_TYPE_CGB,
+  TONEDATA_TYPE_RHY,
+  TONEDATA_TYPE_SPL,
   emptyToneData,
+  s16,
   s8,
   u16,
   u32,
   u8,
+  type CgbChannel,
   type MusicPlayer,
   type MusicPlayerInfo,
   type MusicPlayerTrack,
+  type PokemonCrySong,
   type Song,
   type SongHeader,
   type SoundChannel,
   type SoundInfo,
+  type ToneData,
+  type ToneWav,
 } from './m4aInternal';
-import { gClockTable, gPcmSamplesPerVBlankTable } from './m4aTables';
+import { CgbOscOff, CgbSound, MidiKeyToCgbFreq, newCgbChannels } from './m4aCgb';
+import { SoundMainRAM, isWaveData } from './m4aMixer';
+import {
+  gClockTable,
+  gFreqTable,
+  gPcmSamplesPerVBlankTable,
+  gScaleTable,
+  pokemonCrySongTemplate,
+} from './m4aTables';
+import {
+  buildVoiceData,
+  makeWaveData,
+  type SamplesJson,
+  type VoiceData,
+  type VoicegroupsJson,
+  type WavesJson,
+} from './m4aVoices';
 
 // ---------------------------------------------------------------------------------------------------------------
 // Globals (m4a.c's COMMON_DATA, sound/music_player_table.inc)
@@ -71,7 +108,7 @@ function newTrack(): MusicPlayerTrack {
     pitM: 0, keyShift: 0, keyShiftX: 0, tune: 0, pitX: 0, bend: 0, bendRange: 0, volMR: 0, volML: 0, vol: 0,
     volX: 0, pan: 0, panX: 0, modM: 0, mod: 0, modT: 0, lfoSpeed: 0, lfoSpeedC: 0, lfoDelay: 0, lfoDelayC: 0,
     priority: 0, pseudoEchoVolume: 0, pseudoEchoLength: 0, chan: null, tone: emptyToneData(), timer: 0,
-    unk_3C: 0, data: EMPTY_SONG_DATA, cmdPtr: 0, patternStack: [0, 0, 0],
+    unk_3C: 0, data: EMPTY_SONG_DATA, cmdPtr: 0, patternStack: [0, 0, 0], addr: 0,
   };
 }
 
@@ -85,8 +122,10 @@ function newMusicPlayerInfo(name: string): MusicPlayerInfo {
 
 function newSoundChannel(): SoundChannel {
   return {
-    statusFlags: 0, type: 0, key: 0, gateTime: 0, midiKey: 0, velocity: 0, priority: 0, track: null,
-    prevChannelPointer: null, nextChannelPointer: null,
+    statusFlags: 0, type: 0, rightVolume: 0, leftVolume: 0, attack: 0, decay: 0, sustain: 0, release: 0, key: 0,
+    envelopeVolume: 0, envelopeVolumeRight: 0, envelopeVolumeLeft: 0, pseudoEchoVolume: 0, pseudoEchoLength: 0,
+    gateTime: 0, midiKey: 0, velocity: 0, priority: 0, rhythmPan: 0, count: 0, fw: 0, frequency: 0, wav: null,
+    currentPointer: 0, track: null, prevChannelPointer: null, nextChannelPointer: null,
   };
 }
 
@@ -96,8 +135,8 @@ function newSoundInfo(): SoundInfo {
   return {
     ident: 0, pcmDmaCounter: 0, reverb: 0, maxChans: 0, masterVolume: 0, freq: 0, mode: 0, c15: 0,
     pcmDmaPeriod: 0, maxLines: 0, pcmSamplesPerVBlank: 0, pcmFreq: 0, divFreq: 0, MPlayMainHead: null,
-    musicPlayerHead: null, CgbSound: DummyFunc, CgbOscOff: DummyFunc, plynote: ply_note, ExtVolPit: DummyFunc,
-    chans: [], soundRegs: new Uint8Array(0x100),
+    musicPlayerHead: null, CgbSound: DummyFunc, CgbOscOff: DummyFunc, MidiKeyToCgbFreq: () => 0, plynote: ply_note,
+    ExtVolPit: DummyFunc, cgbChans: null, chans: [], soundRegs: new Uint8Array(0x100),
   };
 }
 
@@ -137,11 +176,68 @@ export const gPokemonCryMusicPlayers: readonly MusicPlayerInfo[] = Array.from({ 
 );
 export const gPokemonCryTracks: readonly MusicPlayerTrack[] = newTracks(MAX_POKEMON_CRIES * 2);
 
+// The tracks' order in IWRAM (MusicPlayerTrack.addr): gMPlayTrack_BGM ... _SE3 in .bss, then gPokemonCryTracks in
+// COMMON (ld_script.ld). 0 stands for a null track.
+[...gMPlayTable.flatMap((m) => m.track), ...gPokemonCryTracks].forEach((track, i) => (track.addr = i + 1));
+
 /** gSongTable: set by loadSongTable (songTable.ts) from songs.json; the index is the song id. */
 export let gSongTable: readonly Song[] = [];
 
+/** Installs the song table; once the voices are loaded (setVoiceData, either order) each song's `tone` is its
+ *  voicegroup. */
 export function setSongTable(songs: readonly Song[]): void {
   gSongTable = songs;
+  if (gVoiceData) setSongTones(gVoiceData);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The voices: voicegroups.json, samples.json, waves.json (m4aVoices.ts)
+
+/** The loaded voices (null until setVoiceData). */
+export let gVoiceData: VoiceData | null = null;
+/** gCryTable / gCryTable_Reverse (sound/cry_tables.inc), indexed by SpeciesToCryId: empty until setVoiceData. */
+export let gCryTable: readonly ToneData[] = [];
+export let gCryTable_Reverse: readonly ToneData[] = [];
+
+/**
+ * Binds the extracted voice data to the engine: builds every voicegroup's ToneData (keysplit and rhythm voices
+ * resolved to their subgroups, DirectSound voices to their samples' WaveData, the programmable waves), sets each
+ * song's SongHeader.tone from its voicegroup (now, and for a song table installed later) and the cry tables.
+ * `pcm` is samples.bin, which only the mixer needs (setSamplePcm adds it later). Call it once at boot with the
+ * parsed JSONs; it doesn't reset the engine (m4aSoundInit doesn't drop it either). Throws on a dangling reference.
+ */
+export function setVoiceData(
+  voicegroups: VoicegroupsJson,
+  samples: SamplesJson,
+  waves: WavesJson,
+  pcm?: Uint8Array | ArrayBuffer,
+): VoiceData {
+  const data = buildVoiceData(voicegroups, samples, waves, pcm);
+  gVoiceData = data;
+  gSamplesJson = samples;
+  gCryTable = data.cryTable;
+  gCryTable_Reverse = data.cryTableReverse;
+  setSongTones(data);
+  return data;
+}
+
+let gSamplesJson: SamplesJson | null = null;
+
+/** Adds samples.bin's PCM to the loaded voices' WaveData (for the mixer; the engine's timing doesn't need it). */
+export function setSamplePcm(pcm: Uint8Array | ArrayBuffer): void {
+  if (!gVoiceData || !gSamplesJson) throw new Error('setSamplePcm: call setVoiceData first');
+  const bytes = pcm instanceof ArrayBuffer ? new Uint8Array(pcm) : pcm;
+  for (const [label, wave] of gVoiceData.samples) wave.data = makeWaveData(label, gSamplesJson[label], bytes).data;
+}
+
+function setSongTones(data: VoiceData): void {
+  for (const song of gSongTable) {
+    const name = song.header.voicegroup;
+    if (name === null) continue;
+    const tone = data.voicegroups.get(name);
+    if (!tone) console.warn(`[m4a] ${song.header.name}: no voicegroup ${name}`);
+    song.header.tone = tone ?? null;
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -149,8 +245,8 @@ export function setSongTable(songs: readonly Song[]): void {
 // MusicPlayerInfo is exactly 64 bytes; on a MusicPlayerTrack it covers everything before cmdPtr.
 
 function Clear64byteTrack(track: MusicPlayerTrack): void {
-  const { data, cmdPtr, patternStack } = track;
-  Object.assign(track, newTrack(), { data, cmdPtr, patternStack });
+  const { data, cmdPtr, patternStack, addr } = track;
+  Object.assign(track, newTrack(), { data, cmdPtr, patternStack, addr });
 }
 
 function Clear64byteInfo(mplayInfo: MusicPlayerInfo): void {
@@ -191,7 +287,7 @@ export function m4aSoundInit(): void {
     mplayInfo.memAccArea = gMPlayMemAccArea;
   }
 
-  // W-m4a 2: memcpy(&gPokemonCrySong, &gPokemonCrySongTemplate, ...)
+  Object.assign(gPokemonCrySong, pokemonCrySongTemplate());
 
   for (let i = 0; i < MAX_POKEMON_CRIES; i++) {
     const mplayInfo = gPokemonCryMusicPlayers[i];
@@ -216,15 +312,20 @@ export function SoundInit(soundInfo: SoundInfo): void {
   soundInfo.ident = ID_NUMBER;
 }
 
-/** MPlayExtender (m4a.c): puts the C versions of ply_memacc, ply_lfos, ply_mod, ply_xcmd and ply_endtie in the jump
- *  table and hooks up the CGB functions. W-m4a 4: the CGB channels (cgbChans, CgbSound, CgbOscOff,
- *  MidiKeyToCgbFreq) and the registers. */
+/** MPlayExtender (m4a.c:257): puts the C versions of ply_memacc, ply_lfos, ply_mod, ply_xcmd and ply_endtie in the
+ *  jump table and sets up the CGB channels (gCgbChans) and functions (m4aCgb.ts: placeholders until W-m4a 4, as are
+ *  the sound registers it writes). */
 export function MPlayExtender(): void {
+  const soundInfo = gSoundInfo;
   gMPlayJumpTable[8] = ply_memacc;
   gMPlayJumpTable[17] = ply_lfos;
   gMPlayJumpTable[19] = ply_mod;
   gMPlayJumpTable[28] = ply_xcmd;
   gMPlayJumpTable[29] = ply_endtie;
+  soundInfo.cgbChans = newCgbChannels();
+  soundInfo.CgbSound = () => CgbSound(gSoundInfo);
+  soundInfo.CgbOscOff = CgbOscOff;
+  soundInfo.MidiKeyToCgbFreq = MidiKeyToCgbFreq;
 }
 
 /** m4aSoundMode (m4a.c): reverb, the DirectSound channel count (stopping every channel), master volume, DAC bits and
@@ -298,8 +399,8 @@ export function m4aSoundMain(): void {
   SoundMain();
 }
 
-/** SoundMain (m4a_1.s): the music players' sequencers (SoundMain_3), CgbSound (SoundMain_4), then SoundMainRAM, the
- *  mixer (W-m4a 2/3). maxLines (the CPU budget in scanlines) has no counterpart. */
+/** SoundMain (m4a_1.s): the music players' sequencers (SoundMain_3), CgbSound (SoundMain_4), then SoundMainRAM
+ *  (m4aMixer.ts: the DirectSound channels). maxLines (the CPU budget in scanlines) has no counterpart. */
 export function SoundMain(): void {
   const soundInfo = gSoundInfo;
   if (soundInfo.ident !== ID_NUMBER) return;
@@ -307,7 +408,7 @@ export function SoundMain(): void {
     soundInfo.MPlayMainHead(soundInfo.musicPlayerHead);
   }
   soundInfo.CgbSound();
-  // W-m4a 2/3: SoundMainRAM (the reverb pass, each DirectSound channel's envelope and sample, the mix).
+  SoundMainRAM(soundInfo);
 }
 
 /** Safety net for corrupt song data: a track that reads this many commands in one tick without a wait (a GOTO to
@@ -458,9 +559,66 @@ function MPlayMainTrackTick(mplayInfo: MusicPlayerInfo, track: MusicPlayerTrack)
 }
 
 /** The per-channel half of MPlayMain's volume / pitch update (m4a_1.s _081DD9F6 to _081DDA52): ChnVolSetAsm on
- *  VOLCHG, the channel frequency (MidiKeyToFreq / MidiKeyToCgbFreq from key + keyM, pitM) on PITCHG.
- *  W-m4a 2 / W-m4a 4: no channel reaches here until notes allocate channels. */
-function ChnVolPitUpdate(_mplayInfo: MusicPlayerInfo, _track: MusicPlayerTrack, _chan: SoundChannel): void {}
+ *  VOLCHG, the channel frequency (MidiKeyToFreq / MidiKeyToCgbFreq from key + keyM, pitM) on PITCHG; a CGB channel
+ *  also gets its `modify` bits for CgbSound. */
+function ChnVolPitUpdate(_mplayInfo: MusicPlayerInfo, track: MusicPlayerTrack, chan: SoundChannel): void {
+  const cgbType = chan.type & TONEDATA_TYPE_CGB;
+  if (track.flags & MPT_FLG_VOLCHG) {
+    ChnVolSetAsm(chan, track);
+    if (cgbType) (chan as CgbChannel).modify |= CGB_CHANNEL_MO_VOL;
+  }
+  if (track.flags & MPT_FLG_PITCHG) {
+    let key = chan.key + track.keyM;
+    if (key < 0) key = 0;
+    if (cgbType) {
+      chan.frequency = gSoundInfo.MidiKeyToCgbFreq(cgbType, key, track.pitM);
+      (chan as CgbChannel).modify |= CGB_CHANNEL_MO_PIT;
+    } else {
+      chan.frequency = MidiKeyToFreq(chan.wav, key, track.pitM);
+    }
+  }
+}
+
+/** ChnVolSetAsm (m4a_1.s:1514): the channel's right / left volume from its velocity, rhythm pan and the track's
+ *  volMR / volML. */
+export function ChnVolSetAsm(chan: SoundChannel, track: MusicPlayerTrack): void {
+  const velocity = chan.velocity;
+  const pan = chan.rhythmPan;
+  let right = ((128 + pan) * velocity * track.volMR) >> 14;
+  if (right > 0xff) right = 0xff;
+  chan.rightVolume = right;
+  let left = ((127 - pan) * velocity * track.volML) >> 14;
+  if (left > 0xff) left = 0xff;
+  chan.leftVolume = left;
+}
+
+/** umul3232H32 (m4a_1.s:10): the high 32 bits of an unsigned 32 × 32 multiply. */
+export function umul3232H32(a: number, b: number): number {
+  a >>>= 0;
+  b >>>= 0;
+  const aLo = a & 0xffff, aHi = a >>> 16, bLo = b & 0xffff, bHi = b >>> 16;
+  const lo = aLo * bLo, mid1 = aHi * bLo, mid2 = aLo * bHi;
+  const carry = ((lo >>> 16) + (mid1 & 0xffff) + (mid2 & 0xffff)) >>> 16;
+  return (aHi * bHi + (mid1 >>> 16) + (mid2 >>> 16) + carry) >>> 0;
+}
+
+/** MidiKeyToFreq (m4a.c:23): a DirectSound channel's frequency (the sample's rate scaled to the key; key 60 plays
+ *  it at its own rate), with fineAdjust in 1/256 semitones. SoundMainRAM steps divFreq × frequency / 2^23 samples
+ *  per output sample. A channel with no sample (the voice data isn't loaded) gets 0. */
+export function MidiKeyToFreq(wav: ToneWav, key: number, fineAdjust: number): number {
+  if (!isWaveData(wav)) return 0;
+  key = u8(key);
+  let fineAdjustShifted = u32(u8(fineAdjust) << 24);
+  if (key > 178) {
+    key = 178;
+    fineAdjustShifted = u32(255 << 24);
+  }
+  let val1 = gScaleTable[key];
+  val1 = gFreqTable[val1 & 0xf] >>> (val1 >> 4);
+  let val2 = gScaleTable[key + 1];
+  val2 = gFreqTable[val2 & 0xf] >>> (val2 >> 4);
+  return umul3232H32(wav.freq, u32(val1 + umul3232H32(u32(val2 - val1), fineAdjustShifted)));
+}
 
 /** TrackStop (m4a_1.s:1468): stops every channel of the track (CgbOscOff for the PSG ones) and unlinks them. */
 export function TrackStop(_mplayInfo: MusicPlayerInfo, track: MusicPlayerTrack): void {
@@ -975,15 +1133,28 @@ function MPlayJumpTableCopy(): void {
   gMPlayJumpTable.splice(0, gMPlayJumpTable.length, ...gMPlayJumpTableTemplate);
 }
 
+/** A channel's track as ply_note compares it: its place in IWRAM (0 for none). */
+const trackAddr = (track: MusicPlayerTrack | null): number => (track ? track.addr : 0);
+
 /**
  * ply_note (m4a_1.s:1538), commands 0xCF (TIE) to 0xFF (N96): the gate time from gClockTable, then up to three
- * argument bytes below 0x80: key, velocity, and extra gate time (mid2agb's -E).
+ * argument bytes below 0x80: key, velocity, and extra gate time (mid2agb's -E). Then (`_081DDB46`):
  *
- * W-m4a 2 continues from `_081DDB46`: the voice (keysplit / rhythm), the channel (a free or stolen DirectSound
- * channel, or the voice's CGB channel), linking it to the track, lfoDelayC, TrkVolPitSet, ChnVolSetAsm and the
- * frequency. It replaces gSoundInfo.plynote (SoundInit sets it to this function).
+ * - The voice: the track's tone, or for a keysplit voice the subgroup's voice at keySplitTable[key], for a rhythm
+ *   voice the subgroup's voice at [key] (played at that voice's own key, with its pan as rhythmPan). A resolved
+ *   voice that is itself keysplit / rhythm plays nothing.
+ * - The priority: the player's plus the track's (at most 255).
+ * - A channel. A CGB voice takes its PSG channel (square 1, square 2, wave, noise) if that is free, released, of
+ *   lower priority, or of the same priority on a track at the same or a higher address; else the note is dropped.
+ *   A DirectSound voice takes the first free one of the maxChans (5) channels; failing that, the released channel
+ *   of lowest priority (the highest track address on a tie) if any is released, else the playing channel of lowest
+ *   priority below or equal to the note's (equal only from a track at the same or a higher address); else the
+ *   note is dropped. Track addresses: BGM < SE1 < SE2 < SE3 < the cry players (MusicPlayerTrack.addr).
+ * - The channel leaves its old track (ClearChain) and goes first in this track's list; it gets the voice, the
+ *   track's gate time, key, velocity, echo and volume (TrkVolPitSet, ChnVolSetAsm), its frequency from key + keyM
+ *   and pitM, the start offset (unk_3C), and START. SoundMainRAM / CgbSound start it in the same frame's VBlank.
  */
-export function ply_note(noteCmd: number, _mplayInfo: MusicPlayerInfo, track: MusicPlayerTrack): void {
+export function ply_note(noteCmd: number, mplayInfo: MusicPlayerInfo, track: MusicPlayerTrack): void {
   track.gateTime = gClockTable[noteCmd];
   let p = track.cmdPtr;
   let b = readByte(track, p);
@@ -1000,6 +1171,137 @@ export function ply_note(noteCmd: number, _mplayInfo: MusicPlayerInfo, track: Mu
     }
     track.cmdPtr = p; // _081DDB44
   }
+
+  // _081DDB46: the voice
+  const soundInfo = gSoundInfo;
+  let rhythmPan = 0;
+  let voice: ToneData | null;
+  let key: number;
+  const toneType = track.tone.type;
+  if (toneType & (TONEDATA_TYPE_RHY | TONEDATA_TYPE_SPL)) {
+    key = track.key;
+    let index = key;
+    if (toneType & TONEDATA_TYPE_SPL) {
+      // The keysplit tables cover keys 36-107 (24-107); beyond that the ROM's neighbouring bytes, null where they
+      // are a pointer's (voicegroups.json). No FRLG song reaches a null one (tests/unit/m4aChannels.test.ts).
+      const entry = track.tone.keySplitTable?.[key];
+      if (entry === null || entry === undefined) return;
+      index = entry;
+    }
+    const subgroup = track.tone.wav;
+    voice = Array.isArray(subgroup) ? (subgroup[index] ?? null) : null;
+    if (voice === null || voice.type & (TONEDATA_TYPE_SPL | TONEDATA_TYPE_RHY)) return;
+    if (toneType & TONEDATA_TYPE_RHY) {
+      if (voice.pan_sweep & 0x80) rhythmPan = s8((voice.pan_sweep - TONEDATA_P_S_PAN) << 1);
+      key = voice.key;
+    }
+  } else {
+    voice = track.tone;
+    key = track.key;
+  }
+
+  // _081DDB9C: the priority
+  let priority = mplayInfo.priority + track.priority;
+  if (priority > 0xff) priority = 0xff;
+
+  // The channel
+  const cgbType = voice.type & TONEDATA_TYPE_CGB;
+  let chan: SoundChannel;
+  if (cgbType) {
+    const cgbChans = soundInfo.cgbChans;
+    if (cgbChans === null) return;
+    const cgb = cgbChans[cgbType - 1];
+    if (cgb.statusFlags & SOUND_CHANNEL_SF_ON && !(cgb.statusFlags & SOUND_CHANNEL_SF_STOP)) {
+      if (cgb.priority > priority) return;
+      if (cgb.priority === priority && trackAddr(cgb.track) < track.addr) return; // _081DDBE4
+    }
+    chan = cgb;
+  } else {
+    // _081DDBEC: r6 / r7 are the best candidate's priority and track, r2 whether a released channel was seen.
+    let bestPriority = priority;
+    let bestTrack = track.addr;
+    let releasedSeen = false;
+    let found: SoundChannel | null = null;
+    for (let i = 0; i < soundInfo.maxChans; i++) {
+      const c = soundInfo.chans[i];
+      const flags = c.statusFlags;
+      if (!(flags & SOUND_CHANNEL_SF_ON)) {
+        found = c; // a free channel: taken at once
+        break;
+      }
+      if (flags & SOUND_CHANNEL_SF_STOP) {
+        if (!releasedSeen) {
+          // The first released channel is the candidate whatever its priority.
+          releasedSeen = true;
+          bestPriority = c.priority;
+          bestTrack = trackAddr(c.track);
+          found = c;
+          continue;
+        }
+      } else if (releasedSeen) {
+        continue; // once one is released, playing channels aren't candidates
+      }
+      // _081DDC18
+      if (c.priority < bestPriority) {
+        bestPriority = c.priority;
+        bestTrack = trackAddr(c.track);
+        found = c;
+      } else if (c.priority === bestPriority) {
+        const a = trackAddr(c.track);
+        if (a > bestTrack) {
+          bestTrack = a;
+          found = c;
+        } else if (a === bestTrack) {
+          found = c;
+        }
+      }
+    }
+    if (found === null) return;
+    chan = found;
+  }
+
+  // _081DDC40: link the channel to the track
+  ClearChain(chan);
+  chan.prevChannelPointer = null;
+  chan.nextChannelPointer = track.chan;
+  if (track.chan !== null) track.chan.prevChannelPointer = chan;
+  track.chan = chan;
+  chan.track = track;
+  track.lfoDelayC = track.lfoDelay;
+  if (track.lfoDelay !== 0) ClearModM(track);
+  TrkVolPitSet(mplayInfo, track);
+
+  // The track's gateTime, key, velocity (one word copy: runningStatus lands on priority, set next)
+  chan.gateTime = track.gateTime;
+  chan.midiKey = track.key;
+  chan.velocity = track.velocity;
+  chan.priority = priority;
+  chan.key = key;
+  chan.rhythmPan = rhythmPan;
+  chan.type = voice.type;
+  chan.wav = voice.wav;
+  chan.attack = voice.attack;
+  chan.decay = voice.decay;
+  chan.sustain = voice.sustain;
+  chan.release = voice.release;
+  chan.pseudoEchoVolume = track.pseudoEchoVolume;
+  chan.pseudoEchoLength = track.pseudoEchoLength;
+  ChnVolSetAsm(chan, track);
+
+  let pitchKey = chan.key + track.keyM;
+  if (pitchKey < 0) pitchKey = 0;
+  if (cgbType) {
+    const cgb = chan as CgbChannel;
+    cgb.length = voice.length; // the CGB voices keep their pan here (music_voice.inc)
+    // The sweep: square 1's from the voice (0x00-0x7F with a time in bits 4-6), else 8 (none)
+    cgb.sweep = voice.pan_sweep & 0x80 || !(voice.pan_sweep & 0x70) ? 8 : voice.pan_sweep;
+    chan.frequency = soundInfo.MidiKeyToCgbFreq(cgbType, pitchKey, track.pitM);
+  } else {
+    chan.count = track.unk_3C;
+    chan.frequency = MidiKeyToFreq(chan.wav, pitchKey, track.pitM);
+  }
+  chan.statusFlags = SOUND_CHANNEL_SF_START;
+  track.flags &= 0xf0;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -1152,4 +1454,131 @@ export function m4aMPlayLFOSpeedSet(mplayInfo: MusicPlayerInfo, trackBits: numbe
     track.lfoSpeed = u8(lfoSpeed);
     if (!track.lfoSpeed) ClearModM(track);
   });
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// The cries (m4a.c:1660-1781): sound.c's PlayCryInternal sets gPokemonCrySong up through the SetPokemonCry*
+// setters, then SetPokemonCryTone copies it to a free cry player's song and starts it.
+
+/** gPokemonCrySong: the next cry's song (gPokemonCrySongTemplate, then the setters). */
+export const gPokemonCrySong: PokemonCrySong = pokemonCrySongTemplate();
+
+/** gPokemonCrySongs: each cry player's copy, as the song header MPlayStart gets. */
+export const gPokemonCrySongs: (SongHeader | null)[] = Array.from({ length: MAX_POKEMON_CRIES }, () => null);
+
+/**
+ * SetPokemonCryTone (m4a.c:1660): starts gPokemonCrySong with `tone` (a gCryTable / gCryTable_Reverse entry) on the
+ * first cry player that is free (its first track ended and has no channel still linked), else on the one whose
+ * song has run longest (the highest clock; the first on a tie), and returns that player.
+ */
+export function SetPokemonCryTone(tone: ToneData): MusicPlayerInfo {
+  let maxClock = 0;
+  let maxClockIndex = 0;
+  let i = 0;
+  let free = false;
+  for (; i < MAX_POKEMON_CRIES; i++) {
+    const track = gPokemonCryTracks[i * 2];
+    if (!track.flags && (!track.chan || track.chan.track !== track)) {
+      free = true;
+      break;
+    }
+    if (maxClock < gPokemonCryMusicPlayers[i].clock) {
+      maxClock = gPokemonCryMusicPlayers[i].clock;
+      maxClockIndex = i;
+    }
+  }
+  if (!free) i = maxClockIndex;
+
+  // start_song
+  const mplayInfo = gPokemonCryMusicPlayers[i];
+  const song = gPokemonCrySong;
+  const data = song.data.slice();
+  // gotoTarget = &gPokemonCrySongs[i].cont: an offset into the copy's bytes here
+  data[CRY_SONG_GOTO_TARGET] = CRY_SONG_CONT;
+  data[CRY_SONG_GOTO_TARGET + 1] = data[CRY_SONG_GOTO_TARGET + 2] = data[CRY_SONG_GOTO_TARGET + 3] = 0;
+  const header: SongHeader = {
+    name: `gPokemonCrySongs[${i}]`,
+    trackCount: song.trackCount,
+    blockCount: song.blockCount,
+    priority: song.priority,
+    reverb: song.reverb,
+    voicegroup: null,
+    tone: [tone], // the song's VOICE 0 reads the cry table entry itself
+    part: [CRY_SONG_PART0, CRY_SONG_PART1],
+    data,
+  };
+  gPokemonCrySongs[i] = header;
+  MPlayStart(mplayInfo, header);
+  return mplayInfo;
+}
+
+/** SetPokemonCryVolume (m4a.c:1701) */
+export function SetPokemonCryVolume(val: number): void {
+  gPokemonCrySong.data[CRY_SONG_VOLUME_VALUE] = val & 0x7f;
+}
+
+/** SetPokemonCryPanpot (m4a.c:1706): -64 (left) .. 63 (right). */
+export function SetPokemonCryPanpot(val: number): void {
+  gPokemonCrySong.data[CRY_SONG_PAN_VALUE] = (s8(val) + C_V) & 0x7f;
+}
+
+/** SetPokemonCryPitch (m4a.c:1711): the pitch in 1/256 semitones from key 0 (15360 = key 60): the TIE key gets the
+ *  semitones, the TUNE value the rest in half steps of TUNE's 1/64 semitone (TrkVolPitSet's tune × 4); the chorus
+ *  track keeps its detune. */
+export function SetPokemonCryPitch(val: number): void {
+  const data = gPokemonCrySong.data;
+  const b = s16(val + 0x80);
+  const a = u8(data[CRY_SONG_TUNE_VALUE2] - data[CRY_SONG_TUNE_VALUE]);
+  data[CRY_SONG_TIE_KEY_VALUE] = (b >> 8) & 0x7f;
+  data[CRY_SONG_TUNE_VALUE] = (b >> 1) & 0x7f;
+  data[CRY_SONG_TUNE_VALUE2] = (a + ((b >> 1) & 0x7f)) & 0x7f;
+}
+
+/** SetPokemonCryLength (m4a.c:1720): the ticks (frames, at the cry's 150 BPM) the TIE is held before EOT / FINE. */
+export function SetPokemonCryLength(val: number): void {
+  gPokemonCrySong.data[CRY_SONG_LENGTH] = val & 0xff;
+  gPokemonCrySong.data[CRY_SONG_LENGTH + 1] = (val >> 8) & 0xff;
+}
+
+/** SetPokemonCryRelease (m4a.c:1725) */
+export function SetPokemonCryRelease(val: number): void {
+  gPokemonCrySong.data[CRY_SONG_RELEASE_VALUE] = u8(val);
+}
+
+/** SetPokemonCryProgress (m4a.c:1730): the sample offset the cry starts from (XCMD 0x0D → unk_3C → count). */
+export function SetPokemonCryProgress(val: number): void {
+  const data = gPokemonCrySong.data;
+  for (let k = 0; k < 4; k++) data[CRY_SONG_UNK_CMD_0D_PARAM + k] = (val >>> (8 * k)) & 0xff;
+}
+
+/** IsPokemonCryPlaying (m4a.c:1735): the cry's first track still has its channel. FINE unlinks it (so the release
+ *  tail doesn't count), and so does the sample running out (MPlayMain's ClearChain, the frame after). */
+export function IsPokemonCryPlaying(mplayInfo: MusicPlayerInfo): boolean {
+  const track = mplayInfo.tracks[0];
+  return !!track && track.chan !== null && track.chan.track === track;
+}
+
+/** SetPokemonCryChorus (m4a.c:1745): a second track detuned by val / 64 semitones (0: one track). */
+export function SetPokemonCryChorus(val: number): void {
+  val = s8(val);
+  const data = gPokemonCrySong.data;
+  if (val) {
+    gPokemonCrySong.trackCount = 2;
+    data[CRY_SONG_TUNE_VALUE2] = (val + data[CRY_SONG_TUNE_VALUE]) & 0x7f;
+  } else {
+    gPokemonCrySong.trackCount = 1;
+  }
+}
+
+/** SetPokemonCryStereo (m4a.c:1758): the options menu's SOUND setting. Stereo clears soundInfo.mode's bit 0, mono
+ *  sets it (the mixer then writes mono, W-m4a 3); the DMA routing (REG_SOUNDCNT_H) is the output's. */
+export function SetPokemonCryStereo(val: number): void {
+  const soundInfo = gSoundInfo;
+  if (val) soundInfo.mode &= ~1;
+  else soundInfo.mode |= 1;
+}
+
+/** SetPokemonCryPriority (m4a.c:1778) */
+export function SetPokemonCryPriority(val: number): void {
+  gPokemonCrySong.priority = u8(val);
 }
