@@ -95,8 +95,8 @@ export const FERRY_SPECIALS: Record<string, Special> = {
   /**
    * DrawSeagallopDestinationMenu (script_menu.c): the Rainbow Pass menu, a std-framed window from rect
    * (17, top, 11, numItems * 2) with 16 px rows, on the multichoice input task (CreateMCMenuInputHandlerTask:
-   * B cancels, it wraps with more than 3 items). Its `waitstate` ends with the choice in VAR_RESULT. (The quest
-   * log's QL_AvoidDisplay has no port.)
+   * B cancels, it wraps with more than 3 items). Its `waitstate` ends the frame after the choice, with it in
+   * VAR_RESULT. (The quest log's QL_AvoidDisplay has no port.)
    */
   DrawSeagallopDestinationMenu({ state, host, setWaitState, encodeText }) {
     state.setVar('VAR_RESULT', SCR_MENU_UNSET);
@@ -112,10 +112,16 @@ export const FERRY_SPECIALS: Record<string, Special> = {
       initPos: 0,
       layout: { width: 11, height: numItems * 2, rowHeight: 16 },
     });
+    // Task_MultichoiceMenu_HandleInput's ScriptContext_Enable: the script runs on in the next frame's
+    // ScriptContext_RunScript, not in the frame of the press (else the A that picks OTHER would also pick the
+    // first item of the page the script draws next).
+    let chosen = false;
     setWaitState(() => {
+      if (chosen) return true;
       if (!menu.tick()) return false;
       state.setVar('VAR_RESULT', menu.result);
-      return true;
+      chosen = true;
+      return false;
     });
   },
 
