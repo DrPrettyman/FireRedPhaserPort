@@ -164,6 +164,21 @@ this is the next level down. When you add or change a subsystem, update its entr
   extract_gfx.py (`graphics/script_menu/`), preloaded with the field's gfx. Probe: `__test.museumFossilPic()`.
   Tests: tests/e2e/sideEvents.test.ts (Oak in his lab at (6, 4), the Viridian PC, the museum's fossils from
   (5, 4) / (5, 7) facing left, the Cinnabar lab's fossil revival), tests/unit/sideSpecials.test.ts.
+- **Daycare:** `world/daycare.ts` is daycare.c's storage: `GameState.route5DayCareMon` (struct DaycareMon: a
+  BoxPokemon or null, u32 steps; no mail) and `GameState.daycare` (struct DayCare, the Four Island daycare: two
+  DaycareMons, offspringPersonality, the u8 egg-cycle stepCounter), both saved (SAVE_VERSION 4; a version 3 save
+  had only `daycareStepCounter`). StorePokemonInDaycare, TakeSelectedPokemonFromDaycare (BoxMonToMon, one exp per
+  step, ApplyDaycareExperience: TryIncrementMonLevel level by level with MonTryLearningNewMove, the first move
+  pushed out when full), the level / cost helpers (cost 100 + 100 per level), ShiftDaycareSlots,
+  CountPokemonInDaycare, and ShouldEggHatch / TryProduceOrHatchEgg (the Route 5 mon's and the daycare mons'
+  steps, party eggs' egg cycles; egg production is a TODO for unit 3). The script specials are
+  `script/daycareSpecials.ts` (DAYCARE_SPECIALS: ChooseSendDaycareMon through `runScreenFromScript` and
+  partyMenu.ts's ChooseMonForDaycare (PARTY_MENU_TYPE_DAYCARE: STORE leaves the slot in VAR_0x8004), the Route 5
+  ones, GetSelectedMonNicknameAndSpecies; they read the chosen slot with GetCursorSelectionMonId, as the C does);
+  IsEnoughForCostInVar0x8005 / SubtractMoneyFromVar0x8005 / CalculatePlayerPartyCount are in SIDE_SPECIALS. Eggs
+  (the Four Island specials) go into the same two files. Tests: tests/unit/daycare.test.ts,
+  tests/e2e/daycare.test.ts (`?start=after-rival&map=Route5_PokemonDayCare&x=4&y=5`, face up; set
+  `t.state.route5DayCareMon.steps` to skip the walking).
 - **Multichoice / elevators:** `ui/MultichoiceMenu.ts` (vertical list and grid, field windows); the script engine
   sets VAR_RESULT from `ScriptHost.openMultichoice`. `text/stringWidth.ts` is GetStringWidth for any font set
   (the field's or the GBA layer's). Specials can start field tasks that outlive them (`ScriptHost.startFieldTask`,
@@ -340,8 +355,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   ChangePokemonNickname leaves) are in the same file. Tests: tests/unit/inGameTrades.test.ts,
   tests/e2e/inGameTrades.test.ts (Reyley in Route2_House, talk from (7, 3); the Name Rater in LavenderTown_House2,
   talk from (4, 5)).
-- **Step counters:** `world/stepCounters.ts` (happiness, VS Seeker, field poison, egg cycles), called from
-  `OverworldScene.tryStartStepCountScript`; `world/roamer.ts` is roamer.c with its EWRAM statics as module state
+- **Step counters:** `world/stepCounters.ts` (happiness, VS Seeker, field poison; ShouldEggHatch is re-exported
+  from world/daycare.ts), called from `OverworldScene.tryStartStepCountScript`; `world/roamer.ts` is roamer.c with its EWRAM statics as module state
   (`roamerLocation()` for tests). Field code may call battle-engine pokemon.c functions (AdjustFriendship): the
   overworld initialises the battle env at boot.
 

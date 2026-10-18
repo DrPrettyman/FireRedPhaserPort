@@ -2140,3 +2140,26 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   and the money box; no Coin Case; the prize room's Abra for 180 coins and TM13 for 4000, not enough coins; the
   Fisher's 10 coins and hidden coins; a slot machine without a Coin Case and GetRandomSlotMachineId's spread),
   storyCeladonSaffron's Game Corner test. Screenshot of the coin clerk: money and coins boxes as on the GBA.
+
+### The Route 5 daycare (W-daycare unit 2)
+
+- `world/daycare.ts` (new): daycare.c's storage. struct DaycareMon / DayCare in GameState (`route5DayCareMon`,
+  `daycare`, which takes over `daycareStepCounter` as `daycare.stepCounter`), StorePokemonInDaycare,
+  TakeSelectedPokemonFromDaycare, ApplyDaycareExperience, GetLevelAfterDaycareSteps, GetNumLevelsGained*,
+  GetDaycareCostForSelectedMon, ShiftDaycareSlots, CountPokemonInDaycare; ShouldEggHatch / TryProduceOrHatchEgg
+  moved here from world/stepCounters.ts (which re-exports it) and now count the Route 5 mon's steps (and the Four
+  Island mons', for unit 3).
+- `script/daycareSpecials.ts` (new, spread into SPECIALS): ChooseSendDaycareMon, GetSelectedMonNicknameAndSpecies,
+  PutMonInRoute5Daycare, GetCostToWithdrawRoute5DaycareMon, IsThereMonInRoute5Daycare,
+  GetNumLevelsGainedForRoute5DaycareMon, TakePokemonFromRoute5Daycare. SIDE_SPECIALS: IsEnoughForCostInVar0x8005,
+  SubtractMoneyFromVar0x8005 (money.c), CalculatePlayerPartyCount (also used by the cable club attendants).
+- Fix on the way: partyMenu.ts's ChooseMonForDaycare didn't set gFieldCallback2 = CB2_FadeFromPartyMenu, so the
+  field wouldn't have faded back in after the daycare's party menu.
+- Save format version 4: `daycare` and `route5DayCareMon` replace `daycareStepCounter`; `upgradeSave` turns a
+  version 3 save into one with both daycares empty and the old step counter kept.
+- Ten entries off `scriptCoverageGaps.ts`. Route5_PokemonDayCare's script runs end to end.
+- Verified: typecheck; `npm test` (205, incl. the new daycare.test.ts and a version 3 save upgrade); e2e
+  daycare.test.ts (new, 4 tests: leave a mon, 46 steps "back already" and NO, 92 steps a level for ¥200; eight
+  levels with Quick Attack and Hyper Fang learned, not enough money first; a one-mon party refused and B in the
+  party menu; save and CONTINUE keeps the mon and its steps), saveContinue, wildBattle; a screenshot of the
+  daycare party menu's STORE / SUMMARY / CANCEL.
