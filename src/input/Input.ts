@@ -64,3 +64,31 @@ export class Input {
     return this.pressed('A') || this.pressed('B');
   }
 }
+
+// ------------------------------------------------------------------ the audio output's keys (AUDIO_PLAN.md W-out 1)
+
+/** The mute key (AUDIO_PLAN.md decision 10; docs/DEVIATIONS.md "Deliberate QOL changes"): no game or dev binding. */
+export const MUTE_KEY_CODE = 'KeyM';
+
+/** A key typed into a text field (the battle test panel's) is the field's, not the game's. */
+function isTextField(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
+}
+
+/**
+ * The page-level keys the audio output (audio/output.ts) needs, outside the per-tick button state: the first
+ * keydown or pointerdown anywhere is the user gesture the browser wants before audio may start (autoplay), and
+ * M toggles the output on and off. Listens on window in the capture phase, so a gesture counts even where the
+ * battle test panel stops its keys from reaching the game; M itself is ignored in text fields and with Ctrl /
+ * Cmd / Alt (Cmd+M minimizes on macOS). Nothing here reaches the game's logic.
+ */
+export function listenForOutputKeys(handlers: { gesture: () => void; toggleMute: () => void }): void {
+  const onKey = (e: KeyboardEvent): void => {
+    handlers.gesture();
+    if (e.code !== MUTE_KEY_CODE || e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTextField(e.target)) return;
+    handlers.toggleMute();
+  };
+  window.addEventListener('keydown', onKey, true);
+  window.addEventListener('pointerdown', () => handlers.gesture(), true);
+}

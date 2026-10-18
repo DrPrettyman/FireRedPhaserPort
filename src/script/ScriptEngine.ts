@@ -22,6 +22,7 @@ import { random } from '../util/random';
 import { FieldEffectActiveListContains, FieldEffectStart, gFieldEffectArguments } from '../world/fieldEffectScripts';
 import { SetEscapeWarp } from '../world/fieldMoves';
 import { scriptGiveEgg } from '../world/daycare';
+import { FadeInBGM, FadeOutBGMTemporarily, IsBGMPausedOrStopped, IsFanfareTaskInactive, IsSEPlaying, Overworld_ChangeMusicTo, PlayFanfare, PlayNewMapMusic, PlaySE } from '../gba/sound';
 
 export interface ScriptsData {
   code: Instruction[];
@@ -238,6 +239,26 @@ class ScriptContext {
   ) {
     this.pc = pc;
   }
+}
+
+/**
+ * SetupNativeScript + RunScriptCommand's SCRIPT_MODE_NATIVE (script.c): the script stops for this frame; from the
+ * next frame on, `native` is called once per frame, and the frame it returns TRUE the script still stops (the
+ * mode goes back to bytecode), so the next command runs the frame after. The audio waits (`waitse`, `waitfanfare`,
+ * `fadeoutbgm`) use it: their checks read the engine's state, which only changes at the end of a frame.
+ */
+function SetupNativeScript(ctx: ScriptContext, native: () => boolean): void {
+  let setUp = true;
+  let finished = false;
+  ctx.wait = () => {
+    if (setUp) {
+      setUp = false;
+      return false;
+    }
+    if (finished) return true;
+    finished = native();
+    return false;
+  };
 }
 
 /**
@@ -1322,17 +1343,50 @@ export class ScriptEngine {
       this.state.incrementGameStat(this.state.value(a[0]));
     },
 
-    // ------------------------------------------------ audio (not implemented yet)
-    playse() {},
-    waitse() {},
-    playbgm() {},
+    // ------------------------------------------------ audio (scrcmd.c:883-990; gba/sound.ts). The quest log's
+    // playback (QL_IS_PLAYBACK_STATE), which skips the BGM commands, isn't ported.
+    /** ScrCmd_playse */
+    playse(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      PlaySE(this.defines.require(a[0]));
+    },
+    /** ScrCmd_waitse: WaitForSoundEffectFinish (!IsSEPlaying: the SE1 and SE2 players, a fanfare too) */
+    waitse(this: ScriptEngine, ctx: ScriptContext) {
+      SetupNativeScript(ctx, () => !IsSEPlaying());
+    },
+    /** ScrCmd_playbgm: PlayNewMapMusic (the song starts in this frame's MapMusicMain). */
+    playbgm(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      const songId = this.defines.require(a[0]);
+      // TODO(W-sound 3): `if (save == TRUE) Overworld_SetSavedMusic(songId)` (savedMusic, saved in the save file)
+      PlayNewMapMusic(songId);
+    },
+    /** ScrCmd_savebgm: Overworld_SetSavedMusic. TODO(W-sound 3): overworld.c's savedMusic. */
     savebgm() {},
+    /** ScrCmd_fadedefaultbgm: Overworld_ChangeMusicToDefault. TODO(W-sound 3): needs GetCurrLocationDefaultMusic
+     *  (the map's music, savedMusic, surf). */
     fadedefaultbgm() {},
-    fadenewbgm() {},
-    fadeoutbgm() {},
-    fadeinbgm() {},
-    playfanfare() {},
-    waitfanfare() {},
+    /** ScrCmd_fadenewbgm: Overworld_ChangeMusicTo */
+    fadenewbgm(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      Overworld_ChangeMusicTo(this.defines.require(a[0]));
+    },
+    /** ScrCmd_fadeoutbgm: FadeOutBGMTemporarily(4 × speed, 4 for 0), then wait for IsBGMPausedOrStopped. */
+    fadeoutbgm(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      const speed = this.defines.require(a[0]) & 0xff;
+      FadeOutBGMTemporarily(speed !== 0 ? 4 * speed : 4);
+      SetupNativeScript(ctx, IsBGMPausedOrStopped);
+    },
+    /** ScrCmd_fadeinbgm: FadeInBGM(4 × speed, 4 for 0) */
+    fadeinbgm(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      const speed = this.defines.require(a[0]) & 0xff;
+      FadeInBGM(speed !== 0 ? 4 * speed : 4);
+    },
+    /** ScrCmd_playfanfare: PlayFanfare (the BGM pauses; Task_Fanfare counts sFanfares' frames). */
+    playfanfare(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      PlayFanfare(this.defines.require(a[0]));
+    },
+    /** ScrCmd_waitfanfare: WaitForFanfareFinish (IsFanfareTaskInactive) */
+    waitfanfare(this: ScriptEngine, ctx: ScriptContext) {
+      SetupNativeScript(ctx, IsFanfareTaskInactive);
+    },
     playmoncry() {},
     waitmoncry() {},
   };

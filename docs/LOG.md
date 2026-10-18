@@ -2706,6 +2706,37 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   98d9ab7 after `npm run extract`: typecheck, `npm test` 33 files / 367 tests, the full e2e suite 58 files / 387
   tests, all green.
 
+### W-out 1: the browser output, autoplay and the mute key (AUDIO_PLAN.md batch B)
+
+- `src/audio/output.ts`, `src/audio/worklet.ts`, `src/audio/outputCore.ts` (pure): an AudioContext created at boot
+  (suspended by the browser until the first keydown / pointerdown, then resumed; suspended while the tab is
+  hidden, flushed and resumed when it is back), one AudioWorkletNode, `pushFrame({ fifoA, fifoB, soundcntH?, psg? })`
+  for the mixer (W-m4a 3; `psg` is a proposed shape for W-m4a 4), posted as one transferable buffer per frame. The
+  worklet runs the GBA's DirectSound DAC (FIFO routing and volume from REG_SOUNDCNT_H, SOUNDBIAS, 10-bit clip,
+  8-bit resolution) and a sample-and-hold upsampler with a 3-4 frame buffer, a ±0.5% rate nudge, silence on an
+  underrun and a drop after a stall. Off headless and for `?speed=` > 1; `?audio=0/1` forces it, `?audio=tone`
+  (dev) plays a test tone through the same path. Mute key M (localStorage; not in text fields). Phaser's
+  `noAudio` and the output start in `main.ts` and `battleTest.ts`. Vite bundles the worklet via
+  `./worklet.ts?worker&url` (dev: served as a module; build: `assets/worklet-*.js`, checked with `vite build` and
+  by loading the built chunk in Chrome).
+- Found on the way: the e2e harness's headless Chrome has `navigator.webdriver` false, so headless is also detected
+  by the `HeadlessChrome` user agent. A key sent through DevTools (`Input.dispatchKeyEvent`) turns that page hidden
+  (and Phaser stops its loop) unless focus emulation is on: the harness's new `game.realKey` turns it on. The
+  PCM plays at 224 × 60 = 13,440 Hz, not 13,379 Hz: the port's frame is 60 Hz, and playing slower than the frames
+  come would overflow the buffer (docs/DEVIATIONS.md). `output.ts` takes the key listener as a parameter: importing
+  Input.ts (Phaser) from it broke every unit test that imports testHooks.
+- Shared edits: `src/main.ts`, `src/battleTest.ts` (noAudio, start), `src/input/Input.ts` (`listenForOutputKeys`,
+  `MUTE_KEY_CODE`), `src/dev/testHooks.ts` (one line: `audioOutput`, from the new `src/dev/audioOutputHooks.ts`),
+  `tests/e2e/harness.ts` (`query` start option, `realKey`).
+- Verified: typecheck; `npm test` 34 files / 381 tests (`tests/unit/audioOutput.test.ts` 14: decideOutput, the
+  DAC's stereo / mono / clipping values, the resampler's holds, rate nudge, start, underrun, overflow, a simulated
+  60 Hz loop for 2 minutes and with ±0.1% drift and 30 Hz rAF for 10 minutes: no underruns or drops);
+  `tests/e2e/audioOutput.test.ts` 4 (off headless; `?audio=1` suspended → running after a real key, suspended
+  while hidden; M toggles, survives a reload, not in a text field, remembered with the output off; the tone's peak
+  0.3125 = 40 / 128 reaches the speakers in headless Chrome and M silences it while the frames keep flowing), run
+  three times; titleScreen + newGame e2e (7). battle-test.html by hand with tools/browser-test.mjs
+  (`?audio=tone`: suspended → running on a key, the tone's peak 0.3125, M ignored in the panel's input, muted
+  outside it).
 ### W-m4a 2: notes, channels and cries (silent) (AUDIO_PLAN.md batch B)
 
 - `src/audio/m4a.ts`: ply_note from `_081DDB46` on (the voice through keysplit and rhythm voices, the priority,
@@ -2757,3 +2788,39 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   without them).
 - Verified: typecheck; `npm test` (35 files, 465 tests). No game code changed, so no e2e.
 
+### W-sound 1: sound.c without the cries, the frame hook, the audio script commands (AUDIO_PLAN.md batch B)
+
+- `src/gba/sound.ts` is now sound.c minus the cries (still stubs, W-sound 2): MapMusicMain and the map music
+  helpers, sFanfares / PlayFanfare / PlayFanfareByFanfareNum / Task_Fanfare / WaitFanfare / IsFanfareTaskInactive,
+  PlaySE / PlaySE12WithPanning / PlaySE1/2WithPanning / SE12PanpotControl, PlayBGM and the BGM fades, IsSEPlaying /
+  IsSpecialSEPlaying / IsBGMPlaying / IsBGMStopped / IsBGMPausedOrStopped, and overworld.c's BGMusicStopped and
+  Overworld_ChangeMusicTo. Task_Fanfare runs as a "sound task" from the new `AgbMainFrameEnd()`
+  (`src/audio/frame.ts`: the sound tasks, MapMusicMain, m4aSoundMain), called once per logic tick by
+  `OverworldScene.tick` and `GbaHostScene.update` (which also hosts BattleScene, in the game and on battle-test, so
+  BattleScene needed no line of its own). `src/audio/audioData.ts` loads songs.json, voicegroups.json, samples.json
+  and waves.json at boot (BootScene, BattleTestBoot) into `loadSongTable` / `setVoiceData`; `AgbMainSoundInit()`
+  (m4aSoundInit + sound.c's statics) runs before the first frame and on a soft reset.
+- Script commands (scrcmd.c:883-990): `playse`, `waitse`, `playbgm` (PlayNewMapMusic), `fadenewbgm`, `fadeoutbgm`,
+  `fadeinbgm`, `playfanfare`, `waitfanfare`. The three waits use a `SetupNativeScript` that keeps script.c's frames
+  (the check starts the next frame; the script goes on the frame after it holds). `savebgm`, `fadedefaultbgm` and
+  `playbgm`'s save flag wait for W-sound 3.
+- Test hooks: `__test.audioEvents(since)`, `__test.audio()`, `__test.playSong(name)`. eggHatch's local 220-frame
+  counter is gone (the real Task_Fanfare holds the message).
+- Found on the way: FRLG's item balls (and `giveitem`'s EventScript_BufferPocketNameTryFanfare) play MUS_LEVEL_UP
+  (FANFARE_LEVEL_UP, 80 frames), not MUS_OBTAIN_ITEM as AUDIO_PLAN.md section 5 says; MUS_OBTAIN_ITEM is only
+  Std_ObtainDecoration's (unreached) and the mystery event's. The diploma played FANFARE 0 (a local
+  `FANFARE_OBTAIN_BADGE = 0`); now K.FANFARE_OBTAIN_BADGE (5, 340 frames).
+- Waits that now take their GBA length: every `waitfanfare` / IsFanfareTaskInactive / WaitFanfare (items, heals,
+  badges, the move relearner, the slot payout, the diploma, the dex rating, egg hatching), every `waitse`, and the
+  IsSEPlaying checks of the screens whose PlaySE calls are live (evolution's MUS_EVOLUTION_INTRO, the trainer card,
+  item use), the title screen's FadeOutMapMusic wait.
+- Tick budgets raised: none. The full e2e suite passed on its first run with the longer waits (59 files, 389
+  tests, 22.7 min), so no budget sized for the instant waits was too tight, and nothing failed and passed on a
+  rerun.
+- Verified: typecheck; `npm test` (36 files, 426 tests after merging W-m4a 2 and W-out 1; tests/unit/sound.test.ts
+  12: fanfare counts, the BGM paused and resumed, MUS_EVOLVED outliving its counter, WaitFanfare, IsSEPlaying over
+  SE_SELECT, FadeOutMapMusic's 16 × speed + 1 wait, a new song after the fade); `tests/e2e/audio.test.ts` (Viridian
+  Forest's Potion ball: MUS_LEVEL_UP's continue 80 frames after the fanfare, "put the POTION" 3 after, BGM paused
+  throughout; the Game Corner fisher's `waitse` holds `setflag` until SE_SHOP's player stops, against the engine's
+  own length for SE_SHOP), 3 runs green; the full e2e suite once before the merge (above), and after it audio,
+  audioOutput, eggHatch, titleScreen and wildBattle.

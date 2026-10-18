@@ -4,7 +4,8 @@
 // through the summary screen (ShowSelectMovePokemonSummaryScreen, back through CB2_MoveRelearner_Resume).
 // VAR_0x8004 comes back TRUE if a move was taught, FALSE if the player gave up. Plus pokemon.c's
 // GetMoveRelearnerMoves / GetNumberOfRelearnableMoves, which the party menu's PARTY_MENU_TYPE_MOVE_RELEARNER
-// branch uses. Not ported: SEs and the level-up fanfare (no audio).
+// branch uses. The SEs and the level-up fanfare go through gba/sound.ts (the fanfare holds the screen for its
+// sFanfares count; nothing is audible before the mixer, AUDIO_PLAN.md W-m4a 3).
 
 import { K } from '../battle/constants';
 import { gBattleMoves, gSpeciesInfo, state } from '../battle/env';

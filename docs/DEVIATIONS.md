@@ -28,8 +28,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Trainer Fan Club (script/miscSpecials.ts, trainer_fan_club.c): there are no link battle records, so
     Script_BufferFanClubTrainerName always names the NPC trainer (the rival, LT. SURGE, KOGA), and the link-battle
     fan updates (Special_UpdateTrainerFansAfterLinkBattle) never run.
-  - Side specials (script/miscSpecials.ts): silent (Daisy's MUS_HEAL fanfare is the script's; the diploma's
-    FANFARE_OBTAIN_BADGE); no quest log (QuestLog_CutRecording). The Magikarp size record loads pokedex.json for the
+  - Side specials (script/miscSpecials.ts): silent until the mixer (Daisy's MUS_HEAL fanfare is the script's; the
+    diploma's FANFARE_OBTAIN_BADGE holds its screen for sFanfares' 340 frames); no quest log (QuestLog_CutRecording). The Magikarp size record loads pokedex.json for the
     heights the first time the guru measures (the script waits for it). The diploma returns through the field's
     plain fade from black rather than FieldCB_WarpExitFadeFromBlack's Task_ExitNonDoor (same look).
   - Fall warps (world/fallWarp.ts): silent (SE_FALL, SE_M_STRENGTH); no help context while surfing on Seafoam B4F.
@@ -71,6 +71,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (any, not only `lock`'s selected object) lands before it holds still.
   - Battles: no audio (PlaySE/cries/BGM are no-ops, so anim SE waits and cry waits end at once).
   - Field sounds: doors (SE_DOOR / SE_SLIDING_DOOR) and puddle splashes (SE_PUDDLE) are silent.
+  - Evolution scene: silent until the mixer; the cries count as finished at once (W-sound 2) and
+    EVOSTATE_RESTORE_SCREEN's `if (IsSEPlaying())` after SE_EXP goes on unchecked (W-sound 7); the intro jingle
+    (MUS_EVOLUTION_INTRO) and the other IsSEPlaying waits hold the scene as on the GBA; the help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
+  - Audio output (audio/output.ts, audio/worklet.ts): the PCM plays at 224 samples per 60 Hz frame, 13,440 Hz,
+    not the GBA's 13,379 Hz: the port's frame is 60 Hz rather than 59.7275 Hz, so the output keeps the GBA's
+    samples per frame and music is 0.46% (8 cents) higher and faster, like all the port's timing. The worklet also
+    nudges its playback rate by up to ±0.5% to keep its 3-4 frame buffer filled (the page's frame loop and the
+    audio clock drift apart); an underrun plays silence, a stall drops the oldest frames. The analog filtering
+    after the GBA's DAC isn't modelled (sample-and-hold straight to the speakers, AUDIO_PLAN.md decision 8).
   - Evolution scene: no audio, so cries and sound effects count as finished at once (the intro jingle and the SE_EXP
     wait don't hold the scene up); the help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
     from the field uses fresh battle globals, so the backdrop follows the map's battle scene (gyms etc.) but not the
@@ -84,8 +93,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     afterwards. Here the script waits at the special and that `fadescreen` does the fade in (same on screen).
   - Party menu: mail, Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
     field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
-  - Move relearner (menus/learnMove.ts): no audio (SE_SELECT, the MUS_LEVEL_UP fanfare after a move is learned;
-    IsFanfareTaskInactive is always true, so the screen waits only for A). The C's scroll arrows are kept as they
+  - Move relearner (menus/learnMove.ts): silent until the mixer (SE_SELECT, the MUS_LEVEL_UP fanfare after a move
+    is learned, which holds the screen as on the GBA). The C's scroll arrows are kept as they
     are: scrollPositionMaybe never changes, so with more than six entries the down arrow always shows and the up
     arrow never does.
   - Region map / Fly (menus/regionMap.ts, world/fly.ts): no audio (SE_DEX_SCROLL, SE_CARD_OPEN, SE_M_FLY, ...).
@@ -176,9 +185,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
     GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
-  - Egg hatching (menus/eggHatch.ts): no audio (the cry, SE_BALL / SE_EGG_HATCH, MUS_EVOLUTION, the MUS_EVOLVED
-    fanfare). "X hatched from the EGG!" still waits the fanfare's 220 frames (sFanfares) with a local counter, as
-    gba/sound.ts's IsFanfareTaskInactive is always true and the nickname prompt would replace it at once. The C
+  - Egg hatching (menus/eggHatch.ts): silent until the mixer (SE_BALL / SE_EGG_HATCH, MUS_EVOLUTION, the MUS_EVOLVED
+    fanfare, which holds "X hatched from the EGG!" for sFanfares' 220 frames as on the GBA); the cry is a stub that
+    ends at once (W-sound 2). The C
     loads five palettes from gTradeGba2_Pal, two of them past the file's end (ROM that follows); the port loads
     the file's three (the shadow tilemap uses none of the other two). BG palette 15 (the YES/NO's text) is loaded
     with the field's message box palette, which the GBA field leaves there. The mon sprite buffers are freed on
@@ -286,12 +295,23 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link flags.
   - Player names are "PLAYER"/"RIVAL" in dev starts and with `?skipIntro` (the e2e harness), which skip Oak's speech.
 - **Approximations:**
+  - sound.c (gba/sound.ts, audio/frame.ts): nothing is audible yet (the mixer is W-m4a 3), but the engine's logic
+    runs every frame, so fanfare, `waitse`, `fadeoutbgm` and IsSEPlaying waits time like the GBA. Task_Fanfare is a
+    "sound task" run from AgbMainFrameEnd after the frame's callbacks, not a gTask: ResetTasks doesn't remove it (on
+    the GBA a screen's ResetTasks during a fanfare would drop it and leave the BGM paused; no FRLG screen does that
+    mid-fanfare), and a screen task that polls IsFanfareTaskInactive in the frame the counter runs out sees it a
+    frame later than a task ordered after Task_Fanfare would. PlaySE isn't skipped while
+    gDisableMapMusicChangeOnMapLoad is set (W-sound 3 ports the flag); the quest log's playback paths (no fanfare
+    song, the BGM commands skipped) aren't ported. `savebgm`, `fadedefaultbgm` and `playbgm`'s save flag do nothing
+    yet (savedMusic and the map's default music: W-sound 3). The script engine models SetupNativeScript's frames
+    (a native wait starts checking the next frame, and the script goes on the frame after it holds) only for the
+    audio commands; the port's other waits check in the same frame.
   - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical; weather palettes ignored.
   - `showmonpic`: the sprite appears when its PNG has loaded; no cry.
   - The Pewter Museum's fossil pics (ui/MuseumFossilPic.ts): a Phaser image over a MenuWindow, like `showmonpic`,
     not an OBJ in palette 13 over BG0 (the field isn't on the GBA layer); the graphics and positions are the C's.
-  - Prof. Oak's Pokédex rating: the MUS_DEX_RATING / MUS_EVOLVED fanfares are silent (`playfanfare` and
-    `waitfanfare` are no-ops until audio); BackupHelpContext / RestoreHelpContext are no-ops (no help system).
+  - Prof. Oak's Pokédex rating: the MUS_DEX_RATING / MUS_EVOLVED fanfares are silent until the mixer (`waitfanfare`
+    holds the script for their sFanfares counts); BackupHelpContext / RestoreHelpContext are no-ops (no help system).
   - Text colour is reset to NPC_TEXT_COLOR_DEFAULT when a script starts, not in ProcessPlayerFieldInput.
   - The RNG (`random.c` formula) is seeded from `Math.random` (or `?seed=` in dev); the trainer id is rolled when the game state is created instead of in Oak's intro.
   - A mon's met location is the MAPSEC_* name, not the numeric id.
@@ -342,8 +362,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     loaded last, so it only differs with two Castforms of different shininess on the field.
   - Slot machine: in `menus/slotMachineLogic.ts` the state's machineBias, biasCooldown and reelStopOrder start at 0;
     PlaySlotMachine Allocs the state without zeroing it, so on the GBA they start as whatever the heap held. The
-    screen (`menus/slotMachine.ts`) has no audio, and IsFanfareTaskInactive is always TRUE, so the payout counts up
-    (and START pays it at once) without waiting for MUS_SLOTS_WIN / MUS_SLOTS_JACKPOT. HBlankCB_SlotMachine's
+    screen (`menus/slotMachine.ts`) is silent until the mixer (its payout waits for MUS_SLOTS_WIN / MUS_SLOTS_JACKPOT's
+    sFanfares counts, as on the GBA). HBlankCB_SlotMachine's
     per-line squash and darkening of the reels apply to the line REG_VCOUNT names (the PPU calls it before drawing
     that line); the GBA's HBlank interrupt for line L sets them for line L + 1, a one-line shift. After
     MainTask_ExitSlots frees the screen, the C's Task_SpinReels still runs that frame through the NULL gfx manager;
@@ -381,3 +401,7 @@ Places where we choose to differ from the GBA on purpose (not placeholders). Kee
     scroll off screen, and a trainer among them can still spot you; here a neighbour's trainers never do.
   - Future: any other per-object logic should likewise check that an object belongs to the current map where the
     GBA would only have current-map objects alive.
+- **A mute key, M** (`input/Input.ts` listenForOutputKeys, `audio/output.ts`; AUDIO_PLAN.md decision 10). The GBA
+  has no volume control; M toggles all sound output on and off. It only silences the output: the m4a engine runs
+  on, so nothing times differently. The setting is kept in localStorage (`firered-phaser:audio-muted`), not in
+  the save. Ignored with Ctrl / Cmd / Alt held and in text fields (the battle test panel).

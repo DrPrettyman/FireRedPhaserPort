@@ -7,8 +7,8 @@
 // From the field: `playslotmachine` (ScrCmd_playslotmachine) → PlaySlotMachine(id,
 // CB2_ReturnToFieldContinueScriptPlayMapMusic) on FieldMenuScene (script/gameCornerSpecials.ts).
 //
-// No audio: PlaySE / PlayFanfare are no-ops and IsFanfareTaskInactive is always TRUE, so the payout counts up
-// without waiting for the win fanfare. No quest log (SetQLPlayedTheSlots) and no game stats
+// The win fanfares hold the payout for their sFanfares count (gba/sound.ts); nothing is audible before the mixer
+// (AUDIO_PLAN.md W-m4a 3). No quest log (SetQLPlayedTheSlots) and no game stats
 // (GAME_STAT_SLOT_JACKPOTS).
 
 import { K } from '../battle/constants';

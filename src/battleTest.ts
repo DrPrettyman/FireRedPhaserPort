@@ -2,8 +2,12 @@
 // directly, without the overworld. Dev-only tooling; nothing here is part of the game.
 
 import Phaser from 'phaser';
+import { startAudioOutput } from './audio/output';
+import { listenForOutputKeys } from './input/Input';
 import type { BattleTablesData } from './battle/data';
 import { Assets } from './data/assets';
+import { loadAudioData } from './audio/audioData';
+import { AgbMainSoundInit } from './audio/frame';
 import { BattleScene, type BattleStart } from './scenes/BattleScene';
 import { PokemonData, readPokemonConstants, type Pokemon } from './pokemon/Pokemon';
 import { Defines } from './script/Defines';
@@ -55,12 +59,13 @@ class BattleTestBoot extends Phaser.Scene {
   async create(): Promise<void> {
     const assets = new Assets();
     try {
-      await assets.init();
+      await Promise.all([assets.init(), loadAudioData()]);
     } catch (err) {
       console.error(err);
       this.add.text(8, 8, 'Assets missing.\nRun: npm run extract', { fontFamily: 'monospace', fontSize: '10px', color: '#f88' }).setResolution(4);
       return;
     }
+    AgbMainSoundInit(); // the audio data: BattleScene's frame (GbaHostScene) runs the engine
     await assets.loadTextTextures(this);
     const tables: BattleTablesData = await (await fetch('gen/battle/tables.json')).json();
     this.registry.set('assets', assets);
@@ -443,6 +448,10 @@ const game = new Phaser.Game({
     const harness = new Harness(game, assets, trainerIds, document.getElementById('panel')!);
     (window as unknown as { battleTest: unknown }).battleTest = harness;
   }), BattleScene],
+  audio: { noAudio: true }, // the sound output is audio/output.ts's, as in main.ts
 });
+
+// The same sound output as the game (AUDIO_PLAN.md decision 12): starts on the first key press or click; M mutes.
+startAudioOutput(listenForOutputKeys);
 
 (window as unknown as { game: Phaser.Game }).game = game;

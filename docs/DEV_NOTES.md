@@ -1010,6 +1010,14 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   clear one *tick* after the last FINE: the next frame at 150 BPM, the same frame above it (MUS_LEVEL_UP), up to
   two frames later below it (SE_DOOR). `status` is 0 between MPlayStart and the first tick (frame N's VBlank for a
   song started in frame N's logic), so `IsSEPlaying` is FALSE until then, as on the GBA.
+- **Seams:** notes (`ply_note`) parse key / velocity / extra gate and set the track's gate time, then stop where
+  the asm looks up the voice (`_081DDB46`): W-m4a 2 adds the voice lookup and channels there (or replaces
+  `gSoundInfo.plynote`), fills `ChnVolPitUpdate` (MPlayMain's per-channel volume / pitch), `SongHeader.tone` from
+  the voicegroup, and the cry songs. The channel loops (gate times, TrackStop, ply_fine, ply_endtie, RealClearChain)
+  are ported and walk an empty list until then. `SoundMain` has the hook for SoundMainRAM (the mixer, W-m4a 3);
+  `gSoundInfo.CgbSound` / `CgbOscOff` are DummyFunc and `ply_port` writes `gSoundInfo.soundRegs` (W-m4a 4).
+- **Hooking in:** see "sound.c" below: the boot loads the songs and calls `m4aSoundInit()`, AgbMainFrameEnd runs
+  `m4aSoundMain()` once per frame; gba/sound.ts calls the m4a* functions on the gMPlayInfo_* players.
 - **Voices:** `setVoiceData(voicegroups, samples, waves, pcm?)` (m4a.ts) takes the parsed voicegroups.json,
   samples.json and waves.json (and optionally samples.bin as a Uint8Array / ArrayBuffer; `setSamplePcm(pcm)` adds it
   later) and returns the built `VoiceData`. It sets every song's `SongHeader.tone` to its voicegroup (also for a
@@ -1098,6 +1106,93 @@ or extend them:
   (FINE and stop frames), 10 looping songs (the frames of track 0's first three GOTOs, watched through
   `gMPlayJumpTable[1]`), 8 species' cries in 5 modes (IsPokemonCryPlaying) and the cry song's end per mode. To add
   a number, measure it the same way and add a row; a mismatch is an engine bug or a difference in what is counted.
+### Audio output
+
+- **Where:** `src/audio/output.ts` (the AudioContext, the worklet node, autoplay, visibility, mute, `pushFrame`, the
+  dev test tone, `audioOutputProbe`), `src/audio/worklet.ts` (the AudioWorkletProcessor), `src/audio/outputCore.ts`
+  (pure: `decideOutput`, the message types, the DAC, `SampleHoldResampler`). Started by
+  `startAudioOutput(listenForOutputKeys)` in `main.ts` and `battleTest.ts`; Phaser's own sound is off there
+  (`audio: { noAudio: true }`). The keys: `listenForOutputKeys` in `input/Input.ts` (passed in, so output.ts loads
+  without Phaser: testHooks imports it, and the unit tests import testHooks).
+- **When it's on:** by default in a browser; off headless (navigator.webdriver or a `HeadlessChrome` user agent:
+  the e2e harness's Chrome has webdriver false) and for `?speed=` > 1 (dev). `?audio=0` / `?audio=1` force it (any
+  build), `?audio=tone` (dev) is on and plays the test tone. The AudioContext is created at boot; the browser holds
+  it suspended until the first keydown / pointerdown anywhere (a capture listener on window, so typing in the
+  battle test panel counts), which resumes it. Hidden tab: suspended; visible again: the worklet's buffer is
+  flushed and it resumes.
+- **pushFrame(frame)** (for the mixer, W-m4a 3, once per frame after SoundMainRAM): `{ fifoA, fifoB, soundcntH?,
+  psg? }`: the frame's 224 signed 8-bit samples per FIFO (A = `pcmBuffer`, B = `pcmBuffer + PCM_DMA_BUF_SIZE`),
+  REG_SOUNDCNT_H (`SOUNDCNT_H_STEREO` by default, `SOUNDCNT_H_MONO` after SetPokemonCryStereo(0)) and, TODO W-m4a 4,
+  `psg: { writes: Uint16Array }` (the frame's sound register writes, `offset << 8 | value` from REG_SOUND1CNT_L; a
+  proposal, W-m4a 4 owns the shape). The arrays are copied into one transferable buffer and posted on the node's
+  port; a no-op while the output is off, suspended, loading or playing the tone. `audioOutputWantsFrames()` lets the
+  mixer skip writing samples when nobody listens (never its bookkeeping). Nothing else may read the output's state
+  (AUDIO_PLAN.md "Rules").
+- **The worklet:** `frameToDac` turns each frame into speaker samples as the GBA does: each routed FIFO ×4 (full)
+  or ×2 (half), + SOUNDBIAS 0x200, clipped to 10 bits, the 2 low bits dropped (SOUNDBIAS_H 0x40: 8-bit
+  resolution). `SampleHoldResampler` buffers them and plays them by sample-and-hold at 224 × 60 = 13,440 Hz
+  (docs/DEVIATIONS.md) in the context's rate: it starts once 3 frames are buffered, nudges its step by up to ±0.5%
+  (0.5% per frame off) to keep the fill at 3.5 frames, plays silence on an underrun until 3 frames are back, and
+  drops the oldest samples back to 3.5 frames when a push passes 7 (after a stall). The PSG synth goes here
+  (TODO W-m4a 4). It reports stats (frames, underruns, dropped, buffered, peak, rendered) every 64 render quanta.
+- **Mute key M** (docs/DEVIATIONS.md "Deliberate QOL changes"): toggles the output only (the worklet writes zeros,
+  the frames keep flowing); ignored with Ctrl / Cmd / Alt and in text fields; saved as
+  `firered-phaser:audio-muted` in localStorage (try/catch). Works with the output off too (it is remembered).
+- **Bundling:** `import workletUrl from './worklet.ts?worker&url'`: Vite serves it as a module in dev and builds it
+  as its own chunk (`assets/worklet-*.js`, imports inlined) in `npm run build`.
+- **Try it:** `npm run dev`, open `/?audio=tone`, press any key: a square wave alternating A4 / E5 every half
+  second; M mutes it. In the console: `__test.audioOutput.state()`, `__test.audioOutput.tone(false)`. Same on
+  `/battle-test.html?audio=tone`.
+- **Tests:** `tests/unit/audioOutput.test.ts` (decideOutput, the DAC's stereo / mono / clipping values, the
+  resampler's holds, rate nudge, start, underrun, overflow, and a simulated 60 Hz loop with drift and 30 Hz rAF);
+  `tests/e2e/audioOutput.test.ts` (off headless; `?audio=1` suspended → running after a real key press
+  (`game.realKey`); M toggles, survives a reload, not in a text field; the tone's peak 0.3125 = 40 / 128 reaches the
+  speakers and M silences it: headless Chrome runs the audio graph on a fake device). Hooks:
+  `__test.audioOutput` (`src/dev/audioOutputHooks.ts`). Harness: `query: { audio: '1' }` adds URL parameters.
+
+### sound.c
+
+- **Where:** `src/gba/sound.ts` is sound.c without the cries (those are stubs until W-sound 2): MapMusicMain and
+  the map music helpers (PlayNewMapMusic, StopMapMusic, FadeOutMapMusic, FadeOutAndPlayNewMapMusic,
+  FadeOutAndFadeInNewMapMusic, IsNotWaitingForBGMStop; overworld.c's BGMusicStopped and Overworld_ChangeMusicTo),
+  fanfares (sFanfares, PlayFanfare / PlayFanfareByFanfareNum, Task_Fanfare, WaitFanfare, IsFanfareTaskInactive),
+  PlaySE / PlaySE12WithPanning / PlaySE1/2WithPanning / SE12PanpotControl, PlayBGM / FadeInNewBGM / FadeInBGM /
+  FadeOutBGM / FadeOutBGMTemporarily, IsSEPlaying / IsSpecialSEPlaying / IsBGMPlaying / IsBGMStopped /
+  IsBGMPausedOrStopped. It is the one API the game calls; call it with song ids (`K.SE_SELECT`, `K.MUS_HEAL`).
+  sFanfares names its songs and resolves them through the loaded song table.
+- **The frame:** `src/audio/frame.ts`'s `AgbMainFrameEnd()` runs the sound tasks (Task_Fanfare; W-sound 2 adds
+  Task_DuckBGMForPokemonCry), MapMusicMain, then m4aSoundMain. Called once per logic tick by `OverworldScene.tick`
+  (after PlayTimeCounter_Update) and `GbaHostScene.update` (every tick, also the one whose callbacks stop the
+  host), which also runs BattleScene in the game and on battle-test.html. Only one host ticks at a time, so it runs
+  exactly once per frame. Don't call it anywhere else. A new kind of host scene must call it once per tick.
+- **Sound tasks:** Task_Fanfare is a gTask in the C; the field doesn't run gTasks every frame, so sound.ts keeps
+  its own list (CreateSoundTask / FuncIsActiveSoundTask / DestroySoundTask, `RunSoundTasks` from the hook) with
+  FuncIsActiveTask's meaning (AUDIO_PLAN.md decision 5). A task created in a frame runs in that frame's hook, as a
+  priority-80 task created in CB1 runs in CB2's RunTasks.
+- **Boot:** `src/audio/audioData.ts`'s `loadAudioData()` fetches songs.json (→ `loadSongTable`), voicegroups.json,
+  samples.json and waves.json (→ `setVoiceData`) once (BootScene and battle-test's BattleTestBoot, in parallel with
+  `Assets.init`). `AgbMainSoundInit()` (frame.ts: m4aSoundInit +
+  sound.ts's ResetSoundState) runs before the first frame and again on a soft reset. samples.bin isn't loaded
+  yet: the mixer (W-m4a 3) adds the `setSamplePcm` fetch to loadAudioData.
+- **Script commands** (script/ScriptEngine.ts): `playse`, `waitse`, `playbgm` (PlayNewMapMusic), `fadenewbgm`,
+  `fadeoutbgm` (+ its IsBGMPausedOrStopped wait), `fadeinbgm`, `playfanfare`, `waitfanfare`, as scrcmd.c. The three
+  waits go through `SetupNativeScript`, which keeps script.c's frames: the check starts the frame after the
+  command, and the script goes on the frame after it holds. `savebgm`, `fadedefaultbgm` and `playbgm`'s save flag
+  wait for W-sound 3 (savedMusic, the map's music).
+- **Timing:** IsSEPlaying is FALSE in the frame an SE is started (the engine's first tick is that frame's hook) and
+  turns FALSE after the song's last tick (tests/unit/m4a.test.ts pins the lengths). A fanfare holds for sFanfares'
+  count + 1 frames (80 counts, then the frame that resumes the BGM); the song plays on to its FINE (MUS_EVOLVED's
+  230 frames outlast its 220).
+- **Test hooks:** `__test.audioEvents(since)` (a seq from `game.mark()`): each start, BGM pause / resume and fade
+  as `{seq, frame, type: 'se' | 'bgm' | 'fanfare' | 'stop' | 'continue' | 'fade', id, name, player: 'BGM' | 'SE1'
+  | 'SE2' | 'SE3', pan?, started?, fade?, speed?}` (`started`: MPlayStart took it; W-sound 2 adds 'cry');
+  `__test.audio()`: each player's `{song, playing, paused, status, volume (track volX, 64 = full), fading}`, the cry
+  players, sound.c's map music state, fanfare counter and task; `__test.playSong(name)` starts a song. sound.ts
+  reports through `setSoundEventListener` (dev only).
+- **Tests:** `tests/unit/sound.test.ts` (fanfare counts, the BGM paused and resumed, IsSEPlaying over SE_SELECT,
+  FadeOutMapMusic's wait, a new map song after the fade), `tests/e2e/audio.test.ts` (Viridian Forest's Potion
+  ball: MUS_LEVEL_UP holds "put the POTION away" 80 + 3 frames with MUS_VIRIDIAN_FOREST paused; the Game Corner
+  fisher's `waitse` holds `setflag` until SE_SHOP stops).
 
 ## Game state
 

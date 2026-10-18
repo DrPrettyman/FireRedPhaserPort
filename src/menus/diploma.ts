@@ -3,6 +3,7 @@
 // half (NATIONAL) once every mon but the event ones is caught (HasAllMons), its left half (KANTO) otherwise.
 // BG0 is the text window. A fades out and returns to the field (CB2_ReturnToFieldFromDiploma).
 
+import { K } from '../battle/constants';
 import { charmap, state } from '../battle/env';
 import {
   ChangeBgX,
@@ -51,7 +52,6 @@ export const DIPLOMA_GFX = ['sDiplomaGfx', 'sDiplomaTilemap', 'sDiplomaPal'];
 const BG_TEXT = 0;
 const BG_DIPLOMA = 1;
 const WIN_TEXT = 0;
-const FANFARE_OBTAIN_BADGE = 0; // (no audio)
 
 /** struct Diploma */
 let sDiploma: { mainState: number; gfxState: number; initState: number; tilemapBuffer: Uint16Array } | undefined;
@@ -119,7 +119,7 @@ const Task_DiplomaInit: TaskFunc = (taskId) => {
       break;
     default:
       if (gPaletteFade.active) break;
-      PlayFanfareByFanfareNum(FANFARE_OBTAIN_BADGE);
+      PlayFanfareByFanfareNum(K.FANFARE_OBTAIN_BADGE);
       gTasks[taskId].func = Task_HandleDiplomaInput;
   }
   d.initState++;

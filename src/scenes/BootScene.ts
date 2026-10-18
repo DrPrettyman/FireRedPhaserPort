@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { Assets } from '../data/assets';
+import { loadAudioData } from '../audio/audioData';
+import { AgbMainSoundInit } from '../audio/frame';
 import { presetFromUrl, presetStart } from '../dev/startPresets';
 import { gSave, LoadGameSave, SAVE_STATUS_EMPTY } from '../state/save';
 import type { MainMenuStart } from './MainMenuScene';
@@ -30,7 +32,7 @@ export class BootScene extends Phaser.Scene {
     if (!assets) {
       assets = new Assets();
       try {
-        await assets.init();
+        await Promise.all([assets.init(), loadAudioData()]);
       } catch (err) {
         console.error(err);
         this.add
@@ -40,6 +42,7 @@ export class BootScene extends Phaser.Scene {
       }
       this.registry.set('assets', assets);
     }
+    AgbMainSoundInit(); // m4aSoundInit + InitMapMusic, before the first frame (also on a soft reset)
     LoadGameSave(); // sets gSaveFileStatus, which the save dialog checks too (the title screen loads it again)
     const dev = data?.softReset ? undefined : startFromUrl();
     if (dev) {
