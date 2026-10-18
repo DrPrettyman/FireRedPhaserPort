@@ -1,4 +1,6 @@
 import Phaser from 'phaser';
+import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound';
 import { EMOTICONS_TEXTURE, fieldEffectTextureKey, reflectionTextureKey, type EmoticonData } from '../data/assets';
 import type { Behaviors } from '../world/behaviors';
 import type { Direction } from '../world/direction';
@@ -620,13 +622,14 @@ export class FieldEffects {
     s.priority = 3;
   }
 
-  /** FldEff_Splash (stepping in a puddle). PlaySE(SE_PUDDLE) is silent: no audio yet. */
+  /** FldEff_Splash (stepping in a puddle) */
   splash(obj: ObjectEvent): void {
     this.begin('FLDEFF_SPLASH');
     const s = this.create('FLDEFF_SPLASH', 'Splash', 0, 0, 0);
     s.obj = obj;
     s.priority = obj.priority;
     s.y2 = (obj.info.frameHeight >> 1) - 4;
+    PlaySE(K.SE_PUDDLE);
   }
 
   /** UpdateSplashFieldEffect */
@@ -653,7 +656,7 @@ export class FieldEffects {
     s.startAnim(1);
   }
 
-  /** UpdateFeetInFlowingWaterFieldEffect (its PlaySE(SE_PUDDLE) on each new tile is silent) */
+  /** UpdateFeetInFlowingWaterFieldEffect: SE_PUDDLE on each new tile */
   private updateFeetInFlowingWater(s: FieldEffectSprite): void {
     const obj = s.obj!;
     if (!obj.sprite.active || !obj.inShallowFlowingWater) {
@@ -668,6 +671,7 @@ export class FieldEffects {
     if (current.x !== s.data[3] || current.y !== s.data[4]) {
       s.data[3] = current.x;
       s.data[4] = current.y;
+      if (!s.invisible) PlaySE(K.SE_PUDDLE);
     }
   }
 
