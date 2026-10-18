@@ -67,7 +67,8 @@ import { gFieldCallback, gFieldCallback2, type FieldCallbackHost } from '../menu
 import { RunMassageCooldownStepCounter } from '../script/miscSpecials';
 import { UseRegisteredKeyItemOnField } from '../menus/registeredItem';
 import { activeFieldEffects, setFieldEffectScriptHost, setFieldEffectScripts } from '../world/fieldEffectScripts';
-import { fieldMoveGfxSymbols, prepareFieldMoveMenu, prepareRegionMap, registerFieldMoves, setFieldMoveHost, UpdateEscapeWarp, type FieldMoveHost } from '../world/fieldMoves';
+import { fieldMoveGfxSymbols, prepareFieldMoveMenu, prepareRegionMap, registerFieldMoves, setFieldMoveHost, UnlockPlayerFieldControls, UpdateEscapeWarp, type FieldMoveHost } from '../world/fieldMoves';
+import { setDiveHost } from '../world/dive';
 import {
   BOB_MON_ONLY,
   DestroyPlayerSurfBlob,
@@ -392,6 +393,14 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     setSurfHost({
       terrainAt: (x, y) => this.world.tileAt(x, y).terrain,
       createFieldEffectSprite: (fldEff, template, x, y, subpriority, callback) => this.fieldEffects.createSprite(fldEff, template, x, y, subpriority, callback),
+    });
+    setDiveHost({
+      connections: () => this.world.current.data.connections,
+      runOnDiveWarpMapScript: () => {
+        const script = this.scripts.mapScript(this.world.current.name, 'MAP_SCRIPT_ON_DIVE_WARP');
+        if (script) this.scripts.runImmediately(script);
+      },
+      setWarpDestination: (mapId, warpId, x, y) => this.setWarpDestination(mapId, warpId, x, y),
     });
     registerFieldMoves();
     await loadGfx(fieldMoveGfxSymbols());
@@ -1216,13 +1225,19 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const white = this.warpFadeOutScreen(from, data);
     await this.waitFrames(() => !this.screenFade.active);
     const isExit = await this.loadWarpedMap(name, warpId, x, y, white);
-    // FieldCB_DefaultWarpExit → SetUpWarpExitTask: a door (MetatileBehavior_IsWarpDoor_2) gets Task_ExitDoor;
-    // otherwise ExitWarpFadeInScreen(FALSE) and a task that waits for the fade.
+    await this.defaultWarpExit(isExit);
+    this.busy = false;
+  }
+
+  /**
+   * FieldCB_DefaultWarpExit → SetUpWarpExitTask: a door (MetatileBehavior_IsWarpDoor_2) gets Task_ExitDoor;
+   * otherwise ExitWarpFadeInScreen(FALSE) and a task that waits for the fade.
+   */
+  private async defaultWarpExit(isExit: boolean): Promise<void> {
     const arrival = this.world.tileAt(this.player.tileX, this.player.tileY);
     if (this.behaviors.isDoor(arrival.behavior)) this.exitDoor(isExit);
     else this.warpFadeInScreen(isExit);
     await this.waitFrames(() => !this.screenFade.active);
-    this.busy = false;
   }
 
   /**
@@ -2796,9 +2811,17 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
           console.warn('[warp] unknown map', mapId);
           return;
         }
-        void this.loadWarpedMap(name, warpId, x, y, this.screenFade.white).then((isExit) => {
+        void this.loadWarpedMap(name, warpId, x, y, this.screenFade.white).then(async (isExit) => {
           lastWarpIsExit = isExit;
-          fieldCallback(); // gFieldCallback, instead of FieldCB_DefaultWarpExit
+          if (fieldCallback) {
+            fieldCallback(); // gFieldCallback, instead of FieldCB_DefaultWarpExit
+          } else {
+            // FieldCB_DefaultWarpExit (DoDiveWarp); Task_ExitNonDoor / Task_ExitDoor end in UnfreezeObjectEvents
+            // and UnlockPlayerFieldControls
+            await this.defaultWarpExit(isExit);
+            this.objectsFrozen = false;
+            UnlockPlayerFieldControls();
+          }
           this.busy = false;
         });
       },

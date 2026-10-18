@@ -117,6 +117,18 @@ export class Behaviors {
     return (fast !== undefined && deep !== undefined && behavior >= fast && behavior <= deep) || this.is(behavior, 'OCEAN_WATER');
   }
 
+  /** MetatileBehavior_IsDiveable: MB_FAST_WATER..MB_DEEP_WATER */
+  isDiveable(behavior: number): boolean {
+    const fast = this.id('FAST_WATER');
+    const deep = this.id('DEEP_WATER');
+    return fast !== undefined && deep !== undefined && behavior >= fast && behavior <= deep;
+  }
+
+  /** MetatileBehavior_IsUnableToEmerge */
+  isUnableToEmerge(behavior: number): boolean {
+    return this.is(behavior, 'UNDERWATER_BLOCKED_ABOVE');
+  }
+
   /** MetatileBehavior_IsMountain */
   isMountain(behavior: number): boolean {
     return this.is(behavior, 'MOUNTAIN_TOP');

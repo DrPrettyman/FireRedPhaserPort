@@ -44,6 +44,9 @@ could skip its battle, every nurse's YES/NO throwing on a constant expression). 
 lists what the scripts use that isn't ported: 0 main, 0 side, 42 postgame, 44 link (and 3 tagged `unused`: shared
 with Emerald, reached by no FRLG map). Next: audio, planned in [AUDIO_PLAN.md](AUDIO_PLAN.md) (awaiting the
 user's review), then the postgame (Sevii 4-7, Mt. Ember, Trainer Tower, the event islands).
+lists what the scripts use that isn't ported: 0 main, 0 side, 42 postgame, 44 link (what FRLG compiles but never
+reaches, the decoration commands and Dive, is ported as the C has it). Next: audio (SE, cries and BGM are no-ops; see DEVIATIONS for what waits on
+them), then the postgame (Sevii 4-7, Mt. Ember, Trainer Tower, the event islands).
 
 Other open work:
 

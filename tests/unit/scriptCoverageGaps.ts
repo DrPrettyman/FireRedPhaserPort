@@ -7,14 +7,13 @@
 //   postgame  only after the Hall of Fame (Sevii 4-7, Trainer Tower, the event islands), incl. features that
 //             postgame areas share with the link rooms.
 //   link      link cable / wireless (union room, cable club, minigames, Mystery Gift, e-Reader).
-//   unused    nothing in FireRed reaches it: std scripts and field move scripts shared with Emerald that no FRLG
-//             map or C code calls (Std_ObtainDecoration, EventScript_DeepWater / EventScript_TrySurface). Not to
-//             be ported; listed so the coverage check still sees them.
+// What FRLG compiles but no FRLG map reaches (Std_ObtainDecoration, EventScript_DeepWater) is ported as the C has
+// it, stubs included, so it needs no tag.
 // `where` lists the maps whose scripts reach it, or `(Label)` for code no map reaches (started from C);
 // it isn't checked. When you port one, take it off the list (the test says so).
 
 export type GapKind = 'command' | 'special' | 'std' | 'movement' | 'fieldeffect';
-export type GapTag = 'main' | 'side' | 'postgame' | 'link' | 'unused';
+export type GapTag = 'main' | 'side' | 'postgame' | 'link';
 
 export interface KnownGap {
   kind: GapKind;
@@ -117,8 +116,4 @@ export const KNOWN_GAPS: KnownGap[] = [
   { kind: 'special', name: 'TryJoinLinkGroup', tag: 'link', where: "CeladonCity_PokemonCenter_2F, CeruleanCity_PokemonCenter_2F, CinnabarIsland_PokemonCenter_2F, FiveIsland_PokemonCenter_2F, FourIsland_PokemonCenter_2F, ... (20 in all)" },
   { kind: 'special', name: 'ValidateEReaderTrainer', tag: 'link', where: "SevenIsland_House_Room1" },
   { kind: 'special', name: 'WonderNews_GetRewardInfo', tag: 'link', where: "CeruleanCity_House4" },
-  // ---------------------------------------------------------------- unused: shared with Emerald, reached by no FRLG map or C code.
-  { kind: 'command', name: 'adddecoration', tag: 'unused', where: "(Std_ObtainDecoration)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
-  { kind: 'command', name: 'bufferdecorationname', tag: 'unused', where: "(EventScript_ObtainDecorMessage)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
-  { kind: 'fieldeffect', name: 'FLDEFF_USE_DIVE', tag: 'unused', where: "(EventScript_DeepWater), (EventScript_TrySurface)", note: "EventScript_DeepWater / EventScript_TrySurface: GetInteractedWaterScript never returns them in FRLG (no dive spots)" },
 ];

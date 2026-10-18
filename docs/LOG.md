@@ -2589,3 +2589,25 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   SoundMain's order (sequencers, then CgbSound, then the mixer: the first frame-order claim was wrong), and a
   model-vs-poryaaaa length cross-check.
 - STATUS.md "Next up" points at the plan. No code changed; no tests run.
+### The unused gaps: decoration commands and Dive (SIDE_PLAN.md batch 3, W-unused)
+
+- ScriptEngine: `adddecoration`, `removedecoration`, `checkdecor`, `checkdecorspace` (ScrCmd_*: VarGet the id, the
+  RSE call commented out) and `bufferdecorationname` (reads the string var and the id, the StringCopy commented
+  out) as FRLG's stubs: VAR_RESULT and the string vars stay as they were. Std_ObtainDecoration runs through.
+- `world/dive.ts`: FLDEFF_USE_DIVE (FldEff_UseDive, Task_UseDive, DiveFieldEffect_Init / _ShowMon / _TryWarp),
+  dive_warp, SetDiveWarp / SetDiveWarpDive / SetDiveWarpEmerge (the map's `dive` / `emerge` connections, else
+  RunOnDiveWarpMapScript; sFixedDiveWarp stays the dummy warp, `setdivewarp` isn't ported) and DoDiveWarp with
+  Task_Teleport2Warp. PlaySE(SE_M_DIVE) goes through gba/sound.ts's no-op. Behaviors gained isDiveable /
+  isUnableToEmerge. EventScript_DeepWater / EventScript_TrySurface run if started.
+- Shared changes: DoFallWarp (world/fallWarp.ts) is now DoDiveWarp(FieldCB_FallWarpExit), as in the C, so it gains
+  Task_Teleport2Warp's FreezeObjectEvents (FieldCB_FallWarpExit unfreezes). `FieldMoveHost.warpIntoMap` takes an
+  optional field callback: without one the field arrives with FieldCB_DefaultWarpExit (`defaultWarpExit`, split
+  out of OverworldScene.warpTo) and then unfreezes the objects and unlocks the field controls (Task_ExitNonDoor's
+  end). `ScriptEngine.start()` clears a pending `waitState`: EventScript_DeepWater's `dofieldeffect` is followed
+  by `releaseall` / `end`, not `waitstate`, and its wait would have hung the next script's `waitstate`.
+- Gap list: the three `unused` entries and the `unused` tag are gone (SIDE_PLAN.md decision 10).
+- Verified: typecheck; `npm test` (30 files, 298 tests; tests/unit/dive.test.ts: the decoration commands on a
+  synthetic script, the waitState fix (fails without it), the three Dive steps on fake hosts through to the warp,
+  emerge, MB_UNDERWATER_BLOCKED_ABOVE, no connection, non-diveable water); e2e dive.test.ts (new: Six Island's
+  fast water with a synthetic dive connection to Route 21 North, and without one), fieldMoves, surf, strength,
+  sideSpecials (fall warps), fly and field: 50 tests green.

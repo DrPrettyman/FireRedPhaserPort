@@ -108,7 +108,8 @@ this is the next level down. When you add or change a subsystem, update its entr
     `FieldEffectActiveListRemove/Contains` as in C (Contains also sees `entities/FieldEffects.ts`' Phaser
     effects). Script commands `dofieldeffect` (a following `waitstate` waits for the effect's
     ScriptContext_Enable), `waitfieldeffect`, `setfieldeffectargument`, `checkpartymove` (+ `buffermovename`,
-    `setescapewarp`) are in ScriptEngine's "field effects and field moves" block.
+    `setescapewarp`) are in ScriptEngine's "field effects and field moves" block. A script that ends without the `waitstate`
+    (EventScript_DeepWater) leaves no wait behind: `start()` clears it.
   - Party menu (`menus/partyMenu.ts`): CursorCB_FieldMove calls the move's SetUpFieldMove_* from
     `registerFieldMoveSetUp('FIELD_MOVE_X', fn)`; it returns TRUE after setting `gFieldCallback2.fn =
     FieldCallback_PrepareFadeInFromMenu` and `setPostMenuFieldCallback(FieldCallback_X)`. The menu closes with
@@ -176,6 +177,21 @@ this is the next level down. When you add or change a subsystem, update its entr
   state, the player's y2), event `partyMenuMessage` (msgId, from DisplayPartyMenuStdMessage). Tests:
   tests/e2e/surf.test.ts (Pallet Town pond from (8, 16) facing down; on the water at (8, 18); Icefall Cave
   entrance: waterfall x 15-19 y 14-20, its foot at (17, 21), pond at (12, 10) for encounters).
+- **Dive:** `world/dive.ts`, an R/S leftover FRLG compiles but never reaches (GetInteractedWaterScript never
+  returns EventScript_DeepWater / EventScript_TrySurface; no FRLG map has a dive/emerge connection or
+  MB_DEEP_WATER). FldEff_UseDive (registered from `registerFieldMoves`) runs Task_UseDive's three steps, one a
+  frame: DiveFieldEffect_Init (preventStep), _ShowMon (LockPlayerFieldControls, FLDEFF_FIELD_MOVE_SHOW_MON_INIT
+  once the banner's graphics are loaded), _TryWarp (once FLDEFF_FIELD_MOVE_SHOW_MON is over: dive_warp, then off
+  the active list). dive_warp: underwater (and not under MB_UNDERWATER_BLOCKED_ABOVE) SetDiveWarpEmerge, on
+  diveable water (Behaviors.isDiveable: MB_FAST_WATER..MB_DEEP_WATER) SetDiveWarpDive; each takes the map's
+  `emerge` / `dive` connection to the same map-local tile (else RunOnDiveWarpMapScript and FALSE), then
+  StoreInitialPlayerAvatarState and DoDiveWarp. `DoDiveWarp(fieldCallback?)` is field_fadetransition.c's (lock,
+  WarpFadeOutScreen, Task_Teleport2Warp, `FieldMoveHost.warpIntoMap`); without a callback the field arrives with
+  FieldCB_DefaultWarpExit (OverworldScene.defaultWarpExit, then UnfreezeObjectEvents / UnlockPlayerFieldControls).
+  DoFallWarp is DoDiveWarp(FieldCB_FallWarpExit). `DiveHost` (`setDiveHost` in OverworldScene.create): the map's
+  connections, its ON_DIVE_WARP script, SetWarpDestination. Test events `diveShowMon`, `diveWarp` (dir, map, x, y),
+  `diveDone` (warped). Tests: tests/unit/dive.test.ts (the steps on fake hosts), tests/e2e/dive.test.ts (Six
+  Island's MB_FAST_WATER at (13, 23), surfing, given a synthetic dive connection to Route 21 North; and none).
 - **Interactions:** `OverworldScene.interact` is GetInteractionScript (object → bg event → metatile via
   `METATILE_SCRIPTS` → water); `tryWalkIntoSignpost` runs after a step (before the wild check) and when holding toward the
   facing direction. The signpost / walk-away / last-message-dismiss state (script.c statics) lives in ScriptEngine
@@ -246,8 +262,8 @@ this is the next level down. When you add or change a subsystem, update its entr
 - **Fall warps (holes):** `world/fallWarp.ts`. Stepping onto an MB_FALL_WARP tile with a warp
   (OverworldScene.tryStartWarpEventScript, TryStartWarpEventScript's branch) runs SetupWarp (`setupWarp`, shared
   with takeWarp; the destination lands in `warpDestination` once its header has loaded: `warpSetup`) and
-  EventScript_DoFallWarp; its `special DoFallWarp` (registered with the field moves) is DoDiveWarp with
-  FieldCB_FallWarpExit: the fade out, `FieldMoveHost.warpIntoMap(..., warpId)`, then Task_FallWarpFieldEffect (the
+  EventScript_DoFallWarp; its `special DoFallWarp` (registered with the field moves) is DoDiveWarp (world/dive.ts)
+  with FieldCB_FallWarpExit: the fade out, `FieldMoveHost.warpIntoMap(..., warpId)`, then Task_FallWarpFieldEffect (the
   player drops from the top of the screen, lands with the landing ground effect, the camera shakes 4/2/1 px through
   `FieldMoveHost.setCameraPanning`; on Seafoam B3F/B4F water the player lands surfing with VAR_TEMP_1 = 1 for the
   B4F current). The holes before the Hall of Fame: Seafoam Islands 1F-B3F, Pokémon Mansion 3F, Victory Road 3F;
@@ -992,12 +1008,14 @@ this is the next level down. When you add or change a subsystem, update its entr
   `callnative`s against `registerFieldEffectNatives` (also read from the source). The extractor's `macros` key
   (asm/macros/event.inc + trainer_tower.inc, movement.inc, map.inc) tells commands from movement actions and map
   data; an op in none of them fails the test. The known gaps are `tests/unit/scriptCoverageGaps.ts`, each tagged
-  `main` / `side` / `postgame` / `link` (or `unused`: shared with Emerald, reached by nothing in FRLG, not to be
-  ported) with the maps that reach it (from each map's map scripts, object, coord and
+  `main` / `side` / `postgame` / `link` with the maps that reach it (from each map's map scripts, object, coord and
   bg event scripts, following every label argument) and a note (BLOCKER = the story stops there). The test fails on
   a new gap (it prints a ready-made entry with the maps; pick the tag from the decomp scripts) and on a fixed one
   (take it off the list). Porting a special in a Phaser module: register it with `registerSpecials({ ... })` as an
-  object literal so the test can read its keys.
+  object literal so the test can read its keys. What FRLG compiles but never reaches is ported as the C has it:
+  ScriptEngine's decoration commands (`adddecoration`, `removedecoration`, `checkdecor`, `checkdecorspace`,
+  `bufferdecorationname`) read their arguments and do nothing, as FRLG comments out the RSE calls
+  (tests/unit/dive.test.ts); Dive: see "Dive".
 - **Story checks:** `tests/e2e/story.test.ts` (Brock to Lt. Surge; later stretches in their own
   `story*.test.ts`). Each gym starts on its map with the state the story has by then (`setFlags` for the earlier
   badges and story flags, a Lv. 100 Mewtwo), walks the gym (`walkFighting` lets trainers spot the player and fights
