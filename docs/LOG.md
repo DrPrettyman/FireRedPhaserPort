@@ -2269,7 +2269,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   ShowDiploma; the Trainer Fan Club's six specials (Script_UpdateTrainerFanClubGameClear and
   Script_TryGainNewFanFromCounter were no-ops). No save format change: all of it lives in vars.
 - `menus/diploma.ts` (new): diploma.c, graphics through `graphics/diploma/` in extract_gfx.py.
-- 15 specials off scriptCoverageGaps.ts (DoFallWarp, the nine above, the four fan club ones);
+- 14 specials off scriptCoverageGaps.ts (DoFallWarp, the nine above, the four fan club ones);
   CalculatePlayerPartyCount came with the Route 5 daycare.
 - Verified: typecheck; `npm test` (215, incl. the new miscSpecials.test.ts); e2e sideSpecials.test.ts (new, 8
   tests: the Mansion hole with the drop and the shake, the Seafoam B4F current after falling, Daisy's rating and
