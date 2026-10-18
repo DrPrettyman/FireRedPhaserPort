@@ -82,6 +82,10 @@ export interface ScriptHost {
   showMoneyBox(x: number, y: number): void;
   updateMoneyBox(): void;
   hideMoneyBox(): void;
+  /** ShowCoinsWindow / PrintCoinsString / HideCoinsWindow (coins.c) */
+  showCoinsBox(x: number, y: number): void;
+  updateCoinsBox(): void;
+  hideCoinsBox(): void;
   /** ScriptMenu_Multichoice(WithDefault) or, with `columns`, ScriptMenu_MultichoiceGrid. */
   openMultichoice(opts: MultichoiceRequest): { tick(): boolean; result: number };
   /** DrawElevatorCurrentFloorWindow / CloseElevatorCurrentFloorWindow (FLOOR_NAMES index, or undefined to close) */
@@ -131,8 +135,9 @@ export interface ScriptHost {
   /**
    * A special's SetMainCallback2 to a GBA-layer screen that `init` starts (the party menu, the summary screen).
    * The wait ends when it is back on the field and RunFieldCallback's gFieldCallback(2) has finished.
+   * `gfxSymbols`: what the screen draws beyond what prepareMenus loads (e.g. the move relearner's).
    */
-  runScreenFromScript(init: () => void): Wait;
+  runScreenFromScript(init: () => void, gfxSymbols?: string[]): Wait;
   /** StartTrainerBattle: `done` ends when the battle is over (screen still black), with the outcome. */
   startTrainerBattle(battle: TrainerBattle): TrainerBattleRun;
   /** ClearRematchStateByTrainerId (world/vsSeeker.ts), at the end of every trainer battle. */
@@ -1119,6 +1124,18 @@ export class ScriptEngine {
     },
     removecoins(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       this.state.setVar('VAR_RESULT', this.state.removeCoins(this.state.value(a[0])) ? 0 : 1);
+    },
+    /** ScrCmd_showcoinsbox: ShowCoinsWindow(GetCoins(), x, y) */
+    showcoinsbox(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      this.host.showCoinsBox(this.state.value(a[0]), this.state.value(a[1]));
+    },
+    /** ScrCmd_updatecoinsbox: PrintCoinsString(GetCoins()); the x, y it reads are unused */
+    updatecoinsbox(this: ScriptEngine) {
+      this.host.updateCoinsBox();
+    },
+    /** ScrCmd_hidecoinsbox: HideCoinsWindow(); the x, y it reads are unused */
+    hidecoinsbox(this: ScriptEngine) {
+      this.host.hideCoinsBox();
     },
 
     // ------------------------------------------------ string buffers

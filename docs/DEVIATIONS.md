@@ -58,8 +58,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Move deleter (SelectMoveDeleterMove): on the GBA the script's `fadescreen FADE_FROM_BLACK` after the special
     runs (unseen) before the summary screen takes over, and FieldCB_ContinueScriptHandleMusic fades the field in
     afterwards. Here the script waits at the special and that `fadescreen` does the fade in (same on screen).
-  - Party menu: mail, the move relearner screen (ChooseMonForMoveRelearner opens the party menu, then warns), Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
+  - Party menu: mail, Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
     field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
+  - Move relearner (menus/learnMove.ts): no audio (SE_SELECT, the MUS_LEVEL_UP fanfare after a move is learned;
+    IsFanfareTaskInactive is always true, so the screen waits only for A). The C's scroll arrows are kept as they
+    are: scrollPositionMaybe never changes, so with more than six entries the down arrow always shows and the up
+    arrow never does.
   - Region map / Fly (menus/regionMap.ts, world/fly.ts): no audio (SE_DEX_SCROLL, SE_CARD_OPEN, SE_M_FLY, ...).
     The bird of Fly always uses the extracted bird sheet's own palette (Red's), where the GBA draws it in OBJ
     palette 0, the player's (Leaf's frames would use hers). gExitStairsMovementDisabled isn't kept (no stair
@@ -246,6 +250,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
 - **Approximations:**
   - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical; weather palettes ignored.
   - `showmonpic`: the sprite appears when its PNG has loaded; no cry.
+  - The Pewter Museum's fossil pics (ui/MuseumFossilPic.ts): a Phaser image over a MenuWindow, like `showmonpic`,
+    not an OBJ in palette 13 over BG0 (the field isn't on the GBA layer); the graphics and positions are the C's.
+  - Prof. Oak's Pokédex rating: the MUS_DEX_RATING / MUS_EVOLVED fanfares are silent (`playfanfare` and
+    `waitfanfare` are no-ops until audio); BackupHelpContext / RestoreHelpContext are no-ops (no help system).
   - Text colour is reset to NPC_TEXT_COLOR_DEFAULT when a script starts, not in ProcessPlayerFieldInput.
   - The RNG (`random.c` formula) is seeded from `Math.random` (or `?seed=` in dev); the trainer id is rolled when the game state is created instead of in Oak's intro.
   - A mon's met location is the MAPSEC_* name, not the numeric id.
@@ -294,6 +302,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Castform's form change (HandleSpeciesGfxDataChange) takes the new form's palette row from that battler's own
     Castform palette. The GBA keeps one gBattleStruct->castformPalette, written by whichever Castform's gfx
     loaded last, so it only differs with two Castforms of different shininess on the field.
+  - Slot machine: `playslotmachine` (the screen) isn't ported yet (W-slots unit 2), nor FLDEFF_SMILEY_FACE_ICON
+    before it. In `menus/slotMachineLogic.ts` the state's machineBias, biasCooldown and reelStopOrder start at 0;
+    PlaySlotMachine Allocs the state without zeroing it, so on the GBA they start as whatever the heap held.
 - **Data:** Castform has no front pic (its `front.png` isn't in the decomp; it's built from per-form images).
 
 ## Deliberate QOL changes

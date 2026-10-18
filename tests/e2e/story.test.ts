@@ -38,7 +38,7 @@ async function approach(game: Game, x: number, y: number, from: 'below' | 'above
   await game.eval((t, f) => t.face(f), face);
 }
 
-/** A leader's battle: talk, fight to the end, then press through the badge and TM text until the field is free. */
+/** A leader's battle: talk, fight to the end, then press B through the badge and TM text until the field is free. */
 async function beatLeader(game: Game, x: number, y: number, from: 'below' | 'above' | 'left' | 'right'): Promise<void> {
   await approach(game, x, y, from);
   const since = await game.mark();
@@ -48,7 +48,9 @@ async function beatLeader(game: Game, x: number, y: number, from: 'below' | 'abo
   await game.mashUntil((t) => t.events((window as any).__storySince).some((e) => e.type === 'battleEnd'), { what: 'the battle to end' });
   const end = await game.waitForEvent('battleEnd', { since });
   expect(await game.eval((t, n) => t.nameOf('B_OUTCOME_', n), end.outcome as number)).toBe('B_OUTCOME_WON');
-  await game.mashUntil((t) => t.idle(), { what: 'the badge and TM text' });
+  // B, not A: B closes the badge and TM text as A does but can't talk to the leader again (a press in the first
+  // free tick restarted the post-battle script; see storyLeague.test.ts).
+  await game.mashUntil((t) => t.idle() && !t.field()!.script, { what: 'the badge and TM text', button: 'B' });
 }
 
 // ------------------------------------------------------------------ Lt. Surge (VermilionCity_Gym)

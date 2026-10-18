@@ -29,6 +29,7 @@ import type { FieldListMenuProbe } from '../ui/FieldListMenu';
 import { storageProbe } from '../menus/pokemonStorage';
 import { itemPcProbe } from '../menus/itemPc';
 import { tmCaseProbe } from '../menus/tmCase';
+import { moveRelearnerProbe } from '../menus/learnMove';
 import { berryPouchProbe } from '../menus/berryPouch';
 import { hallOfFameProbe } from '../menus/hallOfFame';
 import { creditsProbe, creditsSkipToClosing } from '../menus/credits';
@@ -44,6 +45,7 @@ import { saveDialogProbe } from '../ui/SaveDialog';
 import { startMenuProbe } from '../ui/StartMenu';
 import { helpMessageWindowProbe } from '../ui/HelpMessageWindow';
 import { optionMenuProbe } from '../menus/optionMenu';
+import { museumFossilPicProbe } from '../ui/MuseumFossilPic';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -526,6 +528,8 @@ function createApi(game: Phaser.Game) {
     },
     /** The option menu while it's up (menus/optionMenu.ts): Task_OptionMenu's loadState (2 = input), the cursor and the settings shown. */
     optionMenu: () => optionMenuProbe(),
+    /** The Pewter Museum's fossil pic (ui/MuseumFossilPic.ts), while one is up. */
+    museumFossilPic: () => museumFossilPicProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */
     saveDialog: () => {
       const p = saveDialogProbe();
@@ -617,6 +621,8 @@ function createApi(game: Phaser.Game) {
     itemPc: () => (gMain.callback2?.name === 'ItemPc_MainCB' ? itemPcProbe() : undefined),
     /** The TM case while it's open (menus/tmCase.ts): TMCASE_* type, task, scroll/row and the pocket's item ids in list order. */
     tmCase: () => (gMain.callback2?.name === 'CB2_Idle' ? tmCaseProbe() : undefined),
+    /** The move relearner while it's up (menus/learnMove.ts): its MENU_STATE_*, the list's moves and selection. */
+    moveRelearner: () => (gMain.callback2?.name === 'CB2_MoveRelearner' ? moveRelearnerProbe() : undefined),
     /** The berry pouch while it's open (menus/berryPouch.ts): BERRYPOUCH_* type, task, scroll/row and the pocket's berries in list order. */
     berryPouch: () => (gMain.callback2?.name === 'CB2_BerryPouchIdle' ? berryPouchProbe() : undefined),
     /** The map name popup while Task_MapNamePopup runs: its text, decoded, and how many px of it are on screen. */
