@@ -118,7 +118,8 @@ import {
   AnimLoadCompressedBgGfx,
   AnimLoadCompressedBgTilemap,
 } from './animMons';
-import { animSpriteTemplate, BattleAnimAdjustPanning, PlaySE12WithPanning } from './battleAnim';
+import { PlaySE12WithPanning } from '../../gba/sound';
+import { animSpriteTemplate, BattleAnimAdjustPanning } from './battleAnim';
 import { SetSpriteNextToMonHead } from './effects1';
 import { anim, ARG_RET_ID, DestroyAnimSprite, DestroyAnimVisualTask, gBattleAnimArgs, registerAnimExtraGfx } from './state';
 

@@ -101,12 +101,11 @@ import {
   TranslateSpriteLinearFixedPoint,
   WaitAnimForDuration,
 } from './animMons';
-import { animSpriteTemplate, PlaySE12WithPanning } from './battleAnim';
+import { PlaySE, PlaySE12WithPanning } from '../../gba/sound';
+import { animSpriteTemplate } from './battleAnim';
 import { anim, DestroyAnimSprite, DestroyAnimVisualTask, gBattleAnimArgs, registerAnimExtraGfx } from './state';
-import { ui } from '../battleUi';
 
 const isOpponent = (battler: number) => getBattlerSide(battler) !== K.B_SIDE_PLAYER;
-const PlaySE = (songId: number) => ui.playSE(songId);
 
 // ------------------------------------------------------------------ Confuse Ray
 

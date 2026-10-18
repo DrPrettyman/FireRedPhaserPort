@@ -63,7 +63,8 @@ import {
   SetSpriteRotScale,
   TranslateAnimHorizontalArc,
 } from './animMons';
-import { animSpriteTemplate, BattleAnimAdjustPanning, MoveBattlerSpriteToBG, PlaySE12WithPanning, ResetBattleAnimBg } from './battleAnim';
+import { PlaySE12WithPanning } from '../../gba/sound';
+import { animSpriteTemplate, BattleAnimAdjustPanning, MoveBattlerSpriteToBG, ResetBattleAnimBg } from './battleAnim';
 import { anim, DestroyAnimSprite, DestroyAnimVisualTask, gBattleAnimArgs } from './state';
 
 const UNIT = 'battle_anim_psychic.c';

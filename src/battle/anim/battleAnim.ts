@@ -7,6 +7,8 @@
 // graphics are loaded (`isAnimRunnable`); otherwise the launch ends at once like before, so a missing
 // port never hangs a battle. `battleAnimGfxSymbols` lists the graphics to preload.
 
+import { gMPlayInfo_BGM, gMPlayInfo_SE1, gMPlayInfo_SE2, m4aMPlayStop, m4aMPlayVolumeControl } from '../../audio/m4a';
+import { TRACKS_ALL } from '../../audio/m4aInternal';
 import { testEvent } from '../../dev/testHooks';
 import { gfx, gfx16, isGfxLoaded, loadGfx } from '../../gba/gfx';
 import { BG_CHAR_ADDR, BG_SCREEN_ADDR, LZDecompressVram } from '../../gba/bg';
@@ -40,10 +42,10 @@ import {
   type AnimCmd,
   type SpriteTemplate,
 } from '../../gba/sprite';
+import { IsSEPlaying, PlaySE, PlaySE12WithPanning, SE12PanpotControl } from '../../gba/sound';
 import { CreateTask, DestroyTask, gTasks, TASK_NONE, type TaskFunc } from '../../gba/task';
 import { DrawMainBattleBackground } from '../battleBg';
 import { UpdateOamPriorityInAllHealthboxes } from '../battleInterface';
-import { ui } from '../battleUi';
 import { K } from '../constants';
 import { bdata, g } from '../env';
 import { affineAnimTable, animTable } from '../gfx';
@@ -75,7 +77,8 @@ let sBattleAnimScriptPtr = 0;
 let sBattleAnimScriptRetAddr = 0;
 let sAnimFramesToWait = 0;
 const sAnimSpriteIndexArray = new Uint16Array(ANIM_SPRITE_INDEX_COUNT).fill(0xffff);
-// sSoundAnimFramesToWait only counts frames of a playing SE, and nothing plays without audio.
+/** sSoundAnimFramesToWait: frames Cmd_end / Cmd_waitsound have waited for the SEs (stopped after 90) */
+let sSoundAnimFramesToWait = 0;
 const sMonAnimTaskIdArray = [TASK_NONE, TASK_NONE];
 let sAnimBackgroundFadeState = 0;
 /** The running script's label (for test events) */
@@ -402,7 +405,7 @@ export function DoMoveAnim(move: number): void {
  * LaunchBattleAnimation: `table` is gBattleAnims_Moves / _StatusConditions / _General / _Special.
  * Returns false (and leaves gAnimScriptActive FALSE) when the script can't run yet.
  */
-export function LaunchBattleAnimation(table: string, tableId: number, _isMoveAnim: boolean): boolean {
+export function LaunchBattleAnimation(table: string, tableId: number, isMoveAnim: boolean): boolean {
   const start = scriptAddress(table, tableId);
   anim.scriptCallback = () => {};
   anim.scriptActive = false;
@@ -424,12 +427,24 @@ export function LaunchBattleAnimation(table: string, tableId: number, _isMoveAni
   sAnimFramesToWait = 0;
   anim.scriptCallback = RunAnimScriptCommand;
   sAnimSpriteIndexArray.fill(0xffff);
-  // gMovesWithQuietBGM lowers the BGM volume (no audio yet)
+  // gMovesWithQuietBGM (Sing, Perish Song, Grass Whistle) halve the BGM's volume until Cmd_end
+  if (isMoveAnim && movesWithQuietBGM().includes(tableId)) m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 128);
   g.battle_WIN0H = 0;
   g.battle_WIN0V = 0;
   g.battle_WIN1H = 0;
   g.battle_WIN1V = 0;
   return true;
+}
+
+let sMovesWithQuietBGM: number[] | undefined;
+
+/** gMovesWithQuietBGM (data/battle_anim_scripts.s), read from the ROM image up to its 0xFFFF terminator. */
+function movesWithQuietBGM(): number[] {
+  if (!sMovesWithQuietBGM) {
+    sMovesWithQuietBGM = [];
+    for (let a = bdata.animScripts.labels.gMovesWithQuietBGM; read16(a) !== 0xffff; a += 2) sMovesWithQuietBGM.push(read16(a));
+  }
+  return sMovesWithQuietBGM;
 }
 
 /** LaunchStatusAnimation (battle_anim_status_effects.c) */
@@ -557,16 +572,27 @@ function Cmd_nop(): void {
 function Cmd_end(): void {
   // Keep waiting as long as there are animations to be done.
   if (anim.visualTaskCount !== 0 || anim.soundTaskCount !== 0 || sMonAnimTaskIdArray[0] !== TASK_NONE || sMonAnimTaskIdArray[1] !== TASK_NONE) {
+    sSoundAnimFramesToWait = 0;
     sAnimFramesToWait = 1;
     return;
   }
-  // IsSEPlaying() is always FALSE without audio, so there's no 90-frame SE wait.
+  // Finish the sound effects: wait up to 90 frames, then halt them.
+  if (IsSEPlaying()) {
+    if (++sSoundAnimFramesToWait <= 90) {
+      sAnimFramesToWait = 1;
+      return;
+    }
+    m4aMPlayStop(gMPlayInfo_SE1);
+    m4aMPlayStop(gMPlayInfo_SE2);
+  }
+  sSoundAnimFramesToWait = 0;
   for (let i = 0; i < ANIM_SPRITE_INDEX_COUNT; i++) {
     if (sAnimSpriteIndexArray[i] !== 0xffff) {
       freeAnimSpriteGfx(sAnimSpriteIndexArray[i]);
       sAnimSpriteIndexArray[i] = 0xffff;
     }
   }
+  m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 256);
   InitPrioritiesForVisibleBattlers();
   UpdateOamPriorityInAllHealthboxes(1);
   anim.scriptActive = false;
@@ -574,7 +600,7 @@ function Cmd_end(): void {
 }
 
 function Cmd_playse(): void {
-  ui.playSE(read16(sBattleAnimScriptPtr + 1));
+  PlaySE(read16(sBattleAnimScriptPtr + 1));
   sBattleAnimScriptPtr += 3;
 }
 
@@ -937,11 +963,6 @@ export function CalculatePanIncrement(sourcePan: number, targetPan: number, incr
   return 0;
 }
 
-/** PlaySE12WithPanning (no audio yet) */
-export function PlaySE12WithPanning(songId: number, _pan: number): void {
-  ui.playSE(songId);
-}
-
 function Cmd_playsewithpan(): void {
   const songId = read16(sBattleAnimScriptPtr + 1);
   PlaySE12WithPanning(songId, BattleAnimAdjustPanning(s8(read8(sBattleAnimScriptPtr + 3))));
@@ -949,7 +970,7 @@ function Cmd_playsewithpan(): void {
 }
 
 function Cmd_setpan(): void {
-  // SE12PanpotControl(BattleAnimAdjustPanning(pan)): no audio yet
+  SE12PanpotControl(BattleAnimAdjustPanning(s8(read8(sBattleAnimScriptPtr + 1))));
   sBattleAnimScriptPtr += 2;
 }
 
@@ -988,17 +1009,18 @@ const Task_PanFromInitialToTarget: TaskFunc = (taskId) => {
   const d = gTasks[taskId].data;
   if (d[8]++ >= d[3]) {
     d[8] = 0;
-    const pan = d[4] + d[2];
+    let pan = d[4] + d[2];
     d[4] = pan;
     let destroy = false;
     if (d[2] === 0) destroy = true;
     else if (d[0] < d[1]) destroy = pan >= d[1];
     else destroy = pan <= d[1];
     if (destroy) {
+      pan = d[1];
       DestroyTask(taskId);
       anim.soundTaskCount = (anim.soundTaskCount - 1) & 0xff;
     }
-    // SE12PanpotControl(pan): no audio yet
+    SE12PanpotControl(pan);
   }
 };
 
@@ -1066,9 +1088,19 @@ function Cmd_createsoundtask(): void {
 
 function Cmd_waitsound(): void {
   if (anim.soundTaskCount !== 0) {
+    sSoundAnimFramesToWait = 0;
     sAnimFramesToWait = 1;
+  } else if (IsSEPlaying()) {
+    if (++sSoundAnimFramesToWait > 90) {
+      // Halted: the script goes on next frame (sAnimFramesToWait stays as the last frame left it).
+      m4aMPlayStop(gMPlayInfo_SE1);
+      m4aMPlayStop(gMPlayInfo_SE2);
+      sSoundAnimFramesToWait = 0;
+    } else {
+      sAnimFramesToWait = 1;
+    }
   } else {
-    // IsSEPlaying() is always FALSE without audio
+    sSoundAnimFramesToWait = 0;
     sBattleAnimScriptPtr++;
     sAnimFramesToWait = 0;
   }
@@ -1151,7 +1183,8 @@ function Cmd_teamattack_movefwd(): void {
 }
 
 function Cmd_stopsound(): void {
-  // m4aMPlayStop(&gMPlayInfo_SE1 / SE2): no audio yet
+  m4aMPlayStop(gMPlayInfo_SE1);
+  m4aMPlayStop(gMPlayInfo_SE2);
   sBattleAnimScriptPtr++;
 }
 
