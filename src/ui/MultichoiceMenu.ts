@@ -1,4 +1,6 @@
 import type Phaser from 'phaser';
+import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import { FONT_NORMAL, type Fonts } from '../text/Font';
 import { stringWidth } from '../text/stringWidth';
@@ -92,7 +94,8 @@ export class MultichoiceMenu {
     if (input === undefined) return false;
     if (input === 'cancel') {
       if (this.opts.ignoreBPress) return false;
-      this.result = SCR_MENU_CANCEL; // PlaySE(SE_SELECT)
+      PlaySE(K.SE_SELECT);
+      this.result = SCR_MENU_CANCEL;
     } else {
       this.result = input;
     }
