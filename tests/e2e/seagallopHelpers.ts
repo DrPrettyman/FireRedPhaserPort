@@ -14,6 +14,10 @@ export async function warp(game: Game, mapId: string, x: number, y: number) {
   const mark = await game.mark();
   await game.eval((_t, id, x, y) => (window as any).game.scene.getScene('Overworld').warp(id, -1, x, y), mapId, x, y);
   await game.waitForEvent('map', { since: mark, what: mapId });
+  // The map event comes with the load, before the fade-in: until the field takes input (or a map script has
+  // started), a walk gives up at once and a press is lost (under load, the walk onto Vermilion's ticket check
+  // didn't happen).
+  await game.eval((t) => t.until(() => t.idle() || !!t.field()?.script, 20000));
 }
 
 /** The story state after Blaine (CinnabarIsland_Gym_EventScript_DefeatedBlaine). */
@@ -168,7 +172,11 @@ export async function waitForMenu(game: Game, since: number, pressPages = true) 
  * sail?" and the menu. Returns the menu's mcId (MULTICHOICE_NONE for the Rainbow Pass menu).
  */
 export async function talkToHarborSailor(game: Game) {
-  await game.eval((t) => t.face('down'));
+  // (after a ride, the script that sailed runs on to its `end` once the field is back)
+  await game.eval(async (t) => {
+    await t.until(() => t.idle(), 20000);
+    await t.face('down');
+  });
   const since = await game.mark();
   await game.press('A');
   return waitForMenu(game, since);
