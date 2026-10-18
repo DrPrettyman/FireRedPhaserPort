@@ -1,5 +1,5 @@
 // Small side-content specials (SIDE_PLAN.md W-daycare): Prof. Oak's Pokédex rating and the help context pair it
-// uses. Kept apart from specials.ts like storySpecials.ts; SPECIALS spreads this table in. No Phaser here: the
+// uses; money.c's cost specials and CalculatePlayerPartyCount (the daycares, the cable club). Kept apart from specials.ts like storySpecials.ts; SPECIALS spreads this table in. No Phaser here: the
 // museum's fossil pic (it draws) registers itself from ui/MuseumFossilPic.ts.
 
 import { FLAG_GET_CAUGHT, GetSetPokedexFlag, HasAllMons } from '../menus/pokedex';
@@ -41,6 +41,21 @@ export const SIDE_SPECIALS: Record<string, Special> = {
   /** HasAllMons (pokedex.c): every mon caught but Mew, Lugia, Ho-Oh, Celebi, Jirachi and Deoxys. */
   HasAllMons({ state }) {
     return HasAllMons(state) ? 1 : 0;
+  },
+
+  /** CalculatePlayerPartyCount (pokemon.c): the party has no gaps, so its length. */
+  CalculatePlayerPartyCount({ state }) {
+    return state.party.length;
+  },
+
+  /** IsEnoughForCostInVar0x8005 (money.c): IsEnoughMoney(money, gSpecialVar_0x8005). The daycares. */
+  IsEnoughForCostInVar0x8005({ state }) {
+    return state.money >= state.getVar('VAR_0x8005') ? 1 : 0;
+  },
+
+  /** SubtractMoneyFromVar0x8005 (money.c): RemoveMoney(money, gSpecialVar_0x8005). */
+  SubtractMoneyFromVar0x8005({ state }) {
+    state.removeMoney(state.getVar('VAR_0x8005'));
   },
 
   // help_system.c: the L/R help system isn't ported, so its context is never read (like Script_SetHelpContext).

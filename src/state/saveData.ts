@@ -13,12 +13,14 @@ import type { ItemSlot } from './Bag';
 import type { GameState, PlayerLocation, RoamerSave, WarpData } from './GameState';
 import type { PlayTime } from './playTime';
 import type { BoxPokemon } from './PokemonStorage';
+import type { DaycareMon } from '../world/daycare';
 
 /**
  * Bump when SaveData changes shape; fromSaveData refuses other versions. Older versions that only lack fields
- * are brought up to date by `upgradeSave` (version 1 had no gameStats, version 2 no options.sound).
+ * are brought up to date by `upgradeSave` (version 1 had no gameStats, version 2 no options.sound, version 3 had
+ * daycareStepCounter instead of daycare and no route5DayCareMon).
  */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 /** The localStorage key of the one save slot. */
 export const SAVE_STORAGE_KEY = 'firered-phaser:save';
@@ -58,6 +60,11 @@ void allFieldsListed;
 
 export type BoxMonSave = BoxPokemon;
 export type MonSave = Pokemon;
+/** struct DaycareMon (world/daycare.ts). */
+export interface DaycareMonSave {
+  mon: BoxMonSave | null;
+  steps: number;
+}
 /** An item slot as [itemId, quantity]. */
 export type ItemSlotSave = [number, number];
 
@@ -107,7 +114,10 @@ export interface SaveData {
   flags: number[];
   /** Non-zero vars VARS_START..VARS_END as [id, value], ascending. */
   vars: [number, number][];
-  daycareStepCounter: number;
+  /** struct DayCare (the Four Island daycare); since version 4 (version 3 had only its stepCounter). */
+  daycare: { mons: DaycareMonSave[]; offspringPersonality: number; stepCounter: number };
+  /** The Route 5 daycare man's mon; since version 4. */
+  route5DayCareMon: DaycareMonSave;
   roamer: RoamerSave;
   rivalName: string;
 
@@ -134,6 +144,15 @@ function boxMonSave(mon: BoxPokemon): BoxMonSave {
 
 function monSave(mon: Pokemon): MonSave {
   return { ...boxMonSave(mon), ...copyFields(mon, PARTY_MON_FIELDS) } as MonSave;
+}
+
+function daycareMonSave(m: DaycareMon): DaycareMonSave {
+  return { mon: m.mon && boxMonSave(m.mon), steps: m.steps };
+}
+
+function loadDaycareMon(m: DaycareMon, saved: DaycareMonSave | undefined): void {
+  m.mon = clone(saved?.mon ?? null);
+  m.steps = saved?.steps ?? 0;
 }
 
 function itemSlotsSave(slots: ItemSlot[], none: number): ItemSlotSave[] {
@@ -196,7 +215,12 @@ export function toSaveData(state: GameState): SaveData {
     trainerRematches: [...state.trainerRematches],
     flags: state.flagIds().filter((f) => f < specialFlagsStart),
     vars: state.varEntries().filter(([v]) => v >= varsStart && v <= varsEnd),
-    daycareStepCounter: state.daycareStepCounter,
+    daycare: {
+      mons: state.daycare.mons.map(daycareMonSave),
+      offspringPersonality: state.daycare.offspringPersonality,
+      stepCounter: state.daycare.stepCounter,
+    },
+    route5DayCareMon: daycareMonSave(state.route5DayCareMon),
     roamer: structuredClone(state.roamer),
     rivalName: state.rivalName,
     storage: {
@@ -256,7 +280,10 @@ export function fromSaveData(data: SaveData, state: GameState): GameState {
   state.trainerRematches = [...data.trainerRematches];
   state.setFlagIds(data.flags);
   state.setVarEntries(data.vars);
-  state.daycareStepCounter = data.daycareStepCounter;
+  state.daycare.mons.forEach((m, i) => loadDaycareMon(m, data.daycare.mons[i]));
+  state.daycare.offspringPersonality = data.daycare.offspringPersonality;
+  state.daycare.stepCounter = data.daycare.stepCounter;
+  loadDaycareMon(state.route5DayCareMon, data.route5DayCareMon);
   state.roamer = structuredClone(data.roamer);
   state.rivalName = data.rivalName;
 
@@ -273,6 +300,12 @@ export function upgradeSave(data: SaveData): SaveData {
   if (data?.version === 1) data = { ...data, version: 2, gameStats: new Array<number>(64).fill(0) };
   // OPTIONS_SOUND_MONO, the new-game default
   if (data?.version === 2) data = { ...data, version: 3, options: { ...data.options, sound: 0 } };
+  // The daycare's step counter was saved on its own; both daycares were empty (they weren't ported).
+  if (data?.version === 3) {
+    const { daycareStepCounter, ...rest } = data as SaveData & { daycareStepCounter?: number };
+    const empty = (): DaycareMonSave => ({ mon: null, steps: 0 });
+    data = { ...rest, version: 4, daycare: { mons: [empty(), empty()], offspringPersonality: 0, stepCounter: daycareStepCounter ?? 0 }, route5DayCareMon: empty() };
+  }
   return data;
 }
 

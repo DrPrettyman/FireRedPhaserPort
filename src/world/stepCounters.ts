@@ -88,23 +88,6 @@ export function isPoisoned(state: GameState, mon: Pokemon): boolean {
   return (mon.status & state.defines.require('STATUS1_PSN_ANY')) !== 0;
 }
 
-/**
- * ShouldEggHatch → TryProduceOrHatchEgg: every 256 steps (a u8 counter reaching 255) each party egg loses an egg cycle (kept in
- * its friendship); TRUE with VAR_0x8004 = its slot when one with none left should hatch. The daycare
- * (Route 5 and Four Island) isn't ported, so there are no daycare mons to count steps for or breed.
- */
-export function shouldEggHatch(state: GameState): boolean {
-  state.daycareStepCounter = (state.daycareStepCounter + 1) & 0xff;
-  if (state.daycareStepCounter !== 255) return false;
-  for (let i = 0; i < state.party.length; i++) {
-    const mon = state.party[i];
-    if (!mon.isEgg) continue; // (no bad eggs: the port never makes one)
-    if (mon.friendship !== 0) {
-      mon.friendship--;
-    } else {
-      state.setVar('VAR_0x8004', i);
-      return true;
-    }
-  }
-  return false;
-}
+// ShouldEggHatch (daycare.c: the Route 5 daycare mon's steps, the Four Island daycare's, party eggs' egg cycles)
+// lives with the daycare in world/daycare.ts.
+export { shouldEggHatch } from './daycare';
