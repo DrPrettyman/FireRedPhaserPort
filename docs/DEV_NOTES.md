@@ -991,10 +991,13 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
 ### m4a engine
 
 - **Where:** `src/audio/m4a.ts` (m4a.c + m4a_1.s, named as the C: m4aSoundInit, m4aSoundMain, MPlayMain,
-  MPlayStart, the ply_* commands, the m4aSongNum* / m4aMPlay* controls, gMPlayInfo_BGM / SE1 / SE2 / SE3,
-  gPokemonCryMusicPlayers), `m4aInternal.ts` (m4a_internal.h: the structs and constants), `m4aTables.ts`
-  (gClockTable, gPcmSamplesPerVBlankTable), `songTable.ts` (`loadSongTable(json)`: songs.json → gSongTable, checks
-  the players against gMPlayTable, returns `idByName`). Pure logic: no DOM, no AudioContext, no clock; module
+  MPlayStart, the ply_* commands incl. ply_note, ChnVolSetAsm, MidiKeyToFreq, the m4aSongNum* / m4aMPlay*
+  controls, gMPlayInfo_BGM / SE1 / SE2 / SE3, gPokemonCryMusicPlayers, the cry song and its setters,
+  `setVoiceData`), `m4aMixer.ts` (SoundMainRAM's bookkeeping: the DirectSound envelopes and sample positions),
+  `m4aCgb.ts` (gCgbChans, CgbSound: a placeholder until W-m4a 4), `m4aVoices.ts` (voicegroups / samples / waves
+  JSON → ToneData / WaveData), `m4aInternal.ts` (m4a_internal.h: the structs and constants), `m4aTables.ts`
+  (gClockTable, gPcmSamplesPerVBlankTable, gScaleTable, gFreqTable, gPokemonCrySongTemplate), `songTable.ts`
+  (`loadSongTable(json)`: songs.json → gSongTable, checks the players against gMPlayTable, returns `idByName`). Pure logic: no DOM, no AudioContext, no clock; module
   globals like the C's (call `m4aSoundInit()` to reset everything). Structs are plain objects with the C's field
   names and ranges (u8 / s8 / u16 masked on write); a track's `data` is its song's bytes and `cmdPtr` /
   `patternStack` are offsets into them.
@@ -1007,20 +1010,56 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   clear one *tick* after the last FINE: the next frame at 150 BPM, the same frame above it (MUS_LEVEL_UP), up to
   two frames later below it (SE_DOOR). `status` is 0 between MPlayStart and the first tick (frame N's VBlank for a
   song started in frame N's logic), so `IsSEPlaying` is FALSE until then, as on the GBA.
-- **Seams:** notes (`ply_note`) parse key / velocity / extra gate and set the track's gate time, then stop where
-  the asm looks up the voice (`_081DDB46`): W-m4a 2 adds the voice lookup and channels there (or replaces
-  `gSoundInfo.plynote`), fills `ChnVolPitUpdate` (MPlayMain's per-channel volume / pitch), `SongHeader.tone` from
-  the voicegroup, and the cry songs. The channel loops (gate times, TrackStop, ply_fine, ply_endtie, RealClearChain)
-  are ported and walk an empty list until then. `SoundMain` has the hook for SoundMainRAM (the mixer, W-m4a 3);
-  `gSoundInfo.CgbSound` / `CgbOscOff` are DummyFunc and `ply_port` writes `gSoundInfo.soundRegs` (W-m4a 4).
-- **Hooking in:** W-sound 1 calls `m4aSoundInit()` and `loadSongTable()` at boot and `m4aSoundMain()` once per
-  frame (AUDIO_PLAN.md section 4, "The tick"); gba/sound.ts calls the m4a* functions on the gMPlayInfo_* players.
+- **Voices:** `setVoiceData(voicegroups, samples, waves, pcm?)` (m4a.ts) takes the parsed voicegroups.json,
+  samples.json and waves.json (and optionally samples.bin as a Uint8Array / ArrayBuffer; `setSamplePcm(pcm)` adds it
+  later) and returns the built `VoiceData`. It sets every song's `SongHeader.tone` to its voicegroup (also for a
+  song table installed afterwards: `setSongTable` applies it), and `gCryTable` / `gCryTable_Reverse`. ToneData.wav
+  is a WaveData (DirectSound), the duty / noise period (a number), the wave bytes, or the subgroup (keysplit /
+  rhythm); `keySplitTable` is the JSON's table. WaveData.type is 1 for the `Cry_*` samples (compressed in the ROM:
+  SoundMainRAM_Unk1 checks it), the loop flag is `status`'s 0xC000. Only the headers matter to the logic.
+- **Notes and channels:** `ply_note` (m4a_1.s:1538) resolves the voice (keysplit: the subgroup voice at
+  keySplitTable[key]; rhythm: subgroup[key] at that voice's own key, its pan as rhythmPan; a resolved keysplit /
+  rhythm voice is silent), the priority (player + track, ≤ 255), then a channel: a CGB voice claims its PSG channel
+  (`gSoundInfo.cgbChans[type & 7 - 1]`) unless that plays a higher priority, or the same priority from a lower
+  track; a DirectSound voice takes the first free of the 5 channels, else the released channel of lowest priority,
+  else the playing one of lowest priority ≤ its own. Ties go to the channel whose track is at the highest address:
+  `MusicPlayerTrack.addr` ranks the tracks as IWRAM has them (BGM < SE1 < SE2 < SE3 < the cry tracks); a playing
+  channel of equal priority is only taken from a track at the same or a higher address, so the BGM can't steal from
+  an SE of its own priority. Since the players run oldest first, an SE's note in the frame the BGM's runs wins.
+  `ChnVolPitUpdate` (MPlayMain's VOLCHG / PITCHG pass) and `ChnVolSetAsm` set the channel volumes and frequency.
+- **A channel's life:** SoundMainRAM (`m4aMixer.ts`, after the sequencers and CgbSound in the same frame) starts a
+  START channel (ATTACK, its sample from the start offset, the WaveData's loop flag), steps the envelope once per
+  frame (attack +n to 255, decay ×n/256 to sustain, release ×n/256 to the echo volume, then pseudoEchoLength
+  frames), and moves the sample over the frame's 224 output samples (`fw += divFreq × frequency`, 2^23 per sample;
+  FIX voices one per output sample; reverse voices from the end) to its loop or its end. A channel that ends
+  (release done, sample out) gets statusFlags 0 there; the track unlinks it in its next tick (MPlayMain's
+  ClearChain), so `IsPokemonCryPlaying` turns false the frame after. `FastForward` takes a frame's steps in one go
+  when the sample doesn't end in it (exact: see its comment); the per-sample loops are where W-m4a 3 mixes.
+- **Cries:** `gPokemonCrySong` (the template's byte image, m4aInternal's CRY_SONG_* offsets), the setters
+  `SetPokemonCryVolume / Panpot / Pitch / Length / Release / Progress / Chorus / Priority / Stereo`,
+  `SetPokemonCryTone(tone)` (a free cry player, else the one with the highest clock; returns it) and
+  `IsPokemonCryPlaying(mplayInfo)`. sound.c's PlayCryInternal (W-sound 2) calls them in that order with a
+  `gCryTable[SpeciesToCryId(species - 1)]` entry. Lifetimes for section 2's species and modes are pinned in
+  tests/unit/m4aChannels.test.ts (they equal AUDIO_PLAN's estimates, e.g. Charizard NORMAL 56 frames, Jynx
+  NORMAL 135, any species DOUBLES ≤ 21).
+- **Seams:** `SoundMainRAM` mixes nothing (W-m4a 3: the reverb pass, each sample scaled by envelopeVolumeRight /
+  Left into a pcmBuffer, mono via `soundInfo.mode & 1`); `m4aCgb.ts`'s CgbSound / CgbOscOff / MidiKeyToCgbFreq are
+  placeholders (W-m4a 4: CGB channels go off as soon as released, frequency 0); `ply_port` writes
+  `gSoundInfo.soundRegs` (W-m4a 4).
+- **Hooking in:** W-sound 1 calls `m4aSoundInit()`, `loadSongTable()` and `setVoiceData()` at boot and
+  `m4aSoundMain()` once per frame (AUDIO_PLAN.md section 4, "The tick"); gba/sound.ts calls the m4a* functions on
+  the gMPlayInfo_* players.
 - **Tests:** `tests/unit/m4a.test.ts`: hand-assembled songs (a small assembler with labels: `W(24)`, `N(12)`,
   `GOTO, R('loop')`) for tempo and ticks, waits, GOTO / PATT / PEND / REPT / xWAIT, the one-tick-late status,
   the chain order (through MEMACC), MPlayStart's priority rule, pause / continue, fades (FadeOut stops after 16 ×
   speed frames, FadeOutTemporarily pauses after 17 × speed: its TEMPORARY_FADE bit makes fadeOV 257), volume / pan
   / pitch control, the loader; then on songs.json (skipped without it): 270 songs end and 77 loop, and the FINE /
   stop frames of a table of SEs and fanfares (SE_SELECT 10 / 11 ... MUS_POKE_FLUTE 3,061 / 3,063).
+  `tests/unit/m4aChannels.test.ts`: hand-built voices and samples for MidiKeyToFreq, envelopes frame by frame, a
+  sample's end and loop, FIX / reverse voices, EOT / FINE, stealing (5 channels, priorities, track order, released
+  channels, the CGB claim), keysplit / rhythm resolution, the cry song; then on the extracted voices: setVoiceData,
+  voicegroup000's keysplit / rhythm voices, no song reaching a null keysplit entry, the cry lifetime table, a cry
+  stealing from MUS_PALLET.
 
 ### ROM reference measurements
 
