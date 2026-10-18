@@ -145,6 +145,7 @@ pic, the daycare and egg fields in GameState / saveData.
 |---|---|---|
 | 1 (done, PRs #56-#67) | W-moves (1, 2), W-trade (1, 2), W-slots (1, 2; spare 3 not needed), W-daycare (1, 2, 3), W-hatch (unit 4, alongside 2-3), W-misc (the other small side specials) | Different files; all four are side content the user asked for, ordered by how often a player meets it |
 | 2 (done, PRs #69-#77) | W-ferry (1, 2), W-ssanne (1), W-league (1, 2), W-easychat (1-4) | The user's focus: the ferry for Bill's trip, the S.S. Anne, the last two main gaps; three workers, then Easy Chat in the freed slots |
+| 3 | W-unused (1), beside W-audioplan (AUDIO_PLAN.md, research only) | The user's call: port the three `unused` gaps after all; plan the audio before any audio code |
 
 Batch 2 merged: #69 the plan; #70 the S.S. Anne departure and sweep; #71 the league lighting, GetMartClerkObjectId,
 the `unused` gap tag, the fan club e2e, the egg hook; #73 the ferry and Bill's trip; #72, #74, #75, #77 Easy Chat
@@ -310,6 +311,55 @@ Units:
   its own, so W-ferry doesn't touch the field.
 - `world/TilesetVram.ts`: W-league only.
 
+## Batch 3: what was checked
+
+Checked against the decomp and master at `0d68053` (2026-10-18). The user wants the three `unused` gaps
+(decision 8 of batch 2) ported after all, exactly as FRLG's C has them, even where that is a stub:
+
+- **`adddecoration`** (scrcmd.c ScrCmd_adddecoration): FRLG reads the decoration id with VarGet and does nothing
+  else (`gSpecialVar_Result = DecorationAdd(decorId)` is commented out). The same goes for `removedecoration`,
+  `checkdecorspace` and `checkdecor` (not in the gap list since no script uses them; worth checking the engine
+  handles them the same way). Std_ObtainDecoration (data/scripts/obtain_item.inc) is the caller.
+- **`bufferdecorationname`** (ScrCmd_bufferdecorationname): reads the string var index and the decoration id and
+  copies nothing (the StringCopy from gDecorations is commented out: FRLG has no decoration table). Caller:
+  EventScript_ObtainDecorMessage.
+- **FLDEFF_USE_DIVE** (field_effect.c FldEff_UseDive, Task_UseDive, DiveFieldEffect_Init / _ShowMon / _TryWarp;
+  gFldEffScript_UseDive): preventStep, LockPlayerFieldControls, FLDEFF_FIELD_MOVE_SHOW_MON_INIT, then
+  dive_warp (field_control_avatar.c) once the show-mon effect is over: MAP_TYPE_UNDERWATER /
+  MetatileBehavior_IsUnableToEmerge / MetatileBehavior_IsDiveable, SetDiveWarpEmerge / SetDiveWarpDive
+  (overworld.c SetDiveWarp, the map's connections of type dive/emerge), StoreInitialPlayerAvatarState, DoDiveWarp
+  (field_fadetransition.c) and PlaySE(SE_M_DIVE). Callers: EventScript_DeepWater / EventScript_TrySurface
+  (data/scripts/field_moves.inc), which GetInteractedWaterScript never returns in FRLG. ~150 lines of C in all.
+
+## Batch 3 workstreams
+
+### W-unused: the three unused gaps
+
+Owns the decoration commands in `script/ScriptEngine.ts` (or wherever the engine's commands live), the Dive field
+effect (beside the other field-move effects), `tests/unit/` tests for each, and the gap list.
+
+1. **Port all three.** `adddecoration` and `bufferdecorationname` as FRLG's stubs (read their arguments, change
+   nothing; `removedecoration` / `checkdecorspace` / `checkdecor` the same if the engine doesn't have them yet).
+   FLDEFF_USE_DIVE with its tasks, dive_warp, SetDiveWarpDive / SetDiveWarpEmerge and DoDiveWarp as FRLG has them
+   (the field move show-mon is already ported for Surf / Strength), PlaySE as whatever no-op SE call the port uses
+   today. Unit tests: the commands consume the right bytes and leave VAR_RESULT / the string vars alone; the Dive
+   effect runs its three steps, waits for the show-mon effect, then warps through a dive connection, or does
+   nothing where no connection exists. An e2e only if something is observable on an FRLG map (none reaches it, so
+   probably a test map built in the test or a unit-level check). Remove the three entries from
+   `tests/unit/scriptCoverageGaps.ts`; drop the `unused` tag from GapTag and its header comment if nothing else
+   uses it, and fix the docs that mention it (STATUS.md, docs/DEV_NOTES.md, tests/README.md if any).
+
+### W-audioplan: the audio plan (docs only)
+
+One research worker writes [AUDIO_PLAN.md](AUDIO_PLAN.md) (the GBA's m4a engine, every place the game needs audio
+and where game logic waits on it, ways to bring it into the port with a recommendation, integration, testing, the
+work split). No audio code merges in this batch; implementation starts once the user has reviewed the plan.
+
+## Shared files in batch 3
+
+- `tests/unit/scriptCoverageGaps.ts`: W-unused only.
+- STATUS.md: W-audioplan adds a "Next up" pointer to AUDIO_PLAN.md; the merger keeps both sides.
+
 ## Rules
 
 Worker and merger rules: docs/WORKFLOW.md sections 3 and 4. Each worker's e2e file is named in its unit above.
@@ -347,10 +397,15 @@ Worker and merger rules: docs/WORKFLOW.md sections 3 and 4. Each worker's e2e fi
    have no units left to start, in the slot one of them frees. (Coordinator, revisit if you disagree: it started
    once W-ssanne and W-league had finished and W-ferry's unit 1 was running, since W-ferry's unit 2 could only
    follow its unit 1 and the free slots had no focus work left to take. It never held up the ferry.)
+10. **Batch 3 ports the `unused` gaps after all** (the user's call, replacing decision 8): exactly what FRLG's C
+   does, stubs included, so the gap list has no tag for code FRLG compiles but never reaches.
+11. **Two workers in batch 3** (coordinator, revisit if you disagree): W-unused is one small unit, and the audio
+   research is one long worker (90 minutes, checkpoint at 75) with no code to merge, so nothing else runs beside
+   them.
 
 ## Not in this plan
 
 Link trading and the cable trade animation, TradeEvolutionScene, mail, the Heracross size contest (postgame),
-the event tickets (Navel Rock, Birth Island); audio. Easy Chat only if batch 2 has room (decision 9). (DoFallWarp
+the event tickets (Navel Rock, Birth Island); audio (planned in AUDIO_PLAN.md, batch 3). Easy Chat only if batch 2 has room (decision 9). (DoFallWarp
 holes, the Trainer Fan Club, the Magikarp record, the diploma and Daisy's grooming were planned out but done in
 batch 1 by W-misc: decision 6.)
