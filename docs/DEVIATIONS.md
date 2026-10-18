@@ -207,7 +207,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     what the port keeps; left out because the port doesn't keep them: the current map's object events and object
     templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail,
     Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, the fame
-    checker, Trainer Tower and minigame records, the enigma berry, mystery gift, easy chat, link records and
+    checker, Trainer Tower and minigame records, the enigma berry, mystery gift, link records and
     the region map zoom option. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
   - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the title screen; the
@@ -267,8 +267,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     which the port sets in FieldMenuScene since the field isn't on the GBA layer.
   - Trainer card (menus/trainerCard.ts): no audio (SE_CARD_OPEN / SE_CARD_FLIP / SE_CARD_FLIPPING); no help system
     context. The berry picking and Pokémon Jump records (a star for 200 of each) and the link stats are always 0 (no
-    link minigames), so the back never shows its link battle / trade / Berry Crush / Union Room lines; the easy chat
-    profile isn't kept (only a link card prints it). The flip's per-line BG0VOFS gives line L buffer[L] (the PPU's
+    link minigames), so the back never shows its link battle / trade / Berry Crush / Union Room lines (the easy chat
+    profile is saved since save version 5, but only a link card prints it). The flip's per-line BG0VOFS gives line L buffer[L] (the PPU's
     HBlank convention), where the GBA's HBlank interrupt sets it for the line after, a one-line shift of the squash.
     LoadMonIconGfx's 96 colours read 48 past gMonIconPalettes on the GBA; those palettes (BG 8-10) are zeros here and
     no icon uses them.
@@ -279,7 +279,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     GameState; other module-level state isn't reset, and intro.c's movie isn't ported.
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, Trainer Tower clock, cable club
-    monitors, questionnaire/easy chat) start their scripts and hit the unimplemented-special warnings.
+    monitors) start their scripts and hit the unimplemented-special warnings.
   - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link
     flags, CloseLink.
   - Player names are "PLAYER"/"RIVAL" until Oak's intro exists.
