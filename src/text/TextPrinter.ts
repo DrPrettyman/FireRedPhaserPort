@@ -136,6 +136,11 @@ export class TextPrinter {
     return this.bytes[this.pos++] ?? EOS;
   }
 
+  /** Waiting for A or B: a {PAUSE_UNTIL_PRESS}, or a \p / \l with the down arrow (for tests). */
+  get waitingForButton(): boolean {
+    return this.state === State.Wait || this.state === State.Clear || this.state === State.ScrollStart;
+  }
+
   private render(): Result {
     switch (this.state) {
       case State.HandleChar:

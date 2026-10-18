@@ -45,6 +45,7 @@ import { saveDialogProbe } from '../ui/SaveDialog';
 import { startMenuProbe } from '../ui/StartMenu';
 import { helpMessageWindowProbe } from '../ui/HelpMessageWindow';
 import { optionMenuProbe } from '../menus/optionMenu';
+import { museumFossilPicProbe } from '../ui/MuseumFossilPic';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -527,6 +528,8 @@ function createApi(game: Phaser.Game) {
     },
     /** The option menu while it's up (menus/optionMenu.ts): Task_OptionMenu's loadState (2 = input), the cursor and the settings shown. */
     optionMenu: () => optionMenuProbe(),
+    /** The Pewter Museum's fossil pic (ui/MuseumFossilPic.ts), while one is up. */
+    museumFossilPic: () => museumFossilPicProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */
     saveDialog: () => {
       const p = saveDialogProbe();

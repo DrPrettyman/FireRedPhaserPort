@@ -2069,6 +2069,23 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - CLAUDE.md "Merging PRs" points at both; the get-on skill's main coordinator now checks the cleanup itself.
 - Verified: docs only.
 
+### In-game trades without the animation, and the Name Rater (W-trade unit 1)
+
+- Data: `tools/extract_trades.py` (called from extract.py's main) writes sInGameTrades (src/data/ingame_trades.h,
+  FireRed side of its `#if` blocks via `firered_only`) to `public/gen/trades.json`; `Assets.init` loads it and
+  OverworldScene hands it to `initInGameTrades`.
+- `script/tradeSpecials.ts` (TRADE_SPECIALS, one spread line in SPECIALS): GetInGameTradeSpeciesInfo,
+  GetTradeSpecies, CreateInGameTradePokemon (CreateInGameTradePokemonInternal: the player's mon's level, the fixed
+  personality / OT id / IVs / ability / held item, OT name and gender, nickname, METLOC_IN_GAME_TRADE; CreateMon
+  still rolls the random IVs first, as on the GBA), TradeMons (friendship 70), UpdatePokedexForReceivedMon,
+  BufferInGameTradeMonName, and DoInGameTradeScene as a stand-in (fade to black, swap, fade in, the script's
+  `waitstate` ends). The Name Rater: IsMonOTIDNotPlayers (a `special` that writes VAR_RESULT itself),
+  IsMonOTNameNotPlayers, NameRaterWasNicknameChanged. All seven came off scriptCoverageGaps.ts.
+- Not modelled (DEVIATIONS): the trade animation (unit 2), contest conditions and sheen, the Jynx's mail message.
+- Verified: typecheck, `npm test` (unit: tests/unit/inGameTrades.test.ts checks the extracted table, the created
+  Mr. Mime's fields and stats worked out by hand, the swap behind the fade, the Name Rater specials),
+  tests/e2e/inGameTrades.test.ts (Reyley's trade, declining, the wrong species and a cancelled party menu; the
+  Name Rater declining, renaming and refusing a traded mon).
 ### Party selection from scripts, the move tutors and the move deleter (W-moves unit 1)
 
 - `menus/partyMenuSpecials.ts`: party_menu_specials.c (ChoosePartyMon, ChooseMonForMoveRelearner's party menu
@@ -2103,3 +2120,41 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the Cape Brink tutor teaching Blast Burn, Frenzy Plant and Hydro Cannon to max-friendship starters until "passed
   on everything"), tests/e2e/tmCase.test.ts, tests/e2e/evolution.test.ts; screenshots of the list, the YES/NO and
   the "1, 2, and... Poof!" after the summary screen.
+### Oak's Pokédex rating, the museum's fossil pics, the fossil revival (W-daycare unit 1)
+
+- `script/sideSpecials.ts` (new, spread into SPECIALS): GetProfOaksRatingMessage (prof_pc.c
+  GetProfOaksRatingMessageByCount: one message per ten Kanto mons caught, 150 without Mew counts as complete),
+  HasAllMons (the existing menus/pokedex.ts port), BackupHelpContext / RestoreHelpContext as no-ops. Oak's rating
+  runs end to end in his lab and through PROF. OAK's PC (the national dex part too, with FLAG_OAK_SAW_DEX_COMPLETION);
+  `playfanfare` / `waitfanfare` were already no-ops, so nothing hangs without audio.
+- `ui/MuseumFossilPic.ts` (new): OpenMuseumFossilPic / CloseMuseumFossilPic / Task_WaitMuseumFossilPic (the
+  Kabutops and Aerodactyl fossil pics in PewterCity_Museum_1F); `graphics/script_menu/` added to extract_gfx.py's
+  GFX_PREFIXES. OverworldScene preloads and registers it; `__test.museumFossilPic()` probe.
+- The Cinnabar lab's fossil revival (CinnabarIsland_PokemonLab_ExperimentRoom) already worked: hand over the Dome
+  Fossil, leave for the entrance hall (its ON_TRANSITION sets the revive state to 2), come back, get Kabuto.
+- story.test.ts and storyCeladonSaffron.test.ts press B (not A) through the script after a leader battle, as
+  storyLeague.test.ts does.
+- Six entries off `scriptCoverageGaps.ts`.
+- Verified: typecheck; `npm test` (163); e2e sideEvents (7, twice), story + storyCeladonSaffron (17), hallOfFame;
+  screenshots of both fossil pics.
+### W-slots unit 1: the coins box, the Game Corner's clerks and the slot machine's game logic
+
+- coins.c's coins box (`ui/CoinsBox.ts`): `showcoinsbox` / `updatecoinsbox` / `hidecoinsbox` (ScrCmd_* →
+  ShowCoinsWindow / PrintCoinsString / HideCoinsWindow), "COINS" over the 4-digit amount, next to the money box.
+- slot_machine.c's game logic as `menus/slotMachineLogic.ts` (no screen): InitSlotMachineState, the reel spin,
+  StopReel1/2/3 with TwoReelBiasCheck / OneReelBiasCheck, TestReelIconAttribute, CalcSlotBias, ResetMachineBias,
+  CalcPayout, GetPayout. Tables extracted by `tools/extract_slots.py` (new) to `slotMachine.json`.
+  GetRandomSlotMachineId (field_specials.c) in `script/gameCornerSpecials.ts`.
+- Fix found on the way: the script extractor ran both branches of top-level `.ifdef FIRERED` / `.ifdef LEAFGREEN`
+  blocks, so the prize room used LeafGreen's prices and levels (an Abra cost 120 coins, level 7). It now keeps
+  only the taken branch of `.ifdef` / `.if` / `#ifdef` blocks (BUILD_SYMBOLS: FIRERED, REVISION 0, no BUGFIX).
+  That also fixes Daisy's grooming text (both `#ifdef BUGFIX` branches were concatenated), the help system's
+  Pokédex text and the slot machine's smiley-face field effect arguments. Diffed scripts.json / strings.json
+  before and after: only those lines changed.
+- `TextPrinter.waitingForButton` / `MessageBox.waitingForButton` (getters, for tests): a test waits for a `\p`
+  in the page instead of mashing A into the multichoice that follows the message.
+- Verified: typecheck; `npm test` (179, incl. the new slotMachine.test.ts: 23 hand-worked cases from the C);
+  e2e `tests/e2e/gameCorner.test.ts` (new, 5 tests: buying 50 and 500 coins with the coins box at 7 → 57 → 557
+  and the money box; no Coin Case; the prize room's Abra for 180 coins and TM13 for 4000, not enough coins; the
+  Fisher's 10 coins and hidden coins; a slot machine without a Coin Case and GetRandomSlotMachineId's spread),
+  storyCeladonSaffron's Game Corner test. Screenshot of the coin clerk: money and coins boxes as on the GBA.

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { FieldEffectObjects } from '../entities/FieldEffects';
 import type { ScriptsData } from '../script/ScriptEngine';
+import type { TradesData } from '../script/tradeSpecials';
 import type { CharmapData } from '../text/charmap';
 import { fontTextureKey, type FontsData } from '../text/Font';
 import { MESSAGE_TEXTURES } from '../text/MessageBox';
@@ -42,6 +43,8 @@ export class Assets {
   fieldEffectObjects!: FieldEffectObjects;
   /** gFieldEffectScriptPointers by FLDEFF_* name (data/field_effect_scripts.s) */
   fieldEffectScripts: Record<string, string[][]> = {};
+  /** sInGameTrades (trades.json, tools/extract_trades.py) */
+  trades!: TradesData;
 
   private maps = new Map<string, Promise<MapData>>();
   private layoutIndex?: Promise<Record<string, string>>;
@@ -66,6 +69,7 @@ export class Assets {
     this.doors = await fetchJson<DoorData>(`${GEN}/doors.json`);
     this.fieldEffectObjects = await fetchJson<FieldEffectObjects>(`${GEN}/field_effects/objects.json`);
     this.fieldEffectScripts = await fetchJson<Record<string, string[][]>>(`${GEN}/field_effects/scripts.json`);
+    this.trades = await fetchJson<TradesData>(`${GEN}/trades.json`);
     await loadGfx(FieldDoors.gfxSymbols(this.doors));
     this.wildEncounters = wildEncounters;
     this.species = species;

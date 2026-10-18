@@ -64,6 +64,7 @@ GFX_PREFIXES = (
     "graphics/itemfinder/",
     "graphics/trainer_card/",
     "graphics/learn_move/",
+    "graphics/script_menu/",  # the museum's fossil pics (script_menu.c)
     "data/tilesets/",
 )
 

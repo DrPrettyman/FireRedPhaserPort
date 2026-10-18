@@ -15,7 +15,10 @@ import { ForcePlayerOntoBike, GetPlayerAvatarBike } from '../world/bike';
 import { ForcePlayerToStartSurfing, GetPlayerFacingDirection, SeafoamIslandsB4F_CurrentDumpsPlayerOnLand } from '../world/playerAvatar';
 import { RockSmashWildEncounter } from '../world/fieldMoves';
 import { STORY_SPECIALS } from './storySpecials';
+import { SIDE_SPECIALS } from './sideSpecials';
+import { GAME_CORNER_SPECIALS } from './gameCornerSpecials';
 import { PARTY_MENU_SPECIALS } from '../menus/partyMenuSpecials';
+import { TRADE_SPECIALS } from './tradeSpecials';
 
 export interface SpecialEnv {
   state: GameState;
@@ -71,6 +74,9 @@ export const SPECIALS: Record<string, Special> = {
   ...Object.fromEntries(NO_OP.map((name) => [name, () => {}])),
   ...PARTY_MENU_SPECIALS, // menus/partyMenuSpecials.ts: party_menu_specials.c, ChooseMonForMoveTutor
   ...STORY_SPECIALS, // storySpecials.ts: field_specials.c's story specials (Lt. Surge's trash cans, ...)
+  ...SIDE_SPECIALS, // sideSpecials.ts: Oak's Pokédex rating, the help context pair
+  ...GAME_CORNER_SPECIALS, // gameCornerSpecials.ts: GetRandomSlotMachineId
+  ...TRADE_SPECIALS, // tradeSpecials.ts: in-game trades and the Name Rater
 
   // field_player_avatar.c / bike.c / field_specials.c's player avatar specials
   ForcePlayerOntoBike,
