@@ -2844,3 +2844,38 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   merging master in: 389 passed, no budgets raised); #92 none (unit test and docs only). Full run on master
   097f0fb (everything but #92's unit test): typecheck clean, 426 unit in 36 files, **393 e2e in 60 files, all
   passed first time, 20.8 min**. Final master 5ae37a9: typecheck clean, 491 unit in 37 files.
+
+### W-sound 4: the field's SEs (AUDIO_PLAN.md batch C)
+
+- The field's sound calls, ported at their port functions with the C's names: the Pokémon Center / Hall of Fame
+  machine (SE_BALL per ball, MUS_HEAL, PokeballGlowEffect_WaitForSound's IsFanfareTaskInactive: the nurse now waits
+  for the fanfare), Fly's SE_M_FLY, the Escape Rope arrival's SE_CLICK, the field move banner's cry
+  (PlayCry_NormalNoDucking / PlayCry_Normal, still W-sound 2's stubs), Cut (2), Rock Smash, Sweet Scent, Flash,
+  Ruin Valley's SE_BANG; field_player_avatar.c (PlayCollisionSoundIfNotFacingWarp's SE_WALL_HIT, SE_LEDGE, the
+  spinners' SE_M_RAZOR_WIND2, the boulder's SE_M_STRENGTH); field_control_avatar.c (SE_WIN_OPEN on START and on
+  Task_QuestLogPlayback_OpenStartMenu's path, TryStartInteractionScript's SE_SELECT except for the PCs, the
+  boulder's SE_FALL down a hole); field_specials.c (SE_ELEVATOR, SE_DING_DONG, the field ListMenu's three
+  SE_SELECTs); `opendoor` (GetDoorSoundEffect: `FieldDoors.getDoorSoundEffect`, the ScriptHost's
+  `doorSoundEffect`); player_pc.c and the storage PC's main menu; start_menu.c (the menu's SEs, CloseStartMenu,
+  SE_SAVE with SaveDialogCB_ReturnSuccess's IsSEPlaying wait, SE_BOO, the A-held SE_SELECT); the Itemfinder, the
+  VS Seeker, the S.S. Anne's horn (2), the Seagallop's SE_SHIP / SE_EXIT (were `PlaySE(0)`), SE_FIELD_POISON and
+  the puddles' SE_PUDDLE (2).
+- `ui/Menu.ts` now plays menu.c's SEs (Menu_ProcessInput / Menu_ProcessInputNoWrapAround), which gives the start
+  menu, YES/NO, multichoice and the shop's menu theirs; the callers add their B / NO SEs (script_menu.c, shop.c).
+  The multichoice grid has Menu_ProcessInputGridLayout's. These files belong to no unit in appendix A (the calls
+  there were comments, not "kept").
+- Left to others / not in the port: the warp tasks' SEs and music, including the fall arrival's SE_FALL /
+  SE_M_STRENGTH in world/fallWarp.ts (decision 17: W-sound 3), the warp paths' door SEs (W-sound 3 can call
+  `getDoorSoundEffect`); escalators, the Lavaridge warps, FldEff_NpcFlyOut, Birth Island's rock, ShakeScreen,
+  LoopWingFlapSound, the Acro Bike's and secret base mats' SEs, the mailbox's five SE_SELECTs (no mail), weather.
+- Found on the way: `tests/e2e/audio.test.ts`'s `waitse` check took the first frame either SE player was busy as
+  SE_SHOP's; talking to the fisher now plays SE_SELECT first, so it counts only from SE_SHOP's frame on.
+  storyLeague's Elite Four test failed once in the full run: mashing A only ever picks PSYCHIC, whose 10 PP ran out
+  in the Champion battle on an unlucky run ("There's no PP left" until the 20,000-frame budget; normally ~12,700
+  frames), a race on the rolls, not on audio; the test's Mewtwo now has three PP Ups (16 PP).
+- Tick budgets raised: none (the heal's MUS_HEAL and the save's SE_SAVE fit the existing waits).
+- Verified: typecheck; `npm test` (37 files, 491 tests); `tests/e2e/fieldSounds.test.ts` (6: the bump and ledge,
+  talking and Bill's `opendoor`, the bedroom PC, START and the save's SE_SAVE + 60 frames, the heal machine's SE_BALLs
+  and MUS_HEAL wait, the school blackboard's grid SEs), several runs; the full e2e suite once (61 files, 398 tests,
+  22.4 min: 396 passed, the two above failed; both fixed and rerun green: audio, storyLeague's Elite Four (3 runs),
+  fieldSounds).

@@ -184,3 +184,29 @@ test("the Pokémon Center heal: SE_BALL per mon, MUS_HEAL holds the machine (and
   expect(lastHeal).toBeGreaterThanOrEqual(resumed.frame);
   expect(log.filter((l) => l.f > heal.frame && l.f <= resumed.frame).every((l) => l.heal && l.task)).toBe(true);
 });
+
+test("the school's blackboard (multichoicegrid): SE_SELECT on a cursor move, none at the edge, and on B", async () => {
+  // ViridianCity_School_EventScript_Blackboard: `multichoicegrid 7, 1, MULTICHOICE_TRAINER_SCHOOL_WHITEBOARD, 3,
+  // FALSE`; Menu_ProcessInputGridLayout plays SE_SELECT only when MultichoiceGrid_MoveCursorIfValid moved the
+  // cursor, Hask_MultichoiceGridMenu_HandleInput plays it on B.
+  const game = await session.start({ start: 'after-rival', map: 'ViridianCity_School', x: 4, y: 2 });
+  await game.eval((t) => t.face('up'));
+  await game.waitIdle();
+  await game.press('A');
+  // Through the msgbox with A; "Which topic do you want to read?" is `message` + `waitmessage`, so the grid comes
+  // up without a press (a press in the tick it opens could pick a topic).
+  await game.mashUntil((t) => /Which topic/.test(t.message() ?? ''), { what: 'the topic question' });
+  await game.waitFor((t) => t.events().some((e) => e.type === 'multichoice'), { what: 'the blackboard grid' });
+  await game.eval((t) => t.waitFrames(10));
+  const mark = await game.mark();
+  for (const b of ['RIGHT', 'LEFT', 'LEFT', 'B'] as const) {
+    await game.press(b);
+    await game.eval((t) => t.waitFrames(4));
+  }
+  await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the blackboard to close' });
+  const events = (await ses(game, mark)).map((e) => e.name);
+  // RIGHT, the first LEFT and B; the second LEFT is at the left edge. (B through the closing text may add the
+  // text printer's SE_SELECTs once W-sound 2 is in: only the first three count.)
+  expect(events.slice(0, 3)).toEqual(['SE_SELECT', 'SE_SELECT', 'SE_SELECT']);
+  expect(await game.eval((t) => t.var('VAR_RESULT'))).toBe(127);
+});

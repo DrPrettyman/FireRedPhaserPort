@@ -103,7 +103,8 @@ test('`waitse` holds the Game Corner fisher\'s script until SE_SHOP\'s player st
   // SE_SHOP's player has a live track from the engine's first tick (the hook at the end of the playse frame) until
   // after its `stop`-th frame; IsSEPlaying turns FALSE then.
   const stop = songStopFrame('SE_SHOP');
-  const playing = log.filter((l) => l.playing).map((l) => l.f);
+  // (Talking to him plays TryStartInteractionScript's SE_SELECT first: only SE_SHOP's frames count.)
+  const playing = log.filter((l) => l.playing && l.f > se.frame).map((l) => l.f);
   expect(playing[0]).toBe(se.frame + 1);
   expect(playing.at(-1)).toBe(se.frame + stop - 1);
   // `waitse` (a native script) sees it stopped in frame se + stop, runs `setflag` in the next; the watcher reads at
