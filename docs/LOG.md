@@ -2622,3 +2622,46 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the timing model); merging master in left STATUS.md's "Next up" sentence twice (merge=union), tidied by hand.
 - Final tree: master after #80 differs from #81's tested tree only in AUDIO_PLAN.md, STATUS.md and docs/LOG.md, so
   #81's full run stands as the end-of-batch run.
+
+### Audio data: songs (AUDIO_PLAN.md batch A, W-audiodata 1)
+
+- `tools/extract_audio.py` (new, the "audio songs" step of `npm run extract`, one call in tools/extract.py's
+  main): builds the decomp's `tools/mid2agb` with `$CXX` (default `c++`), the Makefile's CXXFLAGS minus `-Werror`
+  (read from the Makefile, with the known flags as a fallback), straight from the decomp's sources into the
+  gitignored `tools/.bin/mid2agb`; rebuilt only when a source, header or the Makefile is newer. No compiler or a
+  failed build stops extract with what to install (`xcode-select --install`, `build-essential`, `CXX=`).
+- Runs mid2agb on the 347 `midi.cfg` lines whose `.mid` exists (52 `ph_*` / `se_card*` lines skipped) with their
+  flags, in parallel, into a temporary directory; assembles the `.s` with a small Python assembler (GNU as
+  expressions and precedence, C division; MPlayDef.s read once) and writes `public/gen/audio/songs.json`
+  (`players` from music_player_table.inc, `songs[id]` from song_table.inc with the header bytes, the voicegroup
+  symbol, track offsets and base64 track bytes whose GOTO / PATT pointers are relocated to offsets into the same
+  data). 281,848 bytes of track data, 428 KB of JSON.
+- Found on the way: mid2agb ends *every* track with FINE; a looping track's GOTO sits before it, sometimes followed
+  by a wait or a PAN (what comes after the `]` marker), so "ends in FINE or GOTO" is really "ends in FINE, loops
+  through a GOTO somewhere before it". The song table has no entry on `dummy_song_header` (index 0 is mus_dummy,
+  which has no tracks). Re-running MPlayDef.s's ~400 `.equ`s per song made the assembler 2.8 s; reading them once
+  and skipping the include made it 0.7 s.
+- `npm run extract`: 22.7 s before, 26.8 s after with mid2agb already built (28.0 s with the build); the audio step
+  alone is ~1.5 s (mid2agb ~0.55 s, assembly ~0.7 s), the build ~1.3 s.
+- Verified: typecheck; `npm test` (31 files, 305 tests; tests/unit/audioSongs.test.ts, 7 tests: the players,
+  347 songs with ids equal to scripts.json's SE_* / MUS_*, known players / priorities, se_select's first bytes by
+  hand from MPlayDef.s, and a command walker that reaches each track's FINE exactly at its end with 77 looping
+  songs and all 3,088 PATT / GOTO pointers inside the data); a missing `CXX` gives the message.
+### Audio data: voicegroups and samples (AUDIO_PLAN.md batch A, W-audiodata 2)
+
+- New `tools/extract_audio_voices.py` (one line in `tools/extract.py`'s main, ~0.2 s of extract time) →
+  `public/gen/audio/voicegroups.json` (1.2 MB: 77 voicegroups, 5 keysplit tables, gCryTable / gCryTable_Reverse,
+  388 each), `samples.json` + `samples.bin` (477 samples, 3.7 MB of s8 PCM), `waves.json` (11 programmable waves).
+  Shape and reading rules in docs/DEV_NOTES.md "Audio data: voicegroups and samples".
+- Found on the way: voice_groups.inc `.include`s cry_tables.inc between voicegroup128 and voicegroup129; many
+  voicegroups define fewer than 128 voices (drum kits, keysplit subgroups of 2-4 voices) and ply_note indexes them
+  unbounded, so each voicegroup is written as the ROM reads it, running on into the next ones; keysplit table
+  entries outside a table's 36-107 range are the ROM's neighbouring bytes (up to 255), so the five keysplit
+  subgroups get 256 entries. In the CGB macros the pan goes into ToneData.length (none of FRLG's CGB voices has
+  one). wav2agb's `agbl` is one less than the samples it writes on every one of the 477 WAVs, so each sample in
+  samples.bin is `size + 1` bytes.
+- Verified: typecheck; `npm test` (31 files, 307 passed + 1 skipped; tests/unit/audioVoices.test.ts: 9 tests, the
+  songs one skips until W-audiodata 1's songs.json is merged, checked against a fake songs.json both ways). Once,
+  by hand: the decomp's wav2agb built to a scratch dir: all 89 instruments' WaveData headers and bytes equal
+  `wav2agb -b`'s, and all 388 cries equal the decoded output of `wav2agb -b -c -l 1 --no-pad` (the DPCM round trip
+  is exact, as AUDIO_PLAN spike 3 found).

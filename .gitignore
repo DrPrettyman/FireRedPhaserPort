@@ -8,3 +8,6 @@ __pycache__/
 
 # Screenshots from failed e2e tests.
 tests/e2e/__output__/
+
+# mid2agb, built from the decomp by tools/extract_audio.py.
+tools/.bin/

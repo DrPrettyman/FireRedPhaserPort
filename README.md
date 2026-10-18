@@ -11,13 +11,15 @@ everything the game needs into `public/gen/` (gitignored). Keep that folder loca
 ```sh
 npm install
 pip3 install pillow           # extractor dependency
+# + a C++ compiler: extract builds the decomp's mid2agb (macOS: xcode-select --install; Linux: build-essential)
 npm run extract               # reads ../pret/firered by default
 npm run dev                   # http://localhost:5173
 npm run dev:battle            # battle test harness (battle-test.html)
 ```
 
 To point at a decomp somewhere else, use `FIRERED_DECOMP=/path/to/firered npm run extract`
-or `python3 tools/extract.py --decomp /path/to/firered`.
+or `python3 tools/extract.py --decomp /path/to/firered`. The extractor compiles the decomp's `tools/mid2agb` (the
+songs) with `c++` into `tools/.bin/`; set `CXX=` to use another compiler (e.g. `CXX=g++ npm run extract`).
 
 ### Controls
 
@@ -62,6 +64,8 @@ Debug: `?map=PalletTown&x=12&y=10` starts at any map and coordinate. In dev buil
 | `gfx/<symbol>.bin`, `gfx/index.json` | every `INCBIN` graphic used by battle/interface code, by C symbol, as the ROM holds it once decompressed (`tools/extract_gfx.py`, `graphics_file_rules.mk` rules) |
 | `battle/scripts.json` | battle scripts + AI scripts assembled into a ROM image with labels and RAM symbols |
 | `battle/battle_anims.json` | battle anim scripts (`battle_anim_scripts.s`) assembled the same way, with the sprite templates and task functions they point at by C name; the anim sprite templates, OamData, pic/palette/background tables (`tools/extract_battle_anims.py`) |
+| `audio/songs.json` | every song in `sound/song_table.inc`, converted by the decomp's own `mid2agb` (built into `tools/.bin/`) and assembled, with the music player table (`tools/extract_audio.py`) |
+| `audio/voicegroups.json`, `samples.json`, `samples.bin`, `waves.json` | `sound/voice_groups.inc`, the keysplit and cry tables, the instrument and cry WAVs as signed 8-bit PCM, the programmable waves (`tools/extract_audio_voices.py`) |
 | `battle/strings.json`, `tables.json`, `anims.json` | battle strings and text-window info, trainers/parties, type chart, mechanics tables, sprite anim command tables per C file, pic tables (`tools/extract_battle.py`, `extract_anims.py`) |
 
 Each metatile's two layers are spread over three atlases by layer type, as DrawMetatile fills the field's BG3,
