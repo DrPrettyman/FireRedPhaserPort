@@ -3,6 +3,7 @@ import { spriteTextureKey, type Assets } from '../data/assets';
 import type { MapData, ObjectEventData, WarpEventData } from '../data/types';
 import { bdata, initBattleEnv } from '../battle/env';
 import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound'; // field_control_avatar.c's SEs (W-sound 4)
 import { BattleTransition_StartOnField, battleTransitionGfxSymbols, IsBattleTransitionDone, setTransitionFieldCamera } from '../battle/transition';
 import { loadGfx } from '../gba/gfx';
 import { RGB_BLACK, RGB_WHITE } from '../gba/hw';
@@ -37,7 +38,7 @@ import { ClearContinueGameWarpStatus, gSave, UseContinueGameWarp } from '../stat
 import { fromSaveData, type SaveData } from '../state/saveData';
 import { PlayTimeCounter_Reset, PlayTimeCounter_Start, PlayTimeCounter_Update } from '../state/playTime';
 import { AgbMainFrameEnd } from '../audio/frame';
-import { BGMusicStopped, PlaySE, StopMapMusic } from '../gba/sound';
+import { BGMusicStopped, StopMapMusic } from '../gba/sound';
 import {
   Overworld_ClearSavedMusic,
   Overworld_PlaySpecialMapMusic,
@@ -661,6 +662,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (!this.busy && !lockedAtFrameStart && !blocked) {
       if (this.startMenuWhenFree) {
         this.startMenuWhenFree = false;
+        PlaySE(K.SE_WIN_OPEN);
         this.openStartMenu();
         return;
       }
@@ -757,6 +759,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (input.pressedAButton && this.interact()) return true;
     if (input.heldDirection2 && input.dpadDirection === facing && this.tryDoorWarp(facing)) return true;
     if (input.pressedStartButton) {
+      PlaySE(K.SE_WIN_OPEN);
       this.openStartMenu();
       return true;
     }
@@ -891,13 +894,19 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         this.scripts.npcTextColor = textColorFromId(npc.brain.obj.info.textColor, this.defines);
         this.state.setVar('VAR_LAST_TALKED', npc.localId);
         this.state.setVar('VAR_FACING', directionId(dir, this.defines));
-        return this.scripts.start(script);
+        return this.startInteractionScript(script);
       }
     }
     const script = this.interactedBackgroundEventScript(behavior, dir) ?? this.interactedMetatileScript(behavior, dir) ?? GetInteractedWaterScript(behavior);
     if (!script) return false;
     this.selectedObject = undefined;
     this.scripts.npcTextColor = 'neutral';
+    return this.startInteractionScript(script);
+  }
+
+  /** TryStartInteractionScript: SE_SELECT (except for the PCs), then ScriptContext_SetupScript. */
+  private startInteractionScript(script: string): boolean {
+    if (script !== 'PalletTown_PlayersHouse_2F_EventScript_PC' && script !== 'EventScript_PC') PlaySE(K.SE_SELECT);
     return this.scripts.start(script);
   }
 
@@ -1099,7 +1108,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       tick: () => {
         switch (state) {
           case 0:
-            PlaySE(this.getDoorSoundEffect(x, y - 1));
+            PlaySE(this.doors.getDoorSoundEffect(x, y - 1)); // GetDoorSoundEffect
             this.doors.animateOpen(x, y - 1);
             state = 1;
             break;
@@ -1151,7 +1160,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         switch (state) {
           case 6:
             if (++delay === 25) {
-              PlaySE(this.getDoorSoundEffect(this.player.tileX, this.player.tileY));
+              PlaySE(this.doors.getDoorSoundEffect(this.player.tileX, this.player.tileY));
               this.doors.animateOpen(this.player.tileX, this.player.tileY);
               state = 7;
             }
@@ -1180,16 +1189,6 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         return false;
       },
     };
-  }
-
-  /**
-   * GetDoorSoundEffect (field_door.c): SE_DOOR for a DOOR_SOUND_NORMAL door at (x, y), else SE_SLIDING_DOOR (also
-   * where there's no door). W-sound 4 owns world/doors.ts and may add it there for `opendoor`: then use that one.
-   */
-  private getDoorSoundEffect(x: number, y: number): number {
-    const metatile = this.world.tileAt(x, y).metatile;
-    const door = this.assets.doors.doors.find((d) => d.metatileId === metatile);
-    return door?.sound === 0 ? K.SE_DOOR : K.SE_SLIDING_DOOR; // DOOR_SOUND_NORMAL
   }
 
   /** The MAP_TYPE_* of a map's header. */
@@ -2094,7 +2093,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   openYesNo(): YesNoMenu {
     const text = (label: string) => this.charmap.encode(this.assets.strings[label] ?? '?$');
-    return new YesNoMenu(this, this.fonts, this.buttons, { yesNo: text('gText_YesNo'), cursor: text('gText_SelectorArrow2') });
+    return new YesNoMenu(this, this.fonts, this.buttons, { yesNo: text('gText_YesNo'), cursor: text('gText_SelectorArrow2') }, { seOnNo: true });
   }
 
   showMoneyBox(x: number, y: number): void {
@@ -2910,7 +2909,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const npc = this.npcs.find((n) => n.brain.obj === boulder && n.chunk === cur);
     if (this.behaviors.is(behavior, 'FALL_WARP') && npc) {
       // RemoveObjectEventByLocalIdAndMap, then FlagClear(GetBoulderRevealFlagByLocalIdAndMap): a boulder's
-      // template keeps the flag of its twin on the floor below in its trainer type (SE_FALL: no audio).
+      // template keeps the flag of its twin on the floor below in its trainer type.
+      PlaySE(K.SE_FALL);
       const reveal = this.templatesFor(cur)[npc.localId - 1]?.trainer_type;
       this.removeObject(npc.localId);
       if (reveal && reveal.startsWith('FLAG_')) this.state.setFlag(reveal, false);
@@ -3087,6 +3087,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const { originX, originY } = this.world.current;
     if (open) this.doors.animateOpen(x + originX, y + originY);
     else this.doors.animateClose(x + originX, y + originY);
+  }
+
+  /** GetDoorSoundEffect at map-local coords (opendoor) */
+  doorSoundEffect(x: number, y: number): number {
+    const { originX, originY } = this.world.current;
+    return this.doors.getDoorSoundEffect(x + originX, y + originY);
   }
 
   /** FieldIsDoorAnimationRunning (waitdooranim) */

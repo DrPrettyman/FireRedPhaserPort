@@ -1,4 +1,6 @@
 import type Phaser from 'phaser';
+import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import { FONT_NORMAL, type Fonts } from '../text/Font';
 import { stringWidth } from '../text/stringWidth';
@@ -92,7 +94,8 @@ export class MultichoiceMenu {
     if (input === undefined) return false;
     if (input === 'cancel') {
       if (this.opts.ignoreBPress) return false;
-      this.result = SCR_MENU_CANCEL; // PlaySE(SE_SELECT)
+      PlaySE(K.SE_SELECT);
+      this.result = SCR_MENU_CANCEL;
     } else {
       this.result = input;
     }
@@ -155,6 +158,7 @@ export class MultichoiceGridMenu {
     if (input === undefined) return false;
     if (input === 'cancel') {
       if (this.opts.ignoreBPress) return false;
+      PlaySE(K.SE_SELECT); // Hask_MultichoiceGridMenu_HandleInput's MENU_B_PRESSED
       this.result = SCR_MENU_CANCEL;
     } else {
       this.result = input;
@@ -163,28 +167,34 @@ export class MultichoiceGridMenu {
     return true;
   }
 
-  /** Menu_ProcessInputGridLayout */
+  /** Menu_ProcessInputGridLayout: SE_SELECT on A and on a cursor move. */
   private processInputGridLayout(): number | 'cancel' | undefined {
     const inp = this.input;
-    if (inp.pressed('A')) return this.cursorPos;
+    if (inp.pressed('A')) {
+      PlaySE(K.SE_SELECT);
+      return this.cursorPos;
+    }
     if (inp.pressed('B')) return 'cancel';
-    if (inp.pressed('UP')) this.moveCursorIfValid(0, -1);
-    else if (inp.pressed('DOWN')) this.moveCursorIfValid(0, 1);
-    else if (inp.pressed('LEFT') || (this.opts.lrMode && inp.pressed('L'))) this.moveCursorIfValid(-1, 0);
-    else if (inp.pressed('RIGHT') || (this.opts.lrMode && inp.pressed('R'))) this.moveCursorIfValid(1, 0);
+    let moved = false;
+    if (inp.pressed('UP')) moved = this.moveCursorIfValid(0, -1);
+    else if (inp.pressed('DOWN')) moved = this.moveCursorIfValid(0, 1);
+    else if (inp.pressed('LEFT') || (this.opts.lrMode && inp.pressed('L'))) moved = this.moveCursorIfValid(-1, 0);
+    else if (inp.pressed('RIGHT') || (this.opts.lrMode && inp.pressed('R'))) moved = this.moveCursorIfValid(1, 0);
+    if (moved) PlaySE(K.SE_SELECT);
     return undefined;
   }
 
-  /** MultichoiceGrid_MoveCursorIfValid */
-  private moveCursorIfValid(deltaX: number, deltaY: number): void {
+  /** MultichoiceGrid_MoveCursorIfValid: whether the cursor moved. */
+  private moveCursorIfValid(deltaX: number, deltaY: number): boolean {
     const cols = this.opts.columnCount;
     const oldPos = this.cursorPos;
     let pos = oldPos;
     if (deltaX && (pos % cols) + deltaX >= 0 && (pos % cols) + deltaX < cols) pos += deltaX;
     if (deltaY && Math.trunc(pos / cols) + deltaY >= 0 && Math.trunc(pos / cols) + deltaY < this.rows) pos += cols * deltaY;
-    if (pos > this.maxCursorPos) return;
+    if (pos > this.maxCursorPos) return false;
     this.cursorPos = pos;
     this.redrawCursor(oldPos, pos);
+    return pos !== oldPos;
   }
 
   /** MultichoiceGrid_RedrawCursor (left 0, top 1, cursor height 16) */

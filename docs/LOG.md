@@ -2870,13 +2870,79 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   same, the Seagallop ferry's warp (64 frames).
 - Found on the way: on the GBA the bike's MUS_CYCLING doesn't survive a connection (LoadMapFromCameraTransition crossfades
   to the next map's music, then clears savedMusic); FRLG's FieldCB_DefaultWarpExit (no gFieldCallback) is also what
-  brings the map's music back after a wild battle. `GetDoorSoundEffect` is a private copy in OverworldScene until
-  W-sound 4's lands in world/doors.ts.
+  brings the map's music back after a wild battle. The warps' door SEs use W-sound 4's `FieldDoors.getDoorSoundEffect`.
 - Tick budgets raised: none. The full e2e suite passed on its first run with the longer warps (61 files, 398 tests,
-  22.4 min), and nothing failed and passed on a rerun.
+  22.4 min), and nothing failed and passed on a rerun. After merging master (#95, #96), two races showed when four
+  e2e files shared the machine and were fixed: surf.test.ts's shore jump (a 60-tick watcher that could run out
+  before the walk began, and the blob read after the frame's batch) and playerAvatar.test.ts's ledge jump (the
+  release came after the batch, up to 40 ticks, so the player walked on a step: now `holdWhile`); mapMusic's surf
+  test retries the step back to the shore.
 - Verified: typecheck; `npm test` (38 files, 502 tests; tests/unit/overworldMusic.test.ts 9, a version 5 save in
   save.test.ts, savedMusic in saveData.test.ts's round trip); `tests/e2e/mapMusic.test.ts` (5: Pallet Town → Oak's lab
   door with SE_DOOR and a speed-2 fade, the lab ≥ 33 frames later and MUS_OAK_LAB; the lab's mat → Pallet Town with
   SE_EXIT and a speed-4 fade, ≥ 65 frames; the player's house without a fade; Pallet Town → Route 1, MUS_ROUTE1 128
   frames after the speed-8 fade; the Bicycle: MUS_CYCLING, saved, CONTINUE plays it, off the bike MUS_ROUTE1; Surf:
   MUS_SURF, back on land MUS_PALLET); the full e2e suite once (above).
+### W-sound 4: the field's SEs (AUDIO_PLAN.md batch C)
+
+- The field's sound calls, ported at their port functions with the C's names: the Pokémon Center / Hall of Fame
+  machine (SE_BALL per ball, MUS_HEAL, PokeballGlowEffect_WaitForSound's IsFanfareTaskInactive: the nurse now waits
+  for the fanfare), Fly's SE_M_FLY, the Escape Rope arrival's SE_CLICK, the field move banner's cry
+  (PlayCry_NormalNoDucking / PlayCry_Normal, still W-sound 2's stubs), Cut (2), Rock Smash, Sweet Scent, Flash,
+  Ruin Valley's SE_BANG; field_player_avatar.c (PlayCollisionSoundIfNotFacingWarp's SE_WALL_HIT, SE_LEDGE, the
+  spinners' SE_M_RAZOR_WIND2, the boulder's SE_M_STRENGTH); field_control_avatar.c (SE_WIN_OPEN on START and on
+  Task_QuestLogPlayback_OpenStartMenu's path, TryStartInteractionScript's SE_SELECT except for the PCs, the
+  boulder's SE_FALL down a hole); field_specials.c (SE_ELEVATOR, SE_DING_DONG, the field ListMenu's three
+  SE_SELECTs); `opendoor` (GetDoorSoundEffect: `FieldDoors.getDoorSoundEffect`, the ScriptHost's
+  `doorSoundEffect`); player_pc.c and the storage PC's main menu; start_menu.c (the menu's SEs, CloseStartMenu,
+  SE_SAVE with SaveDialogCB_ReturnSuccess's IsSEPlaying wait, SE_BOO, the A-held SE_SELECT); the Itemfinder, the
+  VS Seeker, the S.S. Anne's horn (2), the Seagallop's SE_SHIP / SE_EXIT (were `PlaySE(0)`), SE_FIELD_POISON and
+  the puddles' SE_PUDDLE (2).
+- `ui/Menu.ts` now plays menu.c's SEs (Menu_ProcessInput / Menu_ProcessInputNoWrapAround), which gives the start
+  menu, YES/NO, multichoice and the shop's menu theirs; the callers add their B / NO SEs (script_menu.c, shop.c).
+  The multichoice grid has Menu_ProcessInputGridLayout's. These files belong to no unit in appendix A (the calls
+  there were comments, not "kept").
+- Left to others / not in the port: the warp tasks' SEs and music, including the fall arrival's SE_FALL /
+  SE_M_STRENGTH in world/fallWarp.ts (decision 17: W-sound 3), the warp paths' door SEs (W-sound 3 can call
+  `getDoorSoundEffect`); escalators, the Lavaridge warps, FldEff_NpcFlyOut, Birth Island's rock, ShakeScreen,
+  LoopWingFlapSound, the Acro Bike's and secret base mats' SEs, the mailbox's five SE_SELECTs (no mail), weather.
+- Found on the way: `tests/e2e/audio.test.ts`'s `waitse` check took the first frame either SE player was busy as
+  SE_SHOP's; talking to the fisher now plays SE_SELECT first, so it counts only from SE_SHOP's frame on.
+  storyLeague's Elite Four test failed once in the full run: mashing A only ever picks PSYCHIC, whose 10 PP ran out
+  in the Champion battle on an unlucky run ("There's no PP left" until the 20,000-frame budget; normally ~12,700
+  frames), a race on the rolls, not on audio; the test's Mewtwo now has three PP Ups (16 PP).
+- Tick budgets raised: none (the heal's MUS_HEAL and the save's SE_SAVE fit the existing waits).
+- Verified: typecheck; `npm test` (37 files, 491 tests); `tests/e2e/fieldSounds.test.ts` (6: the bump and ledge,
+  talking and Bill's `opendoor`, the bedroom PC, START and the save's SE_SAVE + 60 frames, the heal machine's SE_BALLs
+  and MUS_HEAL wait, the school blackboard's grid SEs), several runs; the full e2e suite once (61 files, 398 tests,
+  22.4 min: 396 passed, the two above failed; both fixed and rerun green: audio, storyLeague's Elite Four (3 runs),
+  fieldSounds).
+
+### W-m4a 3: the mixer, first sound (AUDIO_PLAN.md batch C)
+
+- **Mixer** (`audio/m4aMixer.ts`, m4a_1.s SoundMainRAM / SoundMainRAM_Unk1): the reverb pass (SoundMainRAM_Reverb:
+  this slot's and the next slot's A + B × reverb >> 9, +1 when bit 7 is set, into both FIFOs) or the clearing,
+  then each DirectSound channel's samples (interpolated by `fw` for resampled voices, as read for FIX ones, reverse
+  voices backwards) × envelopeVolumeRight / Left >> 8 added into FIFO A / B with 8-bit wraparound, inside the
+  per-sample loops W-m4a 2 left (`mix:` comments); FastForward only when nothing is mixed. No DPCM (decision 4).
+- **DMA ring:** `gSoundInfo.pcmBuffer` (PCM_DMA_BUF_SIZE × 2), `m4aSoundVSync` (VCountIntr: pcmDmaCounter) and
+  `PcmSlotOffset` (SoundMain's r5: the slot this frame mixes into); `m4aPcmFrame()` returns it with REG_SOUNDCNT_H.
+- **Output:** `AgbMainFrameEnd` runs m4aSoundVSync before m4aSoundMain, turns the mixing on while
+  `audioOutputWantsFrames()` and then calls `pushFrame(m4aPcmFrame())`; `loadAudioData` fetches samples.bin in the
+  background when the output is on (`setSamplePcm`).
+- **Mono:** found on the way: FRLG's mixer never reads `soundInfo.mode` bit 0 (no reference in m4a_1.s); mono is
+  SetPokemonCryStereo's REG_SOUNDCNT_H (both FIFOs to both speakers at half volume), now kept as `gRegSoundCntH`
+  and sent with each frame (the DAC already applied it), and the bit is CgbSound's (W-m4a 4). Callers wired:
+  title_screen.c:742 (`titleScreenEnv.savedOptionsSound`, set by MainMenuScene from the loaded save) and
+  option_menu.c:519; reset_save_heap.c's ReloadSave is the link's (not ported).
+- **Found on the way:** SE_SELECT (and SE_DOOR, SE_EXIT, SE_PC_ON, SE_WALL_HIT, SE_USE_ITEM, SE_FLEE) are PSG only,
+  so the menus' cursor sound stays silent until W-m4a 4; SE_SAVE, SE_BALL_OPEN, SE_SHOP, SE_BIKE_BELL, SE_EXP, SE_BANG
+  and the cries are DirectSound. The "silent until the mixer" entries in DEVIATIONS.md now say what is left (PSG).
+- **Headless render** (`tests/audioRender.ts`, `tools/render-audio.ts`: `npx vite-node tools/render-audio.ts
+  MUS_TITLE 1200 out.wav`): MUS_TITLE 1,200 frames = 268,800 samples per FIFO, RMS 18.0, peak 106 (s8), zero for the
+  30 frames before it starts; MUS_PALLET RMS 9.6, peak 47; SE_SAVE RMS 8.5 over its first 30 frames, last non-zero
+  sample 41 frames after its start (reverb tail included); cry 25 and its reverse RMS 10.9.
+- Tests: typecheck; unit (`tests/unit/m4aMixer.test.ts`, 14: hand-computed blocks, interpolation, envelope,
+  wraparound, slots, reverb impulse, mono through the DAC, bookkeeping on / off by hand and over MUS_TITLE + SEs +
+  cries for 900 frames, the renders); e2e audioOutput (now: `?audio=1` frames reach the worklet with a non-zero
+  peak on the title screen), titleScreen, audio.

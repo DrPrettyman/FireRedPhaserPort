@@ -366,9 +366,18 @@ test('Route 23: the badge guards turn the player back without the badge and let 
 
 // ---------------------------------------------------------------- The Elite Four and the Champion
 
-/** Heal the party for the next battle (a fresh Lv. 100 Mewtwo: full HP and PP). */
+/**
+ * Heal the party for the next battle (a fresh Lv. 100 Mewtwo: full HP and PP). Mashing A only ever picks PSYCHIC,
+ * whose 10 PP ran out against the Champion once (Exeggutor and Alakazam take several hits; the rolls vary from
+ * run to run) and left the mash pressing A at "There's no PP left": three PP Ups make it 16.
+ */
 async function heal(game: Game) {
-  await game.eval((t, mon) => t.setParty([mon]), MEWTWO);
+  await game.eval((t, mon) => {
+    t.setParty([mon]);
+    const m = t.state!.party[0];
+    m.ppBonuses = 0x03; // move 0: three PP Ups
+    m.pp[0] = 16;
+  }, MEWTWO);
 }
 
 /**

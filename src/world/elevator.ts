@@ -2,6 +2,8 @@
 // entered it by), the floor select menu's starting position, the "Now on:" window, and AnimateElevator
 // (the camera shake and the scrolling view through the elevator window).
 
+import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound';
 import type { GameState } from '../state/GameState';
 
 /** sFloorNamePointers, indexed by VAR_ELEVATOR_FLOOR / gSpecialVar_0x8005 */
@@ -142,7 +144,7 @@ export function animateElevator(state: GameState, host: ElevatorHost): { shake: 
         pan = -pan;
         host.setCameraPanning(pan);
         if (shakes === duration) {
-          // PlaySE(SE_DING_DONG); ScriptContext_Enable(); InstallCameraPanAheadCallback()
+          PlaySE(K.SE_DING_DONG); // then ScriptContext_Enable(); InstallCameraPanAheadCallback()
           host.setCameraPanning(0);
           shake.done = true;
         }
@@ -151,7 +153,7 @@ export function animateElevator(state: GameState, host: ElevatorHost): { shake: 
     },
   };
 
-  // Task_AnimateElevatorWindowView (PlaySE(SE_ELEVATOR) is silent)
+  // Task_AnimateElevatorWindowView
   let step = 0;
   let timer = 0;
   const steps = sElevatorWindowAnimDuration[nfloors];
@@ -169,5 +171,6 @@ export function animateElevator(state: GameState, host: ElevatorHost): { shake: 
       return destroyed;
     },
   };
+  PlaySE(K.SE_ELEVATOR);
   return { shake, windowView };
 }

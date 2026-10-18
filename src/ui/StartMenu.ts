@@ -1,4 +1,6 @@
 import type Phaser from 'phaser';
+import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import { FLAG_GET_SEEN, GetNationalPokedexCount } from '../menus/pokedex';
 import type { GameState } from '../state/GameState';
@@ -123,11 +125,14 @@ export class StartMenu {
     // StartMenuPokedexSanityCheck: no POKéDEX before a mon has been seen
     if (item === 'POKEDEX' && GetNationalPokedexCount(this.state, FLAG_GET_SEEN) === 0) return undefined;
     if (item === 'EXIT') return this.close();
+    if (item === 'RETIRE') PlaySE(K.SE_SELECT); // StartMenuSafariZoneRetireCallback's CloseStartMenu
     this.destroy();
     return item;
   }
 
+  /** CloseStartMenu (B / START, StartMenuExitCallback) */
   private close(): 'close' {
+    PlaySE(K.SE_SELECT);
     this.destroy();
     return 'close';
   }

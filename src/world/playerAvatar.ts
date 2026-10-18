@@ -11,6 +11,7 @@
 // and the Acro Bike / secret base mat functions, which FRLG's metatile behaviours never trigger.
 
 import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound';
 import type { SpriteInfo } from '../data/types';
 import type { Button } from '../input/Input';
 import type { ObjectEvent } from '../entities/ObjectEvent';
@@ -224,10 +225,10 @@ const sForcedMovementFuncs: [(b: Behaviors, behavior: number) => boolean, () => 
   [(b, m) => b.is(m, 'NORTHWARD_CURRENT'), () => DoForcedMovement('up', PlayerRideWaterCurrent)],
   [(b, m) => b.is(m, 'WESTWARD_CURRENT'), () => DoForcedMovement('left', PlayerRideWaterCurrent)],
   [(b, m) => b.is(m, 'EASTWARD_CURRENT'), () => DoForcedMovement('right', PlayerRideWaterCurrent)],
-  [(b, m) => b.is(m, 'SPIN_RIGHT'), () => DoForcedMovement('right', PlayerGoSpin)], // PlaySpinSound: no audio
-  [(b, m) => b.is(m, 'SPIN_LEFT'), () => DoForcedMovement('left', PlayerGoSpin)],
-  [(b, m) => b.is(m, 'SPIN_UP'), () => DoForcedMovement('up', PlayerGoSpin)],
-  [(b, m) => b.is(m, 'SPIN_DOWN'), () => DoForcedMovement('down', PlayerGoSpin)],
+  [(b, m) => b.is(m, 'SPIN_RIGHT'), () => (PlaySpinSound(), DoForcedMovement('right', PlayerGoSpin))], // ForcedMovement_SpinRight
+  [(b, m) => b.is(m, 'SPIN_LEFT'), () => (PlaySpinSound(), DoForcedMovement('left', PlayerGoSpin))],
+  [(b, m) => b.is(m, 'SPIN_UP'), () => (PlaySpinSound(), DoForcedMovement('up', PlayerGoSpin))],
+  [(b, m) => b.is(m, 'SPIN_DOWN'), () => (PlaySpinSound(), DoForcedMovement('down', PlayerGoSpin))],
   [(b, m) => b.is(m, 'SLIDE_SOUTH'), () => ForcedMovement_Slide('down', PlayerWalkFast)],
   [(b, m) => b.is(m, 'SLIDE_NORTH'), () => ForcedMovement_Slide('up', PlayerWalkFast)],
   [(b, m) => b.is(m, 'SLIDE_WEST'), () => ForcedMovement_Slide('left', PlayerWalkFast)],
@@ -676,12 +677,14 @@ export function PlayerRun(direction: Direction): void {
 export function PlayerRunSlow(direction: Direction): void {
   PlayerSetAnimId(directionalAction('PLAYER_RUN_SLOW', direction), 2);
 }
-/** PlayerOnBikeCollide (PlayCollisionSoundIfNotFacingWarp: no audio) */
+/** PlayerOnBikeCollide */
 export function PlayerOnBikeCollide(direction: Direction): void {
+  PlayCollisionSoundIfNotFacingWarp(direction);
   PlayerSetAnimId(directionalAction('WALK_IN_PLACE_NORMAL', direction), 2);
 }
-/** PlayerNotOnBikeCollide: the bump (PlayCollisionSoundIfNotFacingWarp: no audio) */
+/** PlayerNotOnBikeCollide: the bump */
 export function PlayerNotOnBikeCollide(direction: Direction): void {
+  PlayCollisionSoundIfNotFacingWarp(direction);
   PlayerSetAnimId(directionalAction('WALK_IN_PLACE_SLOW', direction), 2);
 }
 export function PlayerFaceDirection(direction: Direction): void {
@@ -690,10 +693,31 @@ export function PlayerFaceDirection(direction: Direction): void {
 export function PlayerTurnInPlace(direction: Direction): void {
   PlayerSetAnimId(directionalAction('WALK_IN_PLACE_FAST', direction), 1);
 }
-/** PlayerJumpLedge (SE_LEDGE: no audio) */
+/** PlayerJumpLedge */
 export function PlayerJumpLedge(direction: Direction): void {
+  PlaySE(K.SE_LEDGE);
   PlayerSetAnimId(directionalAction('JUMP_2', direction), 8);
 }
+/**
+ * PlayCollisionSoundIfNotFacingWarp: SE_WALL_HIT, unless the player stands on an arrow warp facing its way
+ * (sArrowWarpMetatileBehaviorChecks) or a directional stair warp facing west / east, or faces a door going north.
+ */
+function PlayCollisionSoundIfNotFacingWarp(direction: Direction): void {
+  const f = avatarField();
+  if (f.behaviors.is(playerObj().currentMetatileBehavior, `${{ up: 'NORTH', down: 'SOUTH', left: 'WEST', right: 'EAST' }[direction]}_ARROW_WARP`)) return;
+  if (f.behaviors.isDirectionalStairWarp(playerObj().currentMetatileBehavior, direction)) return;
+  if (direction === 'up') {
+    const { x, y } = PlayerGetDestCoords();
+    if (f.behaviors.is(f.behaviorAt(x, y - 1), 'WARP_DOOR')) return; // MetatileBehavior_IsWarpDoor
+  }
+  PlaySE(K.SE_WALL_HIT);
+}
+
+/** PlaySpinSound */
+function PlaySpinSound(): void {
+  PlaySE(K.SE_M_RAZOR_WIND2);
+}
+
 function PlayerGoSpin(direction: Direction): void {
   PlayerSetAnimId(directionalAction('SPIN', direction), 3);
 }
@@ -806,7 +830,8 @@ function StartStrengthAnim(boulder: ObjectEvent, direction: Direction): void {
           boulder.clearHeldMovementIfFinished();
           player.setHeldMovement(directionalAction('WALK_IN_PLACE_NORMAL', direction));
           boulder.setHeldMovement(directionalAction('WALK_SLOWER', direction));
-          f.startDust(boulder.current.x, boulder.current.y, boulder.previousElevation, boulder.priority); // FLDEFF_DUST (SE_M_STRENGTH: no audio)
+          f.startDust(boulder.current.x, boulder.current.y, boulder.previousElevation, boulder.priority); // FLDEFF_DUST
+          PlaySE(K.SE_M_STRENGTH);
           state++;
         }
         return false;

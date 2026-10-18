@@ -7,9 +7,11 @@
 // and the C runs as written on top of it: the streaks are copied straight into BG0's VRAM and the mon is
 // a GBA pic sprite. Graphics are loaded asynchronously, so `loadShowMonGfx` must have finished first
 // (CreateFieldEffectShowMon starts it while the player's pose animation plays).
-// Not ported: the cry (no audio).
+// The mon cries as it stops (PlayCry_NormalNoDucking when the caller set the species' top bit, else PlayCry_Normal).
 
+import { PlayCry_Normal, PlayCry_NormalNoDucking } from '../gba/sound';
 import { monPalSymbols, monPicSymbol, GetMonSpritePalStructFromOtIdPersonality } from '../battle/gfx';
+import { K } from '../battle/constants';
 import { state } from '../battle/env';
 import { ChangeBgX, ChangeBgY } from '../gba/bg';
 import { gfx, gfx16, loadGfx } from '../gba/gfx';
@@ -380,7 +382,8 @@ function SpriteCB_FieldMoveMonSlideOnscreen(sprite: Sprite): void {
     sprite.x = 0x78;
     sprite.data[1] = 30;
     sprite.callback = SpriteCB_FieldMoveMonWaitAfterCry;
-    // PlayCry_NormalNoDucking / PlayCry_Normal: no audio
+    if (sprite.data[6]) PlayCry_NormalNoDucking(sprite.data[0], 0, K.CRY_VOLUME_RS, K.CRY_PRIORITY_NORMAL);
+    else PlayCry_Normal(sprite.data[0], 0);
   }
 }
 

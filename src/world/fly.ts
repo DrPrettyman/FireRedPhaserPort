@@ -14,6 +14,7 @@ import { Cos, Sin } from '../battle/trig';
 import { testEvent } from '../dev/testHooks';
 import type { FieldEffectSprite } from '../entities/FieldEffects';
 import { directionalAction } from '../entities/movementActions';
+import { PlaySE } from '../gba/sound';
 import { ObjAffineSet } from '../gba/sprite';
 import { SetMainCallback2 } from '../gba/main';
 import { CB2_ReturnToField, gFieldCallback, type FieldCallbackHost } from '../menus/fieldCallbacks';
@@ -502,7 +503,7 @@ function FldEff_FlyOut(): boolean {
       case 4: // FlyOutFieldEffect_BirdSwoopDown
         if ((tTimer === 0 || --tTimer === 0) && player.clearHeldMovementIfFinished()) {
           tState++;
-          // PlaySE(SE_M_FLY)
+          PlaySE(K.SE_M_FLY);
           StartFlyBirdSwoopDown(bird!);
         }
         return false;

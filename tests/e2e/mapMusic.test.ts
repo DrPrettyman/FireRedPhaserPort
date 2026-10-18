@@ -185,7 +185,9 @@ test('Surf fades to MUS_SURF; getting off fades back to the map\'s music', async
 
   // Back onto the shore: CreateStopSurfingTask's Overworld_ChangeMusicToDefault
   mark = await game.mark();
-  await game.walk('up');
+  await game.eval((t) => t.face('up'));
+  // (a step can be refused while the last mash's press is still in flight: try again)
+  for (let i = 0; i < 5 && !(await game.eval((t) => t.field()!.avatar.flags.includes('ON_FOOT'))); i++) await game.walk('up');
   await game.waitFor((t) => t.field()!.avatar.flags.includes('ON_FOOT') && t.idle(), { what: 'off the water' });
   await waitForBgm(game, 'MUS_PALLET');
   events = await game.eval((t, s) => t.audioEvents(s), mark);

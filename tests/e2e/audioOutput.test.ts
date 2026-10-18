@@ -1,5 +1,6 @@
 // The browser's sound output (src/audio/output.ts, AUDIO_PLAN.md W-out 1): off headless, `?audio=1` creates the
-// AudioContext suspended and the first real key press resumes it (a hidden tab suspends it again), M toggles the output and the setting survives a
+// AudioContext suspended and the first real key press resumes it (a hidden tab suspends it again), the m4a mixer's
+// frames play (the title screen's music), M toggles the output and the setting survives a
 // reload (but not when typed into a text field), and `?audio=tone` plays a tone through pushFrame's path (the
 // worklet reports the peak it wrote; headless Chrome runs the audio graph on a fake output device).
 // The boots go to the title screen (`title: true`), the quickest place where the page is up.
@@ -24,9 +25,13 @@ test('?audio=1: the context starts suspended and the first key press resumes it'
   await game.realKey('KeyQ');
   const s = await game.waitFor((t) => t.audioOutput.state().context === 'running' && t.audioOutput.state(), { what: 'the context to run' });
   expect(s.unlocked).toBe(true);
-  // Nothing calls pushFrame yet (the mixer is W-m4a 3's): the worklet runs and plays silence.
-  const stats = await game.waitFor((t) => t.audioOutput.state().stats, { what: 'the worklet to report' });
-  expect(stats).toMatchObject({ frames: 0, peak: 0 });
+  // The mixer's frames reach the speakers: the title screen's MUS_TITLE (its DirectSound parts; samples.bin loads in
+  // the background).
+  const stats = await game.waitFor((t) => {
+    const st = t.audioOutput.state().stats;
+    return st && st.frames > 30 && st.peak > 0 && st;
+  }, { what: 'MUS_TITLE to play' });
+  expect(stats.peak).toBeLessThanOrEqual(1);
 
   // A hidden tab suspends it, and it resumes when the tab is back (document.hidden faked for the page's handlers).
   const setHidden = (hidden: boolean) =>

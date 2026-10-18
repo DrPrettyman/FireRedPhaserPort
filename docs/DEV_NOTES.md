@@ -993,7 +993,8 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
 - **Where:** `src/audio/m4a.ts` (m4a.c + m4a_1.s, named as the C: m4aSoundInit, m4aSoundMain, MPlayMain,
   MPlayStart, the ply_* commands incl. ply_note, ChnVolSetAsm, MidiKeyToFreq, the m4aSongNum* / m4aMPlay*
   controls, gMPlayInfo_BGM / SE1 / SE2 / SE3, gPokemonCryMusicPlayers, the cry song and its setters,
-  `setVoiceData`), `m4aMixer.ts` (SoundMainRAM's bookkeeping: the DirectSound envelopes and sample positions),
+  `setVoiceData`), `m4aMixer.ts` (SoundMainRAM: the DirectSound envelopes, sample positions and the mix; see
+  "m4a mixer" below),
   `m4aCgb.ts` (gCgbChans, CgbSound: a placeholder until W-m4a 4), `m4aVoices.ts` (voicegroups / samples / waves
   JSON → ToneData / WaveData), `m4aInternal.ts` (m4a_internal.h: the structs and constants), `m4aTables.ts`
   (gClockTable, gPcmSamplesPerVBlankTable, gScaleTable, gFreqTable, gPokemonCrySongTemplate), `songTable.ts`
@@ -1014,7 +1015,7 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   the asm looks up the voice (`_081DDB46`): W-m4a 2 adds the voice lookup and channels there (or replaces
   `gSoundInfo.plynote`), fills `ChnVolPitUpdate` (MPlayMain's per-channel volume / pitch), `SongHeader.tone` from
   the voicegroup, and the cry songs. The channel loops (gate times, TrackStop, ply_fine, ply_endtie, RealClearChain)
-  are ported and walk an empty list until then. `SoundMain` has the hook for SoundMainRAM (the mixer, W-m4a 3);
+  are ported and walk an empty list until then. `SoundMain` runs SoundMainRAM (the mixer, "m4a mixer" below);
   `gSoundInfo.CgbSound` / `CgbOscOff` are DummyFunc and `ply_port` writes `gSoundInfo.soundRegs` (W-m4a 4).
 - **Hooking in:** see "sound.c" below: the boot loads the songs and calls `m4aSoundInit()`, AgbMainFrameEnd runs
   `m4aSoundMain()` once per frame; gba/sound.ts calls the m4a* functions on the gMPlayInfo_* players.
@@ -1042,7 +1043,7 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   FIX voices one per output sample; reverse voices from the end) to its loop or its end. A channel that ends
   (release done, sample out) gets statusFlags 0 there; the track unlinks it in its next tick (MPlayMain's
   ClearChain), so `IsPokemonCryPlaying` turns false the frame after. `FastForward` takes a frame's steps in one go
-  when the sample doesn't end in it (exact: see its comment); the per-sample loops are where W-m4a 3 mixes.
+  when the sample doesn't end in it (exact: see its comment), used only when nothing is mixed.
 - **Cries:** `gPokemonCrySong` (the template's byte image, m4aInternal's CRY_SONG_* offsets), the setters
   `SetPokemonCryVolume / Panpot / Pitch / Length / Release / Progress / Chorus / Priority / Stereo`,
   `SetPokemonCryTone(tone)` (a free cry player, else the one with the highest clock; returns it) and
@@ -1050,8 +1051,7 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   `gCryTable[SpeciesToCryId(species - 1)]` entry. Lifetimes for section 2's species and modes are pinned in
   tests/unit/m4aChannels.test.ts (they equal AUDIO_PLAN's estimates, e.g. Charizard NORMAL 56 frames, Jynx
   NORMAL 135, any species DOUBLES ≤ 21).
-- **Seams:** `SoundMainRAM` mixes nothing (W-m4a 3: the reverb pass, each sample scaled by envelopeVolumeRight /
-  Left into a pcmBuffer, mono via `soundInfo.mode & 1`); `m4aCgb.ts`'s CgbSound / CgbOscOff / MidiKeyToCgbFreq are
+- **Seams:** `m4aCgb.ts`'s CgbSound / CgbOscOff / MidiKeyToCgbFreq are
   placeholders (W-m4a 4: CGB channels go off as soon as released, frequency 0); `ply_port` writes
   `gSoundInfo.soundRegs` (W-m4a 4).
 - **Hooking in:** W-sound 1 calls `m4aSoundInit()`, `loadSongTable()` and `setVoiceData()` at boot and
@@ -1068,6 +1068,47 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   channels, the CGB claim), keysplit / rhythm resolution, the cry song; then on the extracted voices: setVoiceData,
   voicegroup000's keysplit / rhythm voices, no song reaching a null keysplit entry, the cry lifetime table, a cry
   stealing from MUS_PALLET.
+
+### m4a mixer
+
+- **Where:** `src/audio/m4aMixer.ts` (SoundMainRAM and SoundMainRAM_Unk1, m4a_1.s:88-680), `m4aSoundVSync` and
+  `m4aPcmFrame` in `m4a.ts`, the per-frame call in `audio/frame.ts`. Each frame: the reverb pass over this
+  frame's slot of `gSoundInfo.pcmBuffer` (or its clearing), then per DirectSound channel the envelope and the
+  frame's 224 samples: `data[cur]` interpolated toward `data[cur + 1]` by `fw >> 23` (FIX voices: no step, so no
+  interpolation; reverse voices read backwards), × envelopeVolumeRight >> 8 into FIFO A (right, `pcmBuffer`) and
+  × envelopeVolumeLeft >> 8 into FIFO B (left, `pcmBuffer + PCM_DMA_BUF_SIZE`), added with 8-bit wraparound (the
+  asm's byte lanes: no clipping). The master volume is in the envelope volumes.
+- **The DMA ring:** pcmBuffer holds pcmDmaPeriod (7) slots of 224 samples per FIFO. `m4aSoundVSync` (VCountIntr)
+  counts pcmDmaCounter down and reloads it at 0; `PcmSlotOffset` gives the slot SoundMain mixes into
+  (slot period + 1 − counter, 0 for a counter ≤ 1), which the DMA plays the next frame. The reverb (the song
+  header's `reverb`, usually 50, set by MPlayStart through m4aSoundMode) rewrites each sample of the slot as
+  (this slot's A + B, mixed 7 frames ago, + the next slot's A + B, 6 frames ago) × reverb >> 9, +1 when bit 7 is
+  set, in both FIFOs (a mono echo).
+- **Mono:** FRLG's mixer never reads `soundInfo.mode` bit 0; SetPokemonCryStereo sets `gRegSoundCntH`
+  (REG_SOUNDCNT_H: SOUNDCNT_H_STEREO, or SOUNDCNT_H_MONO = both FIFOs to both speakers at half volume), which
+  `m4aPcmFrame` hands to the output's DAC (`frameToDac`). The bit itself is CgbSound's (W-m4a 4: the PSG
+  centred). Callers: SetTitleScreenScene_Cry after LoadGameSave (`titleScreenEnv.savedOptionsSound`, from
+  MainMenuScene), CloseAndSaveOptionMenu (`state.optionsSound`). Dev starts that skip the title keep SoundInit's
+  stereo.
+- **On / off:** `m4aSetMixing(on)`: AgbMainFrameEnd sets it from `audioOutputWantsFrames()` each frame and pushes
+  the frame only then. Off (headless, `?audio=0`, the output not running yet), SoundMainRAM clears the slot and
+  runs only the bookkeeping (FastForward where it can); every channel's envelope, count, fw and position come
+  out the same (unit-tested over MUS_TITLE, SEs and cries). A channel whose WaveData has no PCM yet (samples.bin
+  loads in the background, `audioData.ts`, only when the output is on) also only advances.
+- **Hearing it:** `npm run dev`, open http://localhost:5173/ (the output is on by default; `?audio=1` forces it),
+  press a key (the browser's autoplay rule): the title screen plays MUS_TITLE; M mutes. Only DirectSound parts
+  sound until W-m4a 4: SE_SELECT, SE_DOOR, SE_EXIT and the other square / noise SEs are silent; SE_SAVE,
+  SE_BALL_OPEN, SE_SHOP, SE_EXP and the cries sound. Headless: `npx vite-node tools/render-audio.ts MUS_PALLET
+  1200 out.wav [mono]` renders a song (comma-separated names start together) to a 13,379 Hz WAV of what the
+  speakers get, and prints its RMS (`tests/audioRender.ts` does the loading and the frame loop).
+- **Tests:** `tests/unit/m4aMixer.test.ts`: a FIX note's block against hand-computed values (floor(vol × s / 256),
+  the end mid-frame), a resampled note's interpolation (2^22 + 326 steps), the envelope frame by frame (attack,
+  release), 8-bit wraparound, the slot order, the reverb's echoes 6 and 7 frames after an impulse (and their
+  echoes, rounding for negatives), mono routing through the DAC, the bookkeeping with the mixing on and off (hand
+  and real data); on public/gen/audio: MUS_TITLE (1,200 frames: 268,800 samples per FIFO, RMS 18.0, peak 106, silent
+  for the 30 frames before it starts), MUS_PALLET (RMS 9.6), SE_SAVE (sounds, silent from 42 frames after its
+  start), a cry and its reverse, SE_SELECT silent (PSG). `tests/e2e/audioOutput.test.ts`: with `?audio=1` the
+  title's frames reach the worklet with a non-zero peak.
 
 ### ROM reference measurements
 
@@ -1120,7 +1161,7 @@ or extend them:
   it suspended until the first keydown / pointerdown anywhere (a capture listener on window, so typing in the
   battle test panel counts), which resumes it. Hidden tab: suspended; visible again: the worklet's buffer is
   flushed and it resumes.
-- **pushFrame(frame)** (for the mixer, W-m4a 3, once per frame after SoundMainRAM): `{ fifoA, fifoB, soundcntH?,
+- **pushFrame(frame)** (audio/frame.ts's AgbMainFrameEnd, once per frame after m4aSoundMain, with `m4aPcmFrame()`): `{ fifoA, fifoB, soundcntH?,
   psg? }`: the frame's 224 signed 8-bit samples per FIFO (A = `pcmBuffer`, B = `pcmBuffer + PCM_DMA_BUF_SIZE`),
   REG_SOUNDCNT_H (`SOUNDCNT_H_STEREO` by default, `SOUNDCNT_H_MONO` after SetPokemonCryStereo(0)) and, TODO W-m4a 4,
   `psg: { writes: Uint16Array }` (the frame's sound register writes, `offset << 8 | value` from REG_SOUND1CNT_L; a
@@ -1140,7 +1181,8 @@ or extend them:
   `firered-phaser:audio-muted` in localStorage (try/catch). Works with the output off too (it is remembered).
 - **Bundling:** `import workletUrl from './worklet.ts?worker&url'`: Vite serves it as a module in dev and builds it
   as its own chunk (`assets/worklet-*.js`, imports inlined) in `npm run build`.
-- **Try it:** `npm run dev`, open `/?audio=tone`, press any key: a square wave alternating A4 / E5 every half
+- **Try it:** `npm run dev`, open `/` (or `/?audio=1`), press any key: the title screen's MUS_TITLE (without its
+  PSG parts until W-m4a 4). `/?audio=tone`, press any key: a square wave alternating A4 / E5 every half
   second; M mutes it. In the console: `__test.audioOutput.state()`, `__test.audioOutput.tone(false)`. Same on
   `/battle-test.html?audio=tone`.
 - **Tests:** `tests/unit/audioOutput.test.ts` (decideOutput, the DAC's stereo / mono / clipping values, the
@@ -1172,8 +1214,8 @@ or extend them:
 - **Boot:** `src/audio/audioData.ts`'s `loadAudioData()` fetches songs.json (→ `loadSongTable`), voicegroups.json,
   samples.json and waves.json (→ `setVoiceData`) once (BootScene and battle-test's BattleTestBoot, in parallel with
   `Assets.init`). `AgbMainSoundInit()` (frame.ts: m4aSoundInit +
-  sound.ts's ResetSoundState) runs before the first frame and again on a soft reset. samples.bin isn't loaded
-  yet: the mixer (W-m4a 3) adds the `setSamplePcm` fetch to loadAudioData.
+  sound.ts's ResetSoundState) runs before the first frame and again on a soft reset. When the output is on,
+  loadAudioData also fetches samples.bin in the background (→ `setSamplePcm`); nothing waits for it.
 - **Script commands** (script/ScriptEngine.ts): `playse`, `waitse`, `playbgm` (PlayNewMapMusic), `fadenewbgm`,
   `fadeoutbgm` (+ its IsBGMPausedOrStopped wait), `fadeinbgm`, `playfanfare`, `waitfanfare`, as scrcmd.c. The three
   waits go through `SetupNativeScript`, which keeps script.c's frames: the check starts the frame after the
@@ -1234,6 +1276,34 @@ or extend them:
   speed 8, MUS_ROUTE1 128 frames later; the Bicycle from SELECT: MUS_CYCLING, saved, CONTINUE plays it, off again
   MUS_ROUTE1; Surf: MUS_SURF, and back on land MUS_PALLET). `__test.audio()` shows the map music state
   (`mapMusic`: current, next, state) and `disableMapMusicChangeOnMapLoad`.
+### Field SEs (W-sound 4)
+
+- **Where:** each C call sits at its port function, citing it: field_player_avatar.c in `world/playerAvatar.ts`
+  (PlayCollisionSoundIfNotFacingWarp, PlayerJumpLedge, PlaySpinSound, DoBoulderDust), field_control_avatar.c in
+  `scenes/OverworldScene.ts` (SE_WIN_OPEN where START opens the menu, `startInteractionScript` =
+  TryStartInteractionScript's SE_SELECT except for the PCs, the boulder's SE_FALL in `boulderPushed`), the heal
+  machine's glow in `world/hallOfFameRecord.ts` (SE_BALL, MUS_HEAL, PokeballGlowEffect_WaitForSound's
+  IsFanfareTaskInactive: the nurse's `waitfieldeffect` holds until the fanfare task ends), the fldeff_*.c SEs in
+  `world/fieldMoves.ts` / `flash.ts` / `fieldMoveShowMon.ts` (the banner's cry), `world/elevator.ts`,
+  `world/itemfinder.ts`, `world/vsSeeker.ts`, `world/ssAnne.ts`, `menus/seagallop.ts`, `entities/FieldEffects.ts`
+  (puddles), `entities/FieldPoisonEffect.ts` (its constructor is FldEffPoison_Start), the PCs' menus
+  (`ui/PlayerPcMenu.ts`, `ui/StoragePcMenu.ts`), the start menu and save dialog (`ui/StartMenu.ts`,
+  `ui/SaveDialog.ts`: SE_SAVE, then SaveDialogCB_ReturnSuccess's 60 frames only count once !IsSEPlaying).
+- **Menus:** `ui/Menu.ts` plays menu.c's SEs itself (Menu_ProcessInput with `wrap`, else
+  Menu_ProcessInputNoWrapAround: SE_SELECT on A and on UP / DOWN, without wrap only if the cursor moved; none on B),
+  so the start menu, YES/NO, multichoice and the shop's menu get them; the callers add what their C adds on B
+  (CloseStartMenu, script_menu.c's NO / B with YesNoMenu's `seOnNo`, the multichoice's B, Task_ShopMenu's B). The
+  multichoice grid has Menu_ProcessInputGridLayout's.
+- **Doors:** `FieldDoors.getDoorSoundEffect(x, y)` (world coords) is GetDoorSoundEffect; `opendoor` plays it via
+  the ScriptHost's `doorSoundEffect` (map-local); the warps' door SEs (Task_DoorWarp, Task_ExitDoor) use it too.
+- **Not here:** the warp tasks' sounds (Escape Rope, Dig, Teleport, the fall arrival, Fly's music) and map music
+  ("Map music"), the cries' timing (W-sound 2), the bike bell (item_use.c, W-sound 7). Not in the port: escalators,
+  the Lavaridge warps, FldEff_NpcFlyOut, Birth Island's rock (SE_THUNDER), ShakeScreen, LoopWingFlapSound, the
+  Acro Bike and secret base mats (field_player_avatar.c's SE_BIKE_HOP / SE_WARP_IN), the mailbox, field weather.
+- **Tests:** `tests/e2e/fieldSounds.test.ts` (a bump's SE_WALL_HIT, a ledge's SE_LEDGE, talking's SE_SELECT, Bill's
+  `opendoor` SE_SLIDING_DOOR, the bedroom PC's SE_PC_ON without SE_SELECT, START's SE_WIN_OPEN and the menu's
+  SE_SELECTs, the save dialog closing SE_SAVE's length + 60 frames after it, the heal machine's SE_BALLs 25 frames
+  apart, MUS_HEAL 32 frames after the last, the effect running until the fanfare task resumes the BGM).
 
 ## Game state
 

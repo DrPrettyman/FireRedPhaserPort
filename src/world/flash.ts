@@ -11,6 +11,8 @@
 // transitions) the real scanline effect drives REG_WIN0H instead (`InitCurrentFlashLevelScanlineEffect`).
 
 import Phaser from 'phaser';
+import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound';
 import { DISPLAY_HEIGHT, DISPLAY_WIDTH, REG_OFFSET_WIN0H, WIN_RANGE } from '../gba/hw';
 import { gScanlineEffectRegBuffers, SCANLINE_EFFECT_DMACNT_16BIT, ScanlineEffect_SetParams } from '../gba/scanline';
 import type { GameState } from '../state/GameState';
@@ -114,10 +116,11 @@ export function SetUpFieldMove_Flash(state: GameState, cave: boolean): boolean {
 }
 
 /**
- * FldEff_UseFlash: what FieldCallback_Flash's mon banner hands over to. PlaySE(SE_M_REFLECT) is
- * silent; EventScript_FldEffFlash is `animateflash 0` + `setflashlevel 0`.
+ * FldEff_UseFlash: what FieldCallback_Flash's mon banner hands over to. EventScript_FldEffFlash is
+ * `animateflash 0` + `setflashlevel 0`.
  */
 export function FldEff_UseFlash(state: GameState, setupScript: (label: string) => void): void {
+  PlaySE(K.SE_M_REFLECT);
   state.setFlag('FLAG_SYS_FLASH_ACTIVE');
   setupScript('EventScript_FldEffFlash');
 }

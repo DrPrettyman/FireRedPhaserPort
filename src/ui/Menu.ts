@@ -1,3 +1,5 @@
+import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import type { MenuWindow } from './MenuWindow';
 
@@ -36,27 +38,38 @@ export class Menu {
     this.drawCursor();
   }
 
-  /** One frame of input. Returns the chosen index, 'cancel' for B, or undefined. */
+  /**
+   * One frame of input. Returns the chosen index, 'cancel' for B, or undefined. Menu_ProcessInput (wrap) /
+   * Menu_ProcessInputNoWrapAround: SE_SELECT on A, and on UP / DOWN (without wrapping, only if the cursor moved).
+   */
   tick(): MenuResult {
     if (this.delay > 0) {
       this.delay--;
       return undefined;
     }
-    if (this.input.pressed('UP')) this.move(-1);
-    else if (this.input.pressed('DOWN')) this.move(1);
-    else if (this.input.pressed('A')) return this.cursor;
-    else if (this.input.pressed('B')) return 'cancel';
+    if (this.input.pressed('A')) {
+      PlaySE(K.SE_SELECT);
+      return this.cursor;
+    }
+    if (this.input.pressed('B')) return 'cancel';
+    if (this.input.pressed('UP')) {
+      if (this.move(-1) || this.opts.wrap) PlaySE(K.SE_SELECT);
+    } else if (this.input.pressed('DOWN')) {
+      if (this.move(1) || this.opts.wrap) PlaySE(K.SE_SELECT);
+    }
     return undefined;
   }
 
-  private move(delta: number): void {
+  /** Menu_MoveCursor / Menu_MoveCursorNoWrapAround: whether the cursor moved. */
+  private move(delta: number): boolean {
     let next = this.cursor + delta;
     if (this.opts.wrap) next = (next + this.count) % this.count;
     else next = Math.max(0, Math.min(this.count - 1, next));
-    if (next === this.cursor) return;
+    if (next === this.cursor) return false;
     this.clearCursor();
     this.cursor = next;
     this.drawCursor();
+    return true;
   }
 
   private clearCursor(): void {

@@ -8,11 +8,13 @@
 // with textures built from the GBA pics (sPokeballGlow_Gfx, sHofMonitor_Gfx) and their palettes. The glow's
 // palette flashes (MultiplyInvertedPaletteRGBComponents on palette tag 0x1007) redraw the ball texture. Like the
 // C, positions are screen coordinates (the sprites don't follow the camera; the camera doesn't move meanwhile).
-// SE_BALL is silent (no audio).
+// Each ball plays SE_BALL; the Pokémon Center's heal plays MUS_HEAL and waits for its fanfare before it ends.
 
 import Phaser from 'phaser';
 import { FieldEffectSprite } from '../entities/FieldEffects';
+import { K } from '../battle/constants';
 import { gfx, gfx16 } from '../gba/gfx';
+import { IsFanfareTaskInactive, PlayFanfare, PlaySE } from '../gba/sound';
 import { CreateTask } from './fieldMoves';
 import { FieldEffectActiveListRemove, registerFieldEffectNatives } from './fieldEffectScripts';
 
@@ -195,7 +197,7 @@ class GlowingPokeballsEffect {
           this.balls.push(ball);
           this.sCounter++;
           this.sNumMons--;
-          // PlaySE(SE_BALL): no audio
+          PlaySE(K.SE_BALL);
         }
         if (this.sNumMons === 0) {
           this.sTimer = 32;
@@ -208,7 +210,7 @@ class GlowingPokeballsEffect {
           this.sTimer = 8;
           this.sCounter = 0;
           this.sNumFlashed = 0;
-          // PlayFanfare(MUS_HEAL) when sPlayHealSe: no audio
+          if (this.sPlayHealSe) PlayFanfare(K.MUS_HEAL);
         }
         break;
       case 2: {
@@ -253,9 +255,8 @@ class GlowingPokeballsEffect {
       case 5: // PokeballGlowEffect_Dummy
         this.sState++;
         break;
-      case 6: // PokeballGlowEffect_WaitForSound: !sPlayHealSe || IsFanfareTaskInactive (no audio: always inactive)
-        void this.sPlayHealSe;
-        this.sState++;
+      case 6: // PokeballGlowEffect_WaitForSound
+        if (!this.sPlayHealSe || IsFanfareTaskInactive()) this.sState++;
         break;
       default: // PokeballGlowEffect_Idle
         break;

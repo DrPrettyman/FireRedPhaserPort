@@ -74,11 +74,11 @@ test('a ledge jump carries the player two tiles', async () => {
   await game.waitIdle();
   await game.eval((t) => t.face('down'));
   // Hold, watch and release in one eval, so a busy machine can't miss the action or overshoot.
+  // (holdWhile lets go in the tick the jump starts: a release after `until` comes after the frame's batch of ticks,
+  // up to 40 under load, long enough to finish the jump and start another step)
   const jumped = await game.eval(async (t) => {
-    t.hold('DOWN');
-    const r = await t.until(() => t.field()?.avatar.action === 'JUMP_2_DOWN', 60);
-    t.release();
-    return r;
+    t.holdWhile('DOWN', () => t.field()?.avatar.action !== 'JUMP_2_DOWN');
+    return t.until(() => t.field()?.avatar.action === 'JUMP_2_DOWN', 600);
   });
   expect(jumped).toBe(true);
   await game.waitIdle();
