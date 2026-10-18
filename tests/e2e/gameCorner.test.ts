@@ -347,7 +347,9 @@ test("the photo printer: ¥50, a pink print, the flash; the party goes on the tr
   // CeladonCity_GameCorner_EventScript_PhotoPrinter (the printer east of (16, 13)): YES, then MULTICHOICE_TRAINER_CARD_ICON_TINT
   const since = await game.mark();
   await game.eval((t) => t.face('right'));
-  await game.mashUntil((t) => t.events().some((e) => e.type === 'multichoice') && t.money() === 950, { what: 'the print type menu' });
+  // Mash only through the YES/NO (removemoney comes right after it): a press mashed in the tick the print type menu
+  // opens would pick NORMAL. `message` + `waitmessage` need no button.
+  await game.mashUntil((t) => t.money() === 950, { what: 'YES to the printer' });
   await game.waitForEvent('multichoice', { since });
   await game.pressTimes('DOWN', 2); // PINK
   await game.press('A');
