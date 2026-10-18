@@ -29,7 +29,6 @@ export const KNOWN_GAPS: KnownGap[] = [
   // ---------------------------------------------------------------- side: optional content before the Hall of Fame (NPCs, trades, the Game Corner, the daycare, the Sevii 1-3 trip).
   { kind: 'command', name: 'adddecoration', tag: 'side', where: "(Std_ObtainDecoration)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
   { kind: 'command', name: 'bufferdecorationname', tag: 'side', where: "(EventScript_ObtainDecorMessage)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
-  { kind: 'command', name: 'playslotmachine', tag: 'side', where: "CeladonCity_GameCorner" },
   { kind: 'special', name: 'BufferBigGuyOrBigGirlString', tag: 'side', where: "ThreeIsland_BerryForest, ThreeIsland_House1, TwoIsland_JoyfulGameCorner" },
   { kind: 'special', name: 'CompareMagikarpSize', tag: 'side', where: "Route12_FishingHouse" },
   { kind: 'special', name: 'DaisyMassageServices', tag: 'side', where: "PalletTown_RivalsHouse" },
@@ -52,9 +51,6 @@ export const KNOWN_GAPS: KnownGap[] = [
   { kind: 'special', name: 'ShowDiploma', tag: 'side', where: "CeladonCity_Condominiums_3F" },
   { kind: 'special', name: 'ShowEasyChatMessage', tag: 'side', where: "PewterCity_PokemonCenter_1F" },
   { kind: 'special', name: 'ShowEasyChatScreen', tag: 'side', where: "PewterCity_PokemonCenter_1F" },
-  { kind: 'special', name: 'UpdateTrainerCardPhotoIcons', tag: 'side', where: "CeladonCity_GameCorner" },
-  { kind: 'fieldeffect', name: 'FLDEFF_PHOTO_FLASH', tag: 'side', where: "CeladonCity_GameCorner" },
-  { kind: 'fieldeffect', name: 'FLDEFF_SMILEY_FACE_ICON', tag: 'side', where: "CeladonCity_GameCorner" },
   { kind: 'fieldeffect', name: 'FLDEFF_USE_DIVE', tag: 'side', where: "(EventScript_DeepWater), (EventScript_TrySurface)", note: "EventScript_DeepWater / EventScript_TrySurface: no FRLG map has dive spots" },
   // ---------------------------------------------------------------- postgame: after the Hall of Fame (Sevii 4-7, Trainer Tower, the event islands) or the link features postgame areas share.
   { kind: 'command', name: 'braillemessage', tag: 'postgame', where: "MtEmber_RubyPath_B4F, MtEmber_RubyPath_B5F, SixIsland_DottedHole_B1F, SixIsland_DottedHole_B2F, SixIsland_DottedHole_B3F, ... (8 in all)" },

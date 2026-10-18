@@ -2180,6 +2180,34 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   Fisher's 10 coins and hidden coins; a slot machine without a Coin Case and GetRandomSlotMachineId's spread),
   storyCeladonSaffron's Game Corner test. Screenshot of the coin clerk: money and coins boxes as on the GBA.
 
+### W-slots unit 2: the slot machine screen, the Game Corner's smiley and photo printer
+
+- slot_machine.c's screen as `menus/slotMachine.ts`: PlaySlotMachine / CB2_InitSlotMachine / CB2_RunSlotMachine, the
+  main tasks (game loop, no coins, help, confirm exit, no payout, payout, exit), Task_SlotMachine's setup tasks
+  (graphics init, fade out, line lights, Clefairy, coins display, out of coins, quit YES/NO, reel buttons, help
+  slide), the reel icon sprites with HBlankCB_SlotMachine (OAM matrix 0's PA and BLDY per line), the score digits,
+  the two Clefairy, Task_FlashWinningLine. `playslotmachine` (ScrCmd_playslotmachine) runs it from the Game Corner's
+  machines through `host.runScreenFromScript` and the script continues once the field is back.
+- The Game Corner's other gaps: FLDEFF_SMILEY_FACE_ICON (FldEff_SmileyFaceIcon: the Phaser emote over the player),
+  FLDEFF_PHOTO_FLASH (FldEff_PhotoFlash: a fade from white) and special UpdateTrainerCardPhotoIcons (the photo
+  printer fills the trainer card's photo vars), in `script/gameCornerSpecials.ts`. The Game Corner has no gaps left
+  in scriptCoverageGaps.ts.
+- tools/extract_gfx.py: `graphics/slot_machine/` in GFX_PREFIXES; the C files are read in sorted order, and a static
+  symbol that two files define (slot_machine.c's and main_menu.c's `sBg_Pal`) is also written as
+  `<file stem>.<symbol>`. Diffed gfx/index.json: only the new symbols, and two unused palettes (`sUnusedPal`,
+  `sUnused_Pal`) whose plain name now belongs to another file.
+- Fixes found on the way: WIN0H is written as the C does (WIN_RANGE(0, 256) is 0x100, X1 > X2, so the window spans
+  to 240; masking to (0, 0) hid the combos window); Task_SpinReels no longer touches the freed gfx manager in the
+  exit frame (a TypeError). The e2e's own payout table had the top row wrong; the port was right.
+- Verified: typecheck; `npm test` (193); e2e `tests/e2e/gameCorner.test.ts` (8 tests, twice: the 5 before, plus the
+  slot machine (the smiley; R bets 3; spins until a win and a loss, each checked against the payout worked out from
+  the reel table and the coins; START pays at once; DOWN bets one at a time and lights the lines; the help window in
+  and out; B on the YES/NO is NO; YES gives the bet back and returns to the field), no coins ("Game over!" and back),
+  the photo printer (¥50, PINK, the white flash, Pikachu and an Unown's mail species and the tint in the vars)),
+  saveContinue.test.ts and trainerCard.test.ts (the main menu's sBg_Pal, the trainer card). Screenshots of the
+  machine, a win (flashing lines and payout lights), the help window and the quit YES/NO compared with the C's
+  layout: reels at x 80/120/160, CREDIT / PAYOUT digits at y 30, Clefairy at (16, 136) and (224, 136), the YES/NO at
+  tile (19, 9), the message window at (5, 15).
 ### The Route 5 daycare (W-daycare unit 2)
 
 - `world/daycare.ts` (new): daycare.c's storage. struct DaycareMon / DayCare in GameState (`route5DayCareMon`,
