@@ -471,6 +471,23 @@ this is the next level down. When you add or change a subsystem, update its entr
   payout worked out from the reel table, START to pay, the help window, YES/NO to quit, no coins; the smiley; the
   photo printer). To wait for a message's `\p` in a test without a press reaching the menu after it, wait in the
   page for `messageBox.waitingForButton` (TextPrinter.waitingForButton).
+- **Seagallop ferry:** `menus/seagallop.ts` is seagallop.c; `script/ferrySpecials.ts` (FERRY_SPECIALS, spread into
+  SPECIALS) has its specials and script_menu.c's Rainbow Pass menu. `special DoSeagallopFerryScene` ends the script
+  (the scene leaves through a warp, whose CB2_LoadMap would reset the script context) and runs
+  `host.runScreenFromScript(DoSeagallopFerryScene, SEAGALLOP_GFX)`: CB2_SetUpSeagallopScene (states 0-7: BG3 water
+  from graphics/seagallop with the WB or EB tilemap, the ferry and wake sheets, WIN0 letterboxing lines 24-136),
+  then Task_Seagallop_1 scrolls BG3 6 px a frame for 140 frames and fades out, and Task_Seagallop_3 warps to
+  sSeag[VAR_0x8006] through CB2_LoadMap → `fieldReturn.warp` (menus/fieldCallbacks.ts; FieldMenuScene exits with
+  the WarpData and OverworldScene's `warpFromScreen` loads the map and fades in, FieldCB_DefaultWarpExit's way).
+  Any screen can leave the same way. The direction (GetDirectionOfTravel / `TravelDirection`) is
+  sTravelDirectionMatrix's bit [VAR_0x8004][VAR_0x8006]. GetSeagallopNumber and IsPlayerLeftOfVermilionSailor take
+  plain arguments (unit tests). DrawSeagallopDestinationMenu opens the field's MultichoiceMenu with a fixed `layout`
+  (MultichoiceRequest.layout: CreateWindowFromRect(17, top, 11, rows * 2), 16 px rows) and ends its `waitstate` the
+  frame after the choice (ScriptContext_Enable's frame). Probe `__test.seagallop()`: setup state, Task_Seagallop_1's
+  frame count, BG3's x, the ferry's x / x2 / flip, the wakes on screen. Test: `tests/unit/seagallop.test.ts`,
+  `tests/e2e/seagallop.test.ts` (Bill's trip and the way back, declining Bill, Vermilion ⇄ Two Island, cancelling
+  at the Vermilion sailor, both Rainbow Pass pages); quick look: `?map=VermilionCity&x=23&y=31` with
+  VAR_MAP_SCENE_VERMILION_CITY 3 and VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F >= 1, walk down onto the ticket check.
 - **TM case:** `menus/tmCase.ts` is tm_case.c. `InitTMCase(type, exitCallback, allowSelectClose)` runs on whichever
   GBA host has the bag (FieldMenuScene); `menuGfxSymbols` preloads `TM_CASE_GFX`. Ways in: the bag's KEY ITEMS → TM
   CASE → OPEN (`FieldUseFunc_TmCase` in menus/itemUse.ts → TMCASE_FIELD, back to CB2_BagMenuFromStartMenu), the

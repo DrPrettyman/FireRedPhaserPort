@@ -33,6 +33,17 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     heights the first time the guru measures (the script waits for it). The diploma returns through the field's
     plain fade from black rather than FieldCB_WarpExitFadeFromBlack's Task_ExitNonDoor (same look).
   - Fall warps (world/fallWarp.ts): silent (SE_FALL, SE_M_STRENGTH); no help context while surfing on Seafoam B4F.
+  - Seagallop ferry (menus/seagallop.ts, script/ferrySpecials.ts): silent (SE_SHIP, SE_EXIT,
+    PlayRainStoppingSoundEffect, Overworld_FadeOutMapMusic), so Task_Seagallop_2 waits only for the palette fade, not
+    BGMusicStopped; no help system (HelpSystem_Disable / Enable) and no quest log (DrawSeagallopDestinationMenu's
+    QL_AvoidDisplay). The script that ran DoSeagallopFerryScene ends there (as CB2_LoadMap's ScriptContext_Init
+    would end it) instead of sitting in its `waitstate`. The scene's WarpFadeOutScreen is a plain palette fade to
+    black (FadeScreen's white fade is for underwater maps, and no harbor is one).
+  - Script timing: the `multichoice` command (ScriptEngine) resumes the script in the tick of the choice; the C's
+    Task_MultichoiceMenu_HandleInput calls ScriptContext_Enable, so the script runs on a frame later. The case seen:
+    a menu the script opens next takes the same press, still new: DrawSeagallopDestinationMenu waits
+    the frame itself (OTHER → the next page), but the ticket menus (MULTICHOICE_SEVII_NAVEL / _BIRTH / _NAVEL_BIRTH)
+    going on to it don't, so their A would also pick the Rainbow Pass menu's first row (only with the event tickets).
   - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
   - VS Seeker (world/vsSeeker.ts): silent (SE_CONTEST_MONS_TURN, SE_PIN); no quest log event. Task_VsSeeker_0
     takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for

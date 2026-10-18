@@ -2326,3 +2326,31 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Verified: each PR after merging master in: typecheck, `npm test`, its own e2e file plus the files for the shared
   code it touched; the full e2e suite for #66 (warps) and #67 (yesnobox). Last run, on master with everything
   merged: typecheck clean, 229 unit, 356 e2e in 52 files.
+
+### The Seagallop ferry and Bill's trip (W-ferry unit 1)
+
+- `menus/seagallop.ts`: all of seagallop.c. CB2_SetUpSeagallopScene's states, the scrolling water on BG3 (the
+  WB/EB tilemaps by sTravelDirectionMatrix), the ferry and wake sprites (SpriteCB_Ferry / SpriteCB_Wake), WIN0's
+  letterbox, Task_Seagallop_0-3 and the warp through sSeag; GetSeagallopNumber, IsPlayerLeftOfVermilionSailor.
+  Graphics: `graphics/seagallop/` added to extract_gfx.py's GFX_PREFIXES (the INCBIN symbols sWaterTiles etc.).
+- `script/ferrySpecials.ts`: the five specials (DoSeagallopFerryScene, GetSeagallopNumber,
+  IsPlayerLeftOfVermilionSailor, DrawSeagallopDestinationMenu, GetSelectedSeagallopDestination), off
+  `scriptCoverageGaps.ts`. The destination menu is the field's MultichoiceMenu with a fixed layout
+  (MultichoiceRequest gets an optional `layout`).
+- A screen can now leave through a warp: `fieldReturn.warp(WarpData)` (menus/fieldCallbacks.ts), which
+  FieldMenuScene turns into its existing warp exit (OverworldScene.warpFromScreen, as the Hall of Fame does).
+- Found on the way: the script engine resumes a script in the tick its wait ends, so the A that picked OTHER on the
+  Rainbow Pass menu's first page also picked the second page's first row. In C, ScriptContext_Enable runs the
+  script a frame later; DrawSeagallopDestinationMenu's wait now ends the frame after the choice (as `yesnobox`
+  does since #67). The `multichoice` command still resumes in the same tick (DEVIATIONS; only the event tickets'
+  menus lead into another menu).
+- Verified: typecheck; `npm test` (27 files, 235 tests, incl. tests/unit/seagallop.test.ts: GetSeagallopNumber,
+  the direction matrix, both menu pages and the row → destination mapping for every origin, the SEAGALLOP_* ids
+  against the extracted defines); e2e `tests/e2e/seagallop.test.ts` (5 tests: Bill's scene after Blaine → YES →
+  the Seagallop sails in → the ferry (BG3 scrolling 0x600 a frame for 140 frames, the ferry's x2 3 px a frame,
+  flipped eastbound, wakes) → One Island → Celio's Tri-Pass, then VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F = 2
+  → the leave scene → the westbound ferry → Cinnabar (21, 7) → Bill's goodbye; declining Bill and the trip from
+  the Pokémon Center along FLAG_TEMP_2's path; Vermilion → Two Island with the Tri-Pass and back; cancelling left
+  of the sailor walks up the pier, from above him it just ends; the Rainbow Pass menu's two pages to Five Island),
+  plus hallOfFame and sideSpecials for the screen-exit change. Screenshots of the scene and both menu pages
+  checked by eye.
