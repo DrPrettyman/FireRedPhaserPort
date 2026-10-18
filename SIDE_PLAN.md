@@ -145,7 +145,10 @@ pic, the daycare and egg fields in GameState / saveData.
 |---|---|---|
 | 1 (done, PRs #56-#67) | W-moves (1, 2), W-trade (1, 2), W-slots (1, 2; spare 3 not needed), W-daycare (1, 2, 3), W-hatch (unit 4, alongside 2-3), W-misc (the other small side specials) | Different files; all four are side content the user asked for, ordered by how often a player meets it |
 | 2 (done, PRs #69-#77) | W-ferry (1, 2), W-ssanne (1), W-league (1, 2), W-easychat (1-4) | The user's focus: the ferry for Bill's trip, the S.S. Anne, the last two main gaps; three workers, then Easy Chat in the freed slots |
-| 3 | W-unused (1), beside W-audioplan (AUDIO_PLAN.md, research only) | The user's call: port the three `unused` gaps after all; plan the audio before any audio code |
+| 3 (done, PRs #79-#81) | W-unused (1), beside W-audioplan (AUDIO_PLAN.md, research only) | The user's call: port the three `unused` gaps after all; plan the audio before any audio code |
+
+Batch 3 merged: #79 the plan; #81 the decoration commands and Dive (DoFallWarp now goes through DoDiveWarp, as
+in the C); #80 AUDIO_PLAN.md (docs only, after a second pass on unit sizes, call sites and cry lengths).
 
 Batch 2 merged: #69 the plan; #70 the S.S. Anne departure and sweep; #71 the league lighting, GetMartClerkObjectId,
 the `unused` gap tag, the fan club e2e, the egg hook; #73 the ferry and Bill's trip; #72, #74, #75, #77 Easy Chat

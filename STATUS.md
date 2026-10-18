@@ -24,6 +24,12 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
 
 ## Next up
 
+[AUDIO_PLAN.md](AUDIO_PLAN.md) is written (PR #80) and waits for the user's review before any audio code: port the
+m4a engine to TypeScript, always running (output optional), 14 units in four batches; its "Open questions" need
+answers first. [SIDE_PLAN.md](SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
+`bufferdecorationname` (and the other decoration commands) and FLDEFF_USE_DIVE with DoDiveWarp, ported as FRLG's C
+has them; the `unused` gap tag is gone.
+
 [SIDE_PLAN.md](SIDE_PLAN.md) batch 2 is in (PRs #69-#77): the Seagallop ferry from every harbor and Bill's
 One Island trip and back, the S.S. Anne's departure (ss_anne.c) and a sweep of the S.S. Anne (nothing else was
 wrong), the Elite Four / Champion rooms' lighting, `multichoice` resuming a frame after the choice, and Easy Chat

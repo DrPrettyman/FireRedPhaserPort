@@ -2612,3 +2612,13 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   emerge, MB_UNDERWATER_BLOCKED_ABOVE, no connection, non-diveable water); e2e dive.test.ts (new: Six Island's
   fast water with a synthetic dive connection to Route 21 North, and without one), fieldMoves, surf, strength,
   sideSpecials (fall warps), fly and field: 50 tests green.
+
+### SIDE_PLAN.md batch 3 merged (PRs #79-#81)
+
+- #79 the plan (docs only). #81 W-unused: the decoration commands (FRLG's stubs) and FLDEFF_USE_DIVE / DoDiveWarp;
+  its branch was already on master, no conflicts; typecheck clean, 298 unit, full e2e 387 in 58 files (it touches
+  the script engine and OverworldScene's warps). #80 AUDIO_PLAN.md: after the first version the coordinator sent
+  it back for a second pass (units over WORKFLOW.md's size, the call-site list, cry lengths, the fanfare tails,
+  the timing model); merging master in left STATUS.md's "Next up" sentence twice (merge=union), tidied by hand.
+- Final tree: master after #80 differs from #81's tested tree only in AUDIO_PLAN.md, STATUS.md and docs/LOG.md, so
+  #81's full run stands as the end-of-batch run.
