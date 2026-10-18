@@ -36,6 +36,7 @@ import { SAVECB_RETURN_CANCEL, SAVECB_RETURN_CONTINUE, SaveDialog } from '../ui/
 import { ClearContinueGameWarpStatus, gSave, UseContinueGameWarp } from '../state/save';
 import { fromSaveData, type SaveData } from '../state/saveData';
 import { PlayTimeCounter_Reset, PlayTimeCounter_Start, PlayTimeCounter_Update } from '../state/playTime';
+import { AgbMainFrameEnd } from '../audio/frame';
 import type { PlayerLocation } from '../state/GameState';
 import { GetMapName } from '../world/regionMap';
 import { YesNoMenu } from '../ui/YesNoMenu';
@@ -589,6 +590,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private tick(): void {
     this.tickField();
     PlayTimeCounter_Update(this.state.playTime); // AgbMain, once per frame
+    AgbMainFrameEnd(); // the sound tasks, MapMusicMain, m4aSoundMain
     this.flash.vblank(); // VBlankCB_Field's ScanlineEffect_InitHBlankDmaTransfer
     this.gbaScreen.frame(); // the GBA layer's half of the frame, when it's in use
   }

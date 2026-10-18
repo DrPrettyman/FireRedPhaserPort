@@ -10,6 +10,7 @@ import { renderFrame } from '../gba/ppu';
 import { Input } from '../input/Input';
 import { logicSpeed } from '../dev/testHooks';
 import { PlayTimeCounter_Update, type PlayTime } from '../state/playTime';
+import { AgbMainFrameEnd } from '../audio/frame';
 
 const FRAME_MS = 1000 / 60;
 
@@ -57,6 +58,7 @@ export abstract class GbaHostScene extends Phaser.Scene {
       ReadKeys(this.buttons, this.lEqualsA);
       CallCallbacks();
       if (this.playTime) PlayTimeCounter_Update(this.playTime);
+      AgbMainFrameEnd(); // the sound tasks, MapMusicMain, m4aSoundMain: every tick, also the one that hands over
       if (!this.running) break;
       gMain.vblankCallback?.();
       ticked = true;

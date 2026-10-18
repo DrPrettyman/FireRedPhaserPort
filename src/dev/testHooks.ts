@@ -54,6 +54,9 @@ import { diplomaProbe } from '../menus/diploma';
 import { easyChatProbe } from '../menus/easyChatScreen';
 import { seagallopProbe } from '../menus/seagallop';
 import type { SSAnneProbe } from '../world/ssAnne';
+import { gMPlayTable, gPokemonCryMusicPlayers, gSongTable } from '../audio/m4a';
+import { MPT_FLG_EXIST, MUSICPLAYER_STATUS_PAUSE, MUSICPLAYER_STATUS_TRACK, type MusicPlayerInfo } from '../audio/m4aInternal';
+import { m4aSongNumStart, musicPlayerName, setSoundEventListener, songName, soundProbe, type SoundEvent } from '../gba/sound';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -171,6 +174,37 @@ export interface TestEvent {
 
 const events: TestEvent[] = [];
 let seq = 0;
+
+/** What `__test.audioEvents` returns: one m4aSongNumStart-level call in gba/sound.ts, with the tick it was made in.
+ *  Numbered with the event log's `seq`, so `game.mark()` works for both. */
+export interface AudioTestEvent extends SoundEvent {
+  seq: number;
+  frame: number;
+}
+
+const audioEvents: AudioTestEvent[] = [];
+
+function recordAudioEvent(e: SoundEvent): void {
+  audioEvents.push({ ...e, seq: ++seq, frame: pad.frame });
+  if (audioEvents.length > 5000) audioEvents.splice(0, audioEvents.length - 5000);
+}
+
+/** A music player's state for `__test.audio()`. */
+function playerProbe(info: MusicPlayerInfo) {
+  const song = info.songHeader ? gSongTable.findIndex((s) => s.header === info.songHeader) : -1;
+  const paused = !!(info.status & MUSICPLAYER_STATUS_PAUSE);
+  const track = info.tracks.find((t) => t.flags & MPT_FLG_EXIST);
+  return {
+    song: song < 0 ? null : songName(song),
+    /** status has a live track and isn't paused (IsBGMPlaying's test) */
+    playing: !!(info.status & MUSICPLAYER_STATUS_TRACK) && !paused,
+    paused,
+    status: info.status >>> 0,
+    /** The first live track's volX (m4aMPlayVolumeControl's volume / 4 and the fades: 64 = full). */
+    volume: track ? track.volX : null,
+    fading: info.fadeOI !== 0,
+  };
+}
 
 /**
  * Record a milestone for the tests: `ready`, `map` {map}, `script` {label}, `trainerApproach`,
@@ -527,6 +561,25 @@ function createApi(game: Phaser.Game) {
     // --- events
     events: (since = 0) => events.filter((e) => e.seq > since),
     lastSeq: () => seq,
+    /** Every song start, BGM pause / resume and fade (gba/sound.ts) since `since` (a seq from `mark()`):
+     *  {seq, frame, type: 'se' | 'bgm' | 'fanfare' | 'cry' | 'stop' | 'continue' | 'fade', id, name, player, pan,
+     *  started, fade, speed}. */
+    audioEvents: (since = 0) => audioEvents.filter((e) => e.seq > since),
+
+    // --- audio (the engine's state: it runs with the output off too)
+    /** Each music player's song, playing / paused, volume; the cry players; sound.c's map music and fanfare state. */
+    audio: () => ({
+      players: Object.fromEntries(gMPlayTable.map((m) => [musicPlayerName(m.info), playerProbe(m.info)])),
+      cries: gPokemonCryMusicPlayers.map(playerProbe),
+      ...soundProbe(),
+    }),
+    /** Start a song by name (m4aSongNumStart: BGM, SE or fanfare song on its own player), e.g. 'MUS_ROUTE1'. */
+    playSong: (name: string) => {
+      const id = gSongTable.findIndex((s) => s.header.name.toUpperCase() === name.toUpperCase());
+      if (id < 0) throw new Error(`no song ${name}`);
+      m4aSongNumStart(id);
+      return id;
+    },
 
     // --- probes
     scenes: () => game.scene.getScenes(true).map((s) => s.scene.key),
@@ -816,6 +869,7 @@ function install(game: Phaser.Game): void {
   const ts = q.get('textSpeed');
   if (ts && ts in TEXT_SPEED) textSpeed = ts as TextSpeed;
   (window as unknown as { __test: TestApi }).__test = createApi(game);
+  setSoundEventListener(recordAudioEvent);
   testEvent('hooks');
 }
 

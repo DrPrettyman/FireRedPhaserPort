@@ -4,8 +4,8 @@
 // nickname YES/NO and the naming screen) and CreatedHatchedMon / AddHatchedMonToParty / ScriptHatchMon.
 // The daycare's storage and egg making are world/daycare.ts.
 //
-// Audio isn't implemented: the cry and SEs are no-ops; the MUS_EVOLVED fanfare is silent, but the message still
-// waits its length (see sFanfareCounter).
+// The cry is still a stub (W-sound 2); the MUS_EVOLVED fanfare holds "X hatched from the EGG!" for its sFanfares
+// count (gba/sound.ts's Task_Fanfare).
 
 import { K } from '../battle/constants';
 import { bdata, pokemon as pokemonData, state as battleState } from '../battle/env';
@@ -18,7 +18,7 @@ import { gMain, SetMainCallback2, SetVBlankCallback } from '../gba/main';
 import { CreateYesNoMenu, LoadUserWindowGfx, GetTextWindowPalette, Menu_ProcessInputNoWrapClearOnChoose, ResetTempTileDataBuffers } from '../gba/menu';
 import { BeginNormalPaletteFade, BG_PLTT_ID, gPaletteFade, LoadPalette, PLTT_SIZE_4BPP, ResetPaletteFade, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
 import { ScanlineEffect_Stop } from '../gba/scanline';
-import { IsCryFinished, PlayBGM, PlayCry_Normal, PlayFanfare, PlaySE } from '../gba/sound';
+import { IsCryFinished, IsFanfareTaskInactive, PlayBGM, PlayCry_Normal, PlayFanfare, PlaySE } from '../gba/sound';
 import {
   ANIMCMD_END,
   ANIMCMD_FRAME,
@@ -130,13 +130,6 @@ interface EggHatchData {
 
 let sEggHatchData: EggHatchData | null = null;
 const E = (): EggHatchData => sEggHatchData!;
-
-/**
- * Stands in for sound.c's sFanfareCounter while audio is silent: the frames left of MUS_EVOLVED (sFanfares'
- * FANFARE_EVOLVED: 220), so "X hatched from the EGG!" stays up as long as on the GBA (IsFanfareTaskInactive).
- */
-let sFanfareCounter = 0;
-const FANFARE_EVOLVED_DURATION = 220;
 
 /** The nickname the naming screen writes (gStringVar3 in the C). */
 let sNicknameBuffer: number[] = [EOS];
@@ -428,7 +421,6 @@ function CB2_EggHatch_1(): void {
       gStringVar1.set(DayCare_GetMonNickname(battleState.party[e.eggPartyID]));
       EggHatchPrintMessage(e.windowId, StringExpandPlaceholders(text('gText_HatchedFromEgg')), 0, 3, 0xff);
       PlayFanfare(K.MUS_EVOLVED);
-      sFanfareCounter = FANFARE_EVOLVED_DURATION;
       e.CB2_state++;
       PutWindowTilemap(e.windowId);
       CopyWindowToVram(e.windowId, COPYWIN_FULL);
@@ -481,18 +473,12 @@ function CB2_EggHatch_1(): void {
       }
       break;
   }
-  if (sFanfareCounter > 0) sFanfareCounter--; // Task_Fanfare
   if (!sEggHatchData) return; // the naming screen / the field took over
   RunTasks();
   RunTextPrinters();
   AnimateSprites();
   BuildOamBuffer();
   UpdatePaletteFade();
-}
-
-/** IsFanfareTaskInactive, against sFanfareCounter (see there). */
-function IsFanfareTaskInactive(): boolean {
-  return sFanfareCounter === 0;
 }
 
 /** SpriteCB_Egg_0: 20 frames of small wobbles; the first crack and a shard at frame 15. */
