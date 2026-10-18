@@ -9,11 +9,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
 - **Placeholders (not in the decomp):**
   - Naming screen: the help context, SeedRngAndSetTrainerId after naming the player and the REVISION >= 0xA
     bad-word check aren't ported.
-  - Pokémon Center nurse: the heal machine's SE_BALL and MUS_HEAL are silent (no audio);
-    SetUsedPkmnCenterQuestLogEvent is a no-op (no quest log) and BufferUnionRoomPlayerName always says no wireless
+  - Pokémon Center nurse: SetUsedPkmnCenterQuestLogEvent is a no-op (no quest log) and BufferUnionRoomPlayerName always says no wireless
     player was seen.
-  - The S.S. Anne's departure (world/ssAnne.ts, ss_anne.c): silent (SE_SS_ANNE_HORN at the start and once the ship
-    is off screen; the script's MUS_SURF).
+  - The S.S. Anne's departure (world/ssAnne.ts, ss_anne.c): the script's MUS_SURF waits for map music (W-sound 3).
   - In-game trades (script/tradeSpecials.ts): the traded mon's contest conditions and sheen aren't kept (Pokémon
     have no contest stats), and DONTAE's Jynx holds its Fab Mail without the message (mail isn't modelled:
     GetInGameTradeMail / gLinkPartnerMail / MON_DATA_MAIL). The trade scene (menus/tradeScene.ts) skips
@@ -42,8 +40,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     its text like `messageautoscroll` does, as a plain field message (no auto-scroll; the profile's two lines fit one
     box). InitEasyChatPhrases doesn't clear the mail words (mail isn't modelled) and clears additionalPhrases only
     (the C's non-UBFIX loop clears 64 bytes, into the Mauville old man's data that's re-initialized right after).
-  - Seagallop ferry (menus/seagallop.ts, script/ferrySpecials.ts): silent (SE_SHIP, SE_EXIT,
-    PlayRainStoppingSoundEffect, Overworld_FadeOutMapMusic), so Task_Seagallop_2 waits only for the palette fade, not
+  - Seagallop ferry (menus/seagallop.ts, script/ferrySpecials.ts): no PlayRainStoppingSoundEffect (no weather) or
+    Overworld_FadeOutMapMusic (W-sound 3), so Task_Seagallop_2 waits only for the palette fade, not
     BGMusicStopped; no help system (HelpSystem_Disable / Enable) and no quest log (DrawSeagallopDestinationMenu's
     QL_AvoidDisplay). The script that ran DoSeagallopFerryScene stays in its `waitstate` until the scene warps, then
     runs on to its `end` (in C, CB2_LoadMap's ScriptContext_Init drops it). The scene's WarpFadeOutScreen is a plain palette fade to
@@ -52,7 +50,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     keeping it in its `waitstate` until the screen warps out (as DoSeagallopFerryScene now does), so in theory the
     field could take input in the frame's ticks left after it. Not seen: the field sleeps under the HoF screen.
   - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
-  - VS Seeker (world/vsSeeker.ts): silent (SE_CONTEST_MONS_TURN, SE_PIN); no quest log event. Task_VsSeeker_0
+  - VS Seeker (world/vsSeeker.ts): no quest log event. Task_VsSeeker_0
     takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for
     the Escape Rope). The movement scripts (Wait48, the trainers' emotes and step in place) run as MovementRunners
     in their own field tasks; a frozen trainer still finishes them, so UnfreezeObjectEvent has nothing to do.
@@ -60,7 +58,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     VS Seeker anim's end itself. ClearRematchStateByTrainerId leaves the movement type of a same-row trainer other
     than the selected one alone (the C sets its `movementType` field to FACE_DOWN without changing its callback;
     the port's NpcBrain has one value for both).
-  - Itemfinder (world/itemfinder.ts): silent (SE_ITEMFINDER); GAME_STAT_USED_ITEMFINDER isn't counted (no game
+  - Itemfinder (world/itemfinder.ts): GAME_STAT_USED_ITEMFINDER isn't counted (no game
     stats). ItemUseOnFieldCB_Itemfinder takes the field controls lock itself, as the VS Seeker's task does. The
     arrows and stars are Phaser sprites at the camera's corner plus their GBA screen position, drawn in the
     player's palette as it is at load (the GBA's OBJ palette 0, faded with the field); DestroyArrowAndStarTiles
@@ -70,7 +68,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     sprite's x2/y2 (the GBA keeps them unless ResetMovementOfRematchableTrainers zeroes them); a frozen jumper
     (any, not only `lock`'s selected object) lands before it holds still.
   - Battles: no audio (PlaySE/cries/BGM are no-ops, so anim SE waits and cry waits end at once).
-  - Field sounds: doors (SE_DOOR / SE_SLIDING_DOOR) and puddle splashes (SE_PUDDLE) are silent.
+  - Field sounds: the doors' SEs during warps (field_fadetransition.c) wait for W-sound 3; `opendoor`'s and the
+    puddles' play. Puddles: UpdateFeetInFlowingWaterFieldEffect's SE_PUDDLE checks the splash's `invisible`, which
+    the port never sets for an object off screen (UpdateObjectEventSpriteInvisibility's bounds check).
   - Evolution scene: silent until the mixer; the cries count as finished at once (W-sound 2) and
     EVOSTATE_RESTORE_SCREEN's `if (IsSEPlaying())` after SE_EXP goes on unchecked (W-sound 7); the intro jingle
     (MUS_EVOLUTION_INTRO) and the other IsSEPlaying waits hold the scene as on the GBA; the help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
@@ -97,14 +97,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     is learned, which holds the screen as on the GBA). The C's scroll arrows are kept as they
     are: scrollPositionMaybe never changes, so with more than six entries the down arrow always shows and the up
     arrow never does.
-  - Region map / Fly (menus/regionMap.ts, world/fly.ts): no audio (SE_DEX_SCROLL, SE_CARD_OPEN, SE_M_FLY, ...).
+  - Region map / Fly (menus/regionMap.ts, world/fly.ts): Fly's music (Overworld_PlaySpecialMapMusic) waits for
+    W-sound 3.
     The bird of Fly always uses the extracted bird sheet's own palette (Red's), where the GBA draws it in OBJ
     palette 0, the player's (Leaf's frames would use hers). gExitStairsMovementDisabled isn't kept (no stair
     walk-out). The dungeon previews' third palette is zero-filled: the C loads 3 palettes from 2-palette data,
     reading on into the ROM (no preview tilemap uses it). Where the C reads a NULL sMapCursor (naming the section
     before the cursor exists, CB2_OpenRegionMap / UpdateMapsecNameBox), the port reads MAPSEC_NONE.
-  - Field moves (world/fieldMoves.ts, world/fieldMoveShowMon.ts): no audio (the cry in the banner, SE_M_CUT,
-    SE_M_ROCK_THROW, SE_M_SWEET_SCENT, the warp sounds) and no GAME_STAT_USED_CUT / _ROCK_SMASH. The field
+  - Field moves (world/fieldMoves.ts, world/fieldMoveShowMon.ts): the warp tasks' sounds (Dig, Teleport, Escape
+    Rope: W-sound 3) and no GAME_STAT_USED_CUT / _ROCK_SMASH. The field
     effect scripts' palette commands (loadfadedpal, ...) do nothing: the field's sprites are Phaser textures. A
     `callnative` that isn't ported warns once and the effect ends at once (the emote icons from scripts). Sweet Scent's
     red fade is an overlay under the player instead of a fade of every other palette, so the player is also drawn
@@ -138,7 +139,6 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;
     HP-as-text (SwapHpBarsWithHpText) and link/multi battles aren't implemented.
   - Battle transitions: no SE_MUGSHOT, and the battle music doesn't start with the transition.
-  - Flash (world/flash.ts): FldEff_UseFlash's SE_M_REFLECT is silent.
   - Map preview screens (Mt. Moon, Rock Tunnel, Viridian Forest...) aren't ported: warps into those sections fade
     to black like the GBA and go straight to the map, without the banner (or the flash that follows it).
   - Wild encounters: GAME_STAT_* counters aren't kept.
@@ -155,8 +155,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Cable club (cable_club.c): there is no link play. TryBattleLinkup / TryTradeLinkup run as if nothing were on
     the other end of the cable (Task_LinkupAwaitConnection until B, then LINKUP_FAILED), IsWirelessAdapterConnected
     and ValidateSavedWonderCard are FALSE, IsBadEggInParty is FALSE (no bad eggs), CloseLink is a no-op.
-  - Player avatar (world/playerAvatar.ts, world/bike.ts): no audio (bump, ledge, spinner, bike bell, Strength
-    and fall sounds; Cycling Road and surf music). Not ported: the warp arrow sprite on arrow mats
+  - Player avatar (world/playerAvatar.ts, world/bike.ts): no Cycling Road and surf music (W-sound 3); the bike
+    bell is item_use.c's (W-sound 7). Not ported: the warp arrow sprite on arrow mats
     (HandleWarpArrowSpriteHideShow), DoStairWarp's 12-frame delay when a stair warp takes the player off the
     bike, the teleport spin, the quest log's recordings, and the help context. Movement scripts
     (applymovement) still run through MovementRunner rather than the player's held-movement actions, so `lock`
@@ -239,7 +239,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     anyway; the port loads just the palette. The trainer id is still rolled when the game state is created (see the
     RNG approximation), not by the naming screen's SeedRngAndSetTrainerId. CB2_NewGame hands only the names and the
     gender to the field, whose new GameState is NewGameInitData's.
-  - Save dialog (ui/SaveDialog.ts): SE_SAVE / SE_BOO / SE_SELECT are silent; no help context, no
+  - Save dialog (ui/SaveDialog.ts): no help context, no
     GAME_STAT_SAVED_GAME, no quest log data. A failed write shows the save error message without
     DoSaveFailedScreen. SaveMapView isn't ported: the map view isn't saved, so CONTINUE rebuilds the map from its
     header and ON_LOAD script (metatiles a script changed later aren't restored). `special Field_AskSaveTheGame`
@@ -256,14 +256,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     saved, see Save data); gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
     link play); the quest log's QL_AvoidDisplay bit of ignoreBPress is ignored.
-  - Elevators: SE_ELEVATOR / SE_DING_DONG are silent; UpdateEscapeWarp isn't kept on warps.
-  - Field ListMenu (ui/FieldListMenu.ts): SE_SELECT is silent; the quest log's QL_AvoidDisplay is ignored.
+  - Elevators: UpdateEscapeWarp isn't kept on warps.
+  - Field ListMenu (ui/FieldListMenu.ts): the quest log's QL_AvoidDisplay is ignored.
   - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu.
   - Interaction metatiles whose scripts need unported screens/specials (Trainer Tower clock, cable club
   - Hall of Fame (menus/hallOfFame.ts): no audio (MUS_HALL_OF_FAME, the cries, SE_SAVE, SE_APPLAUSE); no Champion
     Ribbons (mons have no ribbons; REVISION 0 gives no event tickets either); the help system isn't toggled and the
     quest log isn't saved; a failed save carries on (no DoSaveFailedScreen / gGameContinueCallback).
-    FLDEFF_HALL_OF_FAME_RECORD's SE_BALL is silent. Other game stats than GAME_STAT_ENTERED_HOF and
+    Other game stats than GAME_STAT_ENTERED_HOF and
     GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted.
   - Pokédex screen (menus/pokedexScreen.ts, menus/pokedexArea.ts): no audio (SE_SELECT, the SE_DEX_* sounds, the
     mon page's cries and START = CRY, the page turn's SE_BALL_TRAY_ENTER and the cry after registering a catch; the
