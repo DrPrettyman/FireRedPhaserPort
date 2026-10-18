@@ -339,8 +339,8 @@ describe('keysplit and rhythm voices (hand-built)', () => {
   const a = voice(0x00, wave(1000));
   const b = voice(0x00, wave(2000));
   const drum = { ...voice(0x08, wave(3000)), key: 50, pan_sweep: 0xc0 + 16 };
-  const keysplitTable = Array.from({ length: 128 }, (_, k) => (k < 60 ? 0 : 1));
-  keysplitTable[10] = null as unknown as number;
+  const keysplitTable: (number | null)[] = Array.from({ length: 128 }, (_, k) => (k < 60 ? 0 : 1));
+  keysplitTable[10] = null; // a pointer byte
 
   test('a keysplit voice plays the subgroup voice its table names for the key, at the track key', () => {
     const split: ToneData = { ...voice(0x40, [a, b]), keySplitTable: keysplitTable };
