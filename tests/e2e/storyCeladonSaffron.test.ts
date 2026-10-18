@@ -49,12 +49,15 @@ async function talkFrom(game: Game, x: number, y: number, dir: 'up' | 'down' | '
   await game.press('A');
 }
 
-/** Press A until the script has ended and the field is free. */
+/**
+ * Press B until the script has ended and the field is free. (B closes messages as A does but can't talk to the
+ * person in front again: A in the first free tick can restart a leader's post-battle script; see storyLeague.)
+ */
 async function scriptDone(game: Game, what: string) {
-  await game.mashUntil((t) => t.idle() && !t.field()!.script, { what });
+  await game.mashUntil((t) => t.idle() && !t.field()!.script, { what, button: 'B' });
 }
 
-/** Press A through a trainer battle (the first move each turn) and the script after it. */
+/** Press A through a trainer battle (the first move each turn), then B through the script after it. */
 async function winBattle(game: Game, what: string) {
   const since = await game.mark();
   await game.eval((_t, s) => ((window as any).__storySince = s), since);

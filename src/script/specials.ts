@@ -15,6 +15,7 @@ import { ForcePlayerOntoBike, GetPlayerAvatarBike } from '../world/bike';
 import { ForcePlayerToStartSurfing, GetPlayerFacingDirection, SeafoamIslandsB4F_CurrentDumpsPlayerOnLand } from '../world/playerAvatar';
 import { RockSmashWildEncounter } from '../world/fieldMoves';
 import { STORY_SPECIALS } from './storySpecials';
+import { SIDE_SPECIALS } from './sideSpecials';
 
 export interface SpecialEnv {
   state: GameState;
@@ -64,6 +65,7 @@ const NO_OP = [
 export const SPECIALS: Record<string, Special> = {
   ...Object.fromEntries(NO_OP.map((name) => [name, () => {}])),
   ...STORY_SPECIALS, // storySpecials.ts: field_specials.c's story specials (Lt. Surge's trash cans, ...)
+  ...SIDE_SPECIALS, // sideSpecials.ts: Oak's Pokédex rating, the help context pair
 
   // field_player_avatar.c / bike.c / field_specials.c's player avatar specials
   ForcePlayerOntoBike,

@@ -63,6 +63,7 @@ GFX_PREFIXES = (
     "graphics/pokedex/",
     "graphics/itemfinder/",
     "graphics/trainer_card/",
+    "graphics/script_menu/",  # the museum's fossil pics (script_menu.c)
     "data/tilesets/",
 )
 
