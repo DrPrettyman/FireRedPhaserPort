@@ -29,9 +29,6 @@ export const KNOWN_GAPS: KnownGap[] = [
   // ---------------------------------------------------------------- main: on the main path to the Hall of Fame. BLOCKER in the note = the story can't go on without it.
   // (none left: the S.S. Anne departure and the league lighting were the last two, batch 2 of SIDE_PLAN.md)
   // ---------------------------------------------------------------- side: optional content before the Hall of Fame (NPCs, trades, the Game Corner, the daycare, the Sevii 1-3 trip).
-  { kind: 'command', name: 'adddecoration', tag: 'side', where: "(Std_ObtainDecoration)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
-  { kind: 'command', name: 'bufferdecorationname', tag: 'side', where: "(EventScript_ObtainDecorMessage)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
-  { kind: 'special', name: 'GetMartClerkObjectId', tag: 'side', where: "(EventScript_Questionnaire)" },
   { kind: 'special', name: 'ShowEasyChatMessage', tag: 'side', where: "PewterCity_PokemonCenter_1F" },
   { kind: 'special', name: 'ShowEasyChatScreen', tag: 'side', where: "PewterCity_PokemonCenter_1F" },
   // ---------------------------------------------------------------- postgame: after the Hall of Fame (Sevii 4-7, Trainer Tower, the event islands) or the link features postgame areas share.
