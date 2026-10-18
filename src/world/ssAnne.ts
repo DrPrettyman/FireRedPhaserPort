@@ -7,13 +7,15 @@
 // The wake and smoke aren't object events or gFieldEffectObjectTemplate_*s, so they're drawn here as
 // FieldEffectSprites with textures built from sWakeTiles / sSmokeTiles (graphics/ss_anne/) on OBJ palette 10
 // (PALSLOT_NPC_SPECIAL: the boat's gObjectEventPal_SSAnne). Like the C, positions are screen coordinates: the
-// camera doesn't move during the cutscene. SE_SS_ANNE_HORN is silent (no audio).
+// camera doesn't move during the cutscene. The horn (SE_SS_ANNE_HORN) sounds as it starts and as the ship leaves.
 
 import Phaser from 'phaser';
+import { K } from '../battle/constants';
 import { testEvent } from '../dev/testHooks';
 import { FieldEffectSprite, type AnimCmd } from '../entities/FieldEffects';
 import type { ObjectEvent } from '../entities/ObjectEvent';
 import { gfx, gfx16 } from '../gba/gfx';
+import { PlaySE } from '../gba/sound';
 import { registerSpecials } from '../script/specials';
 import { CreateTask } from './fieldMoves';
 import { canvasTexture, drawFrames } from './hallOfFameRecord';
@@ -150,7 +152,7 @@ class Departure {
           this.CreateSmokeSprite();
         }
         if (!this.boat() || this.boatScreenX() < -120) {
-          // PlaySE(SE_SS_ANNE_HORN): no audio
+          PlaySE(K.SE_SS_ANNE_HORN);
           this.func = 'finish';
           testEvent('ssAnneDeparture', { phase: 'finish', boatX2: this.boatX2 });
         } else {
@@ -244,9 +246,10 @@ export function ssAnneProbe(): SSAnneProbe | undefined {
   return active?.probe();
 }
 
-/** DoSSAnneDepartureCutscene: PlaySE(SE_SS_ANNE_HORN) (no audio), then Task_SSAnneInit with data[0] = 50. */
+/** DoSSAnneDepartureCutscene: PlaySE(SE_SS_ANNE_HORN), then Task_SSAnneInit with data[0] = 50. */
 function DoSSAnneDepartureCutscene(): Departure {
   if (!host) throw new Error('[ss anne] no host');
+  PlaySE(K.SE_SS_ANNE_HORN);
   const d = new Departure(host);
   active = d;
   testEvent('ssAnneDeparture', { phase: 'start' });

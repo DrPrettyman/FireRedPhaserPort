@@ -14,6 +14,7 @@ import { state } from '../battle/env';
 import type { ObjectEventData } from '../data/types';
 import { testEvent } from '../dev/testHooks';
 import { SpriteAnim } from '../entities/FieldEffects';
+import { PlaySE } from '../gba/sound';
 import type { ObjectEvent } from '../entities/ObjectEvent';
 import { directionalAction } from '../entities/movementActions';
 import { ConvertIntToDecimalStringN, ExpandToStringVar4, gStringVar1, STR_CONV_MODE_LEFT_ALIGN, text } from '../menus/common';
@@ -328,7 +329,7 @@ function Task_VsSeeker_1(task: VsSeekerTask): void {
 function Task_VsSeeker_2(task: VsSeekerTask): void {
   const data = task.data;
   if (data[2] !== 2 && --data[1] === 0) {
-    // PlaySE(SE_CONTEST_MONS_TURN): no audio
+    PlaySE(K.SE_CONTEST_MONS_TURN);
     data[1] = 11;
     data[2]++;
   }
@@ -462,7 +463,7 @@ function GetVsSeekerResponseInArea(): number {
     }
   }
   if (vs.trainerWantsRematch) {
-    // PlaySE(SE_PIN): no audio
+    PlaySE(K.SE_PIN);
     state.setFlag('FLAG_SYS_VS_SEEKER_CHARGING', true);
     VsSeekerResetChargingStepCounter();
     return VSSEEKER_RESPONSE_FOUND_REMATCHES;

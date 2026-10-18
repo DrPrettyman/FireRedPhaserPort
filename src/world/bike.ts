@@ -25,6 +25,8 @@ import {
   type Dir,
   type Keys,
 } from './playerAvatar';
+import { Overworld_ChangeMusicTo } from '../gba/sound';
+import { Overworld_ClearSavedMusic, Overworld_MusicCanOverrideMapMusic, Overworld_PlaySpecialMapMusic, Overworld_SetSavedMusic } from '../gba/overworldMusic';
 
 /** MovePlayerOnBike */
 export function MovePlayerOnBike(direction: Dir, keys: Keys): void {
@@ -200,10 +202,20 @@ export function IsBikingDisallowedByPlayer(): boolean {
   return true;
 }
 
-/** GetOnOffBike (the music changes aren't ported: no audio) */
+/** GetOnOffBike: off the bike, the map's music again; on it, MUS_CYCLING (saved, so map loads and CONTINUE keep it). */
 export function GetOnOffBike(transitionFlags: number): void {
-  if (gPlayerAvatar.flags & (F.MACH_BIKE | F.ACRO_BIKE)) SetPlayerAvatarTransitionFlags(F.ON_FOOT);
-  else SetPlayerAvatarTransitionFlags(transitionFlags);
+  // gBikeCameraAheadPanback = FALSE: the camera's pan-ahead isn't ported
+  if (gPlayerAvatar.flags & (F.MACH_BIKE | F.ACRO_BIKE)) {
+    SetPlayerAvatarTransitionFlags(F.ON_FOOT);
+    Overworld_ClearSavedMusic();
+    Overworld_PlaySpecialMapMusic();
+  } else {
+    SetPlayerAvatarTransitionFlags(transitionFlags);
+    if (Overworld_MusicCanOverrideMapMusic(K.MUS_CYCLING)) {
+      Overworld_SetSavedMusic(K.MUS_CYCLING);
+      Overworld_ChangeMusicTo(K.MUS_CYCLING);
+    }
+  }
 }
 
 /** BikeClearState */
@@ -241,9 +253,11 @@ export function GetPlayerSpeed(): number {
 /** Bike_HandleBumpySlopeJump: only the Acro Bike on a bumpy slope, which FRLG doesn't have. */
 export function Bike_HandleBumpySlopeJump(): void {}
 
-/** ForcePlayerOntoBike (field_specials.c; Cycling Road's map scripts). The music change isn't ported. */
+/** ForcePlayerOntoBike (field_specials.c; Cycling Road's map scripts): on the Mach Bike, with MUS_CYCLING saved. */
 export function ForcePlayerOntoBike(): void {
   if (gPlayerAvatar.flags & F.ON_FOOT) SetPlayerAvatarTransitionFlags(F.MACH_BIKE);
+  Overworld_SetSavedMusic(K.MUS_CYCLING);
+  Overworld_ChangeMusicTo(K.MUS_CYCLING);
 }
 
 /** GetPlayerAvatarBike (field_specials.c): 1 Acro, 2 Mach, 0 on foot. */

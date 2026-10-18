@@ -14,6 +14,7 @@ import { Cos, Sin } from '../battle/trig';
 import { testEvent } from '../dev/testHooks';
 import type { FieldEffectSprite } from '../entities/FieldEffects';
 import { directionalAction } from '../entities/movementActions';
+import { PlaySE } from '../gba/sound';
 import { ObjAffineSet } from '../gba/sprite';
 import { SetMainCallback2 } from '../gba/main';
 import { CB2_ReturnToField, gFieldCallback, type FieldCallbackHost } from '../menus/fieldCallbacks';
@@ -31,6 +32,7 @@ import {
 } from './fieldMoves';
 import { avatarField, GetPlayerAvatarGraphicsIdByStateId, gPlayerAvatar, PLAYER_AVATAR_FLAG, playerObj, SetPlayerAvatarStateMask, SetPlayerAvatarTransitionFlags } from './playerAvatar';
 import { BOB_MON_ONLY, BOB_NONE, BOB_PLAYER_AND_MON, SetPlayerSurfBlobBobState } from './surf';
+import { Overworld_PlaySpecialMapMusic } from '../gba/overworldMusic'; // FieldCallback_FlyIntoMap (W-sound 3)
 
 // ------------------------------------------------------------------ party menu, fly map
 
@@ -106,7 +108,9 @@ function warpToDestination(): void {
 
 /** FieldCallback_FlyIntoMap → Task_FlyIntoMap */
 function FieldCallback_FlyIntoMap(): void {
-  // Overworld_PlaySpecialMapMusic: no audio; FadeInFromBlack (an outdoor arrival: WarpFadeInScreen fades from black)
+  // Fly fades nothing out before the warp (no TryFadeOutOldMapMusic): the new map's music starts at once.
+  Overworld_PlaySpecialMapMusic();
+  // FadeInFromBlack (an outdoor arrival: WarpFadeInScreen fades from black)
   const fadeIn = flyHost().warpFadeInScreen();
   const player = playerObj();
   player.setVisible(false);
@@ -499,7 +503,7 @@ function FldEff_FlyOut(): boolean {
       case 4: // FlyOutFieldEffect_BirdSwoopDown
         if ((tTimer === 0 || --tTimer === 0) && player.clearHeldMovementIfFinished()) {
           tState++;
-          // PlaySE(SE_M_FLY)
+          PlaySE(K.SE_M_FLY);
           StartFlyBirdSwoopDown(bird!);
         }
         return false;

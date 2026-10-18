@@ -4,6 +4,7 @@
 // door, with the map's own tiles there hidden until the door is drawn closed again.
 
 import Phaser from 'phaser';
+import { K } from '../battle/constants';
 import { gfx } from '../gba/gfx';
 import type { MapChunk } from './MapChunk';
 import { LAYER_DEPTH, TILE } from './MapChunk';
@@ -31,6 +32,8 @@ interface DoorGraphics {
 }
 
 const DOOR_SIZE_1x1 = 0;
+/** field_door.c's local enum (DOOR_SOUND_SLIDING = 1) */
+const DOOR_SOUND_NORMAL = 0;
 // NUM_TILES_TOTAL - 8: where CopyDoorTilesToVram puts a frame's 8 tiles.
 const DOOR_TILE_START = 1024 - 8;
 const METATILE_LAYER_TYPE_COVERED = 1;
@@ -99,6 +102,14 @@ export class FieldDoors {
     const gfx = this.doorGraphics(x, y);
     if (!gfx) return false;
     return this.startTask(gfx, gfx.size === DOOR_SIZE_1x1 ? this.data.frames.CloseSmall : this.data.frames.CloseLarge, x, y);
+  }
+
+  /**
+   * GetDoorSoundEffect (world coords): SE_DOOR for a DOOR_SOUND_NORMAL door, else SE_SLIDING_DOOR (also for a
+   * tile without door graphics: GetDoorSoundType's -1).
+   */
+  getDoorSoundEffect(x: number, y: number): number {
+    return this.doorGraphics(x, y)?.sound === DOOR_SOUND_NORMAL ? K.SE_DOOR : K.SE_SLIDING_DOOR;
   }
 
   /** FieldSetDoorOpened: draw the open-animation's last frame. */

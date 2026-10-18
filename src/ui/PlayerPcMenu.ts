@@ -1,4 +1,6 @@
 import type Phaser from 'phaser';
+import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import { FONT_NORMAL, type Fonts } from '../text/Font';
 import { KeyRepeat } from './FieldListMenu';
@@ -141,21 +143,23 @@ export class PlayerPcMenu {
     this.phase = 'topMenu';
   }
 
-  /** Task_TopMenuHandleInput (Menu_ProcessInputNoWrapAround) */
+  /** Task_TopMenuHandleInput (Menu_ProcessInputNoWrapAround: SE_SELECT on A and on a cursor move) */
   private Task_TopMenuHandleInput(): void {
     if (this.input.pressed('A')) {
+      PlaySE(K.SE_SELECT);
       const input = this.cursorPos;
       this.closeWindow();
       if (input === TOP_ITEM_STORAGE) this.Task_PlayerPcItemStorage();
       else if (input === TOP_MAILBOX) this.Task_PlayerPcMailbox();
       else this.Task_PlayerPcTurnOff();
     } else if (this.input.pressed('B')) {
+      PlaySE(K.SE_SELECT);
       this.closeWindow();
       this.Task_PlayerPcTurnOff();
     } else if (this.input.pressed('UP')) {
-      this.moveCursor(-1);
+      if (this.moveCursor(-1)) PlaySE(K.SE_SELECT);
     } else if (this.input.pressed('DOWN')) {
-      this.moveCursor(1);
+      if (this.moveCursor(1)) PlaySE(K.SE_SELECT);
     }
   }
 
@@ -185,14 +189,24 @@ export class PlayerPcMenu {
 
   private Task_TopMenu_ItemStorageSubmenu_HandleInput(): void {
     if (this.keys.newOrRepeated('UP')) {
-      if (this.moveCursor(-1)) this.host.showDescription(this.host.text(ITEM_PC_DESCRIPTIONS[this.cursorPos]));
+      if (this.cursorPos !== 0) {
+        PlaySE(K.SE_SELECT);
+        this.moveCursor(-1);
+        this.host.showDescription(this.host.text(ITEM_PC_DESCRIPTIONS[this.cursorPos]));
+      }
     } else if (this.keys.newOrRepeated('DOWN')) {
-      if (this.moveCursor(1)) this.host.showDescription(this.host.text(ITEM_PC_DESCRIPTIONS[this.cursorPos]));
+      if (this.cursorPos !== 2) {
+        PlaySE(K.SE_SELECT);
+        this.moveCursor(1);
+        this.host.showDescription(this.host.text(ITEM_PC_DESCRIPTIONS[this.cursorPos]));
+      }
     } else if (this.input.pressed('A')) {
+      PlaySE(K.SE_SELECT);
       if (this.cursorPos === ITEM_PC_WITHDRAW) this.Task_PlayerPcWithdrawItem();
       else if (this.cursorPos === ITEM_PC_DEPOSIT) this.Task_PlayerPcDepositItem();
       else this.Task_PlayerPcCancel();
     } else if (this.input.pressed('B')) {
+      PlaySE(K.SE_SELECT);
       this.Task_PlayerPcCancel();
     }
   }

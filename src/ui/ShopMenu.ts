@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import { GetMartFontId, GetMartTypeFromItemList, MART_TYPE_REGULAR, SetShopItemsForSale, sShopData } from '../menus/shop';
 import { FONT_MALE, FONT_NORMAL, type Fonts } from '../text/Font';
@@ -93,7 +94,7 @@ export class ShopMenu {
   private Task_ShopMenu(): void {
     const input = this.menu!.tick();
     if (input === undefined) return;
-    // PlaySE(SE_SELECT)
+    if (input === 'cancel') PlaySE(K.SE_SELECT); // MENU_B_PRESSED (A's SE_SELECT is Menu_ProcessInputNoWrapAround's)
     if (input === 'cancel' || input === 2) this.Task_HandleShopMenuQuit();
     else this.Task_HandleShopMenuBuyOrSell(input === 0 ? 'buy' : 'sell');
   }

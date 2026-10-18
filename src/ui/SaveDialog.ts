@@ -3,6 +3,8 @@
 // the questions in the field message box. Saving itself is save.c's TrySavingData (state/save.ts).
 
 import type Phaser from 'phaser';
+import { K } from '../battle/constants';
+import { IsSEPlaying, PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import type { GameState } from '../state/GameState';
 import { gSave, SAVE_NORMAL, SAVE_OVERWRITE_DIFFERENT_FILE, SAVE_STATUS_EMPTY, SAVE_STATUS_INVALID, SAVE_STATUS_OK, TrySavingData } from '../state/save';
@@ -114,7 +116,10 @@ export class SaveDialog {
   /** SaveDialog_Wait60FramesOrAButtonHeld */
   private wait60FramesOrAButtonHeld(): boolean {
     this.delay--;
-    if (this.host.input.held('A')) return true; // PlaySE(SE_SELECT)
+    if (this.host.input.held('A')) {
+      PlaySE(K.SE_SELECT);
+      return true;
+    }
     return this.delay === 0;
   }
 
@@ -213,14 +218,15 @@ export class SaveDialog {
   };
 
   private waitPrintSuccessAndPlaySE = (): number => {
-    // RunSaveDialogCB only gets here once the printer is done; PlaySE(SE_SAVE) (no audio)
+    // RunSaveDialogCB only gets here once the printer is done
+    PlaySE(K.SE_SAVE);
     this.cb = this.returnSuccess;
     return SAVECB_RETURN_CONTINUE;
   };
 
   private returnSuccess = (): number => {
-    // !IsSEPlaying(): no audio, so never playing
-    if (this.wait60FramesOrAButtonHeld()) {
+    // The 60-frame count only runs once SE_SAVE has stopped (44 frames).
+    if (!IsSEPlaying() && this.wait60FramesOrAButtonHeld()) {
       this.closeSaveStatsWindow();
       return SAVECB_RETURN_OKAY;
     }
@@ -228,7 +234,7 @@ export class SaveDialog {
   };
 
   private waitPrintErrorAndPlaySE = (): number => {
-    // PlaySE(SE_BOO) (no audio)
+    PlaySE(K.SE_BOO);
     this.cb = this.returnError;
     return SAVECB_RETURN_CONTINUE;
   };

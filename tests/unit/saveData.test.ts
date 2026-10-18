@@ -44,6 +44,7 @@ function playedState(): TestGame['state'] {
   s.coins = 789;
   s.registeredItem = t.d('ITEM_BICYCLE');
   s.flashLevel = 4;
+  s.savedMusic = s.defines.require('MUS_CYCLING');
   s.pcItems[0] = { itemId: t.d('ITEM_POTION'), quantity: 1 };
   s.bag.add(t.d('ITEM_POTION'), 5);
   s.bag.add(t.d('ITEM_ANTIDOTE'), 2);
@@ -127,6 +128,7 @@ describe('save data (save.c / load_save.c)', () => {
       coins: 789,
       registeredItem: s.registeredItem,
       flashLevel: 4,
+      savedMusic: s.savedMusic,
       trainerRematchStepCounter: 0x1234,
       trainerRematches: [0, 1, 0, 1],
       daycare: s.daycare,

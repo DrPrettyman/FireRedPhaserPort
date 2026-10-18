@@ -5,6 +5,7 @@
 // 24-136. After 140 frames the screen fades out (WarpFadeOutScreen) and Task_Seagallop_3 warps to the destination
 // in VAR_0x8006. The script specials are in script/ferrySpecials.ts.
 
+import { K } from '../battle/constants';
 import { state } from '../battle/env';
 import { ChangeBgX, ChangeBgY, CopyBgTilemapBufferToVram, CopyToBgTilemapBufferRect, GetBgX, InitBgsFromTemplates, IsDma3ManagerBusyWithBgCopy, LoadBgTiles, ResetBgsAndClearDma3BusyFlags, SetBgTilemapBuffer, ShowBg, type BgTemplate } from '../gba/bg';
 import { gfx, gfx16 } from '../gba/gfx';
@@ -75,13 +76,12 @@ import { FreeAllWindowBuffers } from '../gba/window';
 import type { WarpData } from '../state/GameState';
 import { fieldReturn, gFieldCallback } from './fieldCallbacks';
 import { ResetAllPicSprites } from './picSprites';
+import { BGMusicStopped } from '../gba/sound'; // Task_Seagallop_2's wait (W-sound 3)
+import { Overworld_FadeOutMapMusic } from '../gba/overworldMusic';
 
 const TILESTAG_FERRY = 3000;
 const TILESTAG_WAKE = 4000;
 const PALTAG_FERRY_WAKE = 3000;
-
-const SE_SHIP = 0; // (no audio)
-const SE_EXIT = 0;
 
 /** The graphics the scene draws (runScreenFromScript preloads them). */
 export const SEAGALLOP_GFX = ['sWaterTiles', 'sWaterPal', 'sWaterTilemap_WB', 'sWaterTilemap_EB', 'sFerrySpriteTiles', 'sFerryAndWakePal', 'sWakeSpriteTiles'];
@@ -232,7 +232,7 @@ function CB2_SetUpSeagallopScene(): void {
     case 7:
       SetDispcnt();
       SetVBlankCallback(VBlankCB_SeaGallop);
-      PlaySE(SE_SHIP);
+      PlaySE(K.SE_SHIP);
       CreateFerrySprite();
       SetGpuRegBits(REG_OFFSET_DISPCNT, DISPCNT_WIN0_ON);
       SetGpuReg(REG_OFFSET_WININ, 0x3f);
@@ -273,7 +273,7 @@ const Task_Seagallop_1: TaskFunc = (taskId) => {
   const task = gTasks[taskId];
   ScrollBG();
   if (++task.data[1] === 140) {
-    // Overworld_FadeOutMapMusic: no audio
+    Overworld_FadeOutMapMusic();
     WarpFadeOutScreen();
     task.func = Task_Seagallop_2;
   }
@@ -281,8 +281,7 @@ const Task_Seagallop_1: TaskFunc = (taskId) => {
 
 const Task_Seagallop_2: TaskFunc = (taskId) => {
   ScrollBG();
-  // BGMusicStopped(): no audio, so only the fade
-  if (!gPaletteFade.active) {
+  if (BGMusicStopped() && !gPaletteFade.active) {
     Task_Seagallop_3();
     // HelpSystem_Enable: no help system
     DestroyTask(taskId);
@@ -309,7 +308,7 @@ function Task_Seagallop_3(): void {
   const [mapId, x, y] = sSeag[dest];
   sWarpDestination = { mapId, warpId: -1, x, y }; // SetWarpDestination(group, num, -1, x, y)
   // PlayRainStoppingSoundEffect: no audio
-  PlaySE(SE_EXIT);
+  PlaySE(K.SE_EXIT);
   // gFieldCallback = FieldCB_DefaultWarpExit: the field's arrival from a screen's warp (fade in, or the door's walk out)
   gFieldCallback.fn = undefined;
   // WarpIntoMap + SetMainCallback2(CB2_LoadMap); ResetInitialPlayerAvatarState is the field's warp from a screen

@@ -6,7 +6,7 @@
 // FRLG's Itemfinder doesn't turn the player (Emerald's does): the arrows point the way. They're screen-fixed
 // sprites (CreateSprite at (120, 76), no coordinate offset), drawn here as FieldEffectSprites at the camera's
 // top left plus their screen position (the camera doesn't move meanwhile). Their tiles (sArrowAndStarSpriteTiles)
-// use OBJ palette 0, the player's (gObjectEventPal_Player) in the field. SE_ITEMFINDER is silent (no audio).
+// use OBJ palette 0, the player's (gObjectEventPal_Player) in the field. Each ding plays SE_ITEMFINDER.
 
 import { K } from '../battle/constants';
 import { state } from '../battle/env';
@@ -14,6 +14,7 @@ import type { MapData } from '../data/types';
 import { testEvent } from '../dev/testHooks';
 import { FieldEffectSprite, type AnimCmd } from '../entities/FieldEffects';
 import { gfx, gfx16 } from '../gba/gfx';
+import { PlaySE } from '../gba/sound';
 import { ConvertIntToDecimalStringN, ExpandToStringVar4, STR_CONV_MODE_LEFT_ALIGN, text } from '../menus/common';
 import { registerItemUseFieldFuncs } from '../menus/itemUse';
 import { DisplayItemMessageOnField, fieldItemsHost } from './fieldItems';
@@ -135,7 +136,7 @@ function Task_ItemfinderResponseSoundsAndAnims(task: ItemfinderTask): void {
       task.func = Task_ItemfinderResponsePrintMessage;
       return;
     }
-    // PlaySE(SE_ITEMFINDER): no audio
+    PlaySE(K.SE_ITEMFINDER);
     CreateArrowSprite(task.tDingNum, direction);
     task.tDingNum++;
     s.tNumDingsRemaining--;
@@ -151,7 +152,7 @@ function Task_ItemfinderUnderfootSoundsAndAnims(task: ItemfinderTask): void {
       task.func = Task_ItemfinderUnderfootPrintMessage;
       return;
     }
-    // PlaySE(SE_ITEMFINDER): no audio
+    PlaySE(K.SE_ITEMFINDER);
     task.tStartSpriteId = CreateStarSprite();
     task.tDingNum++;
     s.tNumDingsRemaining--;

@@ -245,3 +245,18 @@ test('a version 4 save (no easy chat words) loads with the new-game words', () =
   expect(loaded.questionnaireWords).toEqual(new Array(4).fill(0xffff));
   expect(loaded.additionalPhrases).toEqual([0, 0, 0, 0, 0]);
 });
+
+test('a version 5 save (no savedMusic) loads with none: the map plays its own music', () => {
+  const storage = memoryStorage();
+  t.state.savedMusic = t.d('MUS_CYCLING');
+  const data = toSaveData(t.state);
+  expect(data.savedMusic).toBe(t.d('MUS_CYCLING'));
+  expect(fromSaveData(structuredClone(data), newGame().state).savedMusic).toBe(t.d('MUS_CYCLING'));
+  const v5 = { ...structuredClone(data), version: 5 } as Partial<typeof data>;
+  delete v5.savedMusic;
+  storage.setItem(SAVE_STORAGE_KEY, JSON.stringify(v5));
+  const read = readSave(storage);
+  expect(read?.version).toBe(SAVE_VERSION);
+  expect(read?.savedMusic).toBe(0);
+  expect(fromSaveData(read!, newGame().state).savedMusic).toBe(0);
+});

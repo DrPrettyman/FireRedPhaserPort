@@ -1,4 +1,6 @@
 import type Phaser from 'phaser';
+import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import { FONT_NORMAL, type Fonts } from '../text/Font';
 import { MenuWindow } from './MenuWindow';
@@ -194,12 +196,20 @@ export class StoragePcMenu {
     this.drawCursor();
   }
 
-  /** Menu_ProcessInput: the chosen option, 'cancel' for B, undefined otherwise. */
+  /** Menu_ProcessInput: the chosen option, 'cancel' for B, undefined otherwise (SE_SELECT on A and the D-pad). */
   private Menu_ProcessInput(): number | 'cancel' | undefined {
-    if (this.input.pressed('A')) return this.cursorPos;
+    if (this.input.pressed('A')) {
+      PlaySE(K.SE_SELECT);
+      return this.cursorPos;
+    }
     if (this.input.pressed('B')) return 'cancel';
-    if (this.input.pressed('UP')) this.moveCursor(-1);
-    else if (this.input.pressed('DOWN')) this.moveCursor(1);
+    if (this.input.pressed('UP')) {
+      PlaySE(K.SE_SELECT);
+      this.moveCursor(-1);
+    } else if (this.input.pressed('DOWN')) {
+      PlaySE(K.SE_SELECT);
+      this.moveCursor(1);
+    }
     return undefined;
   }
 }

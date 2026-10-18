@@ -28,7 +28,7 @@ export class GameState {
   optionsButtonMode = 0;
   /** gSaveBlock2Ptr->optionsWindowFrameType (frame 1 = 0) */
   optionsWindowFrameType = 0;
-  /** gSaveBlock2Ptr->optionsSound (OPTIONS_SOUND_MONO = 0 / _STEREO): stored only, no audio yet */
+  /** gSaveBlock2Ptr->optionsSound (OPTIONS_SOUND_MONO = 0 / _STEREO): SetPokemonCryStereo's argument */
   optionsSound = 0;
   /**
    * gSaveBlock1Ptr->dynamicWarp: where a MAP_DYNAMIC warp leads (an elevator's door back to the floor it
@@ -76,6 +76,11 @@ export class GameState {
   registeredItem = 0;
   /** gSaveBlock1Ptr->flashLevel: 0 = lit, up to gMaxFlashLevel (world/flash.ts) in a dark cave. */
   flashLevel = 0;
+  /**
+   * gSaveBlock1Ptr->savedMusic: a song that overrides the map's music on map loads (gba/overworldMusic.ts:
+   * MUS_CYCLING on the bike, `savebgm`'s songs); 0 = none. Cleared by every map load.
+   */
+  savedMusic = 0;
   /**
    * gSaveBlock1Ptr->gameStats (NUM_GAME_STATS words; the GBA XORs them with the encryption key, the port keeps
    * them plain). Read and written through GetGameStat / SetGameStat / IncrementGameStat.

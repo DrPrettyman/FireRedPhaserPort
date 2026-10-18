@@ -78,6 +78,7 @@ import {
 } from '../gba/palette';
 import { gScanlineEffect, gScanlineEffectRegBuffers, ScanlineEffect_InitHBlankDmaTransfer, ScanlineEffect_SetParams, SCANLINE_EFFECT_DMACNT_16BIT } from '../gba/scanline';
 import { FadeOutBGM, FadeOutMapMusic, IsNotWaitingForBGMStop, m4aSongNumStart, PlayCry_Normal } from '../gba/sound';
+import { SetPokemonCryStereo } from '../audio/m4a';
 import {
   ANIMCMD_END,
   ANIMCMD_FRAME,
@@ -116,6 +117,9 @@ export const titleScreenEnv = {
    * Sav2_ClearSetDefault for an empty or unreadable slot), so the main menu sees the slot as it is now.
    */
   loadGameSave: (): void => {},
+  /** gSaveBlock2Ptr->optionsSound of the save loadGameSave read (Sav2_ClearSetDefault's OPTIONS_SOUND_MONO for an
+   *  empty or unreadable slot). */
+  savedOptionsSound: (): number => 0,
   /** CB2_SaveClearScreen_Init (clear_save_data_screen.c) */
   saveClearScreenInit: (): void => {},
 };
@@ -576,7 +580,8 @@ function SetTitleScreenScene_Cry(data: Int16Array): void {
         // SeedRngAndSetTrainerId: the port seeds its RNG at load (and the new game picks the trainer id).
         // SetSaveBlocksPointers, ResetMenuAndMonGlobals, Save_ResetSaveCounters: nothing to reset here.
         titleScreenEnv.loadGameSave(); // LoadGameSave(SAVE_NORMAL) (+ Sav2_ClearSetDefault)
-        // SetPokemonCryStereo, InitHeap: no audio, no heap
+        SetPokemonCryStereo(titleScreenEnv.savedOptionsSound());
+        // InitHeap: no heap
         SetMainCallback2(CB2_InitMainMenu);
         DestroyTask(FindTaskIdByFunc(Task_TitleScreenMain));
       }

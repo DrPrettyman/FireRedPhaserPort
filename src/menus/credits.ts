@@ -81,6 +81,7 @@ import {
 } from '../gba/window';
 import { FONT_NORMAL } from '../text/Font';
 import { text } from './common';
+import { MUSIC_DISABLE_KEEP, MUSIC_DISABLE_OFF, SetDisableMapMusicChangeOnMapLoad } from '../gba/sound'; // gDisableMapMusicChangeOnMapLoad (W-sound 3)
 
 const FONT_NORMAL_COPY_1 = 1;
 
@@ -364,7 +365,8 @@ export function CB2_Credits(): boolean {
       M().unk_1D = (M().unk_1D + 1) & 0xff;
       break;
     case 2:
-      // FlagClear(FLAG_DONT_SHOW_MAP_NAME_POPUP) and gDisableMapMusicChangeOnMapLoad: gone with the reset anyway
+      // FlagClear(FLAG_DONT_SHOW_MAP_NAME_POPUP): gone with the reset anyway
+      SetDisableMapMusicChangeOnMapLoad(MUSIC_DISABLE_OFF);
       testEvent('creditsEnd');
       sCreditsMgr = null;
       creditsEnv.softReset();
@@ -414,6 +416,7 @@ function DoOverworldMapScrollScene(_whichMon: number): boolean {
   switch (m.subseqno) {
     case 0:
       // FlagSet(FLAG_DONT_SHOW_MAP_NAME_POPUP): the credits' maps never show it
+      SetDisableMapMusicChangeOnMapLoad(MUSIC_DISABLE_KEEP);
       m.ovwldseqno = 0;
       m.subseqno++;
     // fallthrough

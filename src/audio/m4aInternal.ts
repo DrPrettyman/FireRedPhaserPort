@@ -303,8 +303,7 @@ export interface MusicPlayer {
 
 export type PlyNoteFunc = (noteCmd: number, mplayInfo: MusicPlayerInfo, track: MusicPlayerTrack) => void;
 
-/** struct SoundInfo: the parts the sequencer, the channels and the controls use. The mixer's pcmBuffer comes with
- *  W-m4a 3. */
+/** struct SoundInfo: the parts the sequencer, the channels, the controls and the mixer use. */
 export interface SoundInfo {
   ident: number;
   pcmDmaCounter: number;
@@ -331,6 +330,8 @@ export interface SoundInfo {
   chans: SoundChannel[];
   /** The PSG registers ply_port writes (REG_SOUND1CNT_L + offset): W-m4a 4 reads them. */
   soundRegs: Uint8Array;
+  /** s8 pcmBuffer[PCM_DMA_BUF_SIZE * 2]: FIFO A's ring of pcmDmaPeriod 224-sample slots, then FIFO B's. */
+  pcmBuffer: Int8Array;
 }
 
 /** Integer helpers for the C's field widths. */

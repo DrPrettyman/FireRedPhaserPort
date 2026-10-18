@@ -3,6 +3,7 @@ import { spriteTextureKey, type Assets } from '../data/assets';
 import type { MapData, ObjectEventData, WarpEventData } from '../data/types';
 import { bdata, initBattleEnv } from '../battle/env';
 import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound'; // field_control_avatar.c's SEs (W-sound 4)
 import { BattleTransition_StartOnField, battleTransitionGfxSymbols, IsBattleTransitionDone, setTransitionFieldCamera } from '../battle/transition';
 import { loadGfx } from '../gba/gfx';
 import { RGB_BLACK, RGB_WHITE } from '../gba/hw';
@@ -37,6 +38,14 @@ import { ClearContinueGameWarpStatus, gSave, UseContinueGameWarp } from '../stat
 import { fromSaveData, type SaveData } from '../state/saveData';
 import { PlayTimeCounter_Reset, PlayTimeCounter_Start, PlayTimeCounter_Update } from '../state/playTime';
 import { AgbMainFrameEnd } from '../audio/frame';
+import { BGMusicStopped, StopMapMusic } from '../gba/sound';
+import {
+  Overworld_ClearSavedMusic,
+  Overworld_PlaySpecialMapMusic,
+  Overworld_TryMapConnectionMusicTransition,
+  setOverworldMusicHost,
+  TryFadeOutOldMapMusic,
+} from '../gba/overworldMusic';
 import type { PlayerLocation } from '../state/GameState';
 import { GetMapName } from '../world/regionMap';
 import { YesNoMenu } from '../ui/YesNoMenu';
@@ -369,6 +378,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       this.assets.loadSprite(this, vsSeekerBikeGraphicsId(gender)),
     ]);
     setPlayerAvatarHost(this.createAvatarHost());
+    setOverworldMusicHost({ state: this.state, currentMap: () => this.world.current.data, playerLocal: () => this.playerLocal() });
     // Field moves: field_effect.c's script table, the moves' field side and their graphics
     setFieldEffectScripts(this.assets.fieldEffectScripts);
     setFieldEffectScriptHost({ isPhaserEffectActive: (fldeff) => this.fieldEffects.isActive(fldeff) });
@@ -433,9 +443,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       PlayTimeCounter_Start(this.state.playTime);
       testHooks.applyTestOptions(this.state);
       if (start.preset) await applyStartPreset(this.state, start.preset, this.assets.scripts.healLocations);
+      StopMapMusic(); // CB2_NewGame
       ResetInitialPlayerAvatarState();
       await this.enterMap(start.map, start.x, start.y, start.facing ?? 'down', true);
       this.showMapNameOnWarpArrival(undefined); // CB2_NewGame loads the map like a warp
+      Overworld_PlaySpecialMapMusic(); // FieldCB_WarpExitFadeFromBlack
     }
     this.busy = false;
     testEvent('ready');
@@ -650,6 +662,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (!this.busy && !lockedAtFrameStart && !blocked) {
       if (this.startMenuWhenFree) {
         this.startMenuWhenFree = false;
+        PlaySE(K.SE_WIN_OPEN);
         this.openStartMenu();
         return;
       }
@@ -746,6 +759,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (input.pressedAButton && this.interact()) return true;
     if (input.heldDirection2 && input.dpadDirection === facing && this.tryDoorWarp(facing)) return true;
     if (input.pressedStartButton) {
+      PlaySE(K.SE_WIN_OPEN);
       this.openStartMenu();
       return true;
     }
@@ -817,6 +831,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (!chunk || chunk === this.world.current) return;
     this.busy = true;
     const fromMapsec = this.mapSection();
+    Overworld_TryMapConnectionMusicTransition(chunk.data); // before the new map's header is loaded
     void this.world.setCurrent(chunk).then(async () => {
       InitSecondaryTilesetAnimation(this.assets.tilesetAnimInfo(chunk.data.tilesetPair).secondary);
       await this.onMapLoaded(false);
@@ -879,13 +894,19 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         this.scripts.npcTextColor = textColorFromId(npc.brain.obj.info.textColor, this.defines);
         this.state.setVar('VAR_LAST_TALKED', npc.localId);
         this.state.setVar('VAR_FACING', directionId(dir, this.defines));
-        return this.scripts.start(script);
+        return this.startInteractionScript(script);
       }
     }
     const script = this.interactedBackgroundEventScript(behavior, dir) ?? this.interactedMetatileScript(behavior, dir) ?? GetInteractedWaterScript(behavior);
     if (!script) return false;
     this.selectedObject = undefined;
     this.scripts.npcTextColor = 'neutral';
+    return this.startInteractionScript(script);
+  }
+
+  /** TryStartInteractionScript: SE_SELECT (except for the PCs), then ScriptContext_SetupScript. */
+  private startInteractionScript(script: string): boolean {
+    if (script !== 'PalletTown_PlayersHouse_2F_EventScript_PC' && script !== 'EventScript_PC') PlaySE(K.SE_SELECT);
     return this.scripts.start(script);
   }
 
@@ -1059,8 +1080,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     return { mapId: w.dest_map, warpId: destIndex, x: -1, y: -1 };
   }
 
-  /** SetupWarp, then the warp. */
-  private async takeWarp(w: WarpEventData): Promise<void> {
+  /** SetupWarp, then the warp (`kind`: see warpTo). */
+  private async takeWarp(w: WarpEventData, kind: WarpKind = 'warp'): Promise<void> {
     // Lock the controls now: the destination may still be loading on the next frames, and a held push
     // direction (stairs, arrow mats) must not set up the same warp again meanwhile.
     this.busy = true;
@@ -1072,7 +1093,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       this.warping = false;
       return;
     }
-    await this.warpTo(name, dest.warpId, dest.x, dest.y);
+    await this.warpTo(name, dest.warpId, dest.x, dest.y, kind);
   }
 
   /**
@@ -1087,7 +1108,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       tick: () => {
         switch (state) {
           case 0:
-            this.doors.animateOpen(x, y - 1); // PlaySE(GetDoorSoundEffect) has no audio yet
+            PlaySE(this.doors.getDoorSoundEffect(x, y - 1)); // GetDoorSoundEffect
+            this.doors.animateOpen(x, y - 1);
             state = 1;
             break;
           case 1:
@@ -1107,7 +1129,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
             if (!this.doors.running) state = 4;
             break;
           case 4:
-            void this.takeWarp(warp); // WarpFadeOutScreen, then Task_Teleport2Warp's WarpIntoMap
+            // TryFadeOutOldMapMusic, WarpFadeOutScreen, then Task_Teleport2Warp's WarpIntoMap
+            void this.takeWarp(warp, 'door');
             return true;
         }
         return false;
@@ -1137,6 +1160,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         switch (state) {
           case 6:
             if (++delay === 25) {
+              PlaySE(this.doors.getDoorSoundEffect(this.player.tileX, this.player.tileY));
               this.doors.animateOpen(this.player.tileX, this.player.tileY);
               state = 7;
             }
@@ -1218,14 +1242,22 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.gbaScreen.stop();
   }
 
-  /** Warp to a warp event index, or to explicit coordinates when warpId < 0. */
-  private async warpTo(name: string, warpId: number, x: number, y: number): Promise<void> {
+  /**
+   * Warp to a warp event index, or to explicit coordinates when warpId < 0. `kind`: 'warp' is DoWarp (stepping onto
+   * a warp, arrow mats, stairs, `warp`: SE_EXIT), 'silent' DoDiveWarp (`warpsilent`), 'door' Task_DoorWarp's case 4
+   * (after the door's SE and walk in; `warpdoor`). Each starts TryFadeOutOldMapMusic with the fade out, and
+   * Task_Teleport2Warp waits for both (WaitWarpFadeOutScreen, BGMusicStopped): 32 or 64 more frames when the music
+   * changes.
+   */
+  private async warpTo(name: string, warpId: number, x: number, y: number, kind: WarpKind = 'warp'): Promise<void> {
     this.busy = true;
     const from = this.world.current.data;
     const data = await this.assets.loadMap(name);
-    // DoWarp's WarpFadeOutScreen, then Task_Teleport2Warp waits for it (WaitWarpFadeOutScreen)
+    TryFadeOutOldMapMusic(data);
     const white = this.warpFadeOutScreen(from, data);
-    await this.waitFrames(() => !this.screenFade.active);
+    // PlayRainStoppingSoundEffect: no field weather yet
+    if (kind === 'warp') PlaySE(K.SE_EXIT);
+    await this.waitFrames(() => !this.screenFade.active && BGMusicStopped());
     const isExit = await this.loadWarpedMap(name, warpId, x, y, white);
     await this.defaultWarpExit(isExit);
     this.busy = false;
@@ -1236,6 +1268,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * otherwise ExitWarpFadeInScreen(FALSE) and a task that waits for the fade.
    */
   private async defaultWarpExit(isExit: boolean): Promise<void> {
+    Overworld_PlaySpecialMapMusic();
     const arrival = this.world.tileAt(this.player.tileX, this.player.tileY);
     if (this.behaviors.isDoor(arrival.behavior)) this.exitDoor(isExit);
     else this.warpFadeInScreen(isExit);
@@ -1373,6 +1406,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       if (warped && IsMapTypeOutdoors(cur.data.mapType)) this.state.setFlag('FLAG_SYS_FLASH_ACTIVE', false);
       SetDefaultFlashLevel(this.state, cur.data.cave);
       this.state.mapLayoutId = this.defines.require(cur.data.layoutId); // LoadCurrentMapData
+      Overworld_ClearSavedMusic(); // before RunOnTransitionMapScript (Cycling Road's sets it again)
       const transition = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_TRANSITION');
       if (transition) this.scripts.runImmediately(transition);
     } else {
@@ -1439,6 +1473,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private async continueSavedGame(start: OverworldStart): Promise<void> {
     const s = this.state;
     gSave.differentSaveFile = false;
+    StopMapMusic(); // CB2_ContinueSavedGame
     // A save always has a location (the save dialog stores it); `start` is only a fallback.
     const loc = s.location ?? { mapId: '', x: start.x, y: start.y, facing: start.facing ?? 'down', avatarFlags: PLAYER_AVATAR_FLAG.ON_FOOT };
     // LoadSaveblockMapHeader, then Overworld_ResetStateOnContinue (ChooseAmbientCrySpecies: no audio)
@@ -1458,6 +1493,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       await this.enterMap(name, dest.x, dest.y, undefined, true);
       this.showMapNameOnWarpArrival(undefined);
       // FieldCB_DefaultWarpExit → SetUpWarpExitTask(FALSE)
+      Overworld_PlaySpecialMapMusic();
       if (this.behaviors.isDoor(this.world.tileAt(this.player.tileX, this.player.tileY).behavior)) this.exitDoor(false);
       else this.warpFadeInScreen(false);
     } else {
@@ -1466,6 +1502,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       this.resumeMap(); // ResumeMap's RunOnResumeMapScript, ReloadObjectsAndRunReturnToFieldMapScript
       // FieldCB_ShowMapNameOnContinue, then FieldCB_WarpExitFadeFromBlack → SetUpWarpExitTask(TRUE): FadeInFromBlack
       if (this.world.current.data.showMapName) this.showMapNamePopup();
+      Overworld_PlaySpecialMapMusic();
       this.warpFadeInScreen(false);
     }
     // Task_ExitNonDoor: the controls stay locked until the fade is done
@@ -1969,6 +2006,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.busy = true;
     ResetInitialPlayerAvatarState();
     const isExit = await this.loadWarpedMap(name, w.warpId, w.x, w.y, false);
+    Overworld_PlaySpecialMapMusic(); // FieldCB_DefaultWarpExit
     const arrival = this.world.tileAt(this.player.tileX, this.player.tileY);
     if (this.behaviors.isDoor(arrival.behavior)) this.exitDoor(isExit);
     else this.warpFadeInScreen(isExit);
@@ -2055,7 +2093,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   openYesNo(): YesNoMenu {
     const text = (label: string) => this.charmap.encode(this.assets.strings[label] ?? '?$');
-    return new YesNoMenu(this, this.fonts, this.buttons, { yesNo: text('gText_YesNo'), cursor: text('gText_SelectorArrow2') });
+    return new YesNoMenu(this, this.fonts, this.buttons, { yesNo: text('gText_YesNo'), cursor: text('gText_SelectorArrow2') }, { seOnNo: true });
   }
 
   showMoneyBox(x: number, y: number): void {
@@ -2175,6 +2213,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     let fadeIn: Wait | undefined;
     this.messageBox.hide();
     this.runFieldMenu({ menu: 'naming', naming: req }, () => {
+      Overworld_PlaySpecialMapMusic(); // FieldCB_ContinueScriptHandleMusic
       fadeIn = this.fadeScreen(this.defines.require('FADE_FROM_BLACK'));
     });
     return () => fadeIn?.() ?? false;
@@ -2323,7 +2362,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
           warping = true;
           void this.warpIntoMapFromBlack().then(() => {
             warping = false;
-            this.screenFade.begin(d.require('FADE_FROM_BLACK')); // FieldCB_SafariZoneRanOutOfBalls
+            Overworld_PlaySpecialMapMusic(); // FieldCB_SafariZoneRanOutOfBalls
+            this.screenFade.begin(d.require('FADE_FROM_BLACK'));
             fadeIn = () => !this.screenFade.active;
           });
         } else if (outcome === d.require('B_OUTCOME_CAUGHT')) {
@@ -2436,6 +2476,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       playerWon: () => outcome !== d.require('B_OUTCOME_LOST') && outcome !== d.require('B_OUTCOME_DREW'),
       returnToField: () => {
         this.resumeMap();
+        // FieldCB_DefaultWarpExit (CB2_EndWildBattle) / FieldCB_ContinueScriptHandleMusic (a trainer's
+        // CB2_ReturnToFieldContinueScriptPlayMapMusic): the map's music again after the battle's
+        Overworld_PlaySpecialMapMusic();
         this.screenFade.begin(d.require('FADE_FROM_BLACK'));
         return () => !this.screenFade.active;
       },
@@ -2560,6 +2603,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private async doWhiteOut(): Promise<void> {
     this.busy = true;
     testEvent('whiteOut');
+    StopMapMusic(); // CB2_WhiteOut (EventScript_AfterWhiteOutHeal's fadedefaultbgm brings it back)
     this.scripts.runImmediately('EventScript_ResetEliteFourEnd');
     this.state.removeMoney(this.whiteOutMoneyLoss());
     healPlayerParty(this.state);
@@ -2793,11 +2837,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       startGbaScreen: () => this.gbaScreen.start(this.fieldGbaSource()),
       stopGbaScreen: () => this.gbaScreen.stop(),
       cameraTop: () => this.field.cameraTop,
-      warpFadeOutScreen: (mapId) => {
+      warpFadeOutScreen: (mapId, fadeOutMusic = false) => {
         let started = false;
         const name = this.assets.mapNameForId(mapId);
         if (name) {
           void this.assets.loadMap(name).then((to) => {
+            if (fadeOutMusic) TryFadeOutOldMapMusic(to);
             this.warpFadeOutScreen(this.world.current.data, to);
             started = true;
           });
@@ -2805,7 +2850,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
           this.screenFade.begin(d.require('FADE_TO_BLACK'));
           started = true;
         }
-        return () => started && !this.screenFade.active;
+        return () => started && !this.screenFade.active && (!fadeOutMusic || BGMusicStopped());
       },
       warpIntoMap: (mapId, x, y, fieldCallback, warpId = -1) => {
         const name = this.assets.mapNameForId(mapId);
@@ -2864,7 +2909,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const npc = this.npcs.find((n) => n.brain.obj === boulder && n.chunk === cur);
     if (this.behaviors.is(behavior, 'FALL_WARP') && npc) {
       // RemoveObjectEventByLocalIdAndMap, then FlagClear(GetBoulderRevealFlagByLocalIdAndMap): a boulder's
-      // template keeps the flag of its twin on the floor below in its trainer type (SE_FALL: no audio).
+      // template keeps the flag of its twin on the floor below in its trainer type.
+      PlaySE(K.SE_FALL);
       const reveal = this.templatesFor(cur)[npc.localId - 1]?.trainer_type;
       this.removeObject(npc.localId);
       if (reveal && reveal.startsWith('FLAG_')) this.state.setFlag(reveal, false);
@@ -3043,6 +3089,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     else this.doors.animateClose(x + originX, y + originY);
   }
 
+  /** GetDoorSoundEffect at map-local coords (opendoor) */
+  doorSoundEffect(x: number, y: number): number {
+    const { originX, originY } = this.world.current;
+    return this.doors.getDoorSoundEffect(x + originX, y + originY);
+  }
+
   /** FieldIsDoorAnimationRunning (waitdooranim) */
   doorAnimationRunning(): boolean {
     return this.doors.running;
@@ -3059,14 +3111,14 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.world.current.setBlock(x, y, metatile | (impassable ? MAPGRID_COLLISION_MASK : 0));
   }
 
-  warp(mapId: string, warpId: number, x: number, y: number): void {
+  warp(mapId: string, warpId: number, x: number, y: number, kind: WarpKind = 'warp'): void {
     const name = this.assets.mapNameForId(mapId);
     if (!name) {
       console.warn('[warp] unknown map', mapId);
       return;
     }
     ResetInitialPlayerAvatarState(); // ScrCmd_warp
-    void this.warpTo(name, warpId, x, y);
+    void this.warpTo(name, warpId, x, y, kind);
   }
 
   playerLocal(): { x: number; y: number } {
@@ -3097,6 +3149,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 }
 
 /** SetPlayerCoordsFromWarp: the warp event if the map has it, else (x, y), else the map's centre. */
+/** Which of field_fadetransition.c's warps (OverworldScene.warpTo). */
+type WarpKind = 'warp' | 'silent' | 'door';
+
 function warpDestCoords(data: MapData, warpId: number, x: number, y: number): { x: number; y: number } {
   if (warpId >= 0 && warpId < data.warpEvents.length) return data.warpEvents[warpId];
   if (x >= 0 && y >= 0) return { x, y };

@@ -163,8 +163,8 @@ export function SetDiveWarpDive(x: number, y: number): boolean {
 // ------------------------------------------------------------------ field_fadetransition.c
 
 /**
- * DoDiveWarp: LockPlayerFieldControls, TryFadeOutOldMapMusic (no BGM), WarpFadeOutScreen,
- * PlayRainStoppingSoundEffect (no audio), gFieldCallback = FieldCB_DefaultWarpExit and Task_Teleport2Warp: once
+ * DoDiveWarp: LockPlayerFieldControls, TryFadeOutOldMapMusic, WarpFadeOutScreen,
+ * PlayRainStoppingSoundEffect (no field weather yet), gFieldCallback = FieldCB_DefaultWarpExit and Task_Teleport2Warp: once
  * the fade is over, WarpIntoMap + CB2_LoadMap to the warp destination. `fieldCallback` replaces
  * FieldCB_DefaultWarpExit (DoFallWarp sets gFieldCallback = FieldCB_FallWarpExit right after DoDiveWarp). The
  * destination's map header loads first in the port (WarpFadeOutScreen fades to white into a cave).
@@ -178,7 +178,7 @@ export function DoDiveWarp(fieldCallback?: () => void): void {
       UnlockPlayerFieldControls();
       return;
     }
-    const fadeOut = field.warpFadeOutScreen(dest.mapId);
+    const fadeOut = field.warpFadeOutScreen(dest.mapId, true); // TryFadeOutOldMapMusic, WarpFadeOutScreen
     let stage = 0;
     // Task_Teleport2Warp
     CreateTask(() => {

@@ -2,9 +2,9 @@
 // battle scene, battle style, sound, button mode, frame) and CANCEL; LEFT/RIGHT change the one under the cursor
 // (the frame's tiles and palette are reloaded at once), A or B fades out and CloseAndSaveOptionMenu writes them to
 // the save block (GameState) and goes to gMain.savedCallback (CB2_ReturnToFieldWithOpenMenu from the start menu).
-// Not ported: the help system context (SetHelpContext) and SetPokemonCryStereo (no audio; the sound setting is
-// stored and saved only).
+// Not ported: the help system context (SetHelpContext).
 
+import { SetPokemonCryStereo } from '../audio/m4a';
 import { K } from '../battle/constants';
 import { state } from '../battle/env';
 import { ConvertIntToDecimalStringN, STR_CONV_MODE_RIGHT_ALIGN } from '../battle/stringUtil';
@@ -400,7 +400,7 @@ function CloseAndSaveOptionMenu(taskId: number): void {
   state.optionsSound = ptr.option[MENUITEM_SOUND];
   state.optionsButtonMode = ptr.option[MENUITEM_BUTTONMODE];
   state.optionsWindowFrameType = ptr.option[MENUITEM_FRAMETYPE];
-  // SetPokemonCryStereo(gSaveBlock2Ptr->optionsSound): no audio
+  SetPokemonCryStereo(state.optionsSound);
   sOptionMenuPtr = null;
   DestroyTask(taskId);
 }

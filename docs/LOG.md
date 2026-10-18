@@ -1095,6 +1095,7 @@ end to end.
   Rerun `npm run extract`.
 - Tests: tests/e2e/fieldMoves.test.ts (11 scenarios). Deviations (audio, Sweet Scent's overlay, unported natives) in
   docs/DEVIATIONS.md; how to add Surf/Strength/Flash/Fly in docs/DEV_NOTES.md "Field moves".
+
 ### Field ListMenu (Silph Co. elevator) and Flash's darkness (W-list)
 
 - `special ListMenu` / `special ReturnToListMenu` (field_specials.c) in `ui/FieldListMenu.ts`: list_menu.c's
@@ -1118,6 +1119,7 @@ end to end.
   W-fieldmove's field move framework; `SetUpFieldMove_Flash` and `useFlash()` are ready for it.
 - Tests: tests/e2e/listMenuFlash.test.ts (elevator scrolling, B, riding to 5F; the badge list; Rock Tunnel dark,
   lit by Flash, lit on arrival with FLAG_SYS_FLASH_ACTIVE; Blur over the dark field, Clockwise Wipe once lit).
+
 ### PC boxes and the save data model (W-state)
 
 - `state/PokemonStorage.ts`: struct PokemonStorage (14 boxes of 30 BoxPokemon, names, wallpapers, current box) with
@@ -1182,6 +1184,7 @@ end to end.
   with map, position, facing, bike, party, bag, flags, money and play time, the continue-game warp, play time
   per frame in the field and the bag and shown in both windows, the boot flow and NEW GAME's warning, an
   unreadable save).
+
 ### Surf and Waterfall (W-surf)
 
 - `world/surf.ts`: SetUpFieldMove_Surf / _Waterfall and FieldCallback_Surf / _Waterfall (party_menu.c);
@@ -1315,6 +1318,7 @@ end to end.
   opening on the Sevii map, indoors via the escape warp, a wall map, flying Pallet → Viridian's heal location, an
   unvisited town refused, indoors refused, no Thunder Badge refused). typecheck, `npm test` (85) and the full
   `npm run test:e2e` (222) pass.
+
 ### Hall of Fame, the Hall of Fame PC and the credits (W-hof, batch 3)
 
 - hall_of_fame.c on the GBA layer (`menus/hallOfFame.ts`, FieldMenuScene 'hallOfFame' / 'hallOfFamePc'): the
@@ -1351,6 +1355,7 @@ end to end.
   the record and save checked and the credits skipped after the Charizard scene; the PC with two teams; the PC
   without records), tests/unit/save.test.ts (the records, GAME_STAT_ENTERED_HOF, version 1 saves). Full e2e run:
   two battle anim tests failed under the parallel load (missed rolls) and passed when rerun alone.
+
 ### Title screen and clear save data screen (`title-screen`)
 
 - title_screen.c on the GBA layer (menus/titleScreen.ts): CB2_InitTitleScreen, the flash sweeping up Charizard
@@ -1377,6 +1382,7 @@ end to end.
   new game; A skipping the intro, START → main menu with a save, B back to the title, CONTINUE; the 2700-frame
   restart; the clear save data screen, NO and YES). saveContinue.test.ts's boot test goes through the title screen
   after B on the main menu.
+
 ### Main-path leftovers: card key doors, setmaplayoutindex, Field_AskSaveTheGame, seteventmon (W-misc, batch 3)
 
 - Silph Co.'s card key doors (data/scripts/silphco_doors.inc) already worked end to end: ON_LOAD's `setmetatile`
@@ -1492,6 +1498,7 @@ end to end.
   back, a rod facing land refused in the bag, the Escape Rope from Mt. Moon to Route 4, refused on Route 1), plus
   playerAvatar / surf / wildBattle / fieldMoves / fieldEffects / fly e2e; screenshots of the cast facing down from
   the bank and left/right while surfing.
+
 ### Pokédex screen: data, top menu, numerical lists (W-dex unit 1, SCREENS_PLAN.md batch 1)
 
 - Extractor: `tools/extract_pokedex.py` → public/gen/pokedex.json (gPokedexEntries' category names, FireRed
@@ -1516,6 +1523,7 @@ end to end.
   anticheat); e2e tests/e2e/pokedex.test.ts (open from START, counts, scrolling the Kanto list incl. paging,
   the list's remembered row, the national layout and list, closing back to the start menu and the field, the
   sanity check), plus saveContinue, fly, listMenuFlash. Screenshots of the top menu and lists match FRLG's layout.
+
 ### TM case (SCREENS_PLAN.md batch 1, W-tmcase unit 1)
 
 - `menus/tmCase.ts` ports tm_case.c: InitTMCase for TMCASE_FIELD (the bag's KEY ITEMS → TM CASE → OPEN:
@@ -1535,6 +1543,7 @@ end to end.
   PIDGEY can't learn it, TM28 → GIVE; at the Pewter Mart: SELL → TM case, an HM it won't buy, two TM28s sold for
   half price), screenshots of the list, context menu and quantity box; the bag / mart / PC / evolution e2e files
   (pokemart, pcStorage, evolution, listMenuFlash, saveContinue) and the unit tests still pass.
+
 ### Pokédex area data and markers (W-dexarea unit 1, batch 1 of SCREENS_PLAN.md)
 
 - `menus/wildPokemonArea.ts`: wild_pokemon_area.c (GetSpeciesPokedexAreaMarkers, GetRoamerIndex /
@@ -1575,6 +1584,7 @@ end to end.
   menu's ITEM → GIVE and the PC's MOVE ITEMS → GIVE through the pouch; selling three Oran Berries at the Pewter Mart;
   the battle bag's OPEN → USE an Oran Berry on the battler), screenshots of the list, context menu, toss and sell
   boxes; tmCase, pokemart, pcStorage, wildBattle, evolution, listMenuFlash e2e files and the unit tests still pass.
+
 ### Pokédex mon page and search lists (W-dex unit 2, SCREENS_PLAN.md batch 1)
 
 - `menus/pokedexScreen.ts`: Task_DexScreen_ShowMonPage (A on a seen mon in a numerical list; up/down to the
@@ -1629,6 +1639,7 @@ end to end.
   battle redrawn); wildBattle, scriptedBattles, pcBoxes, mainPathLeftovers' Lugia (non-Kanto before the National
   Dex) and battleAnims' old man tutorial pass. Screenshots of the habitat page, the registered page and the battle
   after it look like FRLG's.
+
 ### VS Seeker (W-fielditems unit 2, SCREENS_PLAN.md batch 1)
 
 - `world/vsSeeker.ts` (new): vs_seeker.c's Task_VsSeeker_0..3 (the charge check and its three messages,
@@ -1664,6 +1675,7 @@ end to end.
   "turned off"; 100 charging steps → EventScript_VsSeekerChargingDone, Ben looks around again and talking gives the
   post-battle line), fieldItems.test.ts, trainerBattle.test.ts, field.test.ts. Snapshots of the anim (the player
   holding the VS Seeker) and of Ben mid-jump with his hand up looked right.
+
 ### Pokédex area page (W-dexarea unit 2, SCREENS_PLAN.md batch 1)
 
 - `menus/pokedexArea.ts`: pokedex_screen.c's DexScreen_DrawMonAreaPage (the frame on BG3 / BG0, the Kanto map and
@@ -1686,6 +1698,7 @@ end to end.
   Island unlocked Pidgey's 16 markers and the map at the top), plus pokedex, tmCase, titleScreen and the
   transitions test's every-transition case (for the extractor fix). Screenshots of the area page (caught, seen-only,
   area unknown, with islands) match FRLG's layout.
+
 ### Itemfinder (W-fielditems unit 3, SCREENS_PLAN.md batch 1)
 
 - `world/itemfinderSearch.ts` (new, no Phaser): itemfinder.c's HiddenItemIsWithinRangeOfPlayer (the current map's
@@ -1717,6 +1730,7 @@ end to end.
   Pallet Town: no response; Route 13 (62, 1): Route 12's Rare Candy, 2 arrows moving up), fieldItems, vsSeeker,
   field and hallOfFame e2e files. Screenshots of the arrows (left, right, up) and the star around the player
   looked right.
+
 ### SCREENS_PLAN.md batch 1 merged (PRs #30-#40)
 
 - Plan: SCREENS_PLAN.md (#30). Merged, one PR per unit: #31 Pokédex area data and markers, #32 TM case, #33
@@ -1766,6 +1780,7 @@ end to end.
   Flute messages; nothing registered and a registered item no longer in the bag), plus fieldItems, vsSeeker,
   itemfinder, tmCase, berryPouch, fieldMoves, strength, surf, playerAvatar, mapNamePopup and field. Screenshots of
   Oak's message and the Coin Case's in the field message box looked right.
+
 ### Script coverage check and e2e bag / party waits (W-story unit 1)
 
 - `tests/unit/scriptCoverage.test.ts`: every script command, special / specialvar, std script, movement action and
@@ -1802,6 +1817,7 @@ end to end.
   pcStorage, playerAvatar, pokedex, saveContinue, scriptedBattles, strength, surf, tmCase, vsSeeker, wildBattle)
   and, after the `until` change, every file that uses it (also fieldEffects, mapNamePopup, pokedexArea, hallOfFame,
   titleScreen, pokemart, transitions).
+
 ### Option menu and start menu help window (W-options, SCREENS_PLAN.md batch 2)
 
 - option_menu.c as `menus/optionMenu.ts` on the GBA layer: CB2_OptionsMenuFromStartMenu → CB2_OptionMenu's load
@@ -1873,6 +1889,7 @@ end to end.
   checks the bag never shows, the objects frozen / controls locked on return, then released, and a step works; run
   3 times), tmCase, berryPouch, fly, fieldItems, trainerCard (33 in all). Screenshots of the three screens opened
   from the field match the bag's.
+
 ### Story checks Brock to Lt. Surge (W-story unit 2)
 
 - `tests/e2e/story.test.ts` (new, 7 tests): Lt. Surge's gym (the trash can puzzle: first switch, a wrong second
@@ -1957,6 +1974,7 @@ Each failed once with other workers' e2e runs on the machine and passed alone; t
   (5), a mash press picking from a menu in the tick it opens (6), tick limits across loads (7).
 - Verified: typecheck; `npm test` (17 files, 155 tests); e2e battleAnims.3e3a, mainPathLeftovers, fieldEffects and
   transitions (30 tests) three times, once under load (load average ~170).
+
 ### Trainer card back and flip (W-tcard unit 2, SCREENS_PLAN.md batch 2)
 
 - `menus/trainerCard.ts`: the card back (BufferTextForCardBack and its Buffer* functions, PrintAllOnCardBack: the
@@ -2014,6 +2032,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   tests) four times: twice alone, once with 8 CPU hogs and two other e2e files (load ~106), once with 16 hogs and
   four other e2e files (load up to ~314); the other battleAnims files that use the changed helpers (2a, 2b, 2c, 2d,
   3e1, 3e3a, 3e3b: 67 tests) once.
+
 ### Story checks Koga to the Hall of Fame (W-story unit 4)
 
 - e2e `tests/e2e/storyLeague.test.ts` (new, 8 tests): Fuchsia Gym (Koga behind the invisible walls, the badge,
@@ -2086,6 +2105,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   Mr. Mime's fields and stats worked out by hand, the swap behind the fade, the Name Rater specials),
   tests/e2e/inGameTrades.test.ts (Reyley's trade, declining, the wrong species and a cancelled party menu; the
   Name Rater declining, renaming and refusing a traded mon).
+
 ### Party selection from scripts, the move tutors and the move deleter (W-moves unit 1)
 
 - `menus/partyMenuSpecials.ts`: party_menu_specials.c (ChoosePartyMon, ChooseMonForMoveRelearner's party menu
@@ -2123,6 +2143,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   under CB2_InitInGameTrade / CB2_InGameTrade, the swap happens while it's up, eight frames rendered mid-scene
   draw something (the GBA fills the screen when zoomed), ABRA's and MR. MIME's pics are drawn; then back on the
   field. Looked at the eight frames (TRADE_SHOTS) against the C's states.
+
 ### The move relearner and the Cape Brink tutor (W-moves unit 2)
 
 - `menus/learnMove.ts`: learn_move.c (TeachMoveRelearnerMove's screen: CB2_MoveRelearner_Init / _Resume, the
@@ -2141,6 +2162,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the Cape Brink tutor teaching Blast Burn, Frenzy Plant and Hydro Cannon to max-friendship starters until "passed
   on everything"), tests/e2e/tmCase.test.ts, tests/e2e/evolution.test.ts; screenshots of the list, the YES/NO and
   the "1, 2, and... Poof!" after the summary screen.
+
 ### Oak's Pokédex rating, the museum's fossil pics, the fossil revival (W-daycare unit 1)
 
 - `script/sideSpecials.ts` (new, spread into SPECIALS): GetProfOaksRatingMessage (prof_pc.c
@@ -2158,6 +2180,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Six entries off `scriptCoverageGaps.ts`.
 - Verified: typecheck; `npm test` (163); e2e sideEvents (7, twice), story + storyCeladonSaffron (17), hallOfFame;
   screenshots of both fossil pics.
+
 ### W-slots unit 1: the coins box, the Game Corner's clerks and the slot machine's game logic
 
 - coins.c's coins box (`ui/CoinsBox.ts`): `showcoinsbox` / `updatecoinsbox` / `hidecoinsbox` (ScrCmd_* →
@@ -2208,6 +2231,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   machine, a win (flashing lines and payout lights), the help window and the quit YES/NO compared with the C's
   layout: reels at x 80/120/160, CREDIT / PAYOUT digits at y 30, Clefairy at (16, 136) and (224, 136), the YES/NO at
   tile (19, 9), the message window at (5, 15).
+
 ### The Route 5 daycare (W-daycare unit 2)
 
 - `world/daycare.ts` (new): daycare.c's storage. struct DaycareMon / DayCare in GameState (`route5DayCareMon`,
@@ -2359,6 +2383,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   plus hallOfFame and sideSpecials for the screen-exit change. seagallop.test.ts green 3 runs in a row, two of
   them beside `npm test` loops for load. Screenshots of the scene and both menu pages
   checked by eye.
+
 ### The Elite Four and Champion rooms' lighting (SIDE_PLAN.md batch 2, W-league unit 1)
 
 - `world/leagueLighting.ts` is field_specials.c's DoPokemonLeagueLightingEffect, Task_RunPokemonLeagueLightingEffect
@@ -2399,6 +2424,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   poll, which under load came after its first 40-tick palette; it's watched in the page now.
 - Verified: typecheck; `npm test` (230, incl. the clerk table against every mart map's objects); e2e
   sideSpecials (9), daycare, eggHatch, leagueLighting: all green.
+
 ### The S.S. Anne's departure and an S.S. Anne sweep (W-ssanne unit 1)
 
 - Ported ss_anne.c as `world/ssAnne.ts`: DoSSAnneDepartureCutscene, Task_SSAnneInit / Run / Finish,
@@ -2515,6 +2541,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   first run and again with trainerCard. Screenshots of the groups, the scrolled groups, the keyboard, the word list
   and its pages, DEL and the typed questionnaire checked by eye against the C's layout (the footer's OK shows right
   of the green frame between the mode and help sprites, as BG3 outside WIN0 does on the GBA).
+
 ### Every Seagallop harbor and the Sevii 1-3 quest (W-ferry unit 2)
 
 - The ferry from every harbor, as e2e tests (`tests/e2e/seagallop.test.ts`): the One / Two / Three Island sailors'
@@ -2647,6 +2674,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   347 songs with ids equal to scripts.json's SE_* / MUS_*, known players / priorities, se_select's first bytes by
   hand from MPlayDef.s, and a command walker that reaches each track's FINE exactly at its end with 77 looping
   songs and all 3,088 PATT / GOTO pointers inside the data); a missing `CXX` gives the message.
+
 ### Audio data: voicegroups and samples (AUDIO_PLAN.md batch A, W-audiodata 2)
 
 - New `tools/extract_audio_voices.py` (one line in `tools/extract.py`'s main, ~0.2 s of extract time) →
@@ -2737,6 +2765,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   three times; titleScreen + newGame e2e (7). battle-test.html by hand with tools/browser-test.mjs
   (`?audio=tone`: suspended → running on a key, the tone's peak 0.3125, M ignored in the panel's input, muted
   outside it).
+
 ### W-m4a 2: notes, channels and cries (silent) (AUDIO_PLAN.md batch B)
 
 - `src/audio/m4a.ts`: ply_note from `_081DDB46` on (the voice through keysplit and rhythm voices, the priority,
@@ -2879,3 +2908,106 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the 8 ROM cries in 5 modes through PlayCry_ByMode for IsCryPlaying and IsCryFinished); `tests/e2e/audioCries.test.ts`
   (3: the Celadon Condominiums Meowth's `waitmoncry` holds `release` until the cry's stop + 3 frames, SE_SELECT on
   a `\p`, Bug Catcher Rick's MUS_ENCOUNTER_BOY), audio.test.ts; the full e2e suite once (above).
+
+### W-sound 3: map music, savedMusic, the warps' music waits (AUDIO_PLAN.md batch C)
+
+- `src/gba/overworldMusic.ts` is overworld.c's music block (overworld.c:989-1200): GetCurrLocationDefaultMusic,
+  GetWarpDestinationMusic, Overworld_PlaySpecialMapMusic (savedMusic, MUS_SURF where Overworld_MusicCanOverrideMapMusic
+  allows it, the Champion's room's fade back in), Overworld_SetSavedMusic / ClearSavedMusic,
+  Overworld_TryMapConnectionMusicTransition, Overworld_ChangeMusicToDefault, GetMapMusicFadeoutSpeed,
+  TryFadeOutOldMapMusic, Overworld_FadeOutMapMusic. gDisableMapMusicChangeOnMapLoad (and MUSIC_DISABLE_*) is in
+  sound.ts, where PlaySE now skips its sound while it's set; the Hall of Fame's SetWarpsToRollCredits sets KEEP, the
+  credits set KEEP / OFF, a soft reset clears it.
+- `savedMusic` in GameState and the save: **SAVE_VERSION 6** (`upgradeSave` gives version 5 saves 0).
+- Callers: the new game, CONTINUE, the warps' and screens' field callbacks (FieldCB_DefaultWarpExit and friends),
+  a battle's return, the Safari Zone's out-of-balls warp, the naming screen's return, white-out (StopMapMusic),
+  `onMapLoaded`'s ClearSavedMusic before ON_TRANSITION, the connections. Every warp path's sound calls (decision 17):
+  DoWarp / DoDiveWarp / Task_DoorWarp in `OverworldScene.warpTo` (TryFadeOutOldMapMusic, SE_EXIT, the wait for
+  `!fade && BGMusicStopped()`), the door SEs of Task_DoorWarp / Task_ExitDoor, Dive / fall warps, Teleport, Dig /
+  Escape Rope (TryFadeOutOldMapMusic and BGMusicStopped through `FieldMoveHost.warpFadeOutScreen(mapId, true)`; their
+  SE_WARP_IN / _OUT, SE_CLICK, SE_FALL, SE_M_STRENGTH), Fly in (Overworld_PlaySpecialMapMusic; Fly fades no music
+  out), the Seagallop ferry's Overworld_FadeOutMapMusic + BGMusicStopped wait. Bike music (GetOnOffBike,
+  ForcePlayerOntoBike), surf music (FldEff_UseSurf, CreateStopSurfingTask). Scripts: `savebgm`, `fadedefaultbgm`,
+  `playbgm`'s save flag, `warpsilent` (no SE_EXIT).
+- Waits that now take their GBA length: every warp into a map with other music (+16 × 2 + 1 frames from the fade's
+  start indoors, 16 × 4 + 1 outdoors, over the screen fade's), Teleport / Dig / Escape Rope / Dive / fall warps the
+  same, the Seagallop ferry's warp (64 frames).
+- Found on the way: on the GBA the bike's MUS_CYCLING doesn't survive a connection (LoadMapFromCameraTransition crossfades
+  to the next map's music, then clears savedMusic); FRLG's FieldCB_DefaultWarpExit (no gFieldCallback) is also what
+  brings the map's music back after a wild battle. The warps' door SEs use W-sound 4's `FieldDoors.getDoorSoundEffect`.
+- Tick budgets raised: none. The full e2e suite passed on its first run with the longer warps (61 files, 398 tests,
+  22.4 min), and nothing failed and passed on a rerun. After merging master (#95, #96), two races showed when four
+  e2e files shared the machine and were fixed: surf.test.ts's shore jump (a 60-tick watcher that could run out
+  before the walk began, and the blob read after the frame's batch) and playerAvatar.test.ts's ledge jump (the
+  release came after the batch, up to 40 ticks, so the player walked on a step: now `holdWhile`); mapMusic's surf
+  test retries the step back to the shore.
+- Verified: typecheck; `npm test` (38 files, 502 tests; tests/unit/overworldMusic.test.ts 9, a version 5 save in
+  save.test.ts, savedMusic in saveData.test.ts's round trip); `tests/e2e/mapMusic.test.ts` (5: Pallet Town → Oak's lab
+  door with SE_DOOR and a speed-2 fade, the lab ≥ 33 frames later and MUS_OAK_LAB; the lab's mat → Pallet Town with
+  SE_EXIT and a speed-4 fade, ≥ 65 frames; the player's house without a fade; Pallet Town → Route 1, MUS_ROUTE1 128
+  frames after the speed-8 fade; the Bicycle: MUS_CYCLING, saved, CONTINUE plays it, off the bike MUS_ROUTE1; Surf:
+  MUS_SURF, back on land MUS_PALLET); the full e2e suite once (above).
+
+### W-sound 4: the field's SEs (AUDIO_PLAN.md batch C)
+
+- The field's sound calls, ported at their port functions with the C's names: the Pokémon Center / Hall of Fame
+  machine (SE_BALL per ball, MUS_HEAL, PokeballGlowEffect_WaitForSound's IsFanfareTaskInactive: the nurse now waits
+  for the fanfare), Fly's SE_M_FLY, the Escape Rope arrival's SE_CLICK, the field move banner's cry
+  (PlayCry_NormalNoDucking / PlayCry_Normal, still W-sound 2's stubs), Cut (2), Rock Smash, Sweet Scent, Flash,
+  Ruin Valley's SE_BANG; field_player_avatar.c (PlayCollisionSoundIfNotFacingWarp's SE_WALL_HIT, SE_LEDGE, the
+  spinners' SE_M_RAZOR_WIND2, the boulder's SE_M_STRENGTH); field_control_avatar.c (SE_WIN_OPEN on START and on
+  Task_QuestLogPlayback_OpenStartMenu's path, TryStartInteractionScript's SE_SELECT except for the PCs, the
+  boulder's SE_FALL down a hole); field_specials.c (SE_ELEVATOR, SE_DING_DONG, the field ListMenu's three
+  SE_SELECTs); `opendoor` (GetDoorSoundEffect: `FieldDoors.getDoorSoundEffect`, the ScriptHost's
+  `doorSoundEffect`); player_pc.c and the storage PC's main menu; start_menu.c (the menu's SEs, CloseStartMenu,
+  SE_SAVE with SaveDialogCB_ReturnSuccess's IsSEPlaying wait, SE_BOO, the A-held SE_SELECT); the Itemfinder, the
+  VS Seeker, the S.S. Anne's horn (2), the Seagallop's SE_SHIP / SE_EXIT (were `PlaySE(0)`), SE_FIELD_POISON and
+  the puddles' SE_PUDDLE (2).
+- `ui/Menu.ts` now plays menu.c's SEs (Menu_ProcessInput / Menu_ProcessInputNoWrapAround), which gives the start
+  menu, YES/NO, multichoice and the shop's menu theirs; the callers add their B / NO SEs (script_menu.c, shop.c).
+  The multichoice grid has Menu_ProcessInputGridLayout's. These files belong to no unit in appendix A (the calls
+  there were comments, not "kept").
+- Left to others / not in the port: the warp tasks' SEs and music, including the fall arrival's SE_FALL /
+  SE_M_STRENGTH in world/fallWarp.ts (decision 17: W-sound 3), the warp paths' door SEs (W-sound 3 can call
+  `getDoorSoundEffect`); escalators, the Lavaridge warps, FldEff_NpcFlyOut, Birth Island's rock, ShakeScreen,
+  LoopWingFlapSound, the Acro Bike's and secret base mats' SEs, the mailbox's five SE_SELECTs (no mail), weather.
+- Found on the way: `tests/e2e/audio.test.ts`'s `waitse` check took the first frame either SE player was busy as
+  SE_SHOP's; talking to the fisher now plays SE_SELECT first, so it counts only from SE_SHOP's frame on.
+  storyLeague's Elite Four test failed once in the full run: mashing A only ever picks PSYCHIC, whose 10 PP ran out
+  in the Champion battle on an unlucky run ("There's no PP left" until the 20,000-frame budget; normally ~12,700
+  frames), a race on the rolls, not on audio; the test's Mewtwo now has three PP Ups (16 PP).
+- Tick budgets raised: none (the heal's MUS_HEAL and the save's SE_SAVE fit the existing waits).
+- Verified: typecheck; `npm test` (37 files, 491 tests); `tests/e2e/fieldSounds.test.ts` (6: the bump and ledge,
+  talking and Bill's `opendoor`, the bedroom PC, START and the save's SE_SAVE + 60 frames, the heal machine's SE_BALLs
+  and MUS_HEAL wait, the school blackboard's grid SEs), several runs; the full e2e suite once (61 files, 398 tests,
+  22.4 min: 396 passed, the two above failed; both fixed and rerun green: audio, storyLeague's Elite Four (3 runs),
+  fieldSounds).
+
+### W-m4a 3: the mixer, first sound (AUDIO_PLAN.md batch C)
+
+- **Mixer** (`audio/m4aMixer.ts`, m4a_1.s SoundMainRAM / SoundMainRAM_Unk1): the reverb pass (SoundMainRAM_Reverb:
+  this slot's and the next slot's A + B × reverb >> 9, +1 when bit 7 is set, into both FIFOs) or the clearing,
+  then each DirectSound channel's samples (interpolated by `fw` for resampled voices, as read for FIX ones, reverse
+  voices backwards) × envelopeVolumeRight / Left >> 8 added into FIFO A / B with 8-bit wraparound, inside the
+  per-sample loops W-m4a 2 left (`mix:` comments); FastForward only when nothing is mixed. No DPCM (decision 4).
+- **DMA ring:** `gSoundInfo.pcmBuffer` (PCM_DMA_BUF_SIZE × 2), `m4aSoundVSync` (VCountIntr: pcmDmaCounter) and
+  `PcmSlotOffset` (SoundMain's r5: the slot this frame mixes into); `m4aPcmFrame()` returns it with REG_SOUNDCNT_H.
+- **Output:** `AgbMainFrameEnd` runs m4aSoundVSync before m4aSoundMain, turns the mixing on while
+  `audioOutputWantsFrames()` and then calls `pushFrame(m4aPcmFrame())`; `loadAudioData` fetches samples.bin in the
+  background when the output is on (`setSamplePcm`).
+- **Mono:** found on the way: FRLG's mixer never reads `soundInfo.mode` bit 0 (no reference in m4a_1.s); mono is
+  SetPokemonCryStereo's REG_SOUNDCNT_H (both FIFOs to both speakers at half volume), now kept as `gRegSoundCntH`
+  and sent with each frame (the DAC already applied it), and the bit is CgbSound's (W-m4a 4). Callers wired:
+  title_screen.c:742 (`titleScreenEnv.savedOptionsSound`, set by MainMenuScene from the loaded save) and
+  option_menu.c:519; reset_save_heap.c's ReloadSave is the link's (not ported).
+- **Found on the way:** SE_SELECT (and SE_DOOR, SE_EXIT, SE_PC_ON, SE_WALL_HIT, SE_USE_ITEM, SE_FLEE) are PSG only,
+  so the menus' cursor sound stays silent until W-m4a 4; SE_SAVE, SE_BALL_OPEN, SE_SHOP, SE_BIKE_BELL, SE_EXP, SE_BANG
+  and the cries are DirectSound. The "silent until the mixer" entries in DEVIATIONS.md now say what is left (PSG).
+- **Headless render** (`tests/audioRender.ts`, `tools/render-audio.ts`: `npx vite-node tools/render-audio.ts
+  MUS_TITLE 1200 out.wav`): MUS_TITLE 1,200 frames = 268,800 samples per FIFO, RMS 18.0, peak 106 (s8), zero for the
+  30 frames before it starts; MUS_PALLET RMS 9.6, peak 47; SE_SAVE RMS 8.5 over its first 30 frames, last non-zero
+  sample 41 frames after its start (reverb tail included); cry 25 and its reverse RMS 10.9.
+- Tests: typecheck; unit (`tests/unit/m4aMixer.test.ts`, 14: hand-computed blocks, interpolation, envelope,
+  wraparound, slots, reverb impulse, mono through the DAC, bookkeeping on / off by hand and over MUS_TITLE + SEs +
+  cries for 900 frames, the renders); e2e audioOutput (now: `?audio=1` frames reach the worklet with a non-zero
+  peak on the title screen), titleScreen, audio.

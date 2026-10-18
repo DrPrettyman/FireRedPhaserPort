@@ -214,16 +214,12 @@ test('getting off on the shore: the blob stays on the water during the jump, the
   const start = await game.eval((t) => t.field()!);
   expect(start.surfBlob).toBeDefined();
   await game.eval((t) => t.face('left'));
-  // Read the blob inside the predicate (tests/README.md rule 5): a read after `until` returns can come after the
-  // jump, once the blob is gone. The limit allows for the round trip before the walk's eval starts.
+  // Read the blob in the tick the jump is seen (after the frame's batch it can be gone), and allow for the walk's
+  // round trip under load (a 60-tick budget ran out before the walk began when eight files shared the machine).
   const jumping = game.eval(async (t) => {
-    let blob: unknown;
-    await t.until(() => {
-      const f = t.field();
-      if (f?.avatar.action === 'JUMP_SPECIAL_WITH_EFFECT_LEFT' && f.surfBlob) blob = f.surfBlob;
-      return blob !== undefined;
-    }, 1200);
-    return blob as Record<string, unknown> | undefined;
+    let blob;
+    await t.until(() => t.field()?.avatar.action === 'JUMP_SPECIAL_WITH_EFFECT_LEFT' && (blob = t.field()!.surfBlob), 3600);
+    return blob;
   });
   await game.eval((t) => t.walk('left', 1));
   // Task_StopSurfingInit: BOB_MON_ONLY leaves the blob where the player was
