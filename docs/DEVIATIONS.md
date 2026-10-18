@@ -240,6 +240,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
 - **Approximations:**
   - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical; weather palettes ignored.
   - `showmonpic`: the sprite appears when its PNG has loaded; no cry.
+  - The Pewter Museum's fossil pics (ui/MuseumFossilPic.ts): a Phaser image over a MenuWindow, like `showmonpic`,
+    not an OBJ in palette 13 over BG0 (the field isn't on the GBA layer); the graphics and positions are the C's.
+  - Prof. Oak's Pokédex rating: the MUS_DEX_RATING / MUS_EVOLVED fanfares are silent (`playfanfare` and
+    `waitfanfare` are no-ops until audio); BackupHelpContext / RestoreHelpContext are no-ops (no help system).
   - Text colour is reset to NPC_TEXT_COLOR_DEFAULT when a script starts, not in ProcessPlayerFieldInput.
   - The RNG (`random.c` formula) is seeded from `Math.random` (or `?seed=` in dev); the trainer id is rolled when the game state is created instead of in Oak's intro.
   - A mon's met location is the MAPSEC_* name, not the numeric id.

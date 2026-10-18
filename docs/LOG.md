@@ -2084,3 +2084,21 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Verified: typecheck, `npm test` (161), tests/e2e/moveTutors.test.ts (5: Mega Punch with a free slot and with
   four moves, B in the tutor's party menu, deleting GROWL from the middle of four moves with PP Ups shifted, B out
   of the deleter's party menu and summary screen), tests/e2e/tmCase.test.ts; screenshots of the field after both.
+
+### Oak's Pokédex rating, the museum's fossil pics, the fossil revival (W-daycare unit 1)
+
+- `script/sideSpecials.ts` (new, spread into SPECIALS): GetProfOaksRatingMessage (prof_pc.c
+  GetProfOaksRatingMessageByCount: one message per ten Kanto mons caught, 150 without Mew counts as complete),
+  HasAllMons (the existing menus/pokedex.ts port), BackupHelpContext / RestoreHelpContext as no-ops. Oak's rating
+  runs end to end in his lab and through PROF. OAK's PC (the national dex part too, with FLAG_OAK_SAW_DEX_COMPLETION);
+  `playfanfare` / `waitfanfare` were already no-ops, so nothing hangs without audio.
+- `ui/MuseumFossilPic.ts` (new): OpenMuseumFossilPic / CloseMuseumFossilPic / Task_WaitMuseumFossilPic (the
+  Kabutops and Aerodactyl fossil pics in PewterCity_Museum_1F); `graphics/script_menu/` added to extract_gfx.py's
+  GFX_PREFIXES. OverworldScene preloads and registers it; `__test.museumFossilPic()` probe.
+- The Cinnabar lab's fossil revival (CinnabarIsland_PokemonLab_ExperimentRoom) already worked: hand over the Dome
+  Fossil, leave for the entrance hall (its ON_TRANSITION sets the revive state to 2), come back, get Kabuto.
+- story.test.ts and storyCeladonSaffron.test.ts press B (not A) through the script after a leader battle, as
+  storyLeague.test.ts does.
+- Six entries off `scriptCoverageGaps.ts`.
+- Verified: typecheck; `npm test` (163); e2e sideEvents (7, twice), story + storyCeladonSaffron (17), hallOfFame;
+  screenshots of both fossil pics.

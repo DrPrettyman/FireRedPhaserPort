@@ -153,6 +153,17 @@ this is the next level down. When you add or change a subsystem, update its entr
   (`msgSetSignpost`, `handleCancelSignpost`, `takeRegisteredInput`); MessageBox draws the signpost frame when told.
   Tests: Viridian Forest item ball (`?start=after-rival&map=ViridianForest&x=5&y=42`, face up, A), hidden Potion
   (x=3 y=23), Pallet town sign (x=9 y=13, hold up), Viridian PC (`map=ViridianCity_PokemonCenter_1F&x=11&y=2`).
+- **Side specials:** `script/sideSpecials.ts` (SIDE_SPECIALS, spread into SPECIALS like STORY_SPECIALS; no Phaser)
+  holds small side-content specials: GetProfOaksRatingMessage (prof_pc.c: the rating by VAR_0x8004 Kanto mons
+  caught through `SpecialEnv.showFieldMessage`, VAR_RESULT = complete; the script's `waitmessage` waits for it),
+  HasAllMons (menus/pokedex.ts), BackupHelpContext / RestoreHelpContext (no-ops). Its callers:
+  PokedexRating_EventScript_RateInPerson (Oak, PalletTown_ProfessorOaksLab) and EventScript_AccessProfOaksPC (the
+  PC menu's PROF. OAK's PC). The museum's fossil pics are `ui/MuseumFossilPic.ts` (script_menu.c
+  OpenMuseumFossilPic / CloseMuseumFossilPic / Task_WaitMuseumFossilPic as a field task, so it outlives the
+  script): registered from OverworldScene with `registerSpecials` (it draws), graphics `sMuseum*Spr*` through
+  extract_gfx.py (`graphics/script_menu/`), preloaded with the field's gfx. Probe: `__test.museumFossilPic()`.
+  Tests: tests/e2e/sideEvents.test.ts (Oak in his lab at (6, 4), the Viridian PC, the museum's fossils from
+  (5, 4) / (5, 7) facing left, the Cinnabar lab's fossil revival), tests/unit/sideSpecials.test.ts.
 - **Multichoice / elevators:** `ui/MultichoiceMenu.ts` (vertical list and grid, field windows); the script engine
   sets VAR_RESULT from `ScriptHost.openMultichoice`. `text/stringWidth.ts` is GetStringWidth for any font set
   (the field's or the GBA layer's). Specials can start field tasks that outlive them (`ScriptHost.startFieldTask`,
