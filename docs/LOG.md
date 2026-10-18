@@ -2622,3 +2622,22 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the timing model); merging master in left STATUS.md's "Next up" sentence twice (merge=union), tidied by hand.
 - Final tree: master after #80 differs from #81's tested tree only in AUDIO_PLAN.md, STATUS.md and docs/LOG.md, so
   #81's full run stands as the end-of-batch run.
+
+### Audio data: voicegroups and samples (AUDIO_PLAN.md batch A, W-audiodata 2)
+
+- New `tools/extract_audio_voices.py` (one line in `tools/extract.py`'s main, ~0.2 s of extract time) →
+  `public/gen/audio/voicegroups.json` (1.2 MB: 77 voicegroups, 5 keysplit tables, gCryTable / gCryTable_Reverse,
+  388 each), `samples.json` + `samples.bin` (477 samples, 3.7 MB of s8 PCM), `waves.json` (11 programmable waves).
+  Shape and reading rules in docs/DEV_NOTES.md "Audio data: voicegroups and samples".
+- Found on the way: voice_groups.inc `.include`s cry_tables.inc between voicegroup128 and voicegroup129; many
+  voicegroups define fewer than 128 voices (drum kits, keysplit subgroups of 2-4 voices) and ply_note indexes them
+  unbounded, so each voicegroup is written as the ROM reads it, running on into the next ones; keysplit table
+  entries outside a table's 36-107 range are the ROM's neighbouring bytes (up to 255), so the five keysplit
+  subgroups get 256 entries. In the CGB macros the pan goes into ToneData.length (none of FRLG's CGB voices has
+  one). wav2agb's `agbl` is one less than the samples it writes on every one of the 477 WAVs, so each sample in
+  samples.bin is `size + 1` bytes.
+- Verified: typecheck; `npm test` (31 files, 307 passed + 1 skipped; tests/unit/audioVoices.test.ts: 9 tests, the
+  songs one skips until W-audiodata 1's songs.json is merged, checked against a fake songs.json both ways). Once,
+  by hand: the decomp's wav2agb built to a scratch dir: all 89 instruments' WaveData headers and bytes equal
+  `wav2agb -b`'s, and all 388 cries equal the decoded output of `wav2agb -b -c -l 1 --no-pad` (the DPCM round trip
+  is exact, as AUDIO_PLAN spike 3 found).
