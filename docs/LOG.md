@@ -2622,3 +2622,28 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the timing model); merging master in left STATUS.md's "Next up" sentence twice (merge=union), tidied by hand.
 - Final tree: master after #80 differs from #81's tested tree only in AUDIO_PLAN.md, STATUS.md and docs/LOG.md, so
   #81's full run stands as the end-of-batch run.
+
+### Audio data: songs (AUDIO_PLAN.md batch A, W-audiodata 1)
+
+- `tools/extract_audio.py` (new, the "audio songs" step of `npm run extract`, one call in tools/extract.py's
+  main): builds the decomp's `tools/mid2agb` with `$CXX` (default `c++`), the Makefile's CXXFLAGS minus `-Werror`
+  (read from the Makefile, with the known flags as a fallback), straight from the decomp's sources into the
+  gitignored `tools/.bin/mid2agb`; rebuilt only when a source, header or the Makefile is newer. No compiler or a
+  failed build stops extract with what to install (`xcode-select --install`, `build-essential`, `CXX=`).
+- Runs mid2agb on the 347 `midi.cfg` lines whose `.mid` exists (52 `ph_*` / `se_card*` lines skipped) with their
+  flags, in parallel, into a temporary directory; assembles the `.s` with a small Python assembler (GNU as
+  expressions and precedence, C division; MPlayDef.s read once) and writes `public/gen/audio/songs.json`
+  (`players` from music_player_table.inc, `songs[id]` from song_table.inc with the header bytes, the voicegroup
+  symbol, track offsets and base64 track bytes whose GOTO / PATT pointers are relocated to offsets into the same
+  data). 281,848 bytes of track data, 428 KB of JSON.
+- Found on the way: mid2agb ends *every* track with FINE; a looping track's GOTO sits before it, sometimes followed
+  by a wait or a PAN (what comes after the `]` marker), so "ends in FINE or GOTO" is really "ends in FINE, loops
+  through a GOTO somewhere before it". The song table has no entry on `dummy_song_header` (index 0 is mus_dummy,
+  which has no tracks). Re-running MPlayDef.s's ~400 `.equ`s per song made the assembler 2.8 s; reading them once
+  and skipping the include made it 0.7 s.
+- `npm run extract`: 22.7 s before, 26.8 s after with mid2agb already built (28.0 s with the build); the audio step
+  alone is ~1.5 s (mid2agb ~0.55 s, assembly ~0.7 s), the build ~1.3 s.
+- Verified: typecheck; `npm test` (31 files, 305 tests; tests/unit/audioSongs.test.ts, 7 tests: the players,
+  347 songs with ids equal to scripts.json's SE_* / MUS_*, known players / priorities, se_select's first bytes by
+  hand from MPlayDef.s, and a command walker that reaches each track's FINE exactly at its end with 77 looping
+  songs and all 3,088 PATT / GOTO pointers inside the data); a missing `CXX` gives the message.

@@ -913,6 +913,38 @@ this is the next level down. When you add or change a subsystem, update its entr
   in the page with `await new Function('p', 'return import(p)')('/src/gba/hw.ts')` (a bare `import()` in the
   function gets rewritten by Vitest); see battleAnims.2d.test.ts's `hblankLines`.
 
+## Audio
+
+The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScript (`src/audio/`), fed from
+`public/gen/audio/`.
+
+### Audio data: songs
+
+- **Where:** `tools/extract_audio.py` (`extract_audio(decomp, out)`, the "audio songs" step of `npm run extract`)
+  writes `public/gen/audio/songs.json`. It builds the decomp's own `tools/mid2agb` with `$CXX` (default `c++`) and
+  the Makefile's CXXFLAGS minus `-Werror` into `tools/.bin/mid2agb` (gitignored; rebuilt only when a source, header
+  or the Makefile is newer), runs it on every `midi.cfg` line whose `.mid` exists (347; the 52 `ph_*` / `se_card*`
+  lines have no file) with that line's flags, into a temporary directory, and assembles the `.s` files with a small
+  Python assembler (`Assembler`: labels, `.byte` / `.hword` / `.word`, `.equ` / `.set` / `.equiv`, GNU as
+  expressions and precedence with C division, `.include`, `.section` / `.align` / `.space` / `.end`; anything else
+  is an error). `sound/MPlayDef.s`'s symbols are read once and its `.include` skipped per song. No compiler: extract
+  stops with what to install.
+- **Shape:** `{ players: [{name, tracks}], songs: [{id, name, ms, me, priority, reverb, blockCount, voicegroup,
+  tracks, data}] }`. `players` is gMPlayTable (music_player_table.inc) in order. `songs[id]` is gSongTable
+  (song_table.inc): `ms` / `me` are the entry's two music player numbers; `priority`, `reverb` (`0x80 | -R`, i.e.
+  178 for `-R50`) and `blockCount` are the SongHeader's bytes, `voicegroup` its voicegroup symbol
+  (`voicegroupNNN`, resolved by W-audiodata 2's voicegroups.json), `tracks` the track pointers as byte offsets into
+  `data`; `data` (base64) is everything mid2agb puts before the header, with every pointer inside (GOTO, PATT) a
+  little-endian u32 byte offset into that same `data` (the ROM has absolute addresses there). A table entry on
+  `dummy_song_header` would get an empty song (FRLG has none). Every track ends in FINE; a looping one has its
+  GOTO a few bytes before it (mid2agb writes what follows the `]` marker), so don't assume GOTO is last.
+- **Test:** `tests/unit/audioSongs.test.ts` (players, 347 songs with ids = SE_* / MUS_* from scripts.json, known
+  priorities, se_select's bytes, and a command walker over every track: FINE at its end, 77 looping songs,
+  3,088 pointers inside the data). Rerun just the songs with
+  `python3 -c "import sys; sys.path.insert(0, 'tools'); from pathlib import Path; from extract_audio import
+  extract_audio; extract_audio(Path('../pret/firered'), Path('public/gen'))"` (~1.5 s; the first build of mid2agb
+  adds ~1.5 s).
+
 ## Game state
 
 - **PC boxes and save data:** `state/PokemonStorage.ts` is struct PokemonStorage (`state.storage`: 14 boxes of 30

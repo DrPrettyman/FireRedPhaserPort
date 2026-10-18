@@ -1509,6 +1509,10 @@ def main():
     extract_field_effect_objects(decomp, out, defines)
     extract_doors(decomp, out, defines)
     extract_league_lighting(decomp, out)
+    print("audio songs")
+    from extract_audio import extract_audio
+
+    extract_audio(decomp, out)
 
 
 if __name__ == "__main__":

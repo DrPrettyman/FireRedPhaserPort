@@ -11,13 +11,15 @@ everything the game needs into `public/gen/` (gitignored). Keep that folder loca
 ```sh
 npm install
 pip3 install pillow           # extractor dependency
+# + a C++ compiler: extract builds the decomp's mid2agb (macOS: xcode-select --install; Linux: build-essential)
 npm run extract               # reads ../pret/firered by default
 npm run dev                   # http://localhost:5173
 npm run dev:battle            # battle test harness (battle-test.html)
 ```
 
 To point at a decomp somewhere else, use `FIRERED_DECOMP=/path/to/firered npm run extract`
-or `python3 tools/extract.py --decomp /path/to/firered`.
+or `python3 tools/extract.py --decomp /path/to/firered`. The extractor compiles the decomp's `tools/mid2agb` (the
+songs) with `c++` into `tools/.bin/`; set `CXX=` to use another compiler (e.g. `CXX=g++ npm run extract`).
 
 ### Controls
 
