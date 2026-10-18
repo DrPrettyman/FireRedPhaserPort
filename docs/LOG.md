@@ -2582,4 +2582,10 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Spikes (scratch, not committed): the decomp's mid2agb builds and converts all 347 songs; a Python assembler +
   MPlayMain timing model runs all of them (77 loop, 270 end; fanfare lengths differ from `sFanfares`); all 388 cry
   WAVs are exactly DPCM-reachable; poryaaaa (MIT) renders every song from the decomp's sources (21 MB of Opus).
+- Second pass (the coordinator's review): units re-sized against WORKFLOW.md (14 units in four batches, sized with
+  `wc -l` of the functions), appendix A maps every port file with audio calls or notes to its owner unit (the
+  GBA-layer menus already make their calls), cry wait lengths per mode on real species, the fanfare songs that
+  outlive their counters (MUS_POKE_FLUTE's 14 silent bars), the sequencer timing model's exact source lines and
+  SoundMain's order (sequencers, then CgbSound, then the mixer: the first frame-order claim was wrong), and a
+  model-vs-poryaaaa length cross-check.
 - STATUS.md "Next up" points at the plan. No code changed; no tests run.

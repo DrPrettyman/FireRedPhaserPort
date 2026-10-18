@@ -1,7 +1,8 @@
 # Audio: plan for sound effects, cries and music
 
 Every sound in the port is a no-op today: `src/gba/sound.ts` stubs the C's sound.c API, the script engine's audio
-commands do nothing, and most ported files dropped their `PlaySE` calls for a comment. This plan says how the GBA
+commands do nothing, the GBA-layer menus call the stubs, and the field, the battle and some scenes dropped
+their calls for a comment. This plan says how the GBA
 makes its sound, where the game uses it (and where game logic *waits* on it), how to bring it into the port, and
 how to split the work into batches. It is research only (batch 3 of [SIDE_PLAN.md](SIDE_PLAN.md), W-audioplan):
 no audio code merges until the user has reviewed it.
@@ -27,12 +28,33 @@ Checked against the decomp (`pret/firered` at `037335f4c`, "Audio improvements (
    waits from gClockTable, GOTO / PATT / PEND, FINE) with no synth. All 347 assemble and run: 77 loop, 270 end.
    The fanfares' real lengths differ from `sFanfares`' fixed durations (MUS_LEVEL_UP 63 frames against 80,
    MUS_OBTAIN_BADGE 313 against 340, MUS_EVOLVED 229 against 220), which matters for section 2's waits.
+   What the model follows, from MPlayMain (m4a_1.s:1129-1300) and MPlayStart (m4a.c:611): a song starts with
+   `tempoD = tempoI = 150`, `tempoC = 0`; each frame `tempoC += tempoI` (`_081DD86C`), and while `tempoC >= 150`
+   (`_081DD9BC`) one tick runs and `tempoC -= 150`; in a tick each live track reads commands while its `wait` is
+   0 (`_081DD8E0`: running status for bytes < 0x80 when the last command was ≥ 0xBD; 0xCF+ notes take up to
+   three argument bytes < 0x80; 0x80-0xB0 set `wait = gClockTable[cmd - 0x80]`, `_081DD92E`), then `wait--`;
+   `TEMPO n` sets `tempoI = 2n * tempoU >> 8` (ply_tempo, m4a_1.s:920). It ignores the LFO, fades, notes'
+   channels and MEMACC / REPT (no FRLG song uses REPT). Known gaps: MPlayMain clears the player's TRACK status
+   bits in the first tick that finds no live track (`_081DD9A4`), i.e. one tick (one frame at 150 BPM) after the
+   FINE; the model counts to the FINE, so IsSEPlaying on the GBA stays TRUE about one frame longer than its
+   numbers. Since SoundMain runs the sequencers before the mixer, a song started during frame N's game logic gets
+   its first tick in frame N's VBlank and is first heard in frame N+1.
+   Cross-check against poryaaaa's renders (which play the MIDI, so the end of the sound is the last note's
+   release, not the FINE): model FINE / render audible end, in frames: SE_SELECT 10 / 13, SE_LEDGE 13 / 10,
+   SE_WALL_HIT 18 / 13, SE_SAVE 43 / 47, SE_PC_ON 61 / 67, SE_FAINT 51 / 52, SE_FLEE 40 / 37, SE_EXP 99 / 117,
+   SE_DOOR 34 / 20, MUS_OBTAIN_ITEM 146 / 143, MUS_OBTAIN_BADGE 313 / 310, MUS_EVOLVED 229 / 226,
+   MUS_SLOTS_WIN 151 / 151, MUS_HEAL 138 / 120. They agree to within a release tail or a trailing rest, which is
+   as close as a MIDI renderer can show; the engine's unit tests should pin the exact numbers.
 3. **The cry WAVs decode exactly.** All 388 cries in `sound/direct_sound_samples/cries/*.wav` are exactly
    reachable by FRLG's DPCM (every in-block step is in gDeltaEncodingTable), so decoding the WAV gives the
    samples the GBA decompresses. The port needs no DPCM code.
 4. **An offline renderer from the decomp's sources exists.** poryaaaa (MIT, C) builds with plain `cc` and
    renders a song from its MIDI file and voicegroup without a ROM. It rendered all 347 songs (intro plus one
    loop) in seconds: 54 minutes of music and 6 minutes of SEs, 21 MB + 2.3 MB as 48 kbps Opus.
+5. **Cry lifetimes and fanfare tails, from the C.** How long `IsPokemonCryPlaying` holds for each cry mode on
+   real species (section 2's table, from the cry template, SetPokemonCryPitch's key / tune split and the WAV
+   lengths), and which fanfare songs outlive their `sFanfares` counter (section 1). Arithmetic, not a run of
+   the engine: the engine's unit tests should pin the real numbers.
 
 ---
 
@@ -70,11 +92,17 @@ points and writes them as a GOTO.
   channels** (of the 12 structs, `MAX_DIRECTSOUND_CHANNELS`). `SampleFreqSet` gives 224 PCM samples per VBlank
   (`gPcmSamplesPerVBlankTable`) at the 59.7275 Hz refresh. Then the four music players are opened
   (`MPlayOpen`) and two cry players (`MAX_POKEMON_CRIES = 2`, 2 tracks each).
-- **Per frame** (main.c `VBlankIntr` → `m4aSoundMain` → `SoundMain`, m4a_1.s): mixes the next 224-sample buffer
-  (`SoundMainRAM`: each DirectSound channel's envelope, pitch step, loop, reverse and compressed playback, the
-  reverb echo of the buffer from the last frame, and the master volume), then runs each player's sequencer
-  (`MPlayMain`) and `CgbSound` for the four PSG channels. `m4aSoundVSync` (the VCount interrupt) only restarts
-  the DMA. On the GBA the mix for frame N plays during frame N+1.
+- **Per frame** (main.c:406 `VBlankIntr` → `m4aSoundMain` → `SoundMain`, m4a_1.s:20-86), in this order:
+  (1) the music players' sequencers, through the `MPlayMainHead` / `musicPlayerHead` chain (SoundMain_3); MPlayOpen
+  (m4a.c:565) puts each newly opened player at the head, so they run newest first: cry player 1, cry player 0,
+  SE3, SE2, SE1, BGM; (2) `CgbSound` for the four PSG channels (SoundMain_4); (3) `SoundMainRAM` (m4a_1.s:88,
+  run from its RAM copy): the reverb pass over the buffer, then per DirectSound channel the envelope (attack /
+  decay / sustain / release, once per frame), the pitch step, loop, reverse and DPCM playback
+  (`SoundMainRAM_Unk2` decodes 64-sample blocks), mixed into the next 224-sample buffer with the master volume.
+  `m4aSoundVSync` (the VCount interrupt) only restarts the DMA. The mix made in frame N plays during frame N+1.
+  So a channel that ends in frame N's mix (its sample ran out or its release reached 0) is unlinked from its
+  track by `MPlayMain` in frame N+1 (the ClearChain in MPlayMain's channel loop, m4a_1.s `_081DD8AE`), and
+  `IsPokemonCryPlaying` turns FALSE one frame after the sound stopped.
 - **Sequencer** (`MPlayMain`, m4a_1.s:1129): `FadeOutBody`, then `tempoC += tempoI`; while `tempoC >= 150`, one
   tick per track: count gate times down on its channels, read commands until a wait (running status for
   commands ≥ 0xBD; `ply_note` for 0xCF+; the jump table for 0xB1-0xCE: FINE, GOTO, PATT, PEND, REPT, MEMACC,
@@ -110,9 +138,13 @@ VOL, XCMD 0x0D progress, xRELE release, PAN, TIE key 60, xWAIT length, EOT, FINE
 Panpot / Pitch / Length / Release / Chorus / Priority` and starts it on a free cry player (`SetPokemonCryTone`,
 m4a.c:1660). The mode table (CRY_MODE_NORMAL, DOUBLES, ENCOUNTER, HIGH_PITCH, ECHO_START/END, FAINT, ROAR_1/2,
 GROWL_1/2, WEAK, WEAK_DOUBLES) sets length (default 140 frames), reverse, release, pitch (default 15360), chorus
-(a second detuned track) and volume. `IsPokemonCryPlaying` is true **while the cry's channel is alive**: its
-length plus the release envelope, or less if the sample runs out first, so cry waits depend on the mixer's
-sample position and envelope, not only on the sequencer. `PlayCry_Normal` / `_ByMode` / `_Script` duck the BGM to
+(a second detuned track) and volume. `IsPokemonCryPlaying` (m4a.c:1735) is true while the cry track's first
+channel is still linked to it (`track->chan && track->chan->track == track`). The link goes at the first of:
+**FINE** (`ply_fine`, m4a_1.s:750, unlinks every channel with RealClearChain at once, so the release tail that
+still sounds does *not* count), reached `length` ticks after the TIE (`ply_xwait` waits one tick per loop until
+its timer reaches `length`; the cry song runs at the default tempo, one tick per frame); or **the sample running
+out** (the mixer stops the channel; MPlayMain unlinks it the next frame). So cry waits depend on the sequencer
+*and* the mixer's sample position, but not on the release. Section 2 has the numbers. `PlayCry_Normal` / `_ByMode` / `_Script` duck the BGM to
 volume 85 and `Task_DuckBGMForPokemonCry` restores 256 once the cry stops (`IsCryFinished` = that task is gone).
 Cries are the compressed (DPCM) voice type in FRLG; spike 3 shows the WAVs decode to exactly those samples.
 
@@ -126,7 +158,18 @@ Cries are the compressed (DPCM) voice type in FRLG; spike 3 shows the WAVs decod
   `PlayFanfareByFanfareNum` pauses the BGM (`m4aMPlayStop`), sets `sFanfareCounter` from `sFanfares`' fixed
   duration (MUS_LEVEL_UP 80 frames ... MUS_POKE_FLUTE 450) and starts the song; `Task_Fanfare` counts it down and
   resumes the BGM (`m4aMPlayContinue`); `WaitFanfare` does the same counting for callers without the task.
-  **Fanfare waits are frame counters, not the song's length** (spike 2).
+  **Fanfare waits are frame counters, not the song's length** (spike 2). When the counter ends, only the BGM is
+  resumed: the fanfare song is not stopped and plays on over the BGM until its FINE. Five fanfare songs outlive
+  their counter (model frames to FINE / sFanfares): MUS_EVOLVED 229 / 220, MUS_SLOTS_JACKPOT 262 / 250,
+  MUS_SLOTS_WIN 151 / 150, MUS_DEX_RATING 200 / 196 (a few frames of tail over the resumed BGM), and
+  **MUS_POKE_FLUTE 3,061 / 450**: its last note starts at frame 316, then both tracks hold 14 empty bars
+  (`W96` × 14 before FINE) at TEMPO 40 (80 BPM, 0.53 ticks a frame). The 450-frame counter covers the melody;
+  the silent tail keeps SE2 "playing" (IsSEPlaying TRUE) for ~2,600 more frames until another SE2 song of
+  priority ≥ 5 replaces it (MPlayStart's rule), which in practice is the SE_SELECT (`-P5`) of the next text box's
+  A press. Its callers wait only on the counter (item_use.c:389 Task_PlayPokeFlute → WaitFanfare(FALSE);
+  EventScript_AwakenSnorlax in data/scripts/static_pokemon.inc: `playfanfare` + `waitfanfare`), so nothing hangs,
+  but a `waitse` right after the flute would wait for the tail. The port must keep this (don't stop fanfares
+  early).
 - **SEs:** `PlaySE` (skipped during quest log playback or while `gDisableMapMusicChangeOnMapLoad`),
   `PlaySE12WithPanning`, `PlaySE1/2WithPanning`, `SE12PanpotControl`, `IsSEPlaying` (SE1 or SE2 has a live track,
   so it is TRUE during a fanfare too), `IsSpecialSEPlaying` (SE3: rain, thunderstorm, downpour, low HP).
@@ -153,16 +196,16 @@ Indigo Plateau). `Overworld_PlaySpecialMapMusic` on map load (22 callers), `TryF
 
 | API | Decomp calls (files) | Port today |
 | --- | --- | --- |
-| PlaySE | 686 (88) | stub; called only in `gba/menu.ts`, `gba/listMenu.ts`, `battle/gfx.ts`. Elsewhere the call was dropped for a comment, or goes through the battle's `ui.playSE` (a no-op in BattleScene.ts:225) |
-| PlaySE12WithPanning / 1 / 2, SE12PanpotControl | 49 (20) / 3 / 2, 2 | `battle/anim/battleAnim.ts` PlaySE12WithPanning → `ui.playSE`, panning dropped |
+| PlaySE | 686 (88) | stub, called 334 times in 51 files: the GBA-layer screens kept their calls (party menu 58, storage 52+7, bag 24, summary 22, ...). The field (`world/`, `entities/`) and some scenes dropped theirs for a comment; the battle goes through `ui.playSE` (a no-op in BattleScene.ts:225). Appendix A has the file-by-file gaps |
+| PlaySE12WithPanning / 1 / 2, SE12PanpotControl | 49 (20) / 3 / 2, 2 | 36 calls in 13 anim files to `battle/anim/battleAnim.ts`'s PlaySE12WithPanning → `ui.playSE`, panning dropped |
 | PlayBGM / PlayNewMapMusic / Overworld_PlaySpecialMapMusic | 21 (12) / 20 (10) / 22 (9) | stub / missing / missing (comments) |
 | Overworld_ChangeMusicTo(Default), FadeOutAndPlayNewMapMusic, FadeOutAndFadeInNewMapMusic | 6, 6, 2 | missing |
 | FadeOutMapMusic / FadeOutBGM / FadeInBGM / FadeOutBGMTemporarily | 11 / 4 / 3 / 2 | stubs (title screen only) / comments |
 | StopMapMusic / BGMusicStopped / IsNotWaitingForBGMStop | 18 / 12 / 3 | missing / missing / stub (TRUE) |
-| PlayFanfare / PlayFanfareByFanfareNum / WaitFanfare / IsFanfareTaskInactive | 24 (19) / 5 / 6 / 16 (12) | stubs; IsFanfareTaskInactive always TRUE, WaitFanfare always TRUE |
-| PlayCry_Normal / _ByMode / _Script / _NormalNoDucking / _ReleaseDouble | 21 / 16 / 2 / 7 / 4 | stubs (the first four); battle's `ui.playCry` no-op |
-| IsCryFinished / IsCryPlaying / IsCryPlayingOrClearCrySongs / StopCryAndClearCrySongs | 11 / 4 / 12 / 7 | stubs: finished at once |
-| IsSEPlaying / IsBGMPlaying / IsBGMStopped / IsSpecialSEPlaying | 34 (11) / 1 / 1 / 1 | stub (FALSE) / missing |
+| PlayFanfare / PlayFanfareByFanfareNum / WaitFanfare / IsFanfareTaskInactive | 24 (19) / 5 / 6 / 16 (12) | stubs called 7 / 3 / 4 / 8 times; IsFanfareTaskInactive and WaitFanfare always TRUE |
+| PlayCry_Normal / _ByMode / _Script / _NormalNoDucking / _ReleaseDouble | 21 / 16 / 2 / 7 / 4 | stubs called 8 / 7 / 0 / 4 / 0 times; battle's `ui.playCry` no-op |
+| IsCryFinished / IsCryPlaying / IsCryPlayingOrClearCrySongs / StopCryAndClearCrySongs | 11 / 4 / 12 / 7 | stubs called 6 / 3 / 1 / 2 times: finished at once |
+| IsSEPlaying / IsBGMPlaying / IsBGMStopped / IsSpecialSEPlaying | 34 (11) / 1 / 1 / 1 | stub (FALSE) called 12 times in 6 files / missing |
 | m4aSongNumStart / Stop, m4aMPlayStop / Continue / AllStop, m4aMPlayVolumeControl | 2 / 15, 18 / 4 / 11, 16 | `m4aSongNumStart` stub; others missing |
 | SetPokemonCryStereo | 4 | comment in `menus/optionMenu.ts:403` |
 
@@ -216,10 +259,34 @@ counter stands in.
 | --- | --- | --- | --- |
 | `waitfanfare`, IsFanfareTaskInactive, WaitFanfare | `sFanfareCounter`: a **fixed frame count** per fanfare (sFanfares) | scrcmd.c, learn_move.c, battle_script_commands.c (level up), daycare.c (2), evolution_scene.c (2), slot_machine.c (3: the payout), field_effect.c, party_menu.c, item_use.c, diploma.c, pokemon_special_anim.c | always done, so scripts' item / badge / heal fanfares don't hold the message; `menus/eggHatch.ts:494` keeps its own 220-frame counter; the slot payout and the relearner don't wait (DEVIATIONS) |
 | `waitse`, IsSEPlaying | the SE1 / SE2 players' tracks (the sequencer), incl. a fanfare on SE2 | scrcmd.c:891, evolution_scene.c (21), start_menu.c:829 (save), item_use.c, trainer_card.c, battle_anim.c (479: the 90-frame SE wait at the end of an anim, 1533), battle_gfx_sfx_util.c:297, text.c (WAIT_SE), field_weather_effects.c | FALSE: `waitse` doesn't hold scripts; `evolutionScene.ts:544` goes on where the C would wait for SE_EXP |
-| `waitmoncry`, IsCryFinished, IsCryPlaying(OrClearCrySongs) | the cry **channel** (length + release, the sample's end): sequencer + mixer state | scrcmd.c:2097, evolution_scene.c (6), trade_scene.c (2), daycare.c, oak_speech.c, battle_anim_sound_tasks.c (4), the battle controllers (8: the opponent's intro cry before the battle starts), hall_of_fame.c (2), pokeball.c, pokemon_summary_screen.c | finished at once: battle intros, the Hall of Fame and evolutions go faster than on the GBA |
+| `waitmoncry`, IsCryFinished, IsCryPlaying(OrClearCrySongs) | the cry track's channel link: until FINE after `length` ticks, or the sample's end (not the release): sequencer + mixer state. Numbers below | scrcmd.c:2097, evolution_scene.c (6), trade_scene.c (2), daycare.c, oak_speech.c, battle_anim_sound_tasks.c (4), the battle controllers (8: the opponent's intro cry before the battle starts), hall_of_fame.c (2), pokeball.c, pokemon_summary_screen.c | finished at once: battle intros, the Hall of Fame and evolutions go faster than on the GBA |
 | BGMusicStopped, IsNotWaitingForBGMStop | the BGM fade-out (16 × speed frames) and MapMusicMain's states 5-7 | field_fadetransition.c (5 warp tasks: `!WaitWarpFadeOutScreen() && BGMusicStopped()`), field_effect.c (5: Fly, Dig, Teleport, Escape Rope), field_screen_effect.c, seagallop.c, overworld.c, title_screen.c, pokemon_jump.c | not checked: warps wait only for the palette fade. On the GBA a warp into a map with other music waits 32 frames (indoors) or 64 (outdoors) for the music |
 | IsBGMStopped / IsBGMPlaying | the BGM player | trade_scene.c, pokeball.c | not ported |
 | IsSpecialSEPlaying | SE3 | field_weather.c (rain stopping) | not ported |
+
+**How long a cry holds a wait.** From section 1: the cry is a TIE at key 60 plus the mode's pitch, held for
+`length` ticks (one a frame), so it is "playing" for min(length + 1, 1 + sample frames) frames after the call,
+where sample frames = sample length / (176 × 2^(pitch / 12)): the cry WAVs are 10,512 Hz and the mixer takes
+224 × 10512 / 13379 = 176 source samples a frame at the base key. `PlayCryInternal`'s pitches decode (through
+SetPokemonCryPitch's key / tune split and TrkVolPitSet's `tune * 4`) to key 60 (NORMAL, DOUBLES), 60.875
+(ENCOUNTER), 56.8125 (FAINT), 61.4375 (HIGH_PITCH). IsCryFinished turns TRUE about a frame later
+(Task_DuckBGMForPokemonCry first waits 2 frames, then polls). Estimates in frames (±1-2: the start frame and the
+frame order aren't modelled exactly):
+
+| Species (cry samples) | NORMAL (length 140) | ENCOUNTER (140) | FAINT (140) | HIGH_PITCH (50) | DOUBLES (20) |
+| --- | --- | --- | --- | --- | --- |
+| Pidgey (1,902, the shortest) | 12 | 12 | 14 | 11 | 12 |
+| Nidoran♀ (4,775) | 29 | 27 | 34 | 26 | 21 |
+| Bulbasaur (8,183) | 48 | 46 | 57 | 44 | 21 |
+| Pikachu (8,233) | 48 | 46 | 58 | 45 | 21 |
+| Charizard (9,539) | 56 | 53 | 67 | 51 | 21 |
+| Onix (12,257) | 71 | 68 | 85 | 51 | 21 |
+| Mew (15,064) | 87 | 83 | 104 | 51 | 21 |
+| Jynx (23,524, the longest) | 135 | 129 | 141 | 51 | 21 |
+
+The median cry (Magmar, 7,655 samples) is ~45 frames. So a wild battle's intro (the opponent's ENCOUNTER cry,
+which battle_controller_opponent.c waits for with IsCryPlayingOrClearCrySongs) gains ~0.5-2 s on the GBA over
+the port today, a faint gains 1-2 s per fainted mon, and an evolution's two cries ~1-3 s.
 
 Timings that don't depend on audio and stay as they are: the credits (frame counters; the music only runs
 alongside), the title screen's cry scene (90 frames), the Hall of Fame's per-mon timers.
@@ -411,84 +478,127 @@ first (decision 5).
 
 ## 6. The work split
 
-Units follow docs/WORKFLOW.md section 1: about an hour for a fresh worker, each leaving the branch green. One PR
-per unit (SIDE_PLAN.md decision 1). Three workstreams; the engine and the data can start in parallel once the
-JSON shapes in section 4 are agreed (they are fixed here, so neither waits on the other's code: the engine's first
-unit tests on fixtures built from the spike's song bytes).
+Units follow docs/WORKFLOW.md section 1: about an hour for a fresh worker (roughly 1,000-1,500 lines of C ported
+plus tests and docs), each leaving the branch green. One PR per unit (SIDE_PLAN.md decision 1). Sizes below are
+`wc -l` of the C / assembly / C++ each unit ports; ARM assembly is about three lines to one of C, so
+"asm" lines count for a third. The JSON shapes in section 4 are fixed here, so the engine and the extractor start
+in parallel: the engine's first unit tests on hand-written song bytes.
 
 ### W-audiodata: the extractor (owns `tools/extract_audio.py`, `public/gen/audio/`, `tools/check_mid2agb.py`)
 
-1. **Songs.** midi.cfg, a Python port of mid2agb (midi.cpp's reader, agb.cpp's writer: notes and ties, waits,
-   `-E` gate times, the volume / pan / bend / mod / tempo events, loop markers to GOTO, PATT compression of
-   repeats, `-V` volume scaling, priority and reverb), the song table and music player table → `songs.json`;
-   the dev check against the C++ mid2agb (all 347 songs byte-identical, or the differences listed in the PR).
-   `npm run extract` wires it in.
-2. **Voicegroups and samples.** `voice_groups.inc` with the `music_voice.inc` macros (every voice type in
-   section 1), `keysplit_tables.inc` (with the label offsets), `direct_sound_data.inc` → the WAVs (`smpl`,
-   `agbp`, `agbl`), `programmable_wave_data.inc`, `cry_tables.inc` → `voicegroups.json`, `samples.json`,
-   `samples.bin`, `waves.json`. Unit test: every song's voicegroup resolves and every voice's sample exists.
+1. **Songs I: mid2agb without compression.** midi.cpp's reader and event conversion (ReadMidiFileHeader ...
+   ConvertTimes, midi.cpp:1-650), main.cpp's options (233), tables.cpp (286, mostly data), agb.cpp's writer for
+   the plain path (PrintAgbHeader, PrintWait / PrintOp / PrintNote / PrintEndOfTieOp / PrintControllerOp /
+   PrintAgbTrack / PrintAgbFooter, ~400 of 547); ~1,350 lines of C++. Writes mid2agb's `.s` text (so the check is
+   a text diff). `tools/check_mid2agb.py` builds the decomp's mid2agb with `c++` in a temp directory and diffs
+   every song against `mid2agb -N` (the tool's own no-compression flag), so this unit can be byte-checked
+   before compression exists. Done when all 347 match under `-N`.
+2. **Songs II: compression, the rest of the flags, the bytes.** CalculateWaits and the PATT compression
+   (CalculateCompressionScore, IsCompressionMatch, CompressWholeNote, Compress: midi.cpp:759-915, ~160), the
+   memacc / extended ops (agb.cpp:254-349, ~95), the loop labels, then an assembler for the `.s` text with
+   MPlayDef.s's symbols (the spike's took ~80 lines of Python) → `songs.json` with the song table and music player
+   table. Done when all 347 match the real flags; wired into `npm run extract`.
+3. **Voicegroups and samples.** `voice_groups.inc` (8,073 lines of data) through the `music_voice.inc` macros
+   (~160 lines: every voice type in section 1), `keysplit_tables.inc` (393, with the label offsets),
+   `direct_sound_data.inc` → the WAVs (`smpl`, `agbp`, `agbl`), `programmable_wave_data.inc`, `cry_tables.inc`
+   → `voicegroups.json`, `samples.json`, `samples.bin`, `waves.json`. Unit test: every song's voicegroup
+   resolves, every voice's sample exists.
 
 ### W-m4a: the engine (owns `src/audio/`)
 
-1. **Sequencer and channels, no sound.** m4a.c + m4a_1.s's logic: MPlayOpen / MPlayStart / MPlayMain, every
-   `ply_*` and `ply_x*` command, TrackStop, TrkVolPitSet, FadeOutBody, the m4aMPlay* controls, ply_note's voice
-   lookup and channel allocation (PCM priority stealing, the 5-channel limit, CGB channels), ChnVolSetAsm,
-   MidiKeyToFreq / MidiKeyToCgbFreq, the per-frame envelope and sample-position bookkeeping (no mixing), the cry
-   song (SetPokemonCryTone and its setters, IsPokemonCryPlaying), `m4aSoundMain`. Unit tests as in section 5.
-2. **The mixer and the output.** SoundMainRAM's mixing (resampling, ADSR applied, reverse, the no-resample type,
-   reverb, master volume, mono), `output.ts` and the worklet (PCM path only), autoplay resume, visibility, the
-   `?audio=` flag, Phaser `noAudio`. First audible unit (songs without their PSG parts).
-3. **The CGB channels.** CgbSound's register writes and the worklet's PSG synth (squares with duty and sweep, the
-   wave channel with the programmable waves, noise with both LFSR widths, the hardware envelope, pan). Compare
-   with poryaaaa's renders. After this, music is complete.
+1. **Sequencer, track commands and controls (silent).** MPlayOpen (46), MPlayStart (57), m4aMPlayStop (24),
+   MPlayMain (339 asm), TrackStop (40 asm), the jump-table commands (ply_fine ... ply_port, ply_lfos, ply_mod:
+   ~330 asm), ply_memacc ... ply_xcmd_0D (m4a.c, ~240), FadeOutBody (73), TrkVolPitSet (45), m4aSongNum*
+   (~80), the m4aMPlay* controls (~330), m4aSoundInit / SoundInit / m4aSoundMode / SampleFreqSet (~170),
+   `m4aSoundMain` (the player chain in its newest-first order); ~1,060 lines of C plus ~710 of asm. Notes only
+   set gate times here (no channels). Unit tests: tempo and tick counts, MPlayStart's priority rule, pause /
+   continue, fades (16 × speed frames), on hand-written bytes, then on `songs.json` once W-audiodata 2 lands.
+2. **Notes, channels and cries (silent).** ply_note (280 asm: voice lookup through keysplit and rhythm voices,
+   PCM channel allocation and stealing, CGB channel claim), ply_endtie (41 asm), ChnVolSetAsm (30 asm),
+   MidiKeyToFreq (21), Clear/RealClearChain (34), the per-frame half of SoundMainRAM that isn't mixing (the
+   envelope state machine, the sample position, loop and end: ~200 of its 381 asm lines, plus the reverse start
+   from SoundMainRAM_Unk1), the cry song (SetPokemonCryTone and its setters, IsPokemonCryPlaying, the template:
+   ~130); ~190 lines of C plus ~600 of asm. Needs W-audiodata 3's voicegroups. Unit tests: channel lifetimes,
+   the cry table in section 2 (pin the real numbers), channel stealing between BGM and an SE.
+3. **The mixer and the output (first audible).** SoundMainRAM's mixing (resampling, ADSR applied, reverb, master
+   volume, mono: the other ~180 asm lines), SoundMainRAM_Unk1's mixing loop (201 asm; DPCM isn't needed, spike 3),
+   `output.ts` and the worklet's PCM path, autoplay resume, visibility, the `?audio=` flag, Phaser `noAudio`.
+   ~380 asm plus new web code. Songs play without their PSG parts.
+4. **The CGB channels.** CgbSound (309), MidiKeyToCgbFreq (47), CgbOscOff / CgbPan / CgbModVol (68),
+   MPlayExtender (71) as per-frame register state, and the worklet's PSG synth (squares with duty and sweep,
+   the wave channel, noise with both LFSR widths, the hardware envelope, pan: new code, poryaaaa's
+   `m4a_channel.c` as the reference). ~500 lines of C plus ~300 new. Music is complete after this.
 
-### W-sound: sound.c and the call sites (owns `gba/sound.ts`, the audio script commands, the call-site files of each unit)
+### W-sound: sound.c, map music and the call sites (owns `gba/sound.ts`, the audio script commands, the call-site files of each unit)
 
-1. **sound.c and the hooks.** All of sound.c on the engine (map music state machine, fanfares with
-   Task_Fanfare / WaitFanfare, cries with the ducking task, PlaySE*, Is*Playing, BGM volume helpers),
-   `AgbMainFrameEnd` in both hosts, the twelve script commands (ScrCmd_playse ... ScrCmd_waitmoncry, `savebgm`
-   with `savedMusic` in the save and a version bump), the NO_OP audio specials, the text printer's SE_SELECT and
-   control codes, `__test.audioEvents` / `__test.audio()`. Remove eggHatch's local fanfare counter. E2E
-   `tests/e2e/audio.test.ts` (item fanfare, `waitse`, `waitmoncry`). Can start on W-m4a unit 1 alone: the waits
-   are right before any sound is heard.
-2. **Map and battle music.** overworld.c's music functions (Overworld_PlaySpecialMapMusic, TryFadeOutOldMapMusic,
-   the connection transition, ChangeMusicTo(Default), MusicCanOverrideMapMusic, gDisableMapMusicChangeOnMapLoad)
-   at their callers (field_fadetransition.c's warp tasks with BGMusicStopped, Fly / Dig / Teleport / Escape Rope,
-   bike, surf, Cycling Road, the Hall of Fame and credits), battle music (CreateBattleStartTask's song, trainer
-   encounter music, victory music, BattleStopLowHpSound / SE_LOW_HEALTH, the controllers' PLAYBGM / PLAYFANFARE /
-   PLAYSE through sound.ts instead of `ui.*`), the title screen and Oak's speech BGM.
-3. **Call sites: field.** Re-add the C's PlaySE / cries / fanfares in `world/` and `entities/` (player avatar,
-   doors, field moves, field effects, the field items, elevators, VS Seeker, Itemfinder, the PC, Seagallop,
-   S.S. Anne, Flash, falls, weather SE3 loops), removing their DEVIATIONS lines.
-4. **Call sites: battle.** Cries in every mode (send-out, faint, doubles, the Pokédex-registered cry), the anim
-   engine's panning (PlaySE12WithPanning, SE12PanpotControl, the sound tasks), the 90-frame SE wait at the end
-   of an anim (battle_anim.c:479), ball and exp SEs, IsCryPlayingOrClearCrySongs in the controllers.
-5. **Call sites: menus and scenes.** Party menu, bag, TM case, berry pouch, PC screens, summary, Pokédex (incl.
-   the BGM volume calls), region map, shop, trainer card, slot machine (the payout's fanfare wait), learn move,
-   evolution, egg hatch, trades, Hall of Fame, credits, save dialog, option menu (SetPokemonCryStereo).
+1. **sound.c and the hooks.** sound.c without the cries (~450 of its 649 lines: map music state machine,
+   fanfares with Task_Fanfare / WaitFanfare, PlaySE*, Is*Playing, the BGM helpers), `AgbMainFrameEnd` in both
+   hosts with the fanfare task (decision 5), the script commands playse ... waitfanfare (scrcmd.c:883-990),
+   `__test.audioEvents` / `__test.audio()`, eggHatch's local fanfare counter removed. E2E
+   `tests/e2e/audio.test.ts`: an item fanfare holds its message 160 frames, `waitse` holds a script. Needs
+   W-m4a 1 and W-audiodata 2 (the songs), not the mixer: the waits are right before anything is heard.
+2. **Cries, text codes and specials.** sound.c's cries (sound.c:344-537, 194 lines: PlayCry_*, PlayCryInternal's
+   mode table, the ducking task, IsCryFinished and the rest), SpeciesToCryId, `playmoncry` / `waitmoncry`
+   (scrcmd.c:2088-2101), the text printer's SE_SELECT on A/B and its PLAY_BGM / PLAY_SE / WAIT_SE /
+   PAUSE_MUSIC / RESUME_MUSIC codes (text.c:555-760, 900-905), the NO_OP audio specials, SetPokemonCryStereo
+   from the option menu, title screen and save load. E2E: `waitmoncry`, a text WAIT_SE. Needs W-m4a 2.
+3. **Map music.** overworld.c's music block (overworld.c:989-1200, ~210 lines: GetCurrLocationDefaultMusic,
+   Overworld_PlaySpecialMapMusic, the connection transition, TryFadeOutOldMapMusic, ChangeMusicTo(Default),
+   MusicCanOverrideMapMusic, gDisableMapMusicChangeOnMapLoad), `savedMusic` in the save (version bump), and the
+   music calls at their callers: field_fadetransition.c (22, incl. the BGMusicStopped warp waits), overworld.c
+   (27), field_effect.c (18: Fly, Dig, Teleport, Escape Rope, Surf), bike.c (4), the Hall of Fame and credits.
+   E2E: a warp between maps with different music waits for the fade; bike music on, saved, continued; surf music.
+4. **Call sites: field SEs.** See appendix A: field_effect.c's 19 non-music calls and the fldeff_* files,
+   field_player_avatar.c (13), field_control_avatar.c (6), field_specials.c (13: elevators, ...), doors
+   (`opendoor` / field_door.c), player_pc.c (10), start_menu.c (14: the save dialog), itemfinder.c,
+   vs_seeker.c, ss_anne.c, seagallop.c, trainer_see.c, fldeff_poison.c: ~110 calls, nearly all missing in the
+   port. (The weather loops on SE3 wait for field weather, which the port doesn't have yet.)
+5. **Call sites: battle I (controllers, scripts, music).** battle_controller_player.c (48 in C / 17 live in the
+   port), _oak_old_man.c (16 / 7), _opponent.c (9 / 4, incl. the intro cry wait), _safari.c (9 / 5),
+   battle_script_commands.c (21 / 15), battle_main.c (11 / 1: the battle music, victory music), battle_setup.c
+   and battle_transition.c (the music the transition starts, SE_MUGSHOT), BattleScene's `ui.play*` hooks
+   replaced by sound.ts calls: ~70 calls to add.
+6. **Call sites: battle II (balls, interface, anims).** pokeball.c (23, nearly all missing: the throw, wobbles,
+   the send-out cry), battle_gfx_sfx_util.c (8: the low HP beep on SE3, the anim SE wait), battle_interface.c,
+   the anim engine's panning and waits (battle_anim.c: 19 in C / 7 live, incl. the 90-frame SE wait at
+   battle_anim.c:479; PlaySE12WithPanning's pan; SE12PanpotControl), battle_anim_sound_tasks.c (16 / 13),
+   battle_anim_special.c (13 / 10): ~55 calls to add, plus checking the 36 PlaySE12WithPanning calls.
+7. **Call sites: scenes.** evolution_scene.c (59 in C / 22 live: the music, cries and the SE_EXP / IsSEPlaying
+   waits), trade_scene.c (30 / 18), hall_of_fame.c (14 / 0), credits.c, egg hatching (daycare.c / egg_hatch.c:
+   14 / 13), pokedex_screen.c (14 / 10, the BGM volume calls), item_menu.c (37 / 24), title_screen.c and
+   main_menu.c: ~85 calls to add.
 
-Units 3-5 split by directory, so they can run in parallel. Each greps its files for "no audio", "silent", "audio"
-(121 comments in 53 files today) and the C files they port for every PlaySE / PlayCry / PlayFanfare / m4a call.
+The menu screens on the GBA layer (party menu, storage, summary, region map, TM case, berry pouch, item PC, shop,
+trainer card, naming screen, markings, learn move, slot machine, Oak's speech) already make their calls (appendix
+A): they need no unit, only a listen once sound.ts is real. Units 4-7 own disjoint files, so they run in parallel.
 
 ### Order and batches
 
-| Batch | Workers (≤ 4) | Depends on |
+| Batch | Workers (≤ 4) | Each needs merged |
 | --- | --- | --- |
-| A | W-audiodata 1, W-audiodata 2, W-m4a 1 | nothing (fixed JSON shapes) |
-| B | W-m4a 2, W-sound 1, then W-m4a 3 | A merged |
-| C | W-sound 2, W-sound 3, W-sound 4, W-sound 5 | W-sound 1 (the API) and W-m4a 2 (to hear it) |
+| A | W-audiodata 1, W-audiodata 3, W-m4a 1 | nothing |
+| B | W-audiodata 2, W-m4a 2, then W-sound 1 | W-audiodata 2: W-audiodata 1. W-m4a 2: W-m4a 1 + W-audiodata 3. W-sound 1: W-m4a 1 + W-audiodata 2 (its e2e times real SEs and fanfares, so it starts once W-audiodata 2 merges) |
+| C | W-m4a 3, W-sound 2, W-sound 3, W-sound 4 | W-m4a 3: W-m4a 2. W-sound 2: W-sound 1 + W-m4a 2. W-sound 3 and 4: W-sound 1 |
+| D | W-m4a 4, W-sound 5, W-sound 6, W-sound 7 | W-m4a 4: W-m4a 3. W-sound 5-7: W-sound 2 (cries) |
+
+Fourteen units in four batches. Fanfare and `waitse` waits become GBA-accurate in batch B (W-sound 1), cry and
+warp (BGM fade) waits in batch C (W-sound 2 and 3); the first sound is heard in batch C (W-m4a 3). Every
+W-sound unit only needs `__test.audioEvents` for its tests, not audible output, which is why the call-site units
+don't wait for W-m4a 3-4.
 
 ### Shared building blocks and owners
 
 - The JSON shapes in section 4: fixed here; W-audiodata owns any change and says so in its PR.
-- `gba/sound.ts` (the API): W-sound unit 1. Until it merges, other units call the existing stubs.
-- `AgbMainFrameEnd` in `OverworldScene.ts` / `GbaHostScene.ts`: W-sound unit 1 (two lines each).
-- `state/saveData.ts` (savedMusic, version bump): W-sound unit 1.
-- `script/ScriptEngine.ts` audio commands, `script/specials.ts` NO_OP list: W-sound unit 1.
-- `text/TextPrinter.ts` control codes: W-sound unit 1.
-- `dev/testHooks.ts` audio hooks: W-sound unit 1.
-- `battle/battleUi.ts` / BattleScene's `ui.play*`: W-sound unit 2 (replaced by sound.ts calls).
-- Per-file call sites: units 3-5 by directory.
+- `gba/sound.ts` (the API): W-sound 1 (cries: W-sound 2). Until they merge, other units call the existing stubs.
+- `AgbMainFrameEnd` in `OverworldScene.ts` / `GbaHostScene.ts`: W-sound 1 (two lines each).
+- `state/saveData.ts` (savedMusic, version bump): W-sound 3.
+- `script/ScriptEngine.ts` audio commands: W-sound 1 (`playmoncry` / `waitmoncry`: W-sound 2); `opendoor`'s SE:
+  W-sound 4. `script/specials.ts` NO_OP list: W-sound 2.
+- `text/TextPrinter.ts` control codes: W-sound 2.
+- `dev/testHooks.ts` audio hooks: W-sound 1.
+- `battle/battleUi.ts` / BattleScene's `ui.play*`: W-sound 5 (replaced by sound.ts calls); W-sound 6 calls
+  sound.ts directly.
+- Per-file call sites: appendix A names each file's unit.
 
 ### Rules
 
@@ -540,14 +650,55 @@ output off; every unit that makes a wait longer runs the full e2e suite once.
 5. **The fanfare and cry-ducking tasks run from the per-frame sound hook** (coordinator, revisit if you
    disagree): the field doesn't run gTasks every frame, and these two tasks only touch sound state.
    `IsFanfareTaskInactive` keeps the C's meaning.
-6. **sound.c's state machines land before anything is audible** (W-sound unit 1 on W-m4a unit 1)
+6. **sound.c's state machines land before anything is audible** (W-sound 1 on W-m4a 1)
    (coordinator, revisit if you disagree): fanfare waits are frame counters, so they can be right first.
 7. **Phaser's sound manager off** (`noAudio`) (coordinator, revisit if you disagree).
 
 ## Not in this plan
+
+Field weather's sounds (field_weather.c / field_weather_effects.c: SE_RAIN, SE_THUNDERSTORM, SE_DOWNPOUR and
+their stops on SE3, PlayRainStoppingSoundEffect): the port has no field weather yet; whoever ports it adds them.
 
 The help system's BGM halving (no help system yet: `SetBGMVolume_SuppressHelpSystemReduction` stays a volume call
 with nothing reducing it), the quest log's playback muting (no quest log), link play and the wireless minigames'
 sounds (dodrio_berry_picking.c, pokemon_jump.c, berry_crush.c, union_room.c), the intro movie's sound (intro.c
 isn't ported), Teachy TV, the e-Reader and Mystery Gift screens, Emerald-only songs in the table (the `ph_*`
 phoneme entries of midi.cfg are never built).
+
+## Appendix A: call sites by file and owner
+
+"C calls" counts every sound.c / m4a call (PlaySE*, PlayBGM, the map music functions, PlayFanfare*, WaitFanfare,
+IsFanfareTaskInactive, PlayCry_*, the IsCry* / IsSE* / IsBGM* checks, m4a*) in the C file(s); "port live" counts
+the port's live calls to the same functions plus the battle's `ui.play*` hooks (comments excluded); "comments"
+counts the port's "no audio" / "silent" / "audio yet" notes. A C file's calls can also be for code the port
+doesn't have (link play, the help system), so the gap is an upper bound. Measured at `bda62a9` with grep; the
+unit that owns a file re-counts it.
+
+| Owner | Port files | C files | C calls | Port live | Comments |
+| --- | --- | --- | --- | --- | --- |
+| W-sound 3 (music) | world/ (warps), scenes/OverworldScene.ts, menus/fieldCallbacks.ts, world/bike.ts, world/surf.ts | overworld.c, field_fadetransition.c, bike.c, field_effect.c (music part) | 27 + 22 + 4 + 18 | 0 | OverworldScene 3, bike 1, surf 1 |
+| W-sound 4 | world/fieldMoves.ts, fieldMoveShowMon.ts, fly.ts, fallWarp.ts, flash.ts, hallOfFameRecord.ts | field_effect.c (non-music), fldeff_cut/dig/rocksmash/sweetscent/teleport/flash.c | 19 + 6 | 0 | 5 + 2 + 1 + 0 + 1 + 4 |
+| W-sound 4 | world/playerAvatar.ts | field_player_avatar.c, field_control_avatar.c | 13 + 6 | 0 | 6 |
+| W-sound 4 | world/elevator.ts, ui/PlayerPcMenu.ts, ui/StoragePcMenu.ts, world/vsSeeker.ts, world/itemfinder.ts, world/ssAnne.ts, menus/seagallop.ts | field_specials.c, player_pc.c, vs_seeker.c, itemfinder.c, ss_anne.c, seagallop.c | 13 + 10 + 2 + 2 + 2 + 5 | 0 + 0 + 0 + 0 + 1 + 2 | 1 + 0 + 0 + 2 + 3 + 3 + 4 |
+| W-sound 4 | ui/SaveDialog.ts, ui/StartMenu.ts | start_menu.c | 14 | 1 | 3 |
+| W-sound 4 | script/ScriptEngine.ts (`opendoor`), world/doors.ts | scrcmd.c:2126 (GetDoorSoundEffect), field_fadetransition.c's door SEs | 1 + 8 | 0 | 1 |
+| W-sound 4 | entities/FieldEffects.ts, entities/FieldPoisonEffect.ts | trainer_see.c, fldeff_poison.c | 0 + 1 | 2 | 2 + 1 |
+| deferred (no field weather in the port) | none | field_weather.c, field_weather_effects.c (the rain / thunder SE3 loops) | 9 + 3 | none | none |
+| W-sound 5 | battle/controllerPlayer.ts, controllerOakOldMan.ts, controllerOpponent.ts, controllerSafari.ts, controllerCommon.ts | battle_controller_player.c, _oak_old_man.c, _opponent.c, _safari.c | 48 + 16 + 9 + 9 | 17 + 7 + 4 + 5 + 1 | 0 + 2 + 1 + 1 |
+| W-sound 5 | battle/bsCommands1-4.ts, battle/main.ts, battle/transition.ts, battle/battleUi.ts, scenes/BattleScene.ts | battle_script_commands.c, battle_main.c, battle_setup.c, battle_transition.c | 21 + 11 + 1 + 1 | 15 + 1 + 0 + 4 + 4 | 3 + 2 + 1 + 3 |
+| W-sound 6 | battle/gfx.ts, battle/battleInterface.ts | pokeball.c, battle_gfx_sfx_util.c, battle_interface.c | 23 + 8 + 3 | 3 + 2 | 1 |
+| W-sound 6 | battle/anim/battleAnim.ts, soundTasks.ts, special.ts, effects1/2/3/3b.ts, electric/fire/ghost/psychic/rock.ts, utilityFuncs.ts | battle_anim.c, battle_anim_sound_tasks.c, battle_anim_special.c, battle_anim_effects_1/2/3.c, the type files, battle_anim_utility_funcs.c | 19 + 16 + 13 + 18 + 7 + 2 | 7 + 13 + 10 + 18 + 9 + 1 | 5 + 1 + 1 + 1 |
+| W-sound 7 | menus/evolutionScene.ts, evolutionGraphics.ts | evolution_scene.c, evolution_graphics.c | 59 + 5 | 22 + 4 | 2 |
+| W-sound 7 | menus/tradeScene.ts, menus/eggHatch.ts | trade_scene.c, daycare.c / egg_hatch.c | 30 + 14 | 18 + 13 | 2 + 5 |
+| W-sound 7 | menus/hallOfFame.ts, menus/credits.ts, menus/titleScreen.ts, menus/mainMenu.ts, scenes/MainMenuScene.ts | hall_of_fame.c + hof_pc.c, credits.c, title_screen.c, main_menu.c | 14 + 1 + 7 + 3 | 0 + 0 + 5 + 2 | 9 + 2 + 1 + 1 |
+| W-sound 7 | menus/pokedexScreen.ts, menus/itemMenu.ts, menus/itemUse.ts, menus/diploma.ts | pokedex_screen.c, item_menu.c, item_use.c, diploma.c | 14 + 37 + 7 + 2 | 10 + 24 + 7 + 2 | 3 + 0 + 0 + 1 |
+| W-sound 2 | text/TextPrinter.ts, script/specials.ts, menus/optionMenu.ts, ui/MonPicBox.ts (`showmonpic` cry) | text.c, option_menu.c, scrcmd.c (playmoncry), reset_save_heap.c | 7 + 1 + 3 + 1 | 0 | 2 + 3 + 2 + 1 |
+| none (calls kept) | menus/partyMenu.ts (+ partyMenuSpecials.ts) | party_menu.c, pokemon_special_anim.c, fldeff_softboiled.c | 73 + 5 + 3 | 63 | 1 |
+| none (calls kept) | menus/pokemonStorage.ts, pokemonStorageCursor.ts, pokemonStorageMenu.ts | pokemon_storage_system_tasks.c, _data.c, _menu.c | 52 + 3 + 4 | 52 + 3 + 4 | 0 |
+| none (calls kept) | menus/summaryScreen.ts, regionMap.ts, tmCase.ts, berryPouch.ts, itemPc.ts, shop.ts | pokemon_summary_screen.c, region_map.c, tm_case.c, berry_pouch.c, item_pc.c, shop.c | 27 + 15 + 11 + 14 + 15 + 8 | 26 + 14 + 11 + 14 + 15 + 7 | 0 |
+| none (calls kept) | menus/trainerCard.ts, namingScreen.ts, monMarkings.ts, learnMove.ts, slotMachine.ts, oakSpeech.ts, clearSaveDataScreen.ts, easyChatScreen.ts | trainer_card.c, naming_screen.c, mon_markings.c, learn_move.c, slot_machine.c, oak_speech.c, clear_save_data_screen.c, easy_chat_2.c | 7 + 4 + 4 + 7 + 11 + 14 + 2 + 1 | 7 + 4 + 4 + 7 + 10 + 14 + 2 + 1 | 1 + 1 + 0 + 1 + 1 + 0 + 0 + 0 |
+| none (calls kept) | gba/menu.ts, gba/listMenu.ts, ui/FieldListMenu.ts, ui/MultichoiceMenu.ts | menu.c, menu_helpers.c, list_menu.c, script_menu.c | 32 + 6 + 1 + 3 | 15 + 1 + 1 + 1 | 1 |
+
+Not counted above: sound.c itself (W-sound 1 and 2), scrcmd.c's twelve audio commands (W-sound 1 and 2), and the C
+files whose screens aren't ported (help_system_util.c 13, teachy_tv.c 9, fame_checker.c 8, the link minigames,
+intro.c 4, mystery_gift_menu.c 3, map_preview_screen.c 1, quest_log.c 1).
