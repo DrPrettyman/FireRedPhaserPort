@@ -14,6 +14,7 @@ import { K } from '../battle/constants';
 import { state } from '../battle/env';
 import { Cos, Sin } from '../battle/trig';
 import { gfx, gfx16 } from '../gba/gfx';
+import { PlaySE } from '../gba/sound';
 import { testEvent } from '../dev/testHooks';
 import type { ObjectEvent } from '../entities/ObjectEvent';
 import { FieldCallback_PrepareFadeInFromMenu, GetCursorSelectionMonId, registerFieldMoveSetUp, setPostMenuFieldCallback } from '../menus/partyMenu';
@@ -396,7 +397,7 @@ function FldEff_UseRockSmash(): boolean {
 }
 
 function StartRockSmashFieldEffect(): void {
-  // PlaySE(SE_M_ROCK_THROW): no audio
+  PlaySE(K.SE_M_ROCK_THROW);
   FieldEffectActiveListRemove('FLDEFF_USE_ROCK_SMASH');
   ScriptContext_Enable();
 }
@@ -522,7 +523,7 @@ function FieldMoveCallback_CutGrass(): void {
 
 /** FldEff_CutGrass: mow the grass around the player and send 8 cut grass sprites spinning out. */
 function FldEff_CutGrass(): boolean {
-  // PlaySE(SE_M_CUT): no audio
+  PlaySE(K.SE_M_CUT);
   const dest = PlayerGetDestCoords();
   gPlayerFacingPosition.x = dest.x;
   gPlayerFacingPosition.y = dest.y;
@@ -630,7 +631,7 @@ function startCutGrassSprites(): void {
 }
 
 function FieldMoveCallback_CutTree(): void {
-  // PlaySE(SE_M_CUT): no audio
+  PlaySE(K.SE_M_CUT);
   FieldEffectActiveListRemove('FLDEFF_USE_CUT_ON_TREE');
   ScriptContext_Enable();
 }
@@ -645,7 +646,7 @@ function CutMoveRuinValleyCheck(): boolean {
 function CutMoveOpenDottedHoleDoor(): void {
   const at = field().localToWorld(24, 24);
   field().setMetatileIdAt(at.x, at.y, K.METATILE_SeviiIslands67_DottedHoleDoor_Open);
-  // PlaySE(SE_BANG): no audio
+  PlaySE(K.SE_BANG);
   state.setFlag('FLAG_USED_CUT_ON_RUIN_VALLEY_BRAILLE', true);
   UnlockPlayerFieldControls();
 }
@@ -672,7 +673,7 @@ function FldEff_SweetScent(): boolean {
 
 /** StartSweetScentFieldEffect + TrySweetScentEncounter + FailSweetScentEncounter */
 function StartSweetScentFieldEffect(): void {
-  // PlaySE(SE_M_SWEET_SCENT): no audio
+  PlaySE(K.SE_M_SWEET_SCENT);
   let fade = field().sweetScentFade(0, 8);
   testEvent('sweetScent');
   FieldEffectActiveListRemove('FLDEFF_SWEET_SCENT');
@@ -1073,7 +1074,7 @@ function FieldCallback_EscapeRopeExit(): void {
       case 2:
         offsetY += 4;
         if (offsetY >= 0) {
-          // PlaySE(SE_CLICK); CameraObjectReset1
+          PlaySE(K.SE_CLICK); // then CameraObjectReset1
           movingState = 3;
           moving = false;
         }
