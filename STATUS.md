@@ -41,12 +41,10 @@ the trainer card, and headless story checks from Brock to the Hall of Fame.
 No known main-path blockers are left: the story checks found and fixed four (Lt. Surge's trash cans, the Rocket
 Hideout's `call_if_defeated` barrier, `GetQuestLogState` leaving VAR_RESULT stale so `trainerbattle_no_intro`
 could skip its battle, every nurse's YES/NO throwing on a constant expression). `tests/unit/scriptCoverageGaps.ts`
-lists what the scripts use that isn't ported: 0 main, 0 side, 42 postgame, 44 link (and 3 tagged `unused`: shared
-with Emerald, reached by no FRLG map). Next: audio, planned in [AUDIO_PLAN.md](AUDIO_PLAN.md) (awaiting the
-user's review), then the postgame (Sevii 4-7, Mt. Ember, Trainer Tower, the event islands).
 lists what the scripts use that isn't ported: 0 main, 0 side, 42 postgame, 44 link (what FRLG compiles but never
-reaches, the decoration commands and Dive, is ported as the C has it). Next: audio (SE, cries and BGM are no-ops; see DEVIATIONS for what waits on
-them), then the postgame (Sevii 4-7, Mt. Ember, Trainer Tower, the event islands).
+reaches, the decoration commands and Dive, is ported as the C has it). Next: audio, planned in
+[AUDIO_PLAN.md](AUDIO_PLAN.md) (awaiting the user's review), then the postgame (Sevii 4-7, Mt. Ember, Trainer
+Tower, the event islands).
 
 Other open work:
 

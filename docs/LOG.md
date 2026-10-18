@@ -2589,6 +2589,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   SoundMain's order (sequencers, then CgbSound, then the mixer: the first frame-order claim was wrong), and a
   model-vs-poryaaaa length cross-check.
 - STATUS.md "Next up" points at the plan. No code changed; no tests run.
+
 ### The unused gaps: decoration commands and Dive (SIDE_PLAN.md batch 3, W-unused)
 
 - ScriptEngine: `adddecoration`, `removedecoration`, `checkdecor`, `checkdecorspace` (ScrCmd_*: VarGet the id, the
