@@ -71,9 +71,6 @@ export const KNOWN_GAPS: KnownGap[] = [
   { kind: 'special', name: 'SubtractMoneyFromVar0x8005', tag: 'side', where: "FourIsland_PokemonDayCare, Route5_PokemonDayCare" },
   { kind: 'special', name: 'TakePokemonFromRoute5Daycare', tag: 'side', where: "Route5_PokemonDayCare" },
   { kind: 'special', name: 'TeachMoveRelearnerMove', tag: 'side', where: "TwoIsland_House" },
-  { kind: 'special', name: 'UpdateTrainerCardPhotoIcons', tag: 'side', where: "CeladonCity_GameCorner" },
-  { kind: 'fieldeffect', name: 'FLDEFF_PHOTO_FLASH', tag: 'side', where: "CeladonCity_GameCorner" },
-  { kind: 'fieldeffect', name: 'FLDEFF_SMILEY_FACE_ICON', tag: 'side', where: "CeladonCity_GameCorner" },
   { kind: 'fieldeffect', name: 'FLDEFF_USE_DIVE', tag: 'side', where: "(EventScript_DeepWater), (EventScript_TrySurface)", note: "EventScript_DeepWater / EventScript_TrySurface: no FRLG map has dive spots" },
   // ---------------------------------------------------------------- postgame: after the Hall of Fame (Sevii 4-7, Trainer Tower, the event islands) or the link features postgame areas share.
   { kind: 'command', name: 'braillemessage', tag: 'postgame', where: "MtEmber_RubyPath_B4F, MtEmber_RubyPath_B5F, SixIsland_DottedHole_B1F, SixIsland_DottedHole_B2F, SixIsland_DottedHole_B3F, ... (8 in all)" },

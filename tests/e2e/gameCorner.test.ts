@@ -207,8 +207,11 @@ function expectedPayout(reelPositions: number[], bet: number): number {
 /** Sit at SlotMachine0 (the machine left of (1, 7)) and answer YES; resolves once the screen takes input. */
 async function sitAtSlotMachine(game: Game) {
   await game.eval((t) => t.face('left'));
+  // dofieldeffect FLDEFF_SMILEY_FACE_ICON (FldEff_SmileyFaceIcon) over the player before the screen
+  const smiley = game.watch((t) => t.field()?.fieldEffects.includes('FLDEFF_SMILEY_FACE_ICON'), { what: 'the smiley over the player' });
   await game.mashUntil((t) => t.gbaScreen() === 'CB2_InitSlotMachine' || t.gbaScreen() === 'CB2_RunSlotMachine', { what: 'playslotmachine' });
   await game.waitFor((t) => t.slotMachine()?.ready, { what: 'the slot machine to fade in' });
+  await smiley;
 }
 
 /** Wait until the game loop is back at its betting step. */
@@ -323,4 +326,45 @@ test('the slot machine without coins: "Game over!" and back to the field', async
   await game.press('A');
   await game.waitFor((t) => t.idle() && !t.field()!.script && t.gbaScreen() === undefined, { what: 'the field after the slot machine', timeout: 30000 });
   expect(await game.eval((t) => [t.state!.coins, t.field()!.map])).toEqual([0, 'CeladonCity_GameCorner']);
+});
+
+test("the photo printer: ¥50, a pink print, the flash; the party goes on the trainer card's photo", async () => {
+  const game = await session.start({
+    start: 'after-rival',
+    map: 'CeladonCity_GameCorner',
+    x: 16,
+    y: 13,
+    party: [
+      { species: 'PIKACHU', level: 20 },
+      { species: 'UNOWN', level: 20 },
+    ],
+  });
+  await game.eval((t) => (t.state!.money = 1000));
+  const unownLetter = await game.eval((t) => {
+    const p = t.state!.party[1].personality;
+    return (((p & 0x03000000) >>> 18) | ((p & 0x030000) >>> 12) | ((p & 0x0300) >>> 6) | (p & 0x03)) % 28; // GetUnownLetterByPersonality
+  });
+  // CeladonCity_GameCorner_EventScript_PhotoPrinter (the printer east of (16, 13)): YES, then MULTICHOICE_TRAINER_CARD_ICON_TINT
+  const since = await game.mark();
+  await game.eval((t) => t.face('right'));
+  await game.mashUntil((t) => t.events().some((e) => e.type === 'multichoice') && t.money() === 950, { what: 'the print type menu' });
+  await game.waitForEvent('multichoice', { since });
+  await game.pressTimes('DOWN', 2); // PINK
+  await game.press('A');
+  // "A big smile for the photo, please! Three… Two… One…\p Flash!", then dofieldeffect FLDEFF_PHOTO_FLASH
+  await game.eval((t) => t.until(() => (window as any).game.scene.getScene('Overworld').messageBox.waitingForButton));
+  const flash = game.watch((t) => t.field()?.fading && t.field()?.fadeWhite, { what: 'FLDEFF_PHOTO_FLASH' });
+  await game.press('A');
+  await flash;
+  await scriptDone(game, 'the photo printer');
+  expect(await game.eval((t) => [1, 2, 3, 4, 5, 6].map((i) => t.var(`VAR_TRAINER_CARD_MON_ICON_${i}`)).concat(t.var('VAR_TRAINER_CARD_MON_ICON_TINT_IDX'), t.money()))).toEqual([
+    25, // SPECIES_PIKACHU
+    30000 + unownLetter, // SpeciesToMailSpecies: UNOWN_OFFSET + the letter
+    0,
+    0,
+    0,
+    0,
+    2, // MON_ICON_TINT_PINK
+    950,
+  ]);
 });

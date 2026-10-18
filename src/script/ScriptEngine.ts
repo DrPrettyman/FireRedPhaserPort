@@ -16,7 +16,7 @@ import type { FieldTask } from '../world/elevator';
 import type { ListMenuHost } from '../ui/FieldListMenu';
 import { SetFlashLevel } from '../world/flash';
 import { SPECIALS, StartScriptedWildBattle, type SpecialEnv } from './specials';
-import { PlaySlotMachineFromScript } from './gameCornerSpecials';
+import { PlaySlotMachineFromScript, registerGameCornerFieldEffects } from './gameCornerSpecials';
 import { testEvent } from '../dev/testHooks';
 import { random } from '../util/random';
 import { FieldEffectActiveListContains, FieldEffectStart, gFieldEffectArguments } from '../world/fieldEffectScripts';
@@ -275,6 +275,7 @@ export class ScriptEngine {
     private input: Input,
     private host: ScriptHost,
   ) {
+    registerGameCornerFieldEffects(host, defines); // FldEff_SmileyFaceIcon, FldEff_PhotoFlash
     this.specialEnv = {
       state,
       host,
