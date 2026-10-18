@@ -277,8 +277,12 @@ where sample frames = sample length / (176 × 2^(pitch / 12)): the cry WAVs are 
 224 × 10512 / 13379 = 176 source samples a frame at the base key. `PlayCryInternal`'s pitches decode (through
 SetPokemonCryPitch's key / tune split and TrkVolPitSet's `tune * 4`) to key 60 (NORMAL, DOUBLES), 60.875
 (ENCOUNTER), 56.8125 (FAINT), 61.4375 (HIGH_PITCH). IsCryFinished turns TRUE about a frame later
-(Task_DuckBGMForPokemonCry first waits 2 frames, then polls). Estimates in frames (±1-2: the start frame and the
-frame order aren't modelled exactly):
+(Task_DuckBGMForPokemonCry first waits 2 frames, then polls). **Measured on the ROM** (W-ref 1, mGBA: PlayCry_ByMode
+called in frame 0, the first frame after which IsPokemonCryPlaying is FALSE; it is TRUE after every frame from 1 up
+to that one). Every number equals the estimate this section made from the C, and the engine's
+(`tests/unit/m4aChannels.test.ts`; `tests/unit/m4aRom.test.ts` pins them against the ROM). The cry song itself
+(FINE, then the cry player free a tick later) ends in frames 141 / 142 for NORMAL, ENCOUNTER and FAINT, 51 / 52
+for HIGH_PITCH, 21 / 22 for DOUBLES, whatever the species:
 
 | Species (cry samples) | NORMAL (length 140) | ENCOUNTER (140) | FAINT (140) | HIGH_PITCH (50) | DOUBLES (20) |
 | --- | --- | --- | --- | --- | --- |
@@ -290,6 +294,11 @@ frame order aren't modelled exactly):
 | Onix (12,257) | 71 | 68 | 85 | 51 | 21 |
 | Mew (15,064) | 87 | 83 | 104 | 51 | 21 |
 | Jynx (23,524, the longest) | 135 | 129 | 141 | 51 | 21 |
+
+SEs, fanfares and songs were measured on the ROM the same way (IsSEPlaying's player status, in frames from the
+call: SE_SELECT 11, SE_DOOR 36, SE_SAVE 44, SE_EXP 100, MUS_LEVEL_UP 64, MUS_OBTAIN_ITEM 147, MUS_OBTAIN_BADGE
+315, MUS_EVOLVED 230, MUS_POKE_FLUTE 3,063, and 33 more; loops: MUS_PALLET loops in frames 2,620 / 5,238 / 7,856,
+MUS_ROUTE1 1,507 / 2,996 / 4,486, ...): all equal the engine's (`tests/unit/m4aRom.test.ts`).
 
 The median cry (Magmar, 7,655 samples) is ~45 frames. So a wild battle's intro (the opponent's ENCOUNTER cry,
 which battle_controller_opponent.c waits for with IsCryPlayingOrClearCrySongs) gains ~0.5-2 s on the GBA over
@@ -660,7 +669,8 @@ don't wait for W-m4a 3-4.
 Split in two (decision 16): the timings need only the ROM and the sequencer, the listening comparison needs the
 whole mix.
 
-1. **mGBA timings (batch B).** Install mGBA with Homebrew (the `mgba-app` cask or the `mgba` formula, both 0.10.5:
+1. **mGBA timings (batch B; done, W-ref 1: every number equals the engine's, see section 2 and
+   `tests/unit/m4aRom.test.ts`; method in docs/DEV_NOTES.md "ROM reference measurements").** Install mGBA with Homebrew (the `mgba-app` cask or the `mgba` formula, both 0.10.5:
    no sudo; if anything asks for a password or a manual step, stop and say so in the PR), confirm the revision
    check below, then measure on the ROM, in frames from the call: IsSEPlaying for SE_SELECT, SE_DOOR, SE_SAVE,
    SE_EXP and a few more, the fanfares (MUS_LEVEL_UP, MUS_OBTAIN_ITEM, MUS_OBTAIN_BADGE, MUS_EVOLVED,

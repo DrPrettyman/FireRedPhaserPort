@@ -1081,15 +1081,23 @@ or extend them:
   #85; bl m4aMPlayVolumeControl` ducking calls in sound.c, gMPlay_PokemonCry from PlayCryInternal's pool. Capstone
   (`pip install capstone` in a venv) disassembles Thumb.
 - **Method:** break on m4aSoundMain's entry for ~10 VBlanks after boot, then freeze the game (gMain.callback1 =
-  NULL, callback2 = a lone `bx lr`) so only VBlankIntr runs. To start a song or cry, at m4aSoundMain's entry set
+  NULL, callback2 = a lone `bx lr`) so only VBlankIntr runs. Write them on every frame for ~60 frames and check
+  they stay: the boot code is still inside an init that sets callback2 itself when it returns, and a game that
+  isn't frozen starts the intro's songs and the title's cry over the measurement 200-1,000 frames in (breaking on
+  MPlayStart during a measurement catches that). To start a song or cry, at m4aSoundMain's entry set
   r0-r2, LR = m4aSoundMain and PC = m4aSongNumStart / PlayCry_ByMode, continue to the entry again and restore LR:
   the call lands right before that VBlank's m4aSoundMain, which is "frame 1" as the engine's tests count it, and
   frame k = gMain.vblankCounter2 − v0 + 1. Songs: breakpoints on ply_fine and ply_goto (r0 = player, r1 = track)
-  and on the PAUSE store (r7 = player) give the FINE, loop and stop frames. Cries: stop on every m4aSoundMain
+  and on the PAUSE store (r7 = player) give the FINE, loop and stop frames; ply_patt and MEMACC's true branch
+  run ply_goto too, so count a GOTO only when the byte before the track's cmdPtr is 0xB2. Cries: stop on every m4aSoundMain
   entry and evaluate IsPokemonCryPlaying from memory (gMPlay_PokemonCry → tracks[0].chan → chan.track).
 - **Revision check:** songs.json's 347 songs (all track bytes, with GOTO / PATT targets relocated, and the headers)
   and the 76 voicegroups the songs reach (every voice, keysplit table, sample header and instrument PCM) are found
   in the ROM byte for byte, so the decomp's audio data is rev 1's.
+- **Test:** `tests/unit/m4aRom.test.ts` holds the numbers as data and runs the engine on them: 42 SEs and fanfares
+  (FINE and stop frames), 10 looping songs (the frames of track 0's first three GOTOs, watched through
+  `gMPlayJumpTable[1]`), 8 species' cries in 5 modes (IsPokemonCryPlaying) and the cry song's end per mode. To add
+  a number, measure it the same way and add a row; a mismatch is an engine bug or a difference in what is counted.
 
 ## Game state
 

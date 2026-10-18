@@ -2732,3 +2732,28 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   sample ends and loops, FIX / reverse voices, stealing, the CGB claim, keysplit / rhythm, the cry song; on the
   extracted data: setVoiceData, voicegroup000's keysplit / rhythm voices, no song reaching a null keysplit entry,
   the cry table, a cry stealing from MUS_PALLET); `tests/e2e/titleScreen.test.ts` (6) as the boot check.
+
+### W-ref 1: mGBA timings from the ROM (AUDIO_PLAN.md batch B)
+
+- mGBA 0.10.5 from Homebrew (`mgba-app` cask; no sudo, no prompts). Its Qt build only runs Lua from the GUI, so the
+  ROM was driven through mGBA's GDB stub from a small Python client (scripts outside the repo; method in
+  docs/DEV_NOTES.md "ROM reference measurements"): addresses found by pattern search in the ROM, the game frozen
+  after boot (gMain's callbacks), songs and cries started by hijacking the CPU at m4aSoundMain's entry
+  (m4aSongNumStart, PlayCry_ByMode), frames counted from gMain.vblankCounter2 the way `tests/unit/m4a.test.ts`
+  counts them (the call in frame 0, the next VBlank's m4aSoundMain is frame 1).
+- Revision check: songs.json's 347 songs and the 76 voicegroups they reach (voices, keysplit tables, sample headers,
+  instrument PCM) are in the rev 1 ROM byte for byte.
+- Measured: 24 SEs and 18 fanfares (FINE and IsSEPlaying stop frames; e.g. SE_SELECT 10 / 11, SE_DOOR 34 / 36,
+  MUS_LEVEL_UP 64 / 64, MUS_OBTAIN_BADGE 313 / 315, MUS_POKE_FLUTE 3,061 / 3,063), SE_LOW_HEALTH and 9 BGMs' loop
+  frames (track 0's first three GOTOs; e.g. MUS_PALLET 2,620 / 5,238 / 7,856), IsPokemonCryPlaying for 8 species in
+  NORMAL, ENCOUNTER, FAINT, HIGH_PITCH and DOUBLES (Pidgey 12 ... Jynx 141 frames), and the cry song's end per
+  mode. **Every number equals the engine's**; no engine change. The cry numbers also equal AUDIO_PLAN.md section 2's
+  estimates (now marked as measured).
+- Found on the way: the boot code sets gMain.callback2 itself when its init returns, so a one-off write doesn't
+  freeze the game; the first run's long songs were broken into by the intro's songs and the title's Charizard cry
+  (caught with a breakpoint on MPlayStart) and were remeasured with the callbacks held for 60 frames. ply_patt and
+  MEMACC's true branch run ply_goto, so a GOTO is counted only on a 0xB2 command.
+- `tests/unit/m4aRom.test.ts`: the numbers as data, 65 tests on the engine (songs.json and the voice data; skipped
+  without them).
+- Verified: typecheck; `npm test` (35 files, 465 tests). No game code changed, so no e2e.
+
