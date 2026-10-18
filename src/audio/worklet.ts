@@ -3,7 +3,8 @@
 // buffers 3-4 frames and plays them upsampled by sample-and-hold (SampleHoldResampler). Loaded with
 // `audioWorklet.addModule` from the URL Vite gives `./worklet.ts?worker&url` (bundled in dev and in the build).
 //
-// TODO W-m4a 4: the PSG. The frame message carries the frame's PSG register writes (`psg`); the four channels
+// TODO W-m4a 4b: the PSG. The frame message carries the frame's PSG register writes (`psg`, `psgState`: see
+// PsgFrame in soundRegs.ts and docs/DEV_NOTES.md "PSG frames"); the four channels
 // (squares with duty and sweep, the wave channel, noise, the hardware envelope and length counters) are
 // synthesized here at the output rate and added in the DAC's 10-bit units before dacOutput.
 

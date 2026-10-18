@@ -77,8 +77,11 @@ export interface FrameMessage {
   type: 'frame';
   pcm: ArrayBuffer;
   soundcntH: number;
-  /** TODO W-m4a 4: the PSG register writes (see PsgFrame in output.ts); the worklet ignores them until then. */
+  /** The PSG's register writes (PsgFrame.writes in soundRegs.ts: a Uint16Array's buffer); TODO W-m4a 4b: the
+   *  worklet ignores them until its synth. */
   psg?: ArrayBuffer;
+  /** PsgFrame.state (a Uint8Array's buffer, PSG_STATE_SIZE bytes): the registers before `psg`. */
+  psgState?: ArrayBuffer;
 }
 export type ToWorklet = FrameMessage | { type: 'mute'; muted: boolean } | { type: 'flush' };
 
@@ -104,7 +107,7 @@ export type FromWorklet = { type: 'stats'; stats: OutputStats };
 /**
  * The GBA's sound mixer for one speaker's DirectSound part (GBATEK "Sound Control Registers"): each FIFO routed to
  * this speaker adds its signed 8-bit sample ×4 at 100% or ×2 at 50% (the 10-bit scale). PSG adds in the same
- * units (W-m4a 4).
+ * units (W-m4a 4b).
  */
 export function directSoundLevel(a: number, b: number, soundcntH: number, left: boolean): number {
   let sum = 0;
