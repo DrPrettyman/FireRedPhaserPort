@@ -647,6 +647,39 @@ warp (BGM fade) waits in batch C (W-sound 2 and 3); the first sound is heard in 
 W-sound unit only needs `__test.audioEvents` for its tests, not audible output, which is why the call-site units
 don't wait for W-m4a 3-4.
 
+### Batch C as run (W-m4a 3, W-sound 2, W-sound 3, W-sound 4)
+
+Checked against master `15b1f5f` before starting (decisions 17-19):
+
+- **W-m4a 3** owns `src/audio/` as before, plus `SetPokemonCryStereo`'s three callers (option_menu.c:519 in
+  `menus/optionMenu.ts`, title_screen.c:742, reset_save_heap.c:24 on save load): it makes the mono bit audible, so
+  it wires it (decision 18). The function itself is in `m4a.ts` already (W-m4a 2). Says exactly how to hear the
+  result and checks it without listening: a song rendered headless (Node, `samples.bin` from `public/gen/audio/`)
+  has the expected length and a non-trivial RMS.
+- **W-sound 2** as in the units list, minus SetPokemonCryStereo. Turns W-ref 1's cry `it.todo`s in
+  `tests/unit/m4aRom.test.ts` into assertions at the IsCryFinished / PlayCry_* level.
+- **W-sound 3** owns every sound call in the warp paths (decision 17): all of field_fadetransition.c (the music
+  *and* its SE_EXIT / SE_WARP_IN / SE_WARP_OUT / door SEs; the port's warps in `scenes/OverworldScene.ts`,
+  `world/mapTransition.ts`, `world/fallWarp.ts`, `world/dive.ts`), and the warp tasks of field_effect.c (Escape
+  Rope, Dig, Teleport, Fly's out and in, the fall / Lavaridge / warp pad tasks: TryFadeOutOldMapMusic,
+  BGMusicStopped, Overworld_PlaySpecialMapMusic and the SEs inside those tasks), the Seagallop ferry's
+  BGMusicStopped wait, surf and bike music, `savebgm` / `fadedefaultbgm` / playbgm's save flag, PlaySE's
+  gDisableMapMusicChangeOnMapLoad gate, `savedMusic` in the save. Map music is a new file next to sound.ts (or in
+  it, the worker's call), named as overworld.c.
+- **W-sound 4** owns the other field SEs: field_effect.c outside those warp tasks (the Pokémon Center heal, SE_FALL,
+  Strength, the escalator, the show-mon cry, Fly's SE_M_FLY, ...), the fldeff_*.c files, field_player_avatar.c,
+  field_control_avatar.c, field_specials.c, doors (`opendoor`, field_door.c's GetDoorSoundEffect), player_pc.c,
+  start_menu.c, itemfinder.c, vs_seeker.c, ss_anne.c, seagallop.c's SEs, trainer_see.c, fldeff_poison.c. Calls the
+  cry stubs (W-sound 2 makes them real; the signatures don't change). If it runs past an hour it hands back and a
+  continuation worker finishes the list.
+- `world/fly.ts`, `world/fieldMoves.ts` and `menus/seagallop.ts` get lines from both W-sound 3 and W-sound 4;
+  `script/ScriptEngine.ts` from W-sound 2 (`playmoncry` / `waitmoncry`), 3 (`savebgm`, `fadedefaultbgm`,
+  `playbgm`) and 4 (`opendoor`); `gba/sound.ts` from W-sound 2 (the cries, at the bottom) and 3 (PlaySE's gate,
+  the map music wrappers). Each keeps to its own lines; the merger resolves the rest.
+- W-sound 2, 3 and 4 lengthen waits, so each runs the full e2e suite once (Rules). Three suites at once overload
+  the machine, so the workers take turns (decision 19): `mkdir /Users/joshua/Coding/PokemonProjects/.e2e-full.lock`
+  before the run (it fails while another worker holds it: wait and retry), `rmdir` it afterwards, also on failure.
+
 ### Shared building blocks and owners
 
 - The JSON shapes in section 4: fixed here; W-audiodata owns any change and says so in its PR.
@@ -778,6 +811,14 @@ None open (question 1 became decision 15).
     installed yet). The timings need only the ROM and the sequencer, so W-ref 1 runs as batch B's fourth worker
     (it runs no e2e, so it adds little load) and its numbers are in before W-sound 2 and the call-site units
     time against the engine. The listening comparison is W-ref 2, after W-m4a 4.
+
+17. **Batch C: every sound call in the warp paths goes to W-sound 3** (coordinator, revisit if you disagree):
+    field_fadetransition.c and field_effect.c's warp tasks mix music waits with SEs line by line, so one owner per
+    task instead of the appendix's split by call type; W-sound 4 takes the rest of the field.
+18. **SetPokemonCryStereo's callers go to W-m4a 3** (coordinator, revisit if you disagree), not W-sound 2: the mixer
+    unit makes the mono bit audible and can check it.
+19. **Workers' full e2e runs take turns** (coordinator, revisit if you disagree): a lock directory outside the repos
+    (`/Users/joshua/Coding/PokemonProjects/.e2e-full.lock`), since three units in batch C each run the full suite.
 
 ## Not in this plan
 
