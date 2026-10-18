@@ -509,6 +509,25 @@ this is the next level down. When you add or change a subsystem, update its entr
   `ScriptHost.doNamingScreen` (FieldMenuScene `naming`). Oak's speech calls it with NAMING_SCREEN_PLAYER
   (monSpecies = the player's gender) and NAMING_SCREEN_RIVAL on MainMenuScene, preloading `namingScreenGfxSymbols`
   after `setObjectEventGraphicsInfo` (the icons are object event graphics) and `loadMenusData` (the keyboard).
+- **Easy Chat (easy_chat.c; the screen is SIDE_PLAN.md W-easychat units 2-4):** `menus/easyChatData.ts` holds
+  public/gen/easyChat.json (tools/extract_easy_chat.py: sEasyChatGroups, the alphabetical word lists, the group
+  names, the default words, plus easy_chat_2.c's screen templates and passphrases), set by Assets.init before any
+  GameState exists (unit tests: gameData.ts), and InitEasyChatPhrases / InitQuestionnaireWords, which the GameState
+  constructor runs (NewGameInitData). `menus/easyChat.ts` is the rest of easy_chat.c: CopyEasyChatWord (encoded,
+  no EOS), ConvertEasyChatWordsToString (with EOS, like gStringVar4), EC_DoesEasyChatStringFitOnLine (TRUE = does
+  NOT fit, as in the C), IsECWordInvalid, the unlocked groups / words (POKéMON = the 251-species list once one is
+  seen, POKéMON2 = the Hoenn list with the National Dex, EVENTS / MOVE 1 / MOVE 2 after FLAG_SYS_GAME_CLEAR, TRENDY
+  SAYING never), the trendy-saying bits (EnableRareWord, UnlockRandomTrendySaying, ...), and the screen's selection
+  lists (InitEasyChatSelection(state) → GetNumDisplayableGroups / GetSelectedGroupByIndex, GetUnlockedECWords(alpha,
+  group) → GetDisplayedWordByIndex). Words are EC_WORD(group, index); the EC_WORD_* names are in the script
+  defines, the EC_GROUP_* / EASY_CHAT_TYPE_* constants also in easyChat.json (`EC()`). Note EC_GROUP_POKEMON_2 (0)
+  holds sEasyChatGroup_Pokemon (Hoenn) and EC_GROUP_POKEMON (21) sEasyChatGroup_Pokemon2. Saved words: GameState's
+  easyChatProfile / easyChatBattleStart / easyChatBattleWon / easyChatBattleLost / questionnaireWords /
+  additionalPhrases (gSaveBlock1's names), in the save's `easyChat` since version 5 (a version-4 save keeps the
+  new-game words); `easyChatWordsForType(state, EASY_CHAT_TYPE_*)` picks the array ShowEasyChatScreen edits.
+  Specials: `script/easyChatSpecials.ts` (ShowEasyChatMessage, BufferRandomHobbyOrLifestyleString). The trainer
+  card copies the profile words (only a link card prints them). Tests: tests/unit/easyChat.test.ts,
+  tests/e2e/easyChat.test.ts (the Pewter Pokémon Center's profile woman at (13, 2), talked to from (13, 3)).
 - **Party selection from scripts, tutors, the move deleter:** `menus/partyMenuSpecials.ts` is
   party_menu_specials.c (ChoosePartyMon, ChooseMonForMoveRelearner, SelectMoveDeleterMove, the deleter's
   helpers) plus the ChooseMonForMoveTutor special; `PARTY_MENU_SPECIALS` is spread into SPECIALS. A special that

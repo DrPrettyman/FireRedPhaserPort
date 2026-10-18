@@ -2353,3 +2353,23 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   (across the water from the dock, as in the decomp) and the deck sailor at (13, 13), who walks back and forth
   without stopping (his movement checked tile by tile; his script is a plain MSGBOX_NPC).
 - Verified: typecheck; `npm test` (229); e2e ssAnne.test.ts (10, twice in a row) and story.test.ts (7).
+
+### Easy Chat: the word data and easy_chat.c (W-easychat unit 1)
+
+- Sized the workstream (easy_chat.c 730, easy_chat_2.c 1,363, easy_chat_3.c 2,316 lines): four units, written into
+  SIDE_PLAN.md's W-easychat section (this one, easy_chat_2.c as a model, the screen's main layer, choosing words).
+- `tools/extract_easy_chat.py` → public/gen/easyChat.json: the 22 groups (word texts as raw decomp strings,
+  alphabeticalOrder, enabled; species / move id lists), the 27 alphabetical lists with their `-1, 2` doubled-species
+  markers, the group names, sDefaultProfileWords / sDefaultBattleStartWords / sDeoxysValue, gText_ThreeQuestionMarks,
+  easy_chat_2.c's sEasyChatScreenTemplates and the two passphrases, the EC_GROUP_* / EASY_CHAT_TYPE_* constants.
+- Ported easy_chat.c (menus/easyChatData.ts, menus/easyChat.ts): word text and validity, ConvertEasyChatWordsToString,
+  EC_DoesEasyChatStringFitOnLine, unlocked groups and words, GetRandomECPokemon, the trendy sayings
+  (additionalPhrases, EnableRareWord, UnlockRandomTrendySaying, GetRandomUnlockedTrendySaying),
+  InitEasyChatPhrases / InitQuestionnaireWords (GameState's constructor), the selection lists for the screen.
+  Specials ShowEasyChatMessage (off scriptCoverageGaps: side has one Easy Chat gap left, ShowEasyChatScreen) and
+  BufferRandomHobbyOrLifestyleString. The trainer card's link-card profile words now come from the save.
+- Save version 5: `easyChat` (profile, battle start / won / lost, questionnaire words, additionalPhrases); a
+  version-4 save loads with the new-game words.
+- Verified: typecheck; `npm test` (unit: easyChat.test.ts with cases worked from the C, e.g. with sayings 5 and 9
+  unlocked a roll of 9 unlocks saying 11, the battle-start 3x2 / 2x3 choice at 18 characters, the doubled ABRA in the A list;
+  save.test.ts's version-4 upgrade); e2e easyChat.test.ts (new), saveContinue.test.ts, trainerCard.test.ts.
