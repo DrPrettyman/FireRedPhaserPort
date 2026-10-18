@@ -175,8 +175,30 @@ function ChannelSamples(chan: SoundChannel, samples: number, divFreq: number): v
   else Forward(chan, samples, Math.imul(divFreq, chan.frequency) >>> 0, loopLen, wav.loopStart); // _081DD19C
 }
 
+/** The largest step for which a frame's steps add up in one go: while `fw < 2^23` and `fw + step < 2^30`, the asm's
+ *  `bic 0x3F800000` is `fw mod 2^23`, so n output samples move floor((fw + n × step) / 2^23) samples. */
+const FAST_STEP_MAX = 0x40000000 - FW_ONE;
+
+/**
+ * The frame's steps in one go when the sample doesn't reach its end in this frame (no mixing to do sample by
+ * sample: W-m4a 3 mixes in the loops below, and can keep this for when nothing is mixed). Returns false (nothing
+ * changed) when the per-sample loop must run.
+ */
+function FastForward(chan: SoundChannel, samples: number, step: number, dir: 1 | -1): boolean {
+  if (step >= FAST_STEP_MAX || chan.fw >= FW_ONE) return false;
+  const total = chan.fw + samples * step; // < 2^53: exact
+  const moved = Math.floor(total / FW_ONE);
+  const count = chan.count | 0;
+  if (moved >= count) return false;
+  chan.fw = total - moved * FW_ONE;
+  chan.count = count - moved;
+  chan.currentPointer += dir * moved;
+  return true;
+}
+
 /** A forward sample (_081DD07C / _081DD19C, and Unk1's compressed path _081DD308). */
 function Forward(chan: SoundChannel, samples: number, step: number, loopLen: number, loopStart: number): void {
+  if (FastForward(chan, samples, step, 1)) return;
   let fw = chan.fw;
   let count = chan.count | 0;
   let cur = chan.currentPointer;
@@ -211,6 +233,7 @@ function Forward(chan: SoundChannel, samples: number, step: number, loopLen: num
 
 /** A reverse sample (Unk1's _081DD3C0 and _081DD468): reads backwards from currentPointer - 1; no loop. */
 function Reverse(chan: SoundChannel, samples: number, step: number): void {
+  if (FastForward(chan, samples, step, -1)) return;
   let fw = chan.fw;
   let count = chan.count | 0;
   let cur = chan.currentPointer;
