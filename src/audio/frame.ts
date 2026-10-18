@@ -2,20 +2,29 @@
 // GbaHostScene.update (which also runs BattleScene, in the game and on battle-test.html). Only one host ticks at a
 // time (the field sleeps while a GbaHostScene runs), so AgbMainFrameEnd runs exactly once per logic tick.
 //
-// Game logic must time the same with the audio output on or off: nothing here may look at the output.
+// Game logic must time the same with the audio output on or off: the output only decides whether the mixer writes
+// samples (m4aSetMixing) and whether the frame is handed over; the engine's state advances the same either way.
 
-import { m4aSoundInit, m4aSoundMain } from './m4a';
+import { m4aPcmFrame, m4aSoundInit, m4aSoundMain, m4aSoundVSync } from './m4a';
+import { m4aSetMixing } from './m4aMixer';
+import { audioOutputWantsFrames, pushFrame } from './output';
 import { MapMusicMain, ResetSoundState, RunSoundTasks } from '../gba/sound';
 
 /**
  * Once per frame, after the frame's callbacks: the sound tasks (Task_Fanfare: gTasks in the C, run by the screen's
  * RunTasks; here from the hook, AUDIO_PLAN.md decision 5), MapMusicMain (the end of AgbMain's loop, main.c:215),
- * then m4aSoundMain (VBlankIntr, main.c:406: the music players' sequencers, later the mixer).
+ * m4aSoundVSync (VCountIntr, main.c:439: the DMA's slot counter), then m4aSoundMain (VBlankIntr, main.c:406: the
+ * music players' sequencers and the mixer), whose frame goes to the output (it plays during the next frame, as on
+ * the GBA).
  */
 export function AgbMainFrameEnd(): void {
   RunSoundTasks();
   MapMusicMain();
+  m4aSoundVSync();
+  const wanted = audioOutputWantsFrames();
+  m4aSetMixing(wanted);
   m4aSoundMain();
+  if (wanted) pushFrame(m4aPcmFrame());
 }
 
 /** AgbMain's m4aSoundInit and InitMapMusic, at boot and on a soft reset (which clears sound.c's statics). The song
