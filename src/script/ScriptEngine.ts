@@ -332,6 +332,9 @@ export class ScriptEngine {
       return false;
     }
     this.ctx = new ScriptContext(pc, label);
+    // A `dofieldeffect` whose script ended without its `waitstate` (EventScript_DeepWater: FLDEFF_USE_DIVE runs on
+    // after the script) leaves no wait for the next script's `waitstate`.
+    this.waitState = undefined;
     testEvent('script', { label });
     this.msgBoxIsCancelable = false; // ClearMsgBoxCancelableState
     this.msgBoxWalkawayDisabled = false; // EnableMsgBoxWalkaway
@@ -1126,6 +1129,25 @@ export class ScriptEngine {
       this.state.setVar('VAR_RESULT', this.state.pokemon.itemPocket(this.state.value(a[0])));
     },
 
+    // ------------------------------------------------ decorations (scrcmd.c: FRLG has no secret base, so each one
+    // reads its argument with VarGet and does nothing else; the RSE calls are commented out in the C)
+    /** ScrCmd_adddecoration: `gSpecialVar_Result = DecorationAdd(decorId)` is commented out; VAR_RESULT is left alone. */
+    adddecoration(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      this.state.value(a[0]); // VarGet(ScriptReadHalfword(ctx))
+    },
+    /** ScrCmd_removedecoration: `DecorationRemove` is commented out. */
+    removedecoration(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      this.state.value(a[0]);
+    },
+    /** ScrCmd_checkdecor: `CheckHasDecoration` is commented out. */
+    checkdecor(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      this.state.value(a[0]);
+    },
+    /** ScrCmd_checkdecorspace: `DecorationCheckSpace` is commented out. */
+    checkdecorspace(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      this.state.value(a[0]);
+    },
+
     // ------------------------------------------------ coins
     checkcoins(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       this.state.setVar(a[0], this.state.coins);
@@ -1190,6 +1212,14 @@ export class ScriptEngine {
     /** ScrCmd_bufferboxname: GetBoxNamePtr(VarGet(var)) */
     bufferboxname(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       this.state.stringVars[this.stringVar(a[0])] = [...(this.state.storage.getBoxName(this.state.value(a[1])) ?? [])];
+    },
+    /**
+     * ScrCmd_bufferdecorationname: reads the string var and VarGet's the decoration id; the StringCopy from
+     * gDecorations is commented out (FRLG has no decoration table), so the string var keeps what it had.
+     */
+    bufferdecorationname(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      this.stringVar(a[0]); // ScriptReadByte(ctx)
+      this.state.value(a[1]); // VarGet(ScriptReadHalfword(ctx))
     },
     bufferstring(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       this.state.stringVars[this.stringVar(a[0])] = this.charmap.encodePlain(this.strings[a[1]] ?? '');

@@ -48,6 +48,7 @@ import { directionalAction } from '../entities/movementActions';
 
 import { SetUpFieldMove_Strength } from './strength'; // fldeff_strength.c (W-strength)
 import { registerFallWarp } from './fallWarp'; // DoFallWarp (W-misc)
+import { registerDive } from './dive'; // FLDEFF_USE_DIVE (W-unused)
 
 /** What the field moves need from the field (OverworldScene). */
 export interface FieldMoveHost {
@@ -97,9 +98,11 @@ export interface FieldMoveHost {
   /**
    * WarpIntoMap + SetMainCallback2(CB2_LoadMap) to a map position (warp id -1), from the faded screen,
    * with gFieldCallback = `fieldCallback`, which runs once the map is loaded instead of the default exit.
-   * With a `warpId` (DoFallWarp), to that warp of the map instead.
+   * With a `warpId` (DoFallWarp), to that warp of the map instead. Without a `fieldCallback`,
+   * FieldCB_DefaultWarpExit (DoDiveWarp): a door's walk out or the fade in, then UnfreezeObjectEvents and
+   * UnlockPlayerFieldControls.
    */
-  warpIntoMap(mapId: string, x: number, y: number, fieldCallback: () => void, warpId?: number): void;
+  warpIntoMap(mapId: string, x: number, y: number, fieldCallback: (() => void) | undefined, warpId?: number): void;
   /** gSaveBlock1Ptr->warpDestination (SetupWarp, `setwarp`), once a warp's setup has loaded its map. */
   warpDestination(): Promise<{ mapId: string; warpId: number; x: number; y: number } | undefined>;
   /** SetCameraPanning(0, dy); 0 for InstallCameraPanAheadCallback. */
@@ -1128,6 +1131,7 @@ export function registerFieldMoves(): void {
   registerFieldMoveSetUp('FIELD_MOVE_STRENGTH', SetUpFieldMove_Strength); // world/strength.ts
   registerFly(); // world/fly.ts
   registerFallWarp(); // world/fallWarp.ts: special DoFallWarp
+  registerDive(); // world/dive.ts: FldEff_UseDive
 }
 
 /** Graphics the field moves use outside the banner (preload at boot). */

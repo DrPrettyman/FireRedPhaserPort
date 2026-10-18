@@ -7,6 +7,7 @@
 import { state } from '../battle/env';
 import { testEvent } from '../dev/testHooks';
 import { registerSpecials } from '../script/specials';
+import { DoDiveWarp } from './dive';
 import { fieldMoveHost, LockPlayerFieldControls, UnlockPlayerFieldControls, CreateTask } from './fieldMoves';
 import { objectDepth } from './MapChunk';
 import {
@@ -20,27 +21,15 @@ import {
 } from './playerAvatar';
 
 /**
- * DoFallWarp: DoDiveWarp (LockPlayerFieldControls, WarpFadeOutScreen, Task_Teleport2Warp: once faded,
- * WarpIntoMap + CB2_LoadMap) to the warp destination SetupWarp stored, with gFieldCallback =
+ * DoFallWarp: DoDiveWarp (world/dive.ts: LockPlayerFieldControls, WarpFadeOutScreen, Task_Teleport2Warp: once
+ * faded, WarpIntoMap + CB2_LoadMap) to the warp destination SetupWarp stored, with gFieldCallback =
  * FieldCB_FallWarpExit. The script's `waitstate` never ends: the map load ends the script.
  */
 export function DoFallWarp(): void {
-  LockPlayerFieldControls();
-  const host = fieldMoveHost();
-  void host.warpDestination().then((dest) => {
-    if (!dest) {
-      console.warn('[fall warp] no warp destination set');
-      UnlockPlayerFieldControls();
-      return;
-    }
-    testEvent('fallWarp', { map: dest.mapId });
-    const fadeOut = host.warpFadeOutScreen(dest.mapId);
-    CreateTask(() => {
-      if (!fadeOut()) return false; // WaitWarpFadeOutScreen
-      host.warpIntoMap(dest.mapId, dest.x, dest.y, FieldCB_FallWarpExit, dest.warpId);
-      return true;
-    });
-  });
+  DoDiveWarp(FieldCB_FallWarpExit);
+  void fieldMoveHost()
+    .warpDestination()
+    .then((dest) => dest && testEvent('fallWarp', { map: dest.mapId }));
 }
 
 /** The player's sprite drawn `y2` px off its tile (CameraObjectReset2: the camera stays on the tile). */
