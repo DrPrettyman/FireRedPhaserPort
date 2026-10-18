@@ -2343,7 +2343,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   without the ticket and walked back up the pier, the sailor turning to the player and back; let through with it,
   the other column not checking again, (22/23, 32)'s ExitedTicketCheck resetting the trigger, aboard through the
   arrow warp); every NPC on the 24 S.S. Anne maps with objects (all texts, all 16 trainers fought, the 7 item balls,
-  the 2F gentleman's Snorlax pic, the 1F heal lady), the hidden items (B1F corridor Hyper Potion, the kitchen's
+  the 2F gentleman's showmonpic scene, the 1F heal lady), the hidden items (B1F corridor Hyper Potion, the kitchen's
   three berries), the captain's office signs; the rival's three triggers on 2F (the side two are new tests); the
   captain's back turned until he's rubbed, HM01, "set sail soon" after; both branches of SSAnne_Exterior_ExitSSAnne
   (from the ship, and walked down the dock when arriving from Vermilion with VAR_MAP_SCENE_VERMILION_CITY 1);
