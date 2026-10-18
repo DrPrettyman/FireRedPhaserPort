@@ -2306,3 +2306,23 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   it, refuse the next; take one back through the level menu and then the other; B in the level menu; the Togepi
   egg from `giveegg`), eggHatch, sideSpecials, saveContinue, and for the `yesnobox` change inGameTrades,
   moveTutors, sideEvents, mainPathLeftovers, fieldMoves, gameCorner, newGame (all green).
+
+### SIDE_PLAN.md batch 1 merged (PRs #56-#67)
+
+- Plan: SIDE_PLAN.md (#56). Merged one PR per unit as each went green: #57 ChoosePartyMon, move tutors, move
+  deleter; #58 in-game trades behind a fade, the Name Rater; #59 coins box, Game Corner clerks, slot machine logic
+  (and the extractor's FIRERED/LEAFGREEN script conditionals); #60 Oak's Pokédex rating, the museum fossil pics,
+  the fossil revival check, story tests press B after leader battles; #61 move relearner, Cape Brink tutor; #62
+  the in-game trade scene (the wireless animation, which is what in-game trades run); #63 Route 5 daycare (save
+  version 4); #64 slot machine screen, smiley, photo printer; #65 egg hatching; #66 holes (DoFallWarp), Daisy,
+  the Magikarp record, the diploma, the fan club; #67 eggs, the Four Island daycare, `giveegg`, and `yesnobox`
+  resuming a frame after the A press.
+- Conflict resolutions: `script/specials.ts` (each workstream's spread line: kept all), `tools/extract_gfx.py`
+  GFX_PREFIXES (kept every prefix), `tests/unit/scriptCoverageGaps.ts` (each side removed its own entries: kept
+  every removal, i.e. dropped both sides of each conflict block).
+- Race found in a merge run: #67's `yesnobox` timing change made gameCorner.test.ts's photo printer test mash its
+  last A press into the print type menu the tick it opened (picked NORMAL, every run). Fixed in #67: mash only until
+  the YES/NO's money is taken, then wait for the menu.
+- Verified: each PR after merging master in: typecheck, `npm test`, its own e2e file plus the files for the shared
+  code it touched; the full e2e suite for #66 (warps) and #67 (yesnobox). Last run, on master with everything
+  merged: typecheck clean, 229 unit, 356 e2e in 52 files.

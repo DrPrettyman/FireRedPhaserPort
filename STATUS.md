@@ -23,8 +23,11 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
 
 ## Next up
 
-[SIDE_PLAN.md](SIDE_PLAN.md) batch 1 is running: Oak's rating, move tutors / deleter / relearner, in-game
-trades, the Game Corner, the Name Rater, fossils, the Route 5 daycare, eggs.
+[SIDE_PLAN.md](SIDE_PLAN.md) batch 1 is in (PRs #56-#67): Prof. Oak's Pokédex rating (in person and on the
+PC), the move tutors, move deleter, move relearner and Cape Brink tutor, ChoosePartyMon, the in-game trades with
+their trade scene, the Name Rater, the Game Corner (coins box, clerks, prize room, slot machine, photo printer),
+the museum's fossil pics and the fossil revival, the Route 5 and Four Island daycares, eggs, `giveegg`, egg
+hatching, holes (DoFallWarp), Daisy's grooming, the Magikarp record, the diploma and the Trainer Fan Club.
 
 [MAIN_PATH_PLAN.md](MAIN_PATH_PLAN.md) is done. [SCREENS_PLAN.md](SCREENS_PLAN.md) batches 1 and 2 are in: the
 Pokédex, TM case, berry pouch, field items, registered SELECT items, the option menu and start menu help window,
@@ -34,10 +37,10 @@ No known main-path blockers are left: the story checks found and fixed four (Lt.
 Hideout's `call_if_defeated` barrier, `GetQuestLogState` leaving VAR_RESULT stale so `trainerbattle_no_intro`
 could skip its battle, every nurse's YES/NO throwing on a constant expression). `tests/unit/scriptCoverageGaps.ts`
 lists what the scripts use that isn't ported: 2 main (both visual: the Elite Four lighting, the S.S. Anne
-departure), 68 side, 55 postgame, 44 link. Next: the side gaps a player meets on the way (in-game trades and
-ChoosePartyMon, the move deleter / relearner / tutors, the Game Corner's coins box and slot machine, the fossil
-revival, the Name Rater, the Route 5 daycare, DoFallWarp holes), then audio (SE, cries and BGM are no-ops; see
-DEVIATIONS for what waits on them).
+departure), 11 side, 42 postgame, 44 link. Next: the last side gaps (the Seagallop ferry for Bill's One Island
+trip, Easy Chat for the Pewter questionnaire, IsPlayerLeftOfVermilionSailor, GetMartClerkObjectId), then audio
+(SE, cries and BGM are no-ops; see DEVIATIONS for what waits on them), then the postgame (Sevii 4-7, Trainer
+Tower).
 
 Other open work:
 
@@ -45,11 +48,10 @@ Other open work:
 - The L/R help system (help_system.c) behind OPTIONS_BUTTON_MODE_HELP.
 - Map preview screens (map_preview_screen.c): TryDoMapTransition already knows where they'd run.
 - Other bag items that need field systems: Fame Checker, Teachy TV, mail.
-- Daycare and egg hatching.
 - Link play (the cable club's link specials are stand-ins that never find a partner), the event tickets for Navel
   Rock / Birth Island, `special ShakeScreen`.
-- More e2e scenarios (see the checklist's Tests section). story.test.ts and storyCeladonSaffron.test.ts mash A
-  after battles, which can restart a leader's post-battle script (storyLeague.test.ts presses B instead).
+- More e2e scenarios (see the checklist's Tests section).
+- Mail (the in-game trade's held mail, the daycare's mail) and contest conditions/sheen aren't modelled.
 
 Loose ends:
 
@@ -125,7 +127,19 @@ Loose ends:
   MAP_DYNAMIC warps and `setdynamicwarp` (gSaveBlock1Ptr->dynamicWarp)
 - [x] Poké Mart (shop.c + buy_menu_helpers.c): `pokemart`, BUY/SELL/SEE YA! field menu, buy menu with the map view
   (field tiles + object sprites on the GBA layer), regular and TM layouts, quantity box, YES/NO; SELL via the bag
-- [~] Specials (`special X` / `specialvar`): table in `script/specials.ts`; HealPlayerParty, GetPokedexCount, EnableNationalPokedex, GetQuestLogState, GetPartyMonSpecies, BufferMonNickname, ChangePokemonNickname (naming screen), plus no-ops for audio/quest log/help/fame checker. Unknown specials log once
+- [~] Specials (`special X` / `specialvar`): table in `script/specials.ts` with one module per area spread in
+  (story, side, misc, party menu, trades, Game Corner, daycare, egg hatch); no-ops for audio/quest log/help/fame
+  checker. Unknown specials log once; what's left is in `tests/unit/scriptCoverageGaps.ts`
+- [x] Party selection from scripts (party_menu_specials.c: ChoosePartyMon), move tutors (incl. Cape Brink), the
+  move deleter, the move relearner (learn_move.c)
+- [x] In-game trades (trade_scene.c's in-game path: the data, the specials, the wireless trade animation) and the
+  Name Rater. Link trading and TradeEvolutionScene aren't ported
+- [x] Game Corner: coins box (coins.c), clerks and prize room, the slot machine (slot_machine.c), the smiley and
+  the photo printer
+- [x] Daycares and eggs (daycare.c): Route 5 and Four Island, egg production, egg species / IVs / moves, `giveegg`,
+  the level menu, the hatching scene
+- [x] Side specials: Oak's Pokédex rating, the museum fossil pics, holes (DoFallWarp), Daisy, the Magikarp record,
+  the diploma (diploma.c), the Trainer Fan Club
 - [x] Items: additem/removeitem/checkitem/checkitemspace/checkitemtype, giveitem/giveitem_msg through the std scripts,
   item balls (`finditem` → Std_FindItem), hidden items (EventScript_HiddenItemScript, incl. hidden coins); coins
   (checkcoins/addcoins/removecoins)
@@ -184,8 +198,8 @@ Loose ends:
 - [x] Roamers (roamer.c): InitRoamer, location sets + history, encounters, HP/status kept between battles
 - [x] Safari Zone: safari_zone.c (Enter/ExitSafariMode, 600-step counter, retire, out-of-balls endings),
   battle_controller_safari.c, the Safari healthbox text, start menu RETIRE + stats window, entrance money box
-- [~] Step counters (TryStartStepCountScript): happiness, field poison (incl. the BG mosaic flash and the faint/white-out
-  script), VS Seeker charge counter (and its rematches), Safari steps; eggs only lose egg cycles (no daycare, no hatching scene)
+- [x] Step counters (TryStartStepCountScript): happiness, field poison (incl. the BG mosaic flash and the faint/white-out
+  script), VS Seeker charge counter (and its rematches), Safari steps, Daisy's massage cooldown; the daycares' steps, egg production and egg hatching
 - [x] Return to field runs MAP_SCRIPT_ON_RESUME / ON_RETURN_TO_FIELD (after battles and the bag/party menu)
 - [x] Trainer sight (trainer_see.c): sight lines + CheckPathBetweenTrainerAndPlayer, the "!" and walk-up, FRLG's
   camera pan to trainers offscreen above, ConfigureAndSetUpOneTrainerBattle. Disguised/buried trainers aren't ported
@@ -206,7 +220,7 @@ Loose ends:
 - [x] Evolution scene (evolution_scene.c, evolution_graphics.c): after a battle (TryEvolvePokemon), from a Rare Candy
   or an evolution stone; holding B stops it; Crobat-style evolutions stop without the National Dex; learning the
   new species' move (incl. forgetting one through the summary screen); Nincada's Shedinja. TradeEvolutionScene
-  isn't ported (no trading)
+  isn't ported (no FRLG in-game trade evolves; no link trading)
 - [ ] Audio playback
 - [x] Naming screen (naming_screen.c): every template (player, rival, PC box, nickname, caught mon); opened by
   ChangePokemonNickname from scripts and by the battle's nickname prompt after a catch
@@ -222,7 +236,9 @@ Loose ends:
   in grass, running, Master Ball catch + nickname, Poké Mart purchase, walking/doors/stairs/talking, evolution
   (after a battle, learning a move with a full moveset, stopping it with B, Rare Candy and Fire Stone from the bag),
   the Pokédex (lists, mon page, habitats, area page, registering a catch), TM case / berry pouch, rods, Escape
-  Rope, VS Seeker, Itemfinder, registered items, options, trainer card, the story gym by gym
+  Rope, VS Seeker, Itemfinder, registered items, options, trainer card, the story gym by gym; move tutors /
+  deleter / relearner, in-game trades and the Name Rater, the Game Corner, Oak's rating and the fossils, the
+  daycares, eggs and hatching, holes and the other side specials
 - [x] Script coverage unit test: every script command, special, std script, movement action and field effect the
   scripts use, against the port's tables; known gaps tagged in `tests/unit/scriptCoverageGaps.ts`
 - [ ] More scenarios: party menu from the start menu, items in battle, level-up move learning, the Old Man

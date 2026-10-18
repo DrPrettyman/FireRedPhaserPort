@@ -143,9 +143,18 @@ pic, the daycare and egg fields in GameState / saveData.
 
 | Batch | Workers | Why together |
 |---|---|---|
-| 1 (this one) | W-moves (1, then 2), W-trade (1, then 2), W-slots (1, 2, spare 3), W-daycare (1, 2, then 3 and 4 if the batch has room) | Different files; all four are side content the user asked for, ordered by how often a player meets it |
+| 1 (done, PRs #56-#67) | W-moves (1, 2), W-trade (1, 2), W-slots (1, 2; spare 3 not needed), W-daycare (1, 2, 3), W-hatch (unit 4, alongside 2-3), W-misc (the other small side specials) | Different files; all four are side content the user asked for, ordered by how often a player meets it |
 
-What's left after batch 1 goes first in batch 2 (see "Next up" in STATUS.md when this batch closes).
+Batch 1 merged: #57 party selection, tutors, deleter; #58 trades behind a fade, Name Rater; #59 coins box, Game
+Corner clerks, slot machine logic; #60 Oak's rating, fossil pics, fossil revival check; #61 move relearner, Cape
+Brink; #62 the trade scene; #63 Route 5 daycare; #64 slot machine screen, smiley, photo printer; #65 egg hatching;
+#66 holes, Daisy, Magikarp record, diploma, fan club; #67 eggs and the Four Island daycare.
+
+Left for a batch 2 (the side gaps in `tests/unit/scriptCoverageGaps.ts`): the Seagallop ferry
+(DoSeagallopFerryScene, DrawSeagallopDestinationMenu, GetSeagallopNumber, GetSelectedSeagallopDestination,
+IsPlayerLeftOfVermilionSailor) for Bill's One Island trip; Easy Chat (ShowEasyChatScreen / ShowEasyChatMessage,
+the Pewter questionnaire); GetMartClerkObjectId. Outside the gap list: mail (daycare mail, the trade's Fab Mail),
+contest conditions, TradeEvolutionScene and link trading, audio.
 
 ## Rules
 
@@ -156,7 +165,8 @@ Worker and merger rules: docs/WORKFLOW.md sections 3 and 4. Each worker's e2e fi
 1. **One PR per unit** (as in SCREENS_PLAN.md decision 2): ChoosePartyMon from W-moves unit 1 is needed by
    W-trade and W-daycare, and the Game Corner's coins box is useful on its own, so each unit merges as it finishes.
 2. **The in-game trade lands in two steps** (coordinator, revisit if you disagree): unit 1 makes trades work behind
-   a fade, unit 2 adds trade_scene.c's cable animation. Trades are playable a unit earlier; the stand-in is logged in
+   a fade, unit 2 adds trade_scene.c's animation. (The plan said "cable"; unit 2 found the in-game trade runs
+   DoTradeAnim_Wireless, since only CB2_LinkTrade sets `isCableTrade`, and ported that.) Trades are playable a unit earlier; the stand-in is logged in
    DEVIATIONS until unit 2 replaces it. TradeEvolutionScene stays out (no FRLG in-game trade evolves).
 3. **Eggs come after the Route 5 daycare** (coordinator, revisit if you disagree): in FRLG the Route 5 daycare man
    holds one mon and gives no eggs; eggs come from the Four Island daycare and the Water Labyrinth after the Hall
@@ -166,7 +176,15 @@ Worker and merger rules: docs/WORKFLOW.md sections 3 and 4. Each worker's e2e fi
    batch started; each worker runs only its own e2e file, and merges run the files the PR touches, with the full
    suite once at the end.
 
+5. **Hatching ran as its own worker (W-hatch) beside the Route 5 daycare** (coordinator, revisit if you disagree):
+   the hatching scene doesn't depend on the daycare storage (the field trigger already existed), so it took a free
+   slot instead of waiting for unit 3.
+6. **A W-misc worker for the other small side specials** (coordinator, revisit if you disagree): with W-moves and
+   W-trade finished early, a free slot took the side gaps a player meets before the Hall of Fame (holes, Daisy, the
+   Magikarp record, the diploma, the fan club) rather than starting the Seagallop ferry, which is left for batch 2.
+
 ## Not in this plan
 
-Link trading and the wireless trade animation, TradeEvolutionScene, mail, the Seagallop ferry, DoFallWarp holes,
-the Trainer Fan Club, the Magikarp / Heracross size contests, the diploma, Daisy's grooming, Easy Chat; audio.
+Link trading and the cable trade animation, TradeEvolutionScene, mail, the Seagallop ferry, the Heracross size
+contest (postgame), Easy Chat; audio. (DoFallWarp holes, the Trainer Fan Club, the Magikarp record, the diploma and
+Daisy's grooming were planned out but done in batch 1 by W-misc: decision 6.)
