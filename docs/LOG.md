@@ -2326,3 +2326,30 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Verified: each PR after merging master in: typecheck, `npm test`, its own e2e file plus the files for the shared
   code it touched; the full e2e suite for #66 (warps) and #67 (yesnobox). Last run, on master with everything
   merged: typecheck clean, 229 unit, 356 e2e in 52 files.
+
+### The S.S. Anne's departure and an S.S. Anne sweep (W-ssanne unit 1)
+
+- Ported ss_anne.c as `world/ssAnne.ts`: DoSSAnneDepartureCutscene, Task_SSAnneInit / Run / Finish,
+  CreateWakeBehindBoat / WakeSpriteCallback, CreateSmokeSprite / SmokeSpriteCallback, the templates and anims. The
+  boat (local id 1) slides left through its sprite's x2, a pixel per 5 frames, until x + x2 < -120; the wake
+  (16x32, two frames every 12) follows 80 px behind; a smoke puff (16x16, four frames, ANIMCMD_END) every 70
+  frames while the funnel is on screen; 40 frames after the horn, ScriptContext_Enable ends the script's
+  `waitstate` and `removeobject` takes the boat. The wake and smoke are FieldEffectSprites at screen coordinates,
+  their textures sWakeTiles / sSmokeTiles (graphics/ss_anne/, a new GFX_PREFIXES entry) on gObjectEventPal_SSAnne
+  (OBJ palette 10). Probe `__test.ssAnne()` (through OverworldScene.testSSAnne: testHooks can't import a Phaser
+  module, unit tests load it), event `ssAnneDeparture`. Off `scriptCoverageGaps.ts`: main has 1 left (the league
+  lighting).
+- Sweep, checked at runtime against the decomp's scripts: Vermilion's ticket check in both columns (refused
+  without the ticket and walked back up the pier, the sailor turning to the player and back; let through with it,
+  the other column not checking again, (22/23, 32)'s ExitedTicketCheck resetting the trigger, aboard through the
+  arrow warp); every NPC on the 24 S.S. Anne maps with objects (all texts, all 16 trainers fought, the 7 item balls,
+  the 2F gentleman's Snorlax pic, the 1F heal lady), the hidden items (B1F corridor Hyper Potion, the kitchen's
+  three berries), the captain's office signs; the rival's three triggers on 2F (the side two are new tests); the
+  captain's back turned until he's rubbed, HM01, "set sail soon" after; both branches of SSAnne_Exterior_ExitSSAnne
+  (from the ship, and walked down the dock when arriving from Vermilion with VAR_MAP_SCENE_VERMILION_CITY 1);
+  VAR_MAP_SCENE_VERMILION_CITY 1 → 2 → 3, FLAG_HIDE_SS_ANNE set by `removeobject`; Vermilion afterwards (the
+  trigger's "The ship set sail.", the ferry sailor, the old man's OldMan1SSAnneLeft, the pier sailor). No other
+  differences from the decomp found. Not reachable in the sweep: the exterior's hidden Lava Cookie at (58, 28)
+  (across the water from the dock, as in the decomp) and the deck sailor at (13, 13), who walks back and forth
+  without stopping (his movement checked tile by tile; his script is a plain MSGBOX_NPC).
+- Verified: typecheck; `npm test` (229); e2e ssAnne.test.ts (10, twice in a row) and story.test.ts (7).

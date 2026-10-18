@@ -28,6 +28,40 @@ async function step(game: Game, dir: 'up' | 'down' | 'left' | 'right'): Promise<
   await game.eval((t, d) => t.walk(d, 1), dir);
 }
 
+/** Walk next to the object `graphicsId` that started near (x, y) (it may wander), face it and run its script. */
+async function talkTo(game: Game, graphicsId: string, x: number, y: number): Promise<{ script?: string; messages: string[] }> {
+  const sides = [[0, 1, 'up'], [0, -1, 'down'], [-1, 0, 'right'], [1, 0, 'left']] as const;
+  for (let k = 0; k < 16; k++) {
+    const o = await game.eval(
+      (t, g, x, y) => t.objects().filter((o) => o.graphicsId === g).sort((a, b) => Math.abs(a.x - x) + Math.abs(a.y - y) - (Math.abs(b.x - x) + Math.abs(b.y - y)))[0],
+      graphicsId,
+      x,
+      y,
+    );
+    const [dx, dy, face] = sides[k % 4];
+    const r = await game.eval((t, x, y) => t.walkTo(x, y).catch(() => ({ arrived: false })), o.x + dx, o.y + dy);
+    if (!r.arrived) continue;
+    // (in one go: a wandering NPC may step away between two round trips)
+    const facing = await game.eval(
+      (t, g, ox, oy, dx, dy, face) => {
+        const now = t.objects().find((p) => p.graphicsId === g && p.x === ox && p.y === oy && !p.moving);
+        const f = t.field()!;
+        if (!now || f.x !== ox + dx || f.y !== oy + dy) return false;
+        t.face(face);
+        return true;
+      },
+      graphicsId,
+      o.x,
+      o.y,
+      dx,
+      dy,
+      face,
+    );
+    if (facing) return runScript(game);
+  }
+  throw new Error(`Couldn't get next to ${graphicsId} near (${x}, ${y})`);
+}
+
 const sailor = (game: Game) => game.eval((t) => t.objects().find((o) => o.x === 24 && o.y === 33 && o.graphicsId === 'OBJ_EVENT_GFX_SAILOR'));
 
 for (const x of [22, 23]) {
@@ -87,6 +121,7 @@ test('The ticket check with the S.S. Ticket: let through, aboard; walking away r
   await game.waitForEvent('map', { since, what: 'SSAnne_Exterior' });
   await game.waitIdle();
   expect(await game.eval((t) => t.field()!)).toMatchObject({ map: 'SSAnne_Exterior', x: 32, y: 5 });
+  expect(await game.eval((t) => t.flag('FLAG_WORLD_MAP_SSANNE_EXTERIOR'))).toBe(true); // SSAnne_Exterior_OnTransition
   // The ship is there (FLAG_HIDE_SS_ANNE is clear until it sails).
   expect(await game.eval((t) => t.objects().some((o) => o.graphicsId === 'OBJ_EVENT_GFX_SS_ANNE'))).toBe(true);
 });
@@ -196,4 +231,98 @@ test('Vermilion once the S.S. Anne has left: the dock sailor, the old man, the s
   expect(r.messages).toEqual(['The ship set sail.']);
   expect(await game.eval((t) => t.field()!)).toMatchObject({ x: 23, y: 32 });
   expect(await game.eval((t) => t.var('VAR_VERMILION_CITY_TICKET_CHECK_TRIGGER'))).toBe(0);
+
+  // The ferry sailor, the old man (VermilionCity_EventScript_OldMan1SSAnneLeft) and the sailor on the pier.
+  expect((await talkTo(game, 'OBJ_EVENT_GFX_SAILOR', 24, 33)).messages).toEqual(['The ship set sail.']);
+  expect((await talkTo(game, 'OBJ_EVENT_GFX_OLD_MAN_1', 17, 9)).messages).toEqual(['So, the S.S. ANNE has departed? She’ll be back in VERMILION about this time next year.']);
+  expect((await talkTo(game, 'OBJ_EVENT_GFX_SAILOR', 31, 30)).messages).toEqual(['The S.S. ANNE is a famous luxury cruise ship. It visits VERMILION once a year.']);
 });
+
+test('Vermilion before the S.S. Anne has left: the old man and the ferry sailor talk about the ship', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'VermilionCity', x: 23, y: 30, party: [MEWTWO] });
+  expect((await talkTo(game, 'OBJ_EVENT_GFX_SAILOR', 24, 33)).messages).toEqual(['Welcome to the S.S. ANNE!']);
+  expect((await talkTo(game, 'OBJ_EVENT_GFX_OLD_MAN_1', 17, 9)).messages).toEqual(['Did you see the S.S. ANNE moored in the harbor?']);
+});
+
+// story.test.ts takes the middle column (31, 6); the other two triggers bring the rival to the player differently.
+for (const [x, side, rivalAt] of [
+  [30, 'Left', [30, 5]],
+  [32, 'Right', [31, 6]],
+] as const) {
+  test(`The rival on 2F from the ${side.toLowerCase()} trigger (${x}, 6)`, async () => {
+    const game = await session.start({ start: 'after-rival', map: 'SSAnne_2F_Corridor', x: 31, y: 9, party: [MEWTWO] });
+    await game.eval((t) => t.state!.setVar('VAR_REPEL_STEP_COUNT', 500));
+    expect(await game.eval((t) => t.objects().some((o) => o.graphicsId === 'OBJ_EVENT_GFX_BLUE'))).toBe(false);
+    await game.eval((t, x) => t.walkTo(x, 7), x);
+    // Where the rival stands when the battle starts (watched in the page: the scene moves on after it).
+    const atBattle = game.watch((t) => {
+      if (!t.battle()) return undefined;
+      const r = t.objects().find((o) => o.graphicsId === 'OBJ_EVENT_GFX_BLUE');
+      return { rival: r && [r.x, r.y], facing: t.field()!.facing };
+    });
+    const since = await game.mark();
+    await step(game, 'up');
+    await game.mashUntil((t) => t.idle() && t.var('VAR_MAP_SCENE_S_S_ANNE_2F_CORRIDOR') !== 0, { what: 'the rival scene' });
+    const scripts = await game.eval((t, s) => t.events(s).filter((e) => e.type === 'script').map((e) => e.label), since);
+    expect(scripts[0]).toBe(`SSAnne_2F_Corridor_EventScript_RivalTrigger${side}`);
+    const at = await atBattle;
+    expect(at.rival).toEqual(rivalAt);
+    if (side === 'Right') expect(at.facing).toBe('left'); // SSAnne_2F_Corridor_Movement_PlayerFaceRivalRight
+    expect(await game.eval((t) => ['SQUIRTLE', 'BULBASAUR', 'CHARMANDER'].some((s) => t.trainerDefeated(`RIVAL_SS_ANNE_${s}`)))).toBe(true);
+    // RivalExit*, then `removeobject` (FLAG_HIDE_SS_ANNE_RIVAL) and the scene var.
+    expect(await game.eval((t) => t.objects().some((o) => o.graphicsId === 'OBJ_EVENT_GFX_BLUE'))).toBe(false);
+    expect(await game.eval((t) => t.flag('FLAG_HIDE_SS_ANNE_RIVAL'))).toBe(true);
+    expect(await game.eval((t) => t.field()!)).toMatchObject({ x, y: 6 });
+  }, 120_000);
+}
+
+test('The captain: seasick with his back turned (`lock`, no `faceplayer`), turns once his back is rubbed; then "set sail soon"', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'SSAnne_CaptainsOffice', x: 5, y: 5, party: [MEWTWO] });
+  const captain = () => game.eval((t) => t.objects().find((o) => o.graphicsId === 'OBJ_EVENT_GFX_CAPTAIN')!.facing);
+  expect(await captain()).toBe('up');
+  await game.eval((t) => t.face('up'));
+  // Facing while each message shows (watched in the page).
+  const facings = game.eval((t) => {
+    const seen: [string, string][] = [];
+    return t
+      .until(() => {
+        const m = t.message();
+        const c = t.objects().find((o) => o.graphicsId === 'OBJ_EVENT_GFX_CAPTAIN')!.facing;
+        if (m && seen[seen.length - 1]?.[0] !== m.slice(0, 20)) seen.push([m.slice(0, 20), c]);
+        return t.flag('FLAG_GOT_HM01') && t.idle();
+      }, 20000)
+      .then(() => seen);
+  });
+  const r = await runScript(game);
+  expect(r.messages[0]).toBe('CAPTAIN: Ooargh… I feel hideous… Urrp! Seasick…');
+  const seen = await facings;
+  expect(seen.find(([m]) => m.startsWith('CAPTAIN: Ooargh'))?.[1]).toBe('up');
+  expect(seen.find(([m]) => m.startsWith('PLAYER rubbed'))?.[1]).toBe('up');
+  expect(seen.find(([m]) => m.startsWith('CAPTAIN: Whew'))?.[1]).toBe('down');
+  expect(await game.eval((t) => [t.itemCount('HM01'), t.var('VAR_MAP_SCENE_VERMILION_CITY')])).toEqual([1, 1]);
+
+  // SSAnne_CaptainsOffice_EventScript_AlreadyGotCut
+  await game.eval((t) => t.face('up'));
+  const again = await runScript(game);
+  expect(again.script).toBe('SSAnne_CaptainsOffice_EventScript_Captain');
+  expect(again.messages[0]).toMatch(/^CAPTAIN: …Whew! Now that I’m not sick anymore, I guess it’s time\. The S\.S\. ANNE will set sail soon!/);
+});
+
+test('Back on the dock from Vermilion with the captain seen (e.g. after a Teleport): walked down to the ship, then it sails', async () => {
+  // SSAnne_Exterior_ExitSSAnne's other branch: arriving at the top of the dock (y <= 6), SSAnne_Exterior_WalkDown.
+  const game = await session.start({ start: 'after-rival', map: 'SSAnne_Exterior', x: 32, y: 5, party: [MEWTWO] });
+  const since = await game.mark();
+  const atStart = game.watch((t) => {
+    const p = t.ssAnne();
+    return p && p.state === 'init' && { x: t.field()!.x, y: t.field()!.y, boatScreenX: p.boatScreenX };
+  });
+  await game.eval((t) => {
+    t.state!.setFlag('FLAG_GOT_HM01');
+    t.state!.setVar('VAR_MAP_SCENE_VERMILION_CITY', 1);
+  });
+  expect(await atStart).toEqual({ x: 32, y: 14, boatScreenX: 88 });
+  await game.waitForEvent('map', { since, what: 'VermilionCity', timeout: 60_000 });
+  await game.waitIdle();
+  expect(await game.eval((t) => t.field()!)).toMatchObject({ map: 'VermilionCity', x: 23, y: 32 });
+  expect(await game.eval((t) => t.var('VAR_MAP_SCENE_VERMILION_CITY'))).toBe(3);
+}, 120_000);
