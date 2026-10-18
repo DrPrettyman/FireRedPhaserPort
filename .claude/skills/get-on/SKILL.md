@@ -25,10 +25,16 @@ context small is the point: everything heavy happens in the sub-coordinators.
 1. Start a sub-coordinator: the Agent tool, `general-purpose`, in the background, with the prompt below (fill in
    the batch number, the focus if any, and the notes from the previous batch's report).
 2. Wait for its report. Don't poll it and don't do its work. If the user asks, say it's still running.
-3. When it reports, give the user a short update: what merged (PR numbers), what's left open and why, decisions it
-   made that the user may want to revisit, and the test totals. Keep the previous report's "notes for the next
-   batch" for the next prompt.
-4. Check the stop conditions. If none holds, go to 1.
+3. When it reports, check its cleanup yourself before believing it: `git fetch --prune`,
+   `git ls-remote --heads origin`, `git worktree list`, `gh pr list`. Only master and open PRs' branches and
+   worktrees should be left. For anything else, check its head matches a merged PR's head
+   (`gh pr list --state all --json headRefName,headRefOid,state`), delete it if so (docs/WORKFLOW.md section 4
+   "Cleaning up a merged PR"), and tell the user the report missed it. Anything that doesn't match a merged PR: leave
+   it and ask.
+4. Give the user a short update: what merged (PR numbers), what's left open and why, decisions it made that the user
+   may want to revisit, and the test totals. Keep the previous report's "notes for the next batch" for the next
+   prompt.
+5. Check the stop conditions. If none holds, go to 1.
 
 ## Stop conditions
 
@@ -55,10 +61,12 @@ A permission a sub-coordinator or worker was denied is never yours to retry: sto
 > 2. Pick the next step from STATUS.md "Next up" (or the focus), check it against the decomp and the port, and write
 >    the batch into a plan doc (continue the current plan, or start a new `<NAME>_PLAN.md` at the root like
 >    MAIN_PATH_PLAN.md) as a docs-only PR, and merge it.
-> 3. Start up to four workers (section 2) in the background, one unit each, and run section 2's watchdog. When a
->    worker hands back with units left, start a continuation worker on the same branch. Workers don't start agents
->    of their own.
-> 4. Merge their PRs (section 4), then the docs-only STATUS/LOG PR, then pull the main checkout if it's clean.
+> 3. Start workers (section 2) in the background, one unit each, and run section 2's watchdog. How many at once (at
+>    most four) is your estimate from the work and the machine load (section 1). When a worker hands back with
+>    units left, start a continuation worker on the same branch. Workers don't start agents of their own.
+> 4. Merge their PRs (section 4: you choose which e2e files each merge needs; the full suite runs at least once at
+>    the end), cleaning up each branch and worktree right after its merge. Then the docs-only STATUS/LOG PR, then
+>    pull the main checkout if it's clean, then section 4's end-of-batch check.
 >
 > Decisions: where the plan needs a choice the user hasn't made, take the reasonable one, write it in the plan's
 > "Decisions" section marked "(coordinator, revisit if you disagree)", and list it in your report. Deliberate
@@ -68,5 +76,5 @@ A permission a sub-coordinator or worker was denied is never yours to retry: sto
 > If you run low on context: finish the merge you're in, leave the rest open, and say exactly what's left.
 >
 > Your final message (it goes to the main coordinator, not the user): PRs merged (numbers, one line each), PRs left
-> open and why, decisions you took, deviations added, test totals from the last full run, anything that needs the
-> user, and notes for the next batch (what you'd do next and why).
+> open and why, decisions you took, deviations added, test totals from the last full run, the end-of-batch check's
+> output, anything that needs the user, and notes for the next batch (what you'd do next and why).

@@ -35,12 +35,15 @@ Big pieces of work run as parallel batches (a coordinator, up to four workers, a
 - Merging PRs:
   - Merge open PRs one at a time, smallest first (unless one depends on another).
   - For each: in a worktree, merge the latest `origin/master` into the PR branch, resolve conflicts (STATUS.md
-    and docs/*.md use merge=union: tidy any duplicated lines), run typecheck, unit and e2e tests, push, then
-    `gh pr merge --squash`. If a conflict needs a judgement call or tests fail, skip that PR and report it.
+    and docs/*.md use merge=union: tidy any duplicated lines), run typecheck, unit and e2e tests (which e2e files
+    is the merger's call: docs/WORKFLOW.md section 4), push, then `gh pr merge --squash`. If a conflict needs a
+    judgement call or tests fail, skip that PR and report it.
   - If the PR branch contains another PR's commits that master already has squashed, git can silently restore
     lines the PR deleted. After merging master in, check `git diff <PR head before the merge>` shows only master's
     changes.
   - Stacked PRs (one PR's branch built on another's): see docs/WORKFLOW.md "Merger" for merging the second after
     the first was squashed.
-  - After each merge, delete the PR's branch (local and remote) and its worktree.
+  - After each merge, delete the PR's branch (local and remote) and its worktree, with the commands in
+    docs/WORKFLOW.md "Cleaning up a merged PR", and check the remote branch is gone. `gh pr merge --delete-branch`
+    is not enough: it skips the remote branch when a worktree has the branch checked out.
   - At the end, `git pull --ff-only` in the main checkout only if its working tree is clean; otherwise tell the user.

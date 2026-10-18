@@ -2054,3 +2054,17 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   after the banner (fixed in #47: read in the mash predicate); the rest went to the W-flaky workers (#48, #53).
 - Verified: each PR after merging master in: typecheck, `npm test`, full e2e. Last run (#53 on top of everything):
   typecheck clean, 156 unit, 308 e2e in 45 files.
+
+## Workflow: branch cleanup checks, worker count and e2e scope are the coordinator's call
+
+- Batches 1-2 of SCREENS_PLAN.md left 15 merged branches on origin while reporting "all branches cleaned up".
+  Cause: `gh pr merge --delete-branch` run while a worktree had the branch checked out fails to delete the local
+  branch and then skips the remote one. The main coordinator found them with `git ls-remote --heads origin`,
+  checked each against its merged PR's head and deleted them.
+- docs/WORKFLOW.md section 4: "Cleaning up a merged PR" (explicit worktree / local / remote deletes, then
+  `ls-remote` must print nothing) and an end-of-batch check whose output goes in the report. Section 1: the number
+  of workers (at most four) is the coordinator's estimate from the work and the machine load. Section 4: which e2e
+  files each merge runs is the merger's call; the full suite runs at least once at the end. Section 3: workers
+  don't edit `.git/info/exclude` (a worker had added a line there; removed).
+- CLAUDE.md "Merging PRs" points at both; the get-on skill's main coordinator now checks the cleanup itself.
+- Verified: docs only.

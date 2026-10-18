@@ -30,7 +30,10 @@ batch is run by hand.
    - Grep the scripts for the commands and specials the item uses, and check `script/ScriptEngine.ts` and
      `script/specials.ts` for each one (unknown ones log once at runtime).
    - `?map=Name&x=&y=` to try it in the browser.
-3. **Split it into workstreams**, at most four per batch, each owning distinct files.
+3. **Split it into workstreams**, each owning distinct files. How many workers to run at once (at most four) is the
+   coordinator's estimate from the work and the machine: each worker runs e2e files, and in batch 2 of
+   SCREENS_PLAN.md four at once pushed the load average to 150-300 and exposed races. Fewer workstreams with more
+   units each are fine; so is starting a fourth worker once another has finished.
 4. **Split each workstream into units** a fresh worker can finish in about an hour: roughly 1,000-1,500 lines of C
    ported plus its tests and docs, each leaving the branch green (typecheck, unit tests, its e2e cases). List the
    units in order in the plan. A worker does one unit (or a few small ones) and hands back; the next unit goes to a
@@ -42,7 +45,8 @@ batch is run by hand.
    wait a batch. (Batch 3 got three duplicates without this: affine BGs, the top bar window and SoftReset.)
 6. **Write the batch into the plan doc** (workstreams, their units, owners, what's shared, what's left out). The coordinator
    can't push to master (auto mode blocks it), so plan and STATUS updates go in as small docs-only PRs. Merge them
-   with `gh pr merge --squash --delete-branch` after a look at the diff; they need no test run.
+   with `gh pr merge --squash` after a look at the diff (they need no test run), then clean up as in section 4
+   "Cleaning up a merged PR".
 
 ## 2. Coordinator: start the workers
 
@@ -118,7 +122,8 @@ free port, so parallel runs don't clash.
   approximate (and remove what you fix). Don't tick STATUS.md; the merger does.
 - **A second PR stacked on your first:** give it its own branch and worktree from your first branch (not a branch
   switch in the same worktree), set the PR's base to your first branch, and say so in both PR bodies.
-- Scratch files: prefix them with your workstream name and keep them out of commits.
+- Scratch files: prefix them with your workstream name and keep them out of commits. Don't edit `.git/info/exclude`
+  or `.git/config`: every worktree and the user's main checkout share them.
 - **One unit, then hand back.** Don't start the plan's next unit; a fresh worker does it with a clean context. Hand
   back early, at the next green point, if the conversation has been summarized once (a sign the context is
   full) or you've worked for about an hour.
@@ -133,6 +138,25 @@ free port, so parallel runs don't clash.
 
 Follow CLAUDE.md's "Merging PRs" (smallest first, merge `origin/master` in, tests, push, squash, clean up), for
 the PRs whose workstream is finished (not drafts). On top of that:
+
+- **Which tests to run per merge is your call.** Typecheck and unit tests always. The full e2e suite (~10
+  minutes) when the PR, or what merging master brought in, touches code many scenarios go through: the engine,
+  scenes, the script engine, field movement, battle, save format, `tools/`. For a PR that adds something
+  self-contained (a screen, a special) with its own e2e file, run that file plus the e2e files for any shared code
+  it touches. Always run the full suite once at the end, on master with everything merged, before the STATUS PR.
+  Say in the LOG entry which runs you did.
+- **Cleaning up a merged PR.** Right after each `gh pr merge` (code PRs and docs-only ones alike):
+
+  ```sh
+  git worktree remove ../wt-<branch>       # if no other open PR still uses it
+  git branch -D <branch>
+  git push origin --delete <branch>
+  git ls-remote --heads origin <branch>    # must print nothing
+  ```
+
+  Don't rely on `gh pr merge --delete-branch`: when a worktree has the branch checked out, it fails to delete the
+  local branch and then skips the remote one too. Batches 1-2 of SCREENS_PLAN.md left 15 remote branches this way
+  while reporting "all branches cleaned up".
 
 - **Re-extract after merging master in** if either side changed `tools/` (`npm run extract`, ~20 s).
 - **Check the merge brought in only master's changes:** `git diff <PR head before the merge> --stat` should match
@@ -162,3 +186,13 @@ the PRs whose workstream is finished (not drafts). On top of that:
 - **At the end:** a docs-only PR that ticks STATUS.md, updates "Next up", and adds a docs/LOG.md entry for the merge
   (conflict resolutions, tests fixed); `git pull --ff-only` and `npm run extract` in the main checkout if its working
   tree is clean; report to the user what was done, what wasn't, and that the progress docs are updated.
+- **End-of-batch check, last of all.** Run these and paste their output into your report:
+
+  ```sh
+  git fetch --prune && git ls-remote --heads origin   # master, plus branches of PRs still open
+  git worktree list                                   # the main checkout, plus worktrees of PRs still open
+  gh pr list
+  ```
+
+  Anything else left over: clean it up (section above) and run the check again. A report that says "cleaned up"
+  without this output doesn't count.
