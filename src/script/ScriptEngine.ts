@@ -131,8 +131,9 @@ export interface ScriptHost {
   /**
    * A special's SetMainCallback2 to a GBA-layer screen that `init` starts (the party menu, the summary screen).
    * The wait ends when it is back on the field and RunFieldCallback's gFieldCallback(2) has finished.
+   * `gfxSymbols`: what the screen draws beyond what prepareMenus loads (e.g. the move relearner's).
    */
-  runScreenFromScript(init: () => void): Wait;
+  runScreenFromScript(init: () => void, gfxSymbols?: string[]): Wait;
   /** StartTrainerBattle: `done` ends when the battle is over (screen still black), with the outcome. */
   startTrainerBattle(battle: TrainerBattle): TrainerBattleRun;
   /** ClearRematchStateByTrainerId (world/vsSeeker.ts), at the end of every trainer battle. */

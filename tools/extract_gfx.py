@@ -24,7 +24,7 @@ from extract import read_jasc
 # credits, the region map (town map / fly map) with the dungeon map previews it shows, the TM case, the berry
 # pouch, and the Pokédex (pokedex_screen.c with the mons' footprints, the area page's maps and
 # pokedex_area_markers.c's markers), the Itemfinder's arrows and star (itemfinder.c), and the trainer card
-# (trainer_card.c).
+# (trainer_card.c), and the move relearner's scroll arrows (learn_move.c).
 GFX_PREFIXES = (
     "graphics/battle_interface/",
     "graphics/battle_terrain/",
@@ -63,6 +63,7 @@ GFX_PREFIXES = (
     "graphics/pokedex/",
     "graphics/itemfinder/",
     "graphics/trainer_card/",
+    "graphics/learn_move/",
     "data/tilesets/",
 )
 
