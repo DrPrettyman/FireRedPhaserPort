@@ -62,6 +62,10 @@ function playedState(): TestGame['state'] {
   s.daycare.offspringPersonality = 0xbeef;
   s.route5DayCareMon = { mon: boxMon({ ...mon('ODDISH', 20), nickname: t.charmap.encodePlain('ODDY') }), steps: 4321 };
   s.roamer = { ivs: { hp: 1, attack: 2, defense: 3, speed: 4, spAttack: 5, spDefense: 6 }, personality: 0x89abcdef, species: t.d('SPECIES_ENTEI'), hp: 100, level: 50, status: 0, active: true };
+  s.easyChatProfile = [t.d('EC_WORD_MYSTERY'), t.d('EC_WORD_EVENT'), t.d('EC_WORD_IS'), t.d('EC_WORD_EXCITING'), 0, 0];
+  s.easyChatBattleWon[2] = t.d('EC_WORD_EXCL');
+  s.questionnaireWords = [t.d('EC_WORD_LINK'), t.d('EC_WORD_TOGETHER'), t.d('EC_WORD_WITH'), t.d('EC_WORD_ALL')];
+  s.additionalPhrases[4] = 0x01; // trendy saying 32
   const st = s.storage;
   st.setCurrentBox(3);
   st.setBoxMonAt(0, 0, mon('CATERPIE', 4));
@@ -128,6 +132,12 @@ describe('save data (save.c / load_save.c)', () => {
       daycare: s.daycare,
       route5DayCareMon: s.route5DayCareMon,
       roamer: s.roamer,
+      easyChatProfile: s.easyChatProfile,
+      easyChatBattleStart: s.easyChatBattleStart,
+      easyChatBattleWon: s.easyChatBattleWon,
+      easyChatBattleLost: s.easyChatBattleLost,
+      questionnaireWords: s.questionnaireWords,
+      additionalPhrases: [0, 0, 0, 0, 1],
     });
     // The loaded state shares nothing with the save it came from.
     loaded.party[0].moves[0] = 0;

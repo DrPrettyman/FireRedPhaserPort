@@ -9,6 +9,7 @@ import type { Constants, ItemInfo, MoveInfo, PokemonTables, SpeciesInfo } from '
 import { PokemonData, readPokemonConstants } from '../../src/pokemon/Pokemon';
 import { Defines } from '../../src/script/Defines';
 import { GameState } from '../../src/state/GameState';
+import { initEasyChatData, type EasyChatData } from '../../src/menus/easyChatData';
 import { Charmap, type CharmapData } from '../../src/text/charmap';
 
 const PUBLIC = resolve(__dirname, '../../public');
@@ -36,6 +37,7 @@ interface GameData {
 let data: GameData | undefined;
 
 function gameData(): GameData {
+  if (!data) initEasyChatData(readGen<EasyChatData>('easyChat.json')); // Assets.init, before any GameState
   data ??= {
     defines: readGen<{ defines: Record<string, number> }>('scripts/scripts.json').defines,
     constants: readGen('constants.json'),

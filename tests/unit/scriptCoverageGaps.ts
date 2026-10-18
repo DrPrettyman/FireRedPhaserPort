@@ -34,7 +34,6 @@ export const KNOWN_GAPS: KnownGap[] = [
   { kind: 'special', name: 'GetSeagallopNumber', tag: 'side', where: "BirthIsland_Harbor, FiveIsland_Harbor, FourIsland_Harbor, NavelRock_Harbor, OneIsland_Harbor, ... (10 in all)" },
   { kind: 'special', name: 'GetSelectedSeagallopDestination', tag: 'side', where: "FiveIsland_Harbor, FourIsland_Harbor, OneIsland_Harbor, SevenIsland_Harbor, SixIsland_Harbor, ... (8 in all)" },
   { kind: 'special', name: 'IsPlayerLeftOfVermilionSailor', tag: 'side', where: "BirthIsland_Harbor, FiveIsland_Harbor, FourIsland_Harbor, NavelRock_Harbor, OneIsland_Harbor, ... (10 in all)" },
-  { kind: 'special', name: 'ShowEasyChatMessage', tag: 'side', where: "PewterCity_PokemonCenter_1F" },
   { kind: 'special', name: 'ShowEasyChatScreen', tag: 'side', where: "PewterCity_PokemonCenter_1F" },
   { kind: 'fieldeffect', name: 'FLDEFF_USE_DIVE', tag: 'side', where: "(EventScript_DeepWater), (EventScript_TrySurface)", note: "EventScript_DeepWater / EventScript_TrySurface: no FRLG map has dive spots" },
   // ---------------------------------------------------------------- postgame: after the Hall of Fame (Sevii 4-7, Trainer Tower, the event islands) or the link features postgame areas share.

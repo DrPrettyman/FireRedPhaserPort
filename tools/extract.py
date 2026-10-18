@@ -1493,6 +1493,10 @@ def main():
     from extract_trades import extract_trades
 
     extract_trades(decomp, out)
+    print("easy chat")
+    from extract_easy_chat import extract_easy_chat
+
+    extract_easy_chat(decomp, out)
     print("gfx")
     from extract_gfx import extract_gfx
     extract_gfx(decomp, out)

@@ -22,6 +22,7 @@ import { PARTY_MENU_SPECIALS } from '../menus/partyMenuSpecials';
 import { TRADE_SPECIALS } from './tradeSpecials';
 import { MISC_SPECIALS } from './miscSpecials';
 import { EGG_HATCH_SPECIALS } from '../menus/eggHatch';
+import { EASY_CHAT_SPECIALS } from './easyChatSpecials';
 
 export interface SpecialEnv {
   state: GameState;
@@ -84,6 +85,7 @@ export const SPECIALS: Record<string, Special> = {
   ...TRADE_SPECIALS, // tradeSpecials.ts: in-game trades and the Name Rater
   ...MISC_SPECIALS, // miscSpecials.ts: Daisy's grooming, the Magikarp size record, the diploma, SetSeenMon, ...
   ...EGG_HATCH_SPECIALS, // menus/eggHatch.ts: daycare.c's EggHatch scene, ScriptHatchMon
+  ...EASY_CHAT_SPECIALS, // easyChatSpecials.ts: easy_chat.c's ShowEasyChatMessage, BufferRandomHobbyOrLifestyleString
 
   // field_player_avatar.c / bike.c / field_specials.c's player avatar specials
   ForcePlayerOntoBike,

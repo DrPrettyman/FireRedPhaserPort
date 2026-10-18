@@ -228,3 +228,20 @@ test('a version 3 save (daycareStepCounter, no daycare mons) loads with both day
   expect(loaded.daycare).toEqual({ mons: [{ mon: null, steps: 0 }, { mon: null, steps: 0 }], offspringPersonality: 0, stepCounter: 200 });
   expect(loaded.route5DayCareMon).toEqual({ mon: null, steps: 0 });
 });
+
+test('a version 4 save (no easy chat words) loads with the new-game words', () => {
+  const storage = memoryStorage();
+  t.state.easyChatProfile[0] = t.d('EC_WORD_HELLO');
+  const data = toSaveData(t.state);
+  expect(fromSaveData(structuredClone(data), newGame().state).easyChatProfile[0]).toBe(t.d('EC_WORD_HELLO'));
+  const v4 = { ...structuredClone(data), version: 4 };
+  delete v4.easyChat;
+  storage.setItem(SAVE_STORAGE_KEY, JSON.stringify(v4));
+  const read = readSave(storage);
+  expect(read?.version).toBe(SAVE_VERSION);
+  const loaded = fromSaveData(read!, newGame().state);
+  // sDefaultProfileWords: I AM A POKéMON FRIEND
+  expect(loaded.easyChatProfile.slice(0, 4)).toEqual(['EC_WORD_I_AM', 'EC_WORD_A', 'EC_WORD_POKEMON', 'EC_WORD_FRIEND'].map(t.d));
+  expect(loaded.questionnaireWords).toEqual(new Array(4).fill(0xffff));
+  expect(loaded.additionalPhrases).toEqual([0, 0, 0, 0, 0]);
+});
