@@ -219,10 +219,10 @@ export class SampleHoldResampler {
     this.playing = false;
   }
 
-  /** The step for this block: the base ratio, nudged toward the target fill (0.2% per frame off, ±0.5% at most). */
+  /** The step for this block: the base ratio, nudged toward the target fill (0.5% per frame off, ±0.5% at most). */
   step(): number {
     const off = (this.count - this.targetSamples) / this.frameLength;
-    return this.baseStep * (1 + Math.min(0.005, Math.max(-0.005, 0.002 * off)));
+    return this.baseStep * (1 + Math.min(0.005, Math.max(-0.005, 0.005 * off)));
   }
 
   /** Fill one output block; silence while not playing. Returns the largest |sample| written. */

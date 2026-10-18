@@ -14,7 +14,6 @@
 // audioOutputWantsFrames, for the mixer to skip its sample arithmetic (not its bookkeeping) when nobody listens.
 
 import workletUrl from './worklet.ts?worker&url';
-import { listenForOutputKeys } from '../input/Input';
 import {
   decideOutput,
   isHeadlessBrowser,
@@ -90,11 +89,17 @@ function post(msg: ToWorklet, transfer: Transferable[] = []): void {
   node?.port.postMessage(msg, transfer);
 }
 
-/** Boot: decide whether the output is on, create the context and load the worklet, listen for the keys. */
-export function startAudioOutput(): void {
+/** The keys the output needs: input/Input.ts listenForOutputKeys (passed in, so this file doesn't load Phaser). */
+export type OutputKeyListener = (handlers: { gesture: () => void; toggleMute: () => void }) => void;
+
+/**
+ * Boot: decide whether the output is on, create the context and load the worklet, listen for the keys
+ * (`startAudioOutput(listenForOutputKeys)` from main.ts and battleTest.ts).
+ */
+export function startAudioOutput(listenForKeys: OutputKeyListener): void {
   if (started) return;
   started = true;
-  listenForOutputKeys({ gesture: onGesture, toggleMute });
+  listenForKeys({ gesture: onGesture, toggleMute });
   decision = decideOutput(location.search, { headless: isHeadlessBrowser(navigator), dev: import.meta.env.DEV });
   if (!decision.enabled) return;
   if (typeof AudioContext === 'undefined' || typeof AudioWorkletNode === 'undefined') {
@@ -138,7 +143,8 @@ function toggleMute(): void {
 function onVisibilityChange(): void {
   if (!ctx) return;
   if (document.hidden) {
-    if (ctx.state === 'running') void ctx.suspend().catch(() => {});
+    // Also while a resume is still pending: the suspend queues behind it.
+    if (ctx.state !== 'closed') void ctx.suspend().catch(() => {});
   } else if (unlocked && ctx.state === 'suspended') {
     // What was buffered when the tab was hidden is stale by now.
     post({ type: 'flush' });

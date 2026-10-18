@@ -6,6 +6,7 @@ import { FieldMenuScene } from './scenes/FieldMenuScene';
 import { MainMenuScene } from './scenes/MainMenuScene';
 import { testHooks } from './dev/testHooks';
 import { startAudioOutput } from './audio/output';
+import { listenForOutputKeys } from './input/Input';
 
 // GBA native resolution; scaled up with nearest-neighbour filtering.
 const game = new Phaser.Game({
@@ -26,7 +27,7 @@ const game = new Phaser.Game({
 });
 
 // The sound output: suspended until the first key press or click, M mutes it.
-startAudioOutput();
+startAudioOutput(listenForOutputKeys);
 
 // Handy for poking at state from the devtools console during development; `__test` drives the e2e tests.
 if (import.meta.env.DEV) {

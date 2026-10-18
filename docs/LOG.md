@@ -2705,3 +2705,35 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Verified: per merge, typecheck and `npm test` (no game code changed, so no e2e per merge); at the end on master
   98d9ab7 after `npm run extract`: typecheck, `npm test` 33 files / 367 tests, the full e2e suite 58 files / 387
   tests, all green.
+
+### W-out 1: the browser output, autoplay and the mute key (AUDIO_PLAN.md batch B)
+
+- `src/audio/output.ts`, `src/audio/worklet.ts`, `src/audio/outputCore.ts` (pure): an AudioContext created at boot
+  (suspended by the browser until the first keydown / pointerdown, then resumed; suspended while the tab is
+  hidden, flushed and resumed when it is back), one AudioWorkletNode, `pushFrame({ fifoA, fifoB, soundcntH?, psg? })`
+  for the mixer (W-m4a 3; `psg` is a proposed shape for W-m4a 4), posted as one transferable buffer per frame. The
+  worklet runs the GBA's DirectSound DAC (FIFO routing and volume from REG_SOUNDCNT_H, SOUNDBIAS, 10-bit clip,
+  8-bit resolution) and a sample-and-hold upsampler with a 3-4 frame buffer, a ±0.5% rate nudge, silence on an
+  underrun and a drop after a stall. Off headless and for `?speed=` > 1; `?audio=0/1` forces it, `?audio=tone`
+  (dev) plays a test tone through the same path. Mute key M (localStorage; not in text fields). Phaser's
+  `noAudio` and the output start in `main.ts` and `battleTest.ts`. Vite bundles the worklet via
+  `./worklet.ts?worker&url` (dev: served as a module; build: `assets/worklet-*.js`, checked with `vite build` and
+  by loading the built chunk in Chrome).
+- Found on the way: the e2e harness's headless Chrome has `navigator.webdriver` false, so headless is also detected
+  by the `HeadlessChrome` user agent. A key sent through DevTools (`Input.dispatchKeyEvent`) turns that page hidden
+  (and Phaser stops its loop) unless focus emulation is on: the harness's new `game.realKey` turns it on. The
+  PCM plays at 224 × 60 = 13,440 Hz, not 13,379 Hz: the port's frame is 60 Hz, and playing slower than the frames
+  come would overflow the buffer (docs/DEVIATIONS.md). `output.ts` takes the key listener as a parameter: importing
+  Input.ts (Phaser) from it broke every unit test that imports testHooks.
+- Shared edits: `src/main.ts`, `src/battleTest.ts` (noAudio, start), `src/input/Input.ts` (`listenForOutputKeys`,
+  `MUTE_KEY_CODE`), `src/dev/testHooks.ts` (one line: `audioOutput`, from the new `src/dev/audioOutputHooks.ts`),
+  `tests/e2e/harness.ts` (`query` start option, `realKey`).
+- Verified: typecheck; `npm test` 34 files / 381 tests (`tests/unit/audioOutput.test.ts` 14: decideOutput, the
+  DAC's stereo / mono / clipping values, the resampler's holds, rate nudge, start, underrun, overflow, a simulated
+  60 Hz loop for 2 minutes and with ±0.1% drift and 30 Hz rAF for 10 minutes: no underruns or drops);
+  `tests/e2e/audioOutput.test.ts` 4 (off headless; `?audio=1` suspended → running after a real key, suspended
+  while hidden; M toggles, survives a reload, not in a text field, remembered with the output off; the tone's peak
+  0.3125 = 40 / 128 reaches the speakers in headless Chrome and M silences it while the frames keep flowing), run
+  three times; titleScreen + newGame e2e (7). battle-test.html by hand with tools/browser-test.mjs
+  (`?audio=tone`: suspended → running on a key, the tone's peak 0.3125, M ignored in the panel's input, muted
+  outside it).

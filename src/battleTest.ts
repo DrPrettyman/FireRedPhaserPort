@@ -3,6 +3,7 @@
 
 import Phaser from 'phaser';
 import { startAudioOutput } from './audio/output';
+import { listenForOutputKeys } from './input/Input';
 import type { BattleTablesData } from './battle/data';
 import { Assets } from './data/assets';
 import { BattleScene, type BattleStart } from './scenes/BattleScene';
@@ -448,6 +449,6 @@ const game = new Phaser.Game({
 });
 
 // The same sound output as the game (AUDIO_PLAN.md decision 12): starts on the first key press or click; M mutes.
-startAudioOutput();
+startAudioOutput(listenForOutputKeys);
 
 (window as unknown as { game: Phaser.Game }).game = game;
