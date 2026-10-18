@@ -83,10 +83,12 @@ test("Spite: a scanline wave wavers the target's BG, and stops after", async () 
 test('Teleport: the attacker shoots up off screen and the battle ends', async () => {
   const game = await session.start({ ...ROUTE1, party: [{ species: 'ABRA', level: 10, moves: ['TELEPORT'] }] });
   await game.eval((t) => t.startWildBattle({ species: 'SNORLAX', level: 100, moves: ['SPLASH'] }));
+  // The battle ends ~150 ticks after the anim (the SE wait lengthened the anim, not the gap): read the attacker's
+  // sprite in the page, in the tick after the anim's end.
+  const atEnd = game.watch((t) => t.events().some((e) => e.type === 'battleAnimEnd' && e.label === 'Move_TELEPORT') && { invisible: t.battle()!.mons[0].spriteInvisible }, { what: "Teleport's end" });
   const since = await useFirstMove(game);
   expect(await animEvent(game, 'battleAnim', 'Move_TELEPORT', since)).toMatchObject({ ran: true, attacker: 0 });
-  await animEvent(game, 'battleAnimEnd', 'Move_TELEPORT', since);
-  expect((await game.eval((t) => t.battle()))!.mons[0].spriteInvisible).toBe(true);
+  expect(await atEnd).toEqual({ invisible: true });
   await game.mashUntil((t) => t.events().some((e) => e.type === 'battleEnd'), { what: 'the battle to end' });
 });
 

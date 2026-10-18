@@ -912,6 +912,17 @@ this is the next level down. When you add or change a subsystem, update its entr
   `ScanlineEffect_InitWave` (src/gba/scanline.ts) for a travelling sine wave. An e2e test can read module state
   in the page with `await new Function('p', 'return import(p)')('/src/gba/hw.ts')` (a bare `import()` in the
   function gets rewritten by Vitest); see battleAnims.2d.test.ts's `hblankLines`.
+  **Sounds:** every anim file calls `gba/sound.ts` directly, as the C does: PlaySE12WithPanning (and PlaySE1 / 2
+  WithPanning, PlaySE) with the pan BattleAnimAdjustPanning / BattleAnimAdjustPanning2 give (SOUND_PAN_ATTACKER
+  -64 .. SOUND_PAN_TARGET 63, negated for the opponent's side), SE12PanpotControl from `setpan` and the panse
+  task, PlayCry_ByMode with the C's species and CRY_MODE_* (soundTasks.ts), and audio/m4a.ts's m4aMPlayStop /
+  m4aMPlayAllStop / m4aMPlayVolumeControl. **Waits:** `end` waits for IsSEPlaying up to 90 frames
+  (sSoundAnimFramesToWait), then stops SE1 / SE2; `waitsound` waits for the sound tasks, then the same way. So an
+  anim whose SE outlasts its visuals ends in the frame after the SE's last tick (an SE started in frame s that
+  lasts n engine ticks: frame s + n). gMovesWithQuietBGM (read from the anim ROM image) sets the BGM to 128 at
+  launch; `end` sets 256. special.ts: the ball SEs, and the caught click's m4aMPlayAllStop + PlaySE(MUS_CAUGHT_INTRO).
+  Tests: tests/e2e/audioBattleAnims.test.ts (`__test.audioEvents`: Tackle's pan from both sides and its end on the
+  SE's end, Growl's two cries, Perish Song's BGM volume, a Master Ball's SEs and the jingle).
 
 ## Audio
 

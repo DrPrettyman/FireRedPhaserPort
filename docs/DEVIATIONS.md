@@ -66,8 +66,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     sprite's x2/y2 (the GBA keeps them unless ResetMovementOfRematchableTrainers zeroes them); a frozen jumper
     (any, not only `lock`'s selected object) lands before it holds still.
   - Battles: no audio through BattleScene's `ui.play*` (the controllers' and scripts' SEs, cries and music are
-    no-ops until W-sound 5-6, so their cry waits end at once); the battle anims' sound tasks call gba/sound.ts
-    directly, so Howl / Roar / Growl / Hyper Voice's cries and their IsCryPlaying waits time as on the GBA.
+    no-ops until W-sound 5-6, so their cry waits end at once); the battle anims (src/battle/anim/) call
+    gba/sound.ts directly, so their panned SEs, the anims' SE waits (Cmd_end, `waitsound`), the sound tasks' cries
+    and IsCryPlaying waits, the quiet BGM of Sing / Perish Song / Grass Whistle and the caught jingle time as on
+    the GBA.
   - Field sounds: puddles: UpdateFeetInFlowingWaterFieldEffect's SE_PUDDLE checks the splash's `invisible`, which
     the port never sets for an object off screen (UpdateObjectEventSpriteInvisibility's bounds check).
   - Audio output (audio/output.ts, audio/worklet.ts): the PCM plays at 224 samples per 60 Hz frame, 13,440 Hz,
