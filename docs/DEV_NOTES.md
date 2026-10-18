@@ -549,7 +549,7 @@ this is the next level down. When you add or change a subsystem, update its entr
   `ScriptHost.doNamingScreen` (FieldMenuScene `naming`). Oak's speech calls it with NAMING_SCREEN_PLAYER
   (monSpecies = the player's gender) and NAMING_SCREEN_RIVAL on MainMenuScene, preloading `namingScreenGfxSymbols`
   after `setObjectEventGraphicsInfo` (the icons are object event graphics) and `loadMenusData` (the keyboard).
-- **Easy Chat (easy_chat.c, easy_chat_2.c, easy_chat_3.c; SIDE_PLAN.md W-easychat, choosing words is unit 4):**
+- **Easy Chat (easy_chat.c, easy_chat_2.c, easy_chat_3.c; SIDE_PLAN.md W-easychat):**
   `menus/easyChatData.ts` holds
   public/gen/easyChat.json (tools/extract_easy_chat.py: sEasyChatGroups, the alphabetical word lists, the group
   names, the default words, plus easy_chat_2.c's screen templates and passphrases), set by Assets.init before any
@@ -591,17 +591,32 @@ this is the next level down. When you add or change a subsystem, update its entr
   extract_gfx.py's GFX_PREFIXES (gEasyChat* and easy_chat_3.c's static s* symbols; LoadSpriteGfx loads every sheet
   and palette, the rectangle cursor / mode / button window ones for unit 4). Layers: BG3 the yellow window
   (gEasyChatWindow_Tilemap) with the phrase window (sPhraseFrameDimensions[frameId], baseBlock 0x60) and the footer;
-  BG1 the orange text input frame (DrawECFrameInTilemapBuffer) and the title (window 0); BG0 the instructions
-  (window 1, the user's frame at tile 1 / palette 14) and the YES/NO (sEasyChatYesNoWindowTemplate); BG2 window 2
-  for unit 4's groups / keyboard / words, shown only inside WIN0 (WINOUT leaves BG2 out; WIN0 is empty until unit
-  4's frame animation sets it). Interface commands: `EasyChatInterfaceCommand_Setup(id)` / `_Run()`;
-  ECInterfaceCmd_01-08 are ported, 09-22 log once and return (unit 4 replaces them; UpdateVerticalScrollArrowVisibility
-  and UpdateStartSelectButtonSpriteVisibility are exported ready). Probe `__test.easyChat()`: the live model
-  (`screen`), `lastCommand`, the triangle cursor (x, y, x2, bouncing), START / SELECT visibility, `idle`
-  (Task_RunEasyChat reading keys, no fade) and `reprint()` (PrintECFields). Test: tests/e2e/easyChat.test.ts (the
-  Pewter profile woman: B → YES, the cursor over fields and footer, DEL. ALL, START → YES unchanged / changed /
-  MYSTERY EVENT IS EXCITING; the Pewter Mart questionnaire at (1, 4) with LINK TOGETHER WITH ALL). Wait for a
-  command with the probe (`lastCommand` + `screen.state` + `idle`), not a fixed number of frames.
+  BG1 the orange text input frame (DrawECFrameInTilemapBuffer), the title (window 0) and the green frame around
+  window 2; BG0 the instructions (window 1, the user's frame at tile 1 / palette 14) and the YES/NO
+  (sEasyChatYesNoWindowTemplate); BG2 window 2 (28x32 tiles, 256 px tall) for the groups menu / A-Z keyboard / word
+  list, shown only inside WIN0 (WINOUT leaves BG2 out). The green frame's animation: StartWin2FrameAnim(n) sets a
+  step range, AnimateFrameResize takes one step a frame through RedrawFrameByIndex (BG1 rows 10-19 cleared, the
+  frame at that step's size by RedrawFrameByRect, which also sets WIN0 to its inside): 0-10 grows the groups /
+  keyboard frame out of the instructions (BG0 hidden meanwhile), 11-17 widens it for the word list, 18-22 shrinks it
+  for the mode switch. Window 2's rows sit at y = (row * 16 + 96) mod 256 and BG2 starts 8 px down (InitBg2Scroll),
+  so a row scrolled to the top of the frame shows at y 88; ScheduleBg2VerticalScroll / AnimateBg2VerticalScroll move
+  BG2 by rows (2 px a frame for a row, 4 for a page, at once for the groups menu reopening scrolled), and the word
+  list prints only the rows that scroll in (UpdateWin2PrintWordsScroll*). Sprites: the red rectangle cursor (two
+  64x32 halves, the right one flipped; anim by what it's on: group, blue box button, "others", letter), the word
+  list's triangle cursor, the mode window (64x32 at (208, 80), anims hidden / to GROUP / to A-Z / transition) and
+  the button window (the blue help box, 64x64 at (208, 128), sliding in from x2 -64 8 px a frame), the scroll arrows
+  (x 96 on the groups, 120 on the words) and START / SELECT. Interface commands: `EasyChatInterfaceCommand_Setup(id)`
+  / `_Run()`, all of ECInterfaceCmd_01-22 (pokeemerald's ECFUNC_* names in EC_CMD). Probe `__test.easyChat()`: the
+  live model (`screen`), `lastCommand` and `commandCount`, the triangle cursor (x, y, x2, bouncing), START / SELECT
+  visibility, `idle` (Task_RunEasyChat reading keys, no fade), the frame step, WIN0, BG2's y and scroll row, the
+  rectangle / word cursors, the mode window's anim and the help sprite's x2, the scroll arrows, the displayable
+  `groups` and the `words` on display, and `reprint()` (PrintECFields). Test: tests/e2e/easyChat.test.ts (the
+  Pewter profile woman: B → YES, the cursor over fields and footer, DEL. ALL, START → YES unchanged; a profile
+  typed through the groups and the keyboard; the group names and ENDINGS' 35 rows scrolled by rows and pages, the
+  mode switch, DEL; MYSTERY EVENT IS EXCITING typed; the Pewter Mart questionnaire at (1, 4) with LINK TOGETHER
+  WITH ALL typed). Its `step(game, button, cmds, state)` presses and waits in the page for a new command (by
+  `commandCount`) and the input state; `typeByGroup` / `typeByKeyboard` type a word from the field selection.
+  Don't wait for a fixed number of frames.
 - **Party selection from scripts, tutors, the move deleter:** `menus/partyMenuSpecials.ts` is
   party_menu_specials.c (ChoosePartyMon, ChooseMonForMoveRelearner, SelectMoveDeleterMove, the deleter's
   helpers) plus the ChooseMonForMoveTutor special; `PARTY_MENU_SPECIALS` is spread into SPECIALS. A special that

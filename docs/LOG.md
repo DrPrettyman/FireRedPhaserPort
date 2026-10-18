@@ -2491,3 +2491,27 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   EVENT IS EXCITING → EventScript_GaveSpecialProfile, the questionnaire's LINK TOGETHER WITH ALL →
   FLAG_SYS_MYSTERY_GIFT_ENABLED), all green on the first run. Screenshots of the profile, the three prompts, the
   empty fields and the questionnaire checked by eye against the C's layout.
+
+### Easy Chat: choosing words (W-easychat unit 4, the last)
+
+- `menus/easyChatScreen.ts`: the rest of easy_chat_3.c. ECInterfaceCmd_09-22 replace the stub: the groups menu
+  (PrintECGroupsMenu, two names a row, reopening at its scroll), the A-Z keyboard (keyboard_text.c's rows), the word
+  list (PrintECRowsWin2 / ClearECRowsWin2 with window 2's 256-px wrap, the UpdateWin2PrintWordsScroll* rows coming
+  in), BG2's row scrolling (InitBg2Scroll, ScheduleBg2VerticalScroll / AnimateBg2VerticalScroll: 2 px a frame for a
+  row, 4 for a page), the green frame's open / close / widen / shrink animation (StartWin2FrameAnim,
+  AnimateFrameResize, RedrawFrameByIndex / RedrawFrameByRect setting WIN0 to its inside), the red rectangle cursor
+  (EC_MoveCursor, MoveCursor_Group / _Alpha with sAlphabetKeyboardColumnOffsets), the word list's triangle cursor, the
+  mode window and the button window (help) sprites with their slide / anims, the scroll arrows' x by menu. ECWork
+  has the remaining fields. No gba/ changes.
+- The probe `__test.easyChat()` adds `commandCount`, the frame step, WIN0, BG2's y and scroll row, the cursors, the
+  mode / help sprites, the scroll arrows, `selectVisible`, the displayable `groups` and the `words` on display.
+- DEVIATIONS: the stubbed-commands note is gone (the screen is still silent).
+- Verified: typecheck; `npm test` (289); e2e easyChat.test.ts (7: the three unit-3 cases; a profile typed through the
+  groups (HI) and the keyboard (AWESOME) → EventScript_GaveProfile, FLAG_SYS_SET_TRAINER_CARD_PROFILE, the saved
+  words, read back; the group names scrolled down / up a row, ENDINGS' 35 rows by SELECT / START pages, rows down
+  and up, B back to the groups at their scroll, SELECT to the keyboard and back, the blue box's MODE / DEL, B out;
+  MYSTERY EVENT IS EXCITING typed → EventScript_GaveSpecialProfile; the questionnaire's LINK TOGETHER WITH ALL typed
+  → FLAG_SYS_MYSTERY_GIFT_ENABLED; the probe injections are gone) and trainerCard.test.ts (3), all green on the
+  first run and again with trainerCard. Screenshots of the groups, the scrolled groups, the keyboard, the word list
+  and its pages, DEL and the typed questionnaire checked by eye against the C's layout (the footer's OK shows right
+  of the green frame between the mode and help sprites, as BG3 outside WIN0 does on the GBA).
