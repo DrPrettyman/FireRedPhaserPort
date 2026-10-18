@@ -8,8 +8,10 @@
 // sample position every frame, so channels live and end as on the GBA. The cry songs (SetPokemonCryTone and the
 // SetPokemonCry* setters, IsPokemonCryPlaying) are at the end. The voices come from setVoiceData (m4aVoices.ts).
 //
-// What isn't here yet (AUDIO_PLAN.md section 6): W-m4a 3, the mixing itself (m4aMixer.ts keeps the bookkeeping);
-// W-m4a 4, the CGB channels' envelope, registers and frequencies (m4aCgb.ts is a placeholder).
+// SoundMainRAM (m4aMixer.ts) also mixes the DirectSound channels into pcmBuffer while mixing is on (audio/frame.ts
+// hands each frame's slot to the output: m4aPcmFrame). What isn't here yet (AUDIO_PLAN.md section 6): W-m4a 4, the
+// CGB channels' envelope, registers and frequencies (m4aCgb.ts is a placeholder), so songs play without their PSG
+// parts.
 //
 // Naming follows the C. The asm's local labels are cited as `m4a_1.s _081DD8E0` and so on.
 
@@ -33,6 +35,7 @@ import {
   FADE_VOL_SHIFT,
   ID_NUMBER,
   MAX_DIRECTSOUND_CHANNELS,
+  PCM_DMA_BUF_SIZE,
   MAX_MUSICPLAYER_TRACKS,
   MAX_POKEMON_CRIES,
   MPT_FLG_EXIST,
@@ -80,7 +83,8 @@ import {
   type ToneWav,
 } from './m4aInternal';
 import { CgbOscOff, CgbSound, MidiKeyToCgbFreq, newCgbChannels } from './m4aCgb';
-import { SoundMainRAM, isWaveData } from './m4aMixer';
+import { PcmSlotOffset, SoundMainRAM, isWaveData } from './m4aMixer';
+import { SOUNDCNT_H_MONO, SOUNDCNT_H_STEREO } from './outputCore';
 import {
   gClockTable,
   gFreqTable,
@@ -137,6 +141,7 @@ function newSoundInfo(): SoundInfo {
     pcmDmaPeriod: 0, maxLines: 0, pcmSamplesPerVBlank: 0, pcmFreq: 0, divFreq: 0, MPlayMainHead: null,
     musicPlayerHead: null, CgbSound: DummyFunc, CgbOscOff: DummyFunc, MidiKeyToCgbFreq: () => 0, plynote: ply_note,
     ExtVolPit: DummyFunc, cgbChans: null, chans: [], soundRegs: new Uint8Array(0x100),
+    pcmBuffer: new Int8Array(PCM_DMA_BUF_SIZE * 2),
   };
 }
 
@@ -308,9 +313,16 @@ export function SoundInit(soundInfo: SoundInfo): void {
   soundInfo.CgbOscOff = DummyFunc;
   soundInfo.ExtVolPit = DummyFunc;
   MPlayJumpTableCopy();
+  gRegSoundCntH = SOUNDCNT_H_STEREO; // REG_SOUNDCNT_H (the FIFO resets and timer bits have no counterpart)
   SampleFreqSet(SOUND_MODE_FREQ_13379);
   soundInfo.ident = ID_NUMBER;
 }
+
+/**
+ * REG_SOUNDCNT_H as SoundInit and SetPokemonCryStereo set it: the FIFOs' routing to the speakers and their volume
+ * (outputCore.ts's SOUNDCNT_H_STEREO / _MONO), which the output's DAC applies to each frame (m4aPcmFrame).
+ */
+export let gRegSoundCntH = SOUNDCNT_H_STEREO;
 
 /** MPlayExtender (m4a.c:257): puts the C versions of ply_memacc, ply_lfos, ply_mod, ply_xcmd and ply_endtie in the
  *  jump table and sets up the CGB channels (gCgbChans) and functions (m4aCgb.ts: placeholders until W-m4a 4, as are
@@ -397,6 +409,39 @@ export function MPlayOpen(mplayInfo: MusicPlayerInfo, tracks: MusicPlayerTrack[]
 /** m4aSoundMain (m4a.c), run once per frame from VBlank (main.c VBlankIntr). */
 export function m4aSoundMain(): void {
   SoundMain();
+}
+
+/**
+ * m4aSoundVSync (m4a_1.s:1071), from VCountIntr (main.c:439) once per frame: counts the DMA's pcmBuffer slots down
+ * and reloads the counter (restarting the DMA at slot 0) when it reaches 0. Only the mixer's slot depends on it
+ * (PcmSlotOffset); the DMA restart has no counterpart.
+ */
+export function m4aSoundVSync(): void {
+  const soundInfo = gSoundInfo;
+  if (((soundInfo.ident - ID_NUMBER) >>> 0) > 1) return;
+  const counter = soundInfo.pcmDmaCounter - 1; // ldrb, subs: a counter of 0 goes to -1
+  soundInfo.pcmDmaCounter = counter > 0 ? counter : soundInfo.pcmDmaPeriod;
+}
+
+/** A frame of sound as the DMA reads it: the slot SoundMain mixed into this frame (views into pcmBuffer: copy them
+ *  before the next frame) and REG_SOUNDCNT_H. The shape of output.ts's SoundFrame. */
+export interface PcmFrame {
+  fifoA: Int8Array;
+  fifoB: Int8Array;
+  soundcntH: number;
+}
+
+/** The frame m4aSoundMain just mixed (call it after m4aSoundMain, before the next m4aSoundVSync). */
+export function m4aPcmFrame(): PcmFrame {
+  const soundInfo = gSoundInfo;
+  const n = soundInfo.pcmSamplesPerVBlank;
+  const slot = PcmSlotOffset(soundInfo);
+  const buf = soundInfo.pcmBuffer;
+  return {
+    fifoA: buf.subarray(slot, slot + n),
+    fifoB: buf.subarray(PCM_DMA_BUF_SIZE + slot, PCM_DMA_BUF_SIZE + slot + n),
+    soundcntH: gRegSoundCntH,
+  };
 }
 
 /** SoundMain (m4a_1.s): the music players' sequencers (SoundMain_3), CgbSound (SoundMain_4), then SoundMainRAM
@@ -1570,12 +1615,19 @@ export function SetPokemonCryChorus(val: number): void {
   }
 }
 
-/** SetPokemonCryStereo (m4a.c:1758): the options menu's SOUND setting. Stereo clears soundInfo.mode's bit 0, mono
- *  sets it (the mixer then writes mono, W-m4a 3); the DMA routing (REG_SOUNDCNT_H) is the output's. */
+/** SetPokemonCryStereo (m4a.c:1758): the options menu's SOUND setting (OPTIONS_SOUND_MONO 0 / _STEREO 1). Stereo:
+ *  FIFO A to the right speaker, B to the left, at full volume, and soundInfo.mode's bit 0 clear; mono: both FIFOs
+ *  to both speakers at half volume, and bit 0 set (CgbSound then centres the PSG channels, W-m4a 4). The mixer
+ *  writes both FIFOs the same either way: the routing (gRegSoundCntH) is what the output's DAC applies. */
 export function SetPokemonCryStereo(val: number): void {
   const soundInfo = gSoundInfo;
-  if (val) soundInfo.mode &= ~1;
-  else soundInfo.mode |= 1;
+  if (val) {
+    gRegSoundCntH = SOUNDCNT_H_STEREO;
+    soundInfo.mode &= ~1;
+  } else {
+    gRegSoundCntH = SOUNDCNT_H_MONO;
+    soundInfo.mode |= 1;
+  }
 }
 
 /** SetPokemonCryPriority (m4a.c:1778) */

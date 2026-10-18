@@ -1,11 +1,19 @@
-// SoundMainRAM (m4a_1.s:88), the DirectSound half of each frame: per channel, the envelope (attack / decay /
-// sustain / release and the pseudo echo, once per frame) and the sample position over the frame's 224 output
-// samples (the pitch step, the loop, the end of a non-looping sample, the reverse start from SoundMainRAM_Unk1).
+// SoundMainRAM (m4a_1.s:88), the DirectSound half of each frame: the reverb pass over this frame's slot of
+// pcmBuffer, then per channel the envelope (attack / decay / sustain / release and the pseudo echo, once per frame)
+// and the frame's 224 output samples: the pitch step, the loop, the end of a non-looping sample, the reverse start
+// (SoundMainRAM_Unk1), and the mix: each sample (interpolated between two source samples by `fw`, except for the
+// fixed-rate voices) scaled by envelopeVolumeRight into FIFO A's half of the buffer and by envelopeVolumeLeft into
+// FIFO B's, added with 8-bit wraparound as the asm's byte lanes do.
 //
-// Silent: this is the mixer's bookkeeping only, so a channel lives exactly as long as on the GBA (a cry's sample
-// running out is what ends IsPokemonCryPlaying early). W-m4a 3 adds the mixing itself (the reverb pass over the
-// buffer, each sample scaled by envelopeVolumeRight / Left into pcmBuffer, mono) inside the same per-sample loops:
-// the comments `mix:` mark where the asm reads the sample. Nothing here reads the AudioContext or a clock.
+// The bookkeeping (envelopes, positions, loop and end) always runs: a channel lives exactly as long as on the GBA
+// (a cry's sample running out is what ends IsPokemonCryPlaying early). Writing samples is optional
+// (m4aSetMixing: audio/frame.ts turns it on while the output wants frames, and tests); without it each channel's
+// frame takes the FastForward shortcut when it can, and the buffer slot is cleared. Nothing here reads the
+// AudioContext or a clock.
+//
+// Mono (soundInfo->mode bit 0, SetPokemonCryStereo) isn't read here: FRLG's mixer always writes FIFO A (right)
+// and FIFO B (left); mono is REG_SOUNDCNT_H routing both FIFOs to both speakers at half volume (the output's DAC,
+// outputCore.ts) and CgbSound's pan (W-m4a 4). No DPCM: the cry samples are PCM already (AUDIO_PLAN.md decision 4).
 
 import {
   SOUND_CHANNEL_SF_ENV,
@@ -17,6 +25,7 @@ import {
   SOUND_CHANNEL_SF_SPECIAL,
   SOUND_CHANNEL_SF_START,
   SOUND_CHANNEL_SF_STOP,
+  PCM_DMA_BUF_SIZE,
   TONEDATA_TYPE_CMP,
   TONEDATA_TYPE_FIX,
   TONEDATA_TYPE_REV,
@@ -36,17 +45,91 @@ export function isWaveData(wav: ToneWav): wav is WaveData {
 /** One sample step is 2^23 in `fw`'s units: a FIX (no-resample) voice moves one sample per output sample. */
 const FW_ONE = 0x800000;
 
-/** SoundMainRAM (m4a_1.s:88): the DirectSound channels' frame. The reverb pass and the mix are W-m4a 3's. */
+/** Whether SoundMainRAM writes samples (see the top of the file). */
+let gMixPcm = false;
+
+/**
+ * Turns the mixing on or off (audio/frame.ts, each frame, from audioOutputWantsFrames; tests). Only the samples
+ * written depend on it: every channel's envelope, position, loop and end advance the same either way.
+ */
+export function m4aSetMixing(on: boolean): void {
+  gMixPcm = on;
+}
+
+/** The offset in pcmBuffer of the slot SoundMain mixes into this frame (m4a_1.s SoundMain_5's r5): the DMA plays
+ *  pcmDmaPeriod (7) slots of 224 samples in a ring, restarting at slot 0 when m4aSoundVSync reloads the counter,
+ *  so with the counter at c the mix goes to slot period + 1 - c (slot 0 for c <= 1) and plays the next frame. */
+export function PcmSlotOffset(soundInfo: SoundInfo): number {
+  const c = soundInfo.pcmDmaCounter;
+  if (c <= 1) return 0;
+  return (soundInfo.pcmDmaPeriod - (c - 1)) * soundInfo.pcmSamplesPerVBlank;
+}
+
+/** The current channel's mix (module state, so the per-sample loops allocate nothing): its sample data, or null
+ *  when nothing is written; the slot's offset in pcmBuffer (FIFO A, FIFO B at + PCM_DMA_BUF_SIZE); its volumes. */
+let mixData: Int8Array | null = null;
+let mixBuf: Int8Array = new Int8Array(0);
+let mixSlot = 0;
+let mixVolR = 0;
+let mixVolL = 0;
+
+/** SoundMainRAM (m4a_1.s:88): the reverb pass (or the clearing), then the DirectSound channels' frame. */
 export function SoundMainRAM(soundInfo: SoundInfo): void {
-  // W-m4a 3: the reverb pass over pcmBuffer (SoundMainRAM_Reverb) or its clearing (SoundMainRAM_NoReverb).
   const samples = soundInfo.pcmSamplesPerVBlank;
   const divFreq = soundInfo.divFreq;
+  const slot = PcmSlotOffset(soundInfo);
+  const buf = soundInfo.pcmBuffer;
+  const mixing = gMixPcm;
+  if (mixing && soundInfo.reverb !== 0) SoundMainRAM_Reverb(soundInfo, slot);
+  else SoundMainRAM_NoReverb(buf, slot, samples);
+  mixBuf = buf;
+  mixSlot = slot;
   for (let i = 0; i < soundInfo.maxChans; i++) {
     const chan = soundInfo.chans[i];
     if (!(chan.statusFlags & SOUND_CHANNEL_SF_ON)) continue; // _081DCF60
     if (!ChannelEnvelope(soundInfo, chan)) continue;
+    const data = (chan.wav as WaveData).data;
+    mixData = mixing && data ? data : null; // no PCM loaded (samples.bin comes in the background): bookkeeping only
+    mixVolR = chan.envelopeVolumeRight;
+    mixVolL = chan.envelopeVolumeLeft;
     ChannelSamples(chan, samples, divFreq);
   }
+  mixData = null;
+}
+
+/**
+ * SoundMainRAM_Reverb (m4a_1.s): each sample of this frame's slot (what was mixed there 7 frames ago) becomes
+ * (its FIFO A + FIFO B samples + the next slot's, mixed 6 frames ago) × reverb / 512, rounded up by one when bit 7
+ * is set, in both FIFOs: a mono echo the channels are then mixed on top of. The slot after the last one is slot 0
+ * (pcmDmaCounter 2).
+ */
+function SoundMainRAM_Reverb(soundInfo: SoundInfo, slot: number): void {
+  const buf = soundInfo.pcmBuffer;
+  const reverb = soundInfo.reverb;
+  const next = soundInfo.pcmDmaCounter === 2 ? 0 : slot + soundInfo.pcmSamplesPerVBlank;
+  for (let i = 0; i < soundInfo.pcmSamplesPerVBlank; i++) {
+    const a = slot + i;
+    const b = next + i;
+    let v = (buf[a + PCM_DMA_BUF_SIZE] + buf[a] + buf[b + PCM_DMA_BUF_SIZE] + buf[b]) * reverb;
+    v >>= 9;
+    if (v & 0x80) v += 1;
+    buf[a + PCM_DMA_BUF_SIZE] = v; // strb: the low byte
+    buf[a] = v;
+  }
+}
+
+/** SoundMainRAM_NoReverb (m4a_1.s): clears this frame's slot in both FIFOs. */
+function SoundMainRAM_NoReverb(buf: Int8Array, slot: number, samples: number): void {
+  buf.fill(0, slot, slot + samples);
+  buf.fill(0, slot + PCM_DMA_BUF_SIZE, slot + PCM_DMA_BUF_SIZE + samples);
+}
+
+/** Adds one output sample to both FIFOs (the asm's `mul r12, r10, lr; bic r12, 0xFF0000; add r6, r12, r6 ror 8`:
+ *  the volume is pre-shifted by 16, so each byte lane gets (volume × sample) >> 8, wrapping at 8 bits). */
+function mixSample(i: number, s: number): void {
+  const a = mixSlot + i;
+  mixBuf[a] += Math.imul(mixVolR, s) >> 8;
+  mixBuf[a + PCM_DMA_BUF_SIZE] += Math.imul(mixVolL, s) >> 8;
 }
 
 /**
@@ -180,9 +263,9 @@ function ChannelSamples(chan: SoundChannel, samples: number, divFreq: number): v
 const FAST_STEP_MAX = 0x40000000 - FW_ONE;
 
 /**
- * The frame's steps in one go when the sample doesn't reach its end in this frame (no mixing to do sample by
- * sample: W-m4a 3 mixes in the loops below, and can keep this for when nothing is mixed). Returns false (nothing
- * changed) when the per-sample loop must run.
+ * The frame's steps in one go when the sample doesn't reach its end in this frame, for when nothing is mixed (the
+ * loops below give the same position, count and fw sample by sample). Returns false (nothing changed) when the
+ * per-sample loop must run.
  */
 function FastForward(chan: SoundChannel, samples: number, step: number, dir: 1 | -1): boolean {
   if (step >= FAST_STEP_MAX || chan.fw >= FW_ONE) return false;
@@ -198,12 +281,18 @@ function FastForward(chan: SoundChannel, samples: number, step: number, dir: 1 |
 
 /** A forward sample (_081DD07C / _081DD19C, and Unk1's compressed path _081DD308). */
 function Forward(chan: SoundChannel, samples: number, step: number, loopLen: number, loopStart: number): void {
-  if (FastForward(chan, samples, step, 1)) return;
+  const data = mixData;
+  if (!data && FastForward(chan, samples, step, 1)) return;
   let fw = chan.fw;
   let count = chan.count | 0;
   let cur = chan.currentPointer;
   for (let i = 0; i < samples; i++) {
-    // mix: wav.data[cur], interpolated toward wav.data[cur + 1] by fw (W-m4a 3)
+    if (data) {
+      // _081DD1BC: data[cur] + (fw × (data[cur + 1] - data[cur])) >> 23. A FIX voice (_081DD0B0) reads data[cur]
+      // alone; its fw stays 0, so this is the same. data has size + 1 bytes (the one past the end is the WAV's).
+      const s0 = data[cur] | 0;
+      mixSample(i, s0 + (Math.imul(fw, (data[cur + 1] | 0) - s0) >> 23));
+    }
     fw = (fw + step) >>> 0;
     let lr = fw >>> 23;
     if (lr === 0) continue;
@@ -233,12 +322,18 @@ function Forward(chan: SoundChannel, samples: number, step: number, loopLen: num
 
 /** A reverse sample (Unk1's _081DD3C0 and _081DD468): reads backwards from currentPointer - 1; no loop. */
 function Reverse(chan: SoundChannel, samples: number, step: number): void {
-  if (FastForward(chan, samples, step, -1)) return;
+  const data = mixData;
+  if (!data && FastForward(chan, samples, step, -1)) return;
   let fw = chan.fw;
   let count = chan.count | 0;
   let cur = chan.currentPointer;
   for (let i = 0; i < samples; i++) {
-    // mix: wav.data[cur - 1], interpolated toward wav.data[cur - 2] by fw (W-m4a 3)
+    if (data) {
+      // _081DD488 / _081DD3E0: data[cur - 1] toward data[cur - 2] (before the start, the ROM reads the WaveData
+      // header's last bytes: 0 here).
+      const s0 = data[cur - 1] | 0;
+      mixSample(i, s0 + (Math.imul(fw, (data[cur - 2] | 0) - s0) >> 23));
+    }
     fw = (fw + step) >>> 0;
     const lr = fw >>> 23;
     if (lr === 0) continue;

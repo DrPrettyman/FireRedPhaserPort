@@ -92,6 +92,7 @@ export class MainMenuScene extends GbaHostScene {
     Object.assign(titleScreenEnv, {
       define: (name: string) => defines.require(name),
       loadGameSave,
+      savedOptionsSound: () => save?.options.sound ?? 0,
       saveClearScreenInit: () => SetMainCallback2(CB2_SaveClearScreen_Init),
     });
     Object.assign(clearSaveDataEnv, {
