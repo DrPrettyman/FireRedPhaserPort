@@ -314,8 +314,8 @@ this is the next level down. When you add or change a subsystem, update its entr
 - **Screen transitions:** `battle/transition.ts` is battle_transition.c; `world/fieldGbaScreen.ts` puts the field
   on the GBA layer for it (start → BattleTransition_StartOnField, `frame()` once per overworld tick, stop when
   IsBattleTransitionDone) and has a bare mode for CB2_DoChangeMap's cave flash screens (`world/mapTransition.ts`,
-  also MapTransitionIsEnter/IsExit). Warps go WarpFadeOutScreen → doChangeMap → SetUpWarpExitTask in
-  `OverworldScene.warpTo`. `__test.forceBattleTransition('SWIRL')` makes the next battles use one transition.
+  also MapTransitionIsEnter/IsExit). Warps go WarpFadeOutScreen (with TryFadeOutOldMapMusic and SE_EXIT, waiting
+  for BGMusicStopped too: "Map music") → doChangeMap → SetUpWarpExitTask in `OverworldScene.warpTo`. `__test.forceBattleTransition('SWIRL')` makes the next battles use one transition.
   The map preview screens are the obvious next piece: TryDoMapTransition already knows where they'd run.
 - **Trainer sight:** `world/trainerSee.ts` (checkForTrainersWantingBattle + the TrainerApproach task), run from
   `OverworldScene.tick` on every frame the controls are free (mid-step too, against the step's destination).
@@ -1178,7 +1178,7 @@ or extend them:
   `fadeoutbgm` (+ its IsBGMPausedOrStopped wait), `fadeinbgm`, `playfanfare`, `waitfanfare`, as scrcmd.c. The three
   waits go through `SetupNativeScript`, which keeps script.c's frames: the check starts the frame after the
   command, and the script goes on the frame after it holds. `savebgm`, `fadedefaultbgm` and `playbgm`'s save flag
-  wait for W-sound 3 (savedMusic, the map's music).
+  are overworld.c's (see "Map music").
 - **Timing:** IsSEPlaying is FALSE in the frame an SE is started (the engine's first tick is that frame's hook) and
   turns FALSE after the song's last tick (tests/unit/m4a.test.ts pins the lengths). A fanfare holds for sFanfares'
   count + 1 frames (80 counts, then the frame that resumes the BGM); the song plays on to its FINE (MUS_EVOLVED's
@@ -1193,6 +1193,47 @@ or extend them:
   FadeOutMapMusic's wait, a new map song after the fade), `tests/e2e/audio.test.ts` (Viridian Forest's Potion
   ball: MUS_LEVEL_UP holds "put the POTION away" 80 + 3 frames with MUS_VIRIDIAN_FOREST paused; the Game Corner
   fisher's `waitse` holds `setflag` until SE_SHOP stops).
+
+### Map music
+
+- **Where:** `src/gba/overworldMusic.ts` is overworld.c's music block (overworld.c:989-1200): GetLocationMusic /
+  GetCurrLocationDefaultMusic / GetWarpDestinationMusic, Overworld_PlaySpecialMapMusic, Overworld_SetSavedMusic /
+  ClearSavedMusic, Overworld_TryMapConnectionMusicTransition, Overworld_ChangeMusicToDefault, GetMapMusicFadeoutSpeed,
+  TryFadeOutOldMapMusic, Overworld_FadeOutMapMusic, Overworld_MusicCanOverrideMapMusic. BGMusicStopped and
+  Overworld_ChangeMusicTo stay in sound.ts, and so does gDisableMapMusicChangeOnMapLoad (MUSIC_DISABLE_OFF / STOP /
+  KEEP; set with `SetDisableMapMusicChangeOnMapLoad`), since PlaySE reads it: PlaySE does nothing while it's set (the
+  Hall of Fame's warp sets KEEP, the credits clear it; a soft reset clears it too). The song a map plays:
+  `state.savedMusic` (gSaveBlock1Ptr->savedMusic, saved since save version 6) if set, else MUS_SURF while surfing
+  (not on Victory Road, Route 23, the Indigo Plateau), else the header's `music`.
+- **Host:** `setOverworldMusicHost({ state, currentMap, playerLocal })` (OverworldScene.create): gMapHeader is the
+  current map's MapData. sWarpDestination isn't a global in the port: TryFadeOutOldMapMusic and the connection
+  transition take the destination's header (the port loads it before the warp's fade).
+- **Hooks (where the C calls it, the port does):** OverworldScene: CB2_NewGame / CB2_ContinueSavedGame / CB2_WhiteOut's
+  StopMapMusic; Overworld_PlaySpecialMapMusic from the new game, CONTINUE (both branches), `defaultWarpExit`
+  (FieldCB_DefaultWarpExit), `warpFromScreen` (the ferry, the Hall of Fame), a battle's `returnToField`, the Safari
+  Zone's out-of-balls warp, the naming screen's return; Overworld_ClearSavedMusic in `onMapLoaded` before
+  ON_TRANSITION (LoadMapFromWarp / LoadMapFromCameraTransition: Cycling Road's ForcePlayerOntoBike sets it again);
+  the connection transition in `onPlayerArrived` before the new chunk is current. Warps: `warpTo(name, warpId, x, y,
+  kind)` is DoWarp ('warp': SE_EXIT), DoDiveWarp ('silent') or Task_DoorWarp's case 4 ('door'); each runs
+  TryFadeOutOldMapMusic with WarpFadeOutScreen and waits for `!fade && BGMusicStopped()` (Task_Teleport2Warp). The
+  door warps play GetDoorSoundEffect (Task_DoorWarp, Task_ExitDoor's 25th frame). Field moves: `FieldMoveHost.
+  warpFadeOutScreen(mapId, fadeOutMusic)` (true for Dive / fall warps, Teleport, Dig / Escape Rope; Fly fades no
+  music), and their field callbacks (FieldCallback_TeleportIn, _EscapeRopeExit, _FlyIntoMap, FieldCB_FallWarpExit)
+  start with Overworld_PlaySpecialMapMusic; the warp tasks' SEs (SE_WARP_IN / _OUT, SE_CLICK, SE_FALL,
+  SE_M_STRENGTH) are live. Bike: GetOnOffBike / ForcePlayerOntoBike (world/bike.ts); surf: FldEff_UseSurf
+  (world/surf.ts) and CreateStopSurfingTask (world/playerAvatar.ts). The Seagallop ferry: Overworld_FadeOutMapMusic,
+  then Task_Seagallop_2 waits for BGMusicStopped. Scripts: `playbgm` (save flag), `savebgm`, `fadedefaultbgm`.
+- **Timing:** a warp into a map with other music takes 16 × 2 + 1 frames (indoors) or 16 × 4 + 1 (outdoors) from its
+  fade's start, more than the screen fade; the same song: no fade, no restart. A connection fades at speed 8 and
+  MapMusicMain starts the new song 128 frames after the fade (on the bike: a crossfade, 4 out and 4 in).
+- **Tests:** `tests/unit/overworldMusic.test.ts` (the song choice incl. savedMusic and surf, the override rule,
+  KEEP / STOP, PlaySE's gate, the fade lengths, the connection transition, ChangeMusicToDefault, the Champion's
+  room), `tests/unit/save.test.ts` (a version 5 save loads with no savedMusic), `tests/e2e/mapMusic.test.ts`
+  (Pallet Town → Oak's lab door: SE_DOOR, a speed-2 fade, the lab loads ≥ 33 frames later, MUS_OAK_LAB; the lab's mat
+  → Pallet Town: SE_EXIT and a speed-4 fade, ≥ 65 frames; the player's house: no fade; Pallet Town → Route 1:
+  speed 8, MUS_ROUTE1 128 frames later; the Bicycle from SELECT: MUS_CYCLING, saved, CONTINUE plays it, off again
+  MUS_ROUTE1; Surf: MUS_SURF, and back on land MUS_PALLET). `__test.audio()` shows the map music state
+  (`mapMusic`: current, next, state) and `disableMapMusicChangeOnMapLoad`.
 
 ## Game state
 
@@ -1216,7 +1257,7 @@ or extend them:
   saved anyway since the Safari start menu has no SAVE, and the roamer's location). Other optional warps the save
   keeps: `continueGameWarp` + `specialSaveWarpFlags` (CONTINUE_GAME_WARP), `escapeWarp`. Game stats
   (`state.gameStats`, Get/Set/IncrementGameStat; only GAME_STAT_ENTERED_HOF and _FIRST_HOF_PLAY_TIME are counted so
-  far) are in the save since version 2. The Hall of Fame records live apart from the save, like their own flash
+  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6. The Hall of Fame records live apart from the save, like their own flash
   sectors: `state/hallOfFame.ts` (key `HOF_STORAGE_KEY`, versioned), read into `gHofBuffer` (gDecompressionBuffer)
   by LoadHallOfFameSave, written by TrySavingData(SAVE_HALL_OF_FAME) (which also counts GAME_STAT_ENTERED_HOF) and
   erased by SAVE_OVERWRITE_DIFFERENT_FILE.

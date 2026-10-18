@@ -2844,3 +2844,39 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   merging master in: 389 passed, no budgets raised); #92 none (unit test and docs only). Full run on master
   097f0fb (everything but #92's unit test): typecheck clean, 426 unit in 36 files, **393 e2e in 60 files, all
   passed first time, 20.8 min**. Final master 5ae37a9: typecheck clean, 491 unit in 37 files.
+
+### W-sound 3: map music, savedMusic, the warps' music waits (AUDIO_PLAN.md batch C)
+
+- `src/gba/overworldMusic.ts` is overworld.c's music block (overworld.c:989-1200): GetCurrLocationDefaultMusic,
+  GetWarpDestinationMusic, Overworld_PlaySpecialMapMusic (savedMusic, MUS_SURF where Overworld_MusicCanOverrideMapMusic
+  allows it, the Champion's room's fade back in), Overworld_SetSavedMusic / ClearSavedMusic,
+  Overworld_TryMapConnectionMusicTransition, Overworld_ChangeMusicToDefault, GetMapMusicFadeoutSpeed,
+  TryFadeOutOldMapMusic, Overworld_FadeOutMapMusic. gDisableMapMusicChangeOnMapLoad (and MUSIC_DISABLE_*) is in
+  sound.ts, where PlaySE now skips its sound while it's set; the Hall of Fame's SetWarpsToRollCredits sets KEEP, the
+  credits set KEEP / OFF, a soft reset clears it.
+- `savedMusic` in GameState and the save: **SAVE_VERSION 6** (`upgradeSave` gives version 5 saves 0).
+- Callers: the new game, CONTINUE, the warps' and screens' field callbacks (FieldCB_DefaultWarpExit and friends),
+  a battle's return, the Safari Zone's out-of-balls warp, the naming screen's return, white-out (StopMapMusic),
+  `onMapLoaded`'s ClearSavedMusic before ON_TRANSITION, the connections. Every warp path's sound calls (decision 17):
+  DoWarp / DoDiveWarp / Task_DoorWarp in `OverworldScene.warpTo` (TryFadeOutOldMapMusic, SE_EXIT, the wait for
+  `!fade && BGMusicStopped()`), the door SEs of Task_DoorWarp / Task_ExitDoor, Dive / fall warps, Teleport, Dig /
+  Escape Rope (TryFadeOutOldMapMusic and BGMusicStopped through `FieldMoveHost.warpFadeOutScreen(mapId, true)`; their
+  SE_WARP_IN / _OUT, SE_CLICK, SE_FALL, SE_M_STRENGTH), Fly in (Overworld_PlaySpecialMapMusic; Fly fades no music
+  out), the Seagallop ferry's Overworld_FadeOutMapMusic + BGMusicStopped wait. Bike music (GetOnOffBike,
+  ForcePlayerOntoBike), surf music (FldEff_UseSurf, CreateStopSurfingTask). Scripts: `savebgm`, `fadedefaultbgm`,
+  `playbgm`'s save flag, `warpsilent` (no SE_EXIT).
+- Waits that now take their GBA length: every warp into a map with other music (+16 × 2 + 1 frames from the fade's
+  start indoors, 16 × 4 + 1 outdoors, over the screen fade's), Teleport / Dig / Escape Rope / Dive / fall warps the
+  same, the Seagallop ferry's warp (64 frames).
+- Found on the way: on the GBA the bike's MUS_CYCLING doesn't survive a connection (LoadMapFromCameraTransition crossfades
+  to the next map's music, then clears savedMusic); FRLG's FieldCB_DefaultWarpExit (no gFieldCallback) is also what
+  brings the map's music back after a wild battle. `GetDoorSoundEffect` is a private copy in OverworldScene until
+  W-sound 4's lands in world/doors.ts.
+- Tick budgets raised: none. The full e2e suite passed on its first run with the longer warps (61 files, 398 tests,
+  22.4 min), and nothing failed and passed on a rerun.
+- Verified: typecheck; `npm test` (38 files, 502 tests; tests/unit/overworldMusic.test.ts 9, a version 5 save in
+  save.test.ts, savedMusic in saveData.test.ts's round trip); `tests/e2e/mapMusic.test.ts` (5: Pallet Town → Oak's lab
+  door with SE_DOOR and a speed-2 fade, the lab ≥ 33 frames later and MUS_OAK_LAB; the lab's mat → Pallet Town with
+  SE_EXIT and a speed-4 fade, ≥ 65 frames; the player's house without a fade; Pallet Town → Route 1, MUS_ROUTE1 128
+  frames after the speed-8 fade; the Bicycle: MUS_CYCLING, saved, CONTINUE plays it, off the bike MUS_ROUTE1; Surf:
+  MUS_SURF, back on land MUS_PALLET); the full e2e suite once (above).
