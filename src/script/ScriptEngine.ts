@@ -595,7 +595,11 @@ export class ScriptEngine {
     ctx.wait = () => {
       if (!menu.tick()) return false;
       this.state.setVar('VAR_RESULT', menu.result);
-      return true;
+      // Task_MultichoiceMenu_HandleInput's ScriptContext_Enable: the script goes on in the next frame's
+      // ScriptContext_RunScript, so the A that chose can't also pick from a menu the script opens next (the event
+      // tickets' MULTICHOICE_SEVII_NAVEL etc. lead on to DrawSeagallopDestinationMenu) or pass a `waitbuttonpress`.
+      ctx.wait = () => true;
+      return false;
     };
   }
 

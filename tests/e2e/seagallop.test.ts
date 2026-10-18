@@ -1,113 +1,15 @@
-// The Seagallop ferry (W-ferry unit 1): seagallop.c's scene and warp, script_menu.c's destination menus, and Bill's
-// One Island trip after Blaine (CinnabarIsland_EventScript_BillScene → the ferry → One Island's Pokémon Center and
-// Celio → back to Cinnabar). Lostelle's rescue, which opens the way back, is stood in for by
-// VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F = 2 (SIDE_PLAN.md decision 7).
+// The Seagallop ferry (W-ferry): seagallop.c's scene and warp, script_menu.c's destination menus, Bill's One Island
+// trip after Blaine (CinnabarIsland_EventScript_BillScene → the ferry → One Island's Pokémon Center and Celio), and
+// every harbor's sailor: Vermilion's, the islands' with the Tri-Pass and the Rainbow Pass, Navel Rock's and Birth
+// Island's. The Sevii 1-3 quest and the way back to Cinnabar are played in seviiQuest.test.ts.
 
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
+import { afterBlaine, checkRide, harborState, MEWTWO, rideFerry, sail, talkToHarborSailor, toTicketCheck, triPassState, waitForMenu, warp, watchSeagallopObject } from './seagallopHelpers';
 
 const session = useGame();
 
-const MEWTWO = { species: 'MEWTWO', level: 100, moves: ['PSYCHIC', 'SURF', 'STRENGTH'] };
-
-/** Every badge up to Blaine's. */
-const BADGES = Array.from({ length: 7 }, (_, i) => `FLAG_BADGE0${i + 1}_GET`);
-
-/** A scripted warp (ScrCmd_warp) to map-local (x, y), waiting for the new map to settle. */
-async function warp(game: Game, mapId: string, x: number, y: number) {
-  const mark = await game.mark();
-  await game.eval((_t, id, x, y) => (window as any).game.scene.getScene('Overworld').warp(id, -1, x, y), mapId, x, y);
-  await game.waitForEvent('map', { since: mark, what: mapId });
-}
-
-/** The story state after Blaine (CinnabarIsland_Gym_EventScript_DefeatedBlaine). */
-async function afterBlaine(game: Game) {
-  await game.eval((t, badges) => {
-    for (const f of badges) t.state!.setFlag(f, true);
-    t.state!.setFlag('FLAG_DEFEATED_BLAINE', true);
-    t.state!.setFlag('FLAG_GOT_TM38_FROM_BLAINE', true);
-    t.state!.setVar('VAR_MAP_SCENE_CINNABAR_ISLAND', 1);
-    t.state!.setFlag('FLAG_HIDE_CINNABAR_BILL', false);
-    t.state!.setVar('VAR_REPEL_STEP_COUNT', 1000);
-  }, BADGES);
-}
-
-/** One frame of the ferry scene as the in-page watcher saw it. */
-interface FerryFrame {
-  frames: number;
-  bg3X: number;
-  x2?: number;
-  ferryX?: number;
-  hFlip?: boolean;
-  wakes: number;
-  eastbound: boolean;
-}
-
-/**
- * Mash A until the ferry scene is up, watching it in the page from its first frame until the field is back: the
- * scene's frames (BG3's x, the ferry's x and x2, wakes). Returns them and the map the ferry arrived at.
- */
-async function rideFerry(game: Game, what: string, button: 'A' | 'B' = 'A') {
-  const watcher = game.eval(async (t) => {
-    const seen: FerryFrame[] = [];
-    let up = false;
-    await t.until(() => {
-      const s = t.seagallop();
-      if (!s?.running) return up; // (not yet, or over)
-      if (!up) (window as any).__ferrySince = t.lastSeq();
-      up = true;
-      seen.push({ frames: s.frames, bg3X: s.bg3X, x2: s.ferry?.x2, ferryX: s.ferry?.x, hFlip: s.ferry?.hFlip, wakes: s.wakes, eastbound: s.eastbound });
-      return false;
-    }, 40000);
-    return seen;
-  });
-  await game.mashUntil((t) => t.seagallop() !== undefined, { what: `${what}: the ferry scene`, button });
-  const frames = (await watcher) as FerryFrame[];
-  // The map Task_Seagallop_3 warped to (not one loaded before the scene, e.g. leaving a Pokémon Center)
-  const sceneUp = await game.eval(() => (window as any).__ferrySince as number);
-  const arrival = await game.waitForEvent('map', { since: sceneUp });
-  // The script that ran DoSeagallopFerryScene stays stopped until the warp, so the mash can't start another one on
-  // the way (an A press used to talk to the Vermilion sailor, whose script then ran on at the destination): what
-  // runs once the departing script has reached its `end` (a few ticks after the warp) is the destination's own.
-  const running = await game.eval(async (t, map) => {
-    let label: string | undefined;
-    await t.until(() => {
-      label = t.field()?.script;
-      return !label || label.startsWith(map);
-    }, 120);
-    return label;
-  }, arrival.map as string);
-  if (running) expect(running.startsWith(arrival.map as string), running).toBe(true);
-  await game.eval((t) => t.until(() => t.field()?.map !== undefined && !t.field()?.fading, 20000));
-  return { frames, map: arrival.map as string };
-}
-
-/** What every ride shows: BG3 scrolls 6 px a frame for 140 frames, the ferry crosses at 3 px a frame with wakes. */
-function checkRide(frames: FerryFrame[], eastbound: boolean) {
-  expect(frames.length).toBeGreaterThan(0);
-  expect(frames.every((f) => f.eastbound === eastbound)).toBe(true);
-  const last = frames[frames.length - 1];
-  expect(last.frames).toBe(140); // Task_Seagallop_1's 140 frames, then the fade (Task_Seagallop_2)
-  // ScrollBG: ChangeBgX(3, 0x600, add or subtract) once a frame
-  for (let i = 1; i < frames.length; i++) {
-    const step = (frames[i].bg3X - frames[i - 1].bg3X) | 0;
-    if (frames[i].frames !== frames[i - 1].frames || frames[i].frames === 140) expect([eastbound ? 0x600 : -0x600, 0]).toContain(step);
-  }
-  expect(frames.some((f) => f.bg3X !== frames[0].bg3X)).toBe(true);
-  // The ferry: from x 0 (eastbound, flipped) or 240, x2 3 px a frame, gone 300 px out (frame 100)
-  const withFerry = frames.filter((f) => f.x2 !== undefined);
-  expect(withFerry.length).toBeGreaterThan(0);
-  for (const f of withFerry) {
-    expect(f.ferryX).toBe(eastbound ? 0 : 240);
-    // (the anim's flip reaches the OAM in the first AnimateSprites, after the frame the sprite was made in)
-    if (f.frames > 0) expect(f.hFlip).toBe(eastbound);
-    expect(Math.abs(f.x2!)).toBeLessThanOrEqual(300);
-  }
-  expect(frames.some((f) => f.frames > 100 && f.x2 === undefined)).toBe(true);
-  expect(frames.some((f) => f.wakes > 0)).toBe(true);
-}
-
-test("Bill's trip: YES on Cinnabar, the Seagallop arrives, the ferry to One Island, Celio; the way back and Bill's goodbye", async () => {
+test("Bill's trip: YES on Cinnabar, the Seagallop arrives, the ferry to One Island, Celio", async () => {
   const game = await session.start({ start: 'after-rival', map: 'CinnabarIsland_Gym', x: 25, y: 21, party: [MEWTWO] });
   await afterBlaine(game);
   // Out of the gym's door (20, 4) onto (20, 5): OnTransition leaves Bill at (20, 7) and moves the Seagallop to (30, 8)
@@ -128,37 +30,8 @@ test("Bill's trip: YES on Cinnabar, the Seagallop arrives, the ferry to One Isla
   expect(await game.eval((t) => t.field()!.map)).toBe('OneIsland_PokemonCenter_1F');
   expect(await game.eval((t) => [t.itemCount('TRI_PASS'), t.itemCount('METEORITE'), t.flag('FLAG_SYS_SEVII_MAP_123'), t.var('VAR_MAP_SCENE_ONE_ISLAND_HARBOR')])).toEqual([1, 1, true, 3]);
 
-  // Lostelle's rescue (unit 2 plays it) sets the var; back in, Bill and Celio wait at the machine.
-  await game.eval((t) => t.state!.setVar('VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F', 2));
-  await warp(game, 'MAP_ONE_ISLAND_POKEMON_CENTER_1F', 9, 8);
-  await game.walk('right', 3); // onto (12, 8): LeaveOneIslandTriggerMidBottom
-  const back = await rideFerry(game, 'the leave scene');
-  checkRide(back.frames, false); // One Island → Cinnabar is westbound
-  expect(back.map).toBe('CinnabarIsland');
-  expect(await game.eval((t) => [t.field()!.x, t.field()!.y])).toEqual([21, 7]); // sSeag[SEAGALLOP_CINNABAR_ISLAND]
-  // CinnabarIsland_EventScript_ReturnFromSeviiIslands: Bill's goodbye, he walks off
-  await game.mashUntil((t) => t.var('VAR_MAP_SCENE_CINNABAR_ISLAND') === 4 && t.idle() && !t.field()!.script, { what: "Bill's goodbye" });
-  expect(await game.eval((t) => [t.flag('FLAG_HIDE_TWO_ISLAND_GAME_CORNER_LOSTELLE'), t.flag('FLAG_HIDE_LOSTELLE_IN_HER_HOME'), t.var('VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F')])).toEqual([true, false, 3]);
+  // The way back (Lostelle's rescue, the leave scene, the ferry to Cinnabar, Bill's goodbye): seviiQuest.test.ts
 }, 240_000);
-
-/** The Seagallop object on the field from when it appears until the ferry scene starts: where it came and stopped. */
-function watchSeagallopObject(game: Game) {
-  // Read inside the predicate, tick by tick: after an `await` the page may be a whole frame batch further on.
-  return game.eval(async (t) => {
-    type Obj = { graphicsId?: string; x: number; y: number };
-    let start: { x: number; y: number } | undefined;
-    let end: { x: number; y: number } | undefined;
-    await t.until(() => {
-      const b = (t.objects() as Obj[]).find((o) => o.graphicsId === 'OBJ_EVENT_GFX_SEAGALLOP');
-      if (b) {
-        start ??= { x: b.x, y: b.y };
-        end = { x: b.x, y: b.y };
-      }
-      return start !== undefined && t.seagallop() !== undefined;
-    }, 40000);
-    return { start, end };
-  });
-}
 
 test("declining Bill: he waits in the Pokémon Center; from there the ferry leaves from the shore (FLAG_TEMP_2's path)", async () => {
   const game = await session.start({ start: 'after-rival', map: 'CinnabarIsland_Gym', x: 25, y: 21, party: [MEWTWO] });
@@ -188,47 +61,6 @@ test("declining Bill: he waits in the Pokémon Center; from there the ferry leav
   expect(ride.map).toBe('OneIsland_Harbor');
   expect(await game.eval((t) => [t.var('VAR_MAP_SCENE_CINNABAR_ISLAND'), t.var('VAR_MAP_SCENE_CINNABAR_ISLAND_2'), t.flag('FLAG_HIDE_CINNABAR_POKECENTER_BILL')])).toEqual([2, 2, true]);
 }, 240_000);
-
-/** Vermilion after the S.S. Anne left, with the Tri-Pass (Celio's scene done) and Bill's trip over. */
-async function triPassState(game: Game) {
-  await game.eval((t) => {
-    t.state!.setVar('VAR_MAP_SCENE_VERMILION_CITY', 3);
-    t.state!.setVar('VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F', 3);
-    t.state!.setVar('VAR_MAP_SCENE_CINNABAR_ISLAND', 4);
-    t.state!.setVar('VAR_MAP_SCENE_ONE_ISLAND_HARBOR', 3);
-    t.state!.bag.add(t.define('ITEM_TRI_PASS'), 1);
-    t.state!.setFlag('FLAG_SYS_SEVII_MAP_123', true);
-  });
-}
-
-/**
- * From (23, 31) down onto Vermilion's ticket check at (23, 33). The step onto (23, 32) runs ExitedTicketCheck
- * (VAR_TEMP_1 is 0 after the load), which eats the next step while it locks the field.
- */
-async function toTicketCheck(game: Game) {
-  const since = await game.mark();
-  await game.walk('down');
-  await game.eval((t, s) => t.until(() => t.events(s).some((e) => e.type === 'script' && e.label === 'VermilionCity_EventScript_ExitedTicketCheck') && t.idle() && !t.field()!.script, 20000), since);
-  expect(await game.walk('down')).toMatchObject({ x: 23, y: 33 });
-}
-
-/**
- * Until a multichoice menu opened since `since`: press A at each page break of the message before it (only while
- * the text waits for a button, so no press can reach the menu), then let it settle a few ticks. Returns its mcId.
- * `pressPages` false for a menu with no message before it (the message box of the last one still waits).
- */
-async function waitForMenu(game: Game, since: number, pressPages = true) {
-  if (pressPages) await game.eval(async (t, s) => {
-    const box = (window as any).game.scene.getScene('Overworld').messageBox;
-    for (let i = 0; i < 2000 && !t.events(s).some((e) => e.type === 'multichoice'); i++) {
-      if (box.waitingForButton) await t.press('A');
-      else await t.waitFrames(1);
-    }
-  }, since);
-  const e = await game.waitForEvent('multichoice', { since });
-  await game.eval((t) => t.waitFrames(4));
-  return e.mcId as number;
-}
 
 test('Vermilion → Two Island with the Tri-Pass (SEAGALLOP HI-SPEED 7), and back from Two Island', async () => {
   const game = await session.start({ start: 'after-rival', map: 'VermilionCity', x: 23, y: 31, party: [MEWTWO] });
@@ -306,4 +138,197 @@ test("the Rainbow Pass menu (DrawSeagallopDestinationMenu): page 1, OTHER → pa
   const ride = await rideFerry(game, 'Vermilion → Five Island');
   checkRide(ride.frames, true);
   expect(ride.map).toBe('FiveIsland_Harbor');
+}, 240_000);
+
+/** Where the player stands, as [map, x, y]. */
+function where(game: Game) {
+  return game.eval((t) => [t.field()!.map, t.field()!.x, t.field()!.y]);
+}
+
+/** Cancel a sailor's menu (B, or A on EXIT) away from Vermilion's pier: EventScript_CancelSail just releases. */
+async function cancelAtHarbor(game: Game) {
+  await game.mashUntil((t) => t.idle() && !t.field()!.script, { what: 'EventScript_CancelSail', button: 'B' });
+}
+
+/** Pick row `row` of the menu that is up: DOWN `row` times, then A. */
+async function pick(game: Game, row: number) {
+  await game.pressTimes('DOWN', row);
+  await game.press('A');
+}
+
+test("the island sailors with the Tri-Pass: each island's menu before and after Bill's trip ends, EXIT and B", async () => {
+  const game = await session.start({ start: 'after-rival', map: 'ThreeIsland_Harbor', x: 8, y: 5, party: [MEWTWO] });
+  await harborState(game, 2, 2); // Lostelle rescued, Bill's way back not taken yet
+  const harbors = [
+    ['MAP_ONE_ISLAND_HARBOR', 'OneIsland_Harbor', 'MULTICHOICE_ISLAND_23', 'MULTICHOICE_SEAGALLOP_V23'],
+    ['MAP_TWO_ISLAND_HARBOR', 'TwoIsland_Harbor', 'MULTICHOICE_ISLAND_13', 'MULTICHOICE_SEAGALLOP_V13'],
+    ['MAP_THREE_ISLAND_HARBOR', 'ThreeIsland_Harbor', 'MULTICHOICE_ISLAND_12', 'MULTICHOICE_SEAGALLOP_V12'],
+  ];
+  for (const cinnabar of [2, 4]) {
+    await game.eval((t, c) => t.state!.setVar('VAR_MAP_SCENE_CINNABAR_ISLAND', c), cinnabar);
+    for (const [map, local, before, after] of harbors) {
+      await warp(game, map, 8, 5);
+      // EventScript_ChooseDestFromOneIsland / _TwoIsland / _Island: VERMILION only once VAR_MAP_SCENE_CINNABAR_ISLAND is 4
+      expect(await talkToHarborSailor(game), map).toBe(await game.eval((t, n) => t.define(n), cinnabar < 4 ? before : after));
+      if (cinnabar < 4) await pick(game, 2); // EXIT (the third row)
+      else await game.press('B'); // SCR_MENU_CANCEL
+      await cancelAtHarbor(game);
+      expect(await where(game)).toEqual([local, 8, 5]);
+    }
+  }
+
+  // Three Island → One Island before Bill's way back (ISLAND_12: ONE, TWO, EXIT): HI-SPEED 2, westbound
+  await game.eval((t) => t.state!.setVar('VAR_MAP_SCENE_CINNABAR_ISLAND', 2));
+  await warp(game, 'MAP_THREE_ISLAND_HARBOR', 8, 5);
+  await talkToHarborSailor(game);
+  await pick(game, 0);
+  const ride = await sail(game, 'Three → One Island', 2);
+  checkRide(ride.frames, false);
+  expect(await where(game)).toEqual(['OneIsland_Harbor', 8, 5]);
+
+  // After it (V23: VERMILION, TWO, THREE, EXIT): One → Three Island, eastbound
+  await game.eval((t) => t.state!.setVar('VAR_MAP_SCENE_CINNABAR_ISLAND', 4));
+  await talkToHarborSailor(game);
+  await pick(game, 2);
+  const ride2 = await sail(game, 'One → Three Island', 2);
+  checkRide(ride2.frames, true);
+  expect(await where(game)).toEqual(['ThreeIsland_Harbor', 8, 5]);
+}, 240_000);
+
+/**
+ * The Rainbow Pass menu (EventScript_SeviiDestinationsPage1 / 2) from Vermilion and from each island in turn, every
+ * harbor's arrival (sSeag: (8, 5) on the islands, (23, 32) at Vermilion), the direction of each trip
+ * (sTravelDirectionMatrix) and its number (GetSeagallopNumber).
+ */
+test('the Rainbow Pass: Vermilion and every island harbor in turn, both pages, OTHER both ways, EXIT and B', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'VermilionCity', x: 23, y: 31, party: [MEWTWO] });
+  await harborState(game, 4, 5);
+  await warp(game, 'MAP_VERMILION_CITY', 23, 31);
+  // Vermilion's page 1: ONE, TWO, THREE, FOUR ISLAND, OTHER, EXIT. EXIT left of the sailor walks the player up.
+  let since = await game.mark();
+  await toTicketCheck(game);
+  expect(await waitForMenu(game, since)).toBe(255); // MULTICHOICE_NONE
+  await pick(game, 5);
+  await game.mashUntil((t) => t.idle() && !t.field()!.script, { what: 'the walk up the pier', button: 'B' });
+  expect(await where(game)).toEqual(['VermilionCity', 23, 32]);
+  await game.walk('up');
+  since = await game.mark();
+  await toTicketCheck(game);
+  await waitForMenu(game, since);
+  await pick(game, 2); // THREE ISLAND
+  expect(await game.eval((t) => t.field()!.facing)).toBe('right'); // (CheckTicket turned the player to the sailor)
+  let ride = await sail(game, 'Vermilion → Three Island', 7);
+  checkRide(ride.frames, true);
+  expect(await where(game)).toEqual(['ThreeIsland_Harbor', 8, 5]);
+  // Nothing stored an initial direction (StoreInitialPlayerAvatarState sets hasDirectionSet FALSE) and (8, 5) is a
+  // plain tile: GetAdjustedInitialDirection's DIR_SOUTH
+  expect(await game.eval((t) => t.field()!.facing)).toBe('down');
+
+  // Three Island's page 1: VERMILION, ONE, TWO, FOUR ISLAND, OTHER, EXIT
+  expect(await talkToHarborSailor(game)).toBe(255);
+  await pick(game, 3);
+  ride = await sail(game, 'Three → Four Island', 6);
+  checkRide(ride.frames, true);
+  expect(await where(game)).toEqual(['FourIsland_Harbor', 8, 5]);
+
+  // Four Island: OTHER → page 2: FIVE, SIX, SEVEN ISLAND, OTHER, EXIT
+  await talkToHarborSailor(game);
+  since = await game.mark();
+  await pick(game, 4);
+  await waitForMenu(game, since, false);
+  await pick(game, 1);
+  ride = await sail(game, 'Four → Six Island', 6);
+  checkRide(ride.frames, true);
+  expect(await where(game)).toEqual(['SixIsland_Harbor', 8, 5]);
+
+  // Six Island's page 2: FOUR, FIVE, SEVEN ISLAND
+  await talkToHarborSailor(game);
+  since = await game.mark();
+  await pick(game, 4);
+  await waitForMenu(game, since, false);
+  await pick(game, 2);
+  ride = await sail(game, 'Six → Seven Island', 5);
+  checkRide(ride.frames, false);
+  expect(await where(game)).toEqual(['SevenIsland_Harbor', 8, 5]);
+
+  // Seven Island: OTHER, OTHER back to page 1, EXIT; then B on page 2; then FIVE ISLAND
+  await talkToHarborSailor(game);
+  since = await game.mark();
+  await pick(game, 4);
+  await waitForMenu(game, since, false);
+  since = await game.mark();
+  await pick(game, 3); // OTHER on page 2 → page 1
+  await waitForMenu(game, since, false);
+  expect(await game.eval((t) => t.var('VAR_0x8005'))).toBe(0);
+  await pick(game, 5); // EXIT
+  await cancelAtHarbor(game);
+  expect(await where(game)).toEqual(['SevenIsland_Harbor', 8, 5]);
+  await talkToHarborSailor(game);
+  since = await game.mark();
+  await pick(game, 4);
+  await waitForMenu(game, since, false);
+  await game.press('B');
+  await cancelAtHarbor(game);
+  expect(await where(game)).toEqual(['SevenIsland_Harbor', 8, 5]);
+  await talkToHarborSailor(game);
+  since = await game.mark();
+  await pick(game, 4);
+  await waitForMenu(game, since, false);
+  await pick(game, 1); // FOUR, FIVE, SIX: FIVE
+  ride = await sail(game, 'Seven → Five Island', 6);
+  checkRide(ride.frames, false);
+  expect(await where(game)).toEqual(['FiveIsland_Harbor', 8, 5]);
+
+  // Five Island's page 1: VERMILION, ONE, TWO, THREE ISLAND
+  await talkToHarborSailor(game);
+  await pick(game, 1);
+  ride = await sail(game, 'Five → One Island', 6);
+  checkRide(ride.frames, false);
+  expect(await where(game)).toEqual(['OneIsland_Harbor', 8, 5]);
+
+  // One Island's page 1: VERMILION, TWO, THREE, FOUR ISLAND
+  await talkToHarborSailor(game);
+  await pick(game, 1);
+  ride = await sail(game, 'One → Two Island', 2);
+  checkRide(ride.frames, true);
+  expect(await where(game)).toEqual(['TwoIsland_Harbor', 8, 5]);
+
+  // Two Island's page 1: VERMILION first
+  await talkToHarborSailor(game);
+  await pick(game, 0);
+  ride = await sail(game, 'Two Island → Vermilion', 7);
+  checkRide(ride.frames, false);
+  expect(await where(game)).toEqual(['VermilionCity', 23, 32]);
+}, 300_000);
+
+/**
+ * Navel Rock and Birth Island. The event tickets aren't ported, so the trip there starts at the ticket menus'
+ * targets, EventScript_SailToNavelRock / _SailToBirthIsland (the sailor's text, VAR_0x8004 VERMILION, VAR_0x8006 the
+ * island, EventScript_SetSail), run at Vermilion's sailor. Back, the harbor's sailor has MULTICHOICE_SEAGALLOP_VERMILION.
+ */
+test('Navel Rock and Birth Island harbors: there from Vermilion (the tickets\' sail-off), back with B, EXIT, VERMILION', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'VermilionCity', x: 23, y: 31, party: [MEWTWO] });
+  await harborState(game, 4, 5);
+  for (const [label, local, number] of [['EventScript_SailToNavelRock', 'NavelRock_Harbor', 10], ['EventScript_SailToBirthIsland', 'BirthIsland_Harbor', 12]] as const) {
+    await warp(game, 'MAP_VERMILION_CITY', 24, 32);
+    await game.eval((_t, l) => (window as any).game.scene.getScene('Overworld').startFieldScript(l), label);
+    const there = await sail(game, `Vermilion → ${local}`, number);
+    checkRide(there.frames, true);
+    expect(await where(game)).toEqual([local, 8, 5]); // sSeag[SEAGALLOP_NAVEL_ROCK / _BIRTH_ISLAND]
+
+    expect(await talkToHarborSailor(game)).toBe(await game.eval((t) => t.define('MULTICHOICE_SEAGALLOP_VERMILION')));
+    await game.press('B');
+    await cancelAtHarbor(game);
+    expect(await where(game)).toEqual([local, 8, 5]);
+    await talkToHarborSailor(game);
+    await pick(game, 1); // EXIT
+    await cancelAtHarbor(game);
+    expect(await where(game)).toEqual([local, 8, 5]);
+    await talkToHarborSailor(game);
+    await pick(game, 0); // VERMILION: EventScript_SailToVermilionCity
+    // GetSeagallopNumber checks Vermilion before Navel Rock / Birth Island: 7 on the way back
+    const back = await sail(game, `${local} → Vermilion`, 7);
+    checkRide(back.frames, false);
+    expect(await where(game)).toEqual(['VermilionCity', 23, 32]);
+  }
 }, 240_000);
