@@ -2425,3 +2425,38 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   (across the water from the dock, as in the decomp) and the deck sailor at (13, 13), who walks back and forth
   without stopping (his movement checked tile by tile; his script is a plain MSGBOX_NPC).
 - Verified: typecheck; `npm test` (229); e2e ssAnne.test.ts (10, twice in a row) and story.test.ts (7).
+
+### Every Seagallop harbor and the Sevii 1-3 quest (W-ferry unit 2)
+
+- The ferry from every harbor, as e2e tests (`tests/e2e/seagallop.test.ts`): the One / Two / Three Island sailors'
+  Tri-Pass menus (EventScript_ChooseDestFromOneIsland / _TwoIsland / _Island: MULTICHOICE_ISLAND_23 / _13 / _12
+  while VAR_MAP_SCENE_CINNABAR_ISLAND < 4, MULTICHOICE_SEAGALLOP_V23 / _V13 / _V12 after), EXIT and B; the Rainbow
+  Pass menu from Vermilion (EXIT left of the sailor walks the player up the pier) and from each island in turn
+  (Vermilion → Three → Four → Six → Seven → Five → One → Two → Vermilion: both pages, OTHER both ways, EXIT, B on
+  page 2), each trip's HI-SPEED number (GetSeagallopNumber), direction (sTravelDirectionMatrix) and arrival (sSeag:
+  (8, 5) on every island, (23, 32) at Vermilion, the player facing south as GetAdjustedInitialDirection gives with
+  no stored direction); Navel Rock and Birth Island (the tickets aren't ported: the trip there starts at their
+  sail-off scripts, EventScript_SailToNavelRock / _SailToBirthIsland, HI-SPEED 10 / 12; back with the harbor sailor's
+  MULTICHOICE_SEAGALLOP_VERMILION, HI-SPEED 7). Cinnabar has no sailor: its only ferry is Bill's (unit 1).
+- The Sevii 1-3 quest played headless (`tests/e2e/seviiQuest.test.ts`): Bill's trip and Celio, One → Two Island by
+  the sailor, the Joyful Game Corner's HelpFindLostelleScene (positions after it checked), Two → Three Island,
+  BikerBossIntroTrigger and BattleBikersScene (the three bikers and Paxton, the bikers removed with the port's), Berry
+  Forest's Lostelle (the wild Hypno, the Iapapa Berry, the warp into FoundLostelleScene), the Meteorite to her daddy
+  (VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F → 2, the Moon Stone), Two → One Island, the Pokémon Center's leave
+  scene, the ferry to Cinnabar and Bill's goodbye. Warps skip the walking between scenes. Kindle Road isn't on the
+  story's path (it leads to Mt. Ember, which waits for the postgame) and isn't played. The play-through found no
+  script or mechanic to fix. The unit 1 test's var shortcut (SIDE_PLAN.md decision 7) is gone: seagallop.test.ts's
+  Bill's trip now ends at Celio, and the way back is only played in seviiQuest.test.ts.
+- ScriptEngine: `multichoice` (and `multichoicedefault`, `multichoicegrid`) resumes the script the frame after the
+  choice, as `yesnobox` does since #67 (Task_MultichoiceMenu_HandleInput's ScriptContext_Enable). Its DEVIATIONS
+  note is gone. EnterHallOfFame's theoretical input gap (it ends its script at the special) is noted in DEVIATIONS
+  instead; not fixed (optional in the plan, and the field sleeps under the HoF screen).
+- Found on the way: the unit 1 helpers' `warp` returned on the map event, before the fade-in, so under load the next
+  walk gave up at once (the walk onto Vermilion's ticket check never happened). The helpers moved to
+  `tests/e2e/seagallopHelpers.ts`; `warp` now waits until the field takes input or a map script has started, and
+  `talkToHarborSailor` waits for an idle field after a ride.
+- Verified: typecheck; `npm test` (27 files, 236 tests); e2e seagallop.test.ts (8) and seviiQuest.test.ts (1), green
+  in two runs beside other e2e files for load (with storyCeladonSaffron + sideEvents, then gameCorner +
+  mainPathLeftovers: the e2e files with multichoice menus, all green). A first run beside five other files failed
+  three ferry tests on the `warp` race above, fixed before both green runs. Screenshots of a harbor menu, Three
+  Island's bikers, Berry Forest and Navel Rock's harbor checked by eye.

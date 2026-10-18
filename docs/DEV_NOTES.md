@@ -266,7 +266,9 @@ this is the next level down. When you add or change a subsystem, update its entr
   world/daycare.ts' `createEgg` (then friendship = cycles; `level` / `iv` / `shiny` don't apply); set `t.state.daycare.stepCounter = 254` so the next step counts
   the cycle. Tests: tests/unit/eggHatch.test.ts, tests/e2e/eggHatch.test.ts.
 - **Multichoice / elevators:** `ui/MultichoiceMenu.ts` (vertical list and grid, field windows); the script engine
-  sets VAR_RESULT from `ScriptHost.openMultichoice`. `text/stringWidth.ts` is GetStringWidth for any font set
+  sets VAR_RESULT from `ScriptHost.openMultichoice`. Like `yesnobox`, `multichoice` / `multichoicedefault` /
+  `multichoicegrid` let the script run on the frame after the choice (Task_MultichoiceMenu_HandleInput's
+  ScriptContext_Enable), so the A that chose can't reach a menu or `waitbuttonpress` that follows. `text/stringWidth.ts` is GetStringWidth for any font set
   (the field's or the GBA layer's). Specials can start field tasks that outlive them (`ScriptHost.startFieldTask`,
   run after the script each frame like RunTasks); `world/elevator.ts` uses that. Test: walk into the Celadon Dept.
   Store elevator from 1F (`?start=after-rival&map=CeladonCity_DepartmentStore_1F&x=6&y=2`, Up), panel at (4,1).
@@ -519,8 +521,13 @@ this is the next level down. When you add or change a subsystem, update its entr
   (MultichoiceRequest.layout: CreateWindowFromRect(17, top, 11, rows * 2), 16 px rows) and ends its `waitstate` the
   frame after the choice (ScriptContext_Enable's frame). Probe `__test.seagallop()`: setup state, Task_Seagallop_1's
   frame count, BG3's x, the ferry's x / x2 / flip, the wakes on screen. Test: `tests/unit/seagallop.test.ts`,
-  `tests/e2e/seagallop.test.ts` (Bill's trip and the way back, declining Bill, Vermilion ⇄ Two Island, cancelling
-  at the Vermilion sailor, both Rainbow Pass pages); quick look: `?map=VermilionCity&x=23&y=31` with
+  `tests/e2e/seagallop.test.ts` (Bill's trip out, declining Bill, Vermilion ⇄ Two Island, cancelling at the
+  Vermilion sailor; every harbor's sailor: the islands' Tri-Pass menus before and after VAR_MAP_SCENE_CINNABAR_ISLAND
+  4, the Rainbow Pass from Vermilion and each island in turn with both pages, OTHER, EXIT and B, each arrival and
+  direction; Navel Rock / Birth Island from the tickets' EventScript_SailToNavelRock / _BirthIsland and back),
+  `tests/e2e/seviiQuest.test.ts` (the Sevii 1-3 quest played, Bill's way back without setting the var). Helpers
+  for new ferry tests: `tests/e2e/seagallopHelpers.ts` (`warp`, `rideFerry` / `checkRide`, `sail` (checks the
+  HI-SPEED number), `waitForMenu`, `talkToHarborSailor`, `harborState`). Quick look: `?map=VermilionCity&x=23&y=31` with
   VAR_MAP_SCENE_VERMILION_CITY 3 and VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F >= 1, walk down onto the ticket check.
 - **TM case:** `menus/tmCase.ts` is tm_case.c. `InitTMCase(type, exitCallback, allowSelectClose)` runs on whichever
   GBA host has the bag (FieldMenuScene); `menuGfxSymbols` preloads `TM_CASE_GFX`. Ways in: the bag's KEY ITEMS → TM
