@@ -285,6 +285,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Castform's form change (HandleSpeciesGfxDataChange) takes the new form's palette row from that battler's own
     Castform palette. The GBA keeps one gBattleStruct->castformPalette, written by whichever Castform's gfx
     loaded last, so it only differs with two Castforms of different shininess on the field.
+  - Slot machine: `playslotmachine` (the screen) isn't ported yet (W-slots unit 2), nor FLDEFF_SMILEY_FACE_ICON
+    before it. In `menus/slotMachineLogic.ts` the state's machineBias, biasCooldown and reelStopOrder start at 0;
+    PlaySlotMachine Allocs the state without zeroing it, so on the GBA they start as whatever the heap held.
 - **Data:** Castform has no front pic (its `front.png` isn't in the decomp; it's built from per-form images).
 
 ## Deliberate QOL changes
