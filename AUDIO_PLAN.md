@@ -4,17 +4,18 @@ Every sound in the port is a no-op today: `src/gba/sound.ts` stubs the C's sound
 commands do nothing, the GBA-layer menus call the stubs, and the field, the battle and some scenes dropped
 their calls for a comment. This plan says how the GBA
 makes its sound, where the game uses it (and where game logic *waits* on it), how to bring it into the port, and
-how to split the work into batches. It is research only (batch 3 of [SIDE_PLAN.md](SIDE_PLAN.md), W-audioplan):
-no audio code merges until the user has reviewed it.
+how to split the work into batches. It was written as research (batch 3 of [SIDE_PLAN.md](SIDE_PLAN.md),
+W-audioplan); the user has reviewed it and answered its open questions ("Decisions", marked "(user)"), and batch A
+is under way.
 
 **The recommendation in one paragraph:** port the m4a engine itself (the sequencer, the channel allocator, the
 mixer and the CGB channels: `src/m4a.c`, `src/m4a_1.s`) to TypeScript and drive it from the 60 Hz tick, once per
 frame, exactly where the GBA's VBlank runs `m4aSoundMain`. The engine's logic always runs, so `IsSEPlaying`,
 `IsCryFinished`, `BGMusicStopped` and the other waits time the same with audio on or off (headless tests run it
 with the output off). Only the last step, sending each frame's mixed samples to the speakers, needs an
-AudioContext. The extractor turns the decomp's MIDI files into the song bytes `mid2agb` would build, and reads the
-voicegroups and the WAV samples straight from the decomp's sources. Pre-rendered audio files were measured and
-rejected (see section 3).
+AudioContext. The extractor builds the decomp's own `mid2agb` with the system C++ compiler, runs it on the MIDI
+files (so the song bytes are the ROM's by construction), and reads the voicegroups and the WAV samples straight
+from the decomp's sources. Pre-rendered audio files were measured and rejected (see section 3).
 
 ## What was checked
 
@@ -320,7 +321,20 @@ below removes the ones it fixes.
 | **poryaaaa** (github.com/huderlem/poryaaaa) | MIT | the decomp's sources: MIDI + voicegroups + WAVs, **no ROM** | A C re-implementation of the m4a mixer (SoundMainRAM, CGB channels, reverb) and a voicegroup loader for pokefirered. Its sequencer plays MIDI events, not mid2agb's bytes. Spiked: `cc` builds `poryaaaa_render` (5 C files); it rendered every song. Good reference code and a dev-only comparison oracle |
 | **agbplay** (github.com/ipatix/agbplay) | LGPL-3.0 | a **ROM** | The reference MP2K player (C++), exports WAV. Needs a built ROM, which needs `arm-none-eabi` + agbcc (not installed here) or the user's own dump |
 | **VGMusicStudio** (Kermalis) | LGPL-3.0 | a ROM | C#, Windows-first; same ROM problem |
-| mGBA recording | MPL-2.0 | a ROM | The ground truth for comparisons, if a ROM is at hand (open question 6) |
+| mGBA recording | MPL-2.0 | a ROM | The ground truth for comparisons: the user has a ROM (decision 13); W-ref 1 uses it |
+
+**Which decomp tools `npm run extract` builds** (decision 9): only **mid2agb**. The song pipeline's other steps:
+
+- **`.s` → bytes:** the decomp assembles mid2agb's output with `arm-none-eabi-as` (binutils from devkitARM),
+  which isn't in the decomp's `tools/` and is far too big to build during extract. mid2agb's `.s` uses a tiny
+  subset (labels, `.byte`, `.word`, `.equ` / `.set`, `.include "MPlayDef.s"`, `.global` / `.section` / `.align`),
+  so a Python assembler (~80 lines in spike 2, which assembled all 347 songs) stays.
+- **wav2agb** (decomp `tools/wav2agb`, C++): could be built the same way, but nothing needs it: the WAVs carry
+  the rate, loop and length (`agbp`, `smpl`, `agbl`) and the instruments' bytes are the PCM as is; for the cries
+  it would only produce the DPCM-compressed bytes the port doesn't need (spike 3). Not built.
+- **aif2pcm:** pokefirered has no such tool (its samples are WAVs).
+- **The voicegroup / keysplit / cry table `.inc` files** go through assembler macros (`asm/macros/music_voice.inc`);
+  no decomp tool reads them, so the Python parser stays (W-audiodata 2).
 
 ### (a) Port the m4a engine (sequencer + mixer) and run it live
 
@@ -337,9 +351,10 @@ the samples; the port runs a TypeScript port of m4a.c / m4a_1.s.
 - **CPU:** small: per frame, ≤ 15 tracks across the players, ≤ 5 PCM channels × 224 samples, 4 PSG channels.
 - **Looping:** free (GOTO in the song).
 - **Effort:** the largest code effort: ~2,500 lines of TS for the engine (m4a.c 1,781 + the ~1,900 lines of
-  assembly, much of it register shuffling) and a ~1,000-line Python mid2agb.
+  assembly, much of it register shuffling). The songs cost little: the decomp's mid2agb is built and run during
+  extract (decision 9).
 - **CLAUDE.md fit:** good: data through the extractor, constants (song ids, CRY_MODE_*, FANFARE_*) already in
-  `scripts.json`, the engine ticks in GBA frames.
+  `scripts.json`, the engine ticks in GBA frames. New setup requirement: a C++ compiler for mid2agb (README).
 
 ### (b) Pre-render songs and SEs to audio files at extract time
 
@@ -379,18 +394,19 @@ AAC; the port plays them with Web Audio buffers.
    sample arithmetic and only advances positions, which is all the waits need.
 2. **The output is a thin AudioWorklet**: each frame the main thread posts the 224-sample DirectSound block and the
    frame's PSG register state (a transferable buffer on a MessagePort; no SharedArrayBuffer, so no COOP/COEP
-   headers). The worklet upsamples the PCM (sample-and-hold, like the GBA's DMA, or linear, see open question 1),
+   headers). The worklet upsamples the PCM (sample-and-hold, like the GBA's DMA: decision 8),
    synthesizes the four PSG channels at the output rate from the registers (this is where the hardware envelope
    and the noise LFSR live), mixes and writes. A few frames of buffering absorb timer jitter; an underrun plays
    silence.
-3. **The data comes from the decomp's sources through the extractor**, in Python: a port of mid2agb (verified
-   byte-for-byte against the decomp's C++ tool by a dev script, since spike 1 shows the tool builds in seconds), the
-   voicegroups / keysplits / cry tables parsed from the `.inc` files, the WAVs read as they are (cries included).
+3. **The data comes from the decomp's sources through the extractor**: the decomp's own mid2agb, built with the
+   system C++ compiler during `npm run extract` and run with each song's `midi.cfg` flags (spike 1: it builds in
+   seconds), a small Python assembler for its `.s` output, the voicegroups / keysplits / cry tables parsed from the
+   `.inc` files in Python, the WAVs read as they are (cries included).
 4. **poryaaaa is the reference** for the mixer and PSG details (MIT: code may be adapted with its notice) and its
    renderer is a dev-only comparison tool; it is not part of `npm run extract`.
 
 Why: it is the only option where the waits in section 2 are right by construction, where every m4a call the C makes
-has a real meaning, and where nothing new is needed to extract. Its cost is engine code, which this project
+has a real meaning, and where the extractor needs only a C++ compiler on top of Python. Its cost is engine code, which this project
 writes routinely (the battle engine, the anim engine and the PPU are the same kind of port).
 
 ---
@@ -407,7 +423,8 @@ writes routinely (the battle engine, the anim engine and the PPU are the same ki
 - `src/audio/output.ts` + `src/audio/worklet.ts`: the AudioContext, the worklet, resume on input, visibility.
 - `src/gba/sound.ts`: becomes the port of sound.c (every function in it, with the C's names; the stubs' callers
   keep compiling). It is the one API the game calls.
-- `tools/extract_audio.py` → `public/gen/audio/`: `songs.json` (per song: name, id, player, priority, reverb,
+- `tools/extract_audio.py` (songs: builds and runs mid2agb, assembles) and `tools/extract_audio_voices.py`
+  (voicegroups, samples) → `public/gen/audio/`: `songs.json` (per song: name, id, player, priority, reverb,
   voicegroup, track offsets; the bytes base64 or in `songs.bin`), `voicegroups.json` (voices with their type
   byte, key, pan / length, ADSR, sample or CGB parameters, keysplit table; references as names), `samples.json`
   (per sample: rate × 1024, loop flag, loop start, size, offset) + `samples.bin` (int8 PCM), `waves.json` (the 11
@@ -436,6 +453,8 @@ first (decision 5).
 - **Tab hidden:** Phaser stops the frame loop, so no frames reach the worklet: suspend the context on
   `visibilitychange` and resume when visible, so it doesn't buzz on an underrun.
 - **`?speed=` > 1 and headless:** output off (the engine still runs). A `?audio=0/1` dev flag forces it.
+- **`battle-test.html`** gets audio too (decision 12): its boot loads the audio data, BattleScene's frame runs
+  the sound hook, and the output starts on the first key press as in the game.
 - **Phaser's sound system:** not used (it plays decoded buffers; it has no synth). Set `audio: { noAudio: true }`
   in `main.ts` so Phaser doesn't open a second AudioContext.
 - **Options:** SOUND (`state.optionsSound`, saved since save version 3, `state/saveData.ts:94`) calls
@@ -444,15 +463,20 @@ first (decision 5).
 - **Save state:** `gSaveBlock1Ptr->savedMusic` (global.h:767) must be saved: it holds MUS_CYCLING on the bike and
   `savebgm` songs, and CONTINUE plays it (`Overworld_PlaySpecialMapMusic`). One field and a save version bump.
   Nothing else in the audio state is saved (the GBA saves no player state).
-- **Volume:** the GBA has none. A master volume / mute is a deliberate QOL change if wanted (open question 3).
+- **Volume:** the GBA has none. **M toggles all output on and off** (decision 10): a deliberate QOL change,
+  logged in docs/DEVIATIONS.md "Deliberate QOL changes" by the unit that adds it (W-out 1). M is free: the game
+  uses Z, Space, X, Enter, Backspace, A, S and the arrows, and the dev HUD uses the backtick. It mutes the output
+  only (the engine runs on, so nothing times differently); the choice is remembered in `localStorage` (not in the
+  save), and the battle test panel's text fields keep their own key presses.
 
 ---
 
 ## 5. Testing
 
-- **Unit (Vitest, Node):** the Python side is checked by the extractor run itself plus a dev script
-  (`tools/check_mid2agb.py`, not part of `npm test`) that builds the decomp's mid2agb with `c++` into a temp
-  directory and compares every song's bytes; the TS side: the sequencer on the extracted songs (lengths in frames
+- **Unit (Vitest, Node):** the song bytes are mid2agb's own output, so no differential check is needed; the
+  extractor fails loudly on any song that doesn't assemble, and a unit test on `songs.json` checks the song and
+  music player tables (347 songs, their players and priorities, every track offset inside its song, every song
+  ending in FINE or a GOTO); the TS side: the sequencer on the extracted songs (lengths in frames
   of the fanfares and a set of SEs pinned in a table, e.g. SE_SELECT 10, MUS_LEVEL_UP 63, from the spike's model and
   then from the engine), MPlayStart's priority rule, pause / continue, FadeOutBody's 16 × speed frames, the cry
   modes' channel lifetimes, keysplit voice resolution, the mixer's output for a single note against a hand-computed
@@ -465,13 +489,14 @@ first (decision 5).
   ball's MUS_OBTAIN_ITEM holds the message 160 frames and the BGM resumes; `waitse` holds a script until the SE
   ends; a trainer's encounter music, the battle music, the victory music; a wild battle's encounter cry holds the
   intro; bike music on and off, saved and continued; surf music.
-- **Existing tests:** once the engine is in, every wait in section 2 gets longer (warps, cries, SE waits). E2E
-  tests wait on state, not time (tests/README.md rule 3), so they should pass, but each unit runs the full suite
-  once to catch hard-coded tick budgets.
+- **Existing tests:** once the engine is in, every wait in section 2 gets longer (warps, cries, SE waits): the
+  GBA's timing, which the user wants (decision 11). E2E tests wait on state, not time (tests/README.md rule 3), so
+  they should pass, but each unit that lengthens a wait runs the full suite once and raises the tick budgets that
+  were sized for the instant waits (in the same PR, saying which and why).
 - **Against the GBA:** (1) poryaaaa_render as a dev-only oracle: render a song from the decomp sources, render the
   same song with the port's engine in Node, compare loudness envelopes and note onsets (not bit-exact: poryaaaa
-  plays MIDI, not mid2agb's bytes). (2) If the user has a ROM or builds one, mGBA's audio recording is the ground
-  truth for a few listening checks and for cry timings (open question 6). (3) The fanfare / SE length table
+  plays MIDI, not mid2agb's bytes). (2) The user's ROM in mGBA is the ground truth for a few listening checks and
+  for cry / SE / song timings: W-ref 1 (decision 13). (3) The fanfare / SE length table
   doubles as a regression check.
 
 ---
@@ -484,25 +509,30 @@ plus tests and docs), each leaving the branch green. One PR per unit (SIDE_PLAN.
 "asm" lines count for a third. The JSON shapes in section 4 are fixed here, so the engine and the extractor start
 in parallel: the engine's first unit tests on hand-written song bytes.
 
-### W-audiodata: the extractor (owns `tools/extract_audio.py`, `public/gen/audio/`, `tools/check_mid2agb.py`)
+The user's answer on mid2agb (decision 9: build the decomp's tool instead of porting it) shrank W-audiodata from
+three units to two (the Python mid2agb port and its byte-for-byte differential script are gone), and the old
+W-m4a 3 is split in two (W-m4a 3, the mixer; W-out 1, the browser output), so batch B has three workers.
 
-1. **Songs I: mid2agb without compression.** midi.cpp's reader and event conversion (ReadMidiFileHeader ...
-   ConvertTimes, midi.cpp:1-650), main.cpp's options (233), tables.cpp (286, mostly data), agb.cpp's writer for
-   the plain path (PrintAgbHeader, PrintWait / PrintOp / PrintNote / PrintEndOfTieOp / PrintControllerOp /
-   PrintAgbTrack / PrintAgbFooter, ~400 of 547); ~1,350 lines of C++. Writes mid2agb's `.s` text (so the check is
-   a text diff). `tools/check_mid2agb.py` builds the decomp's mid2agb with `c++` in a temp directory and diffs
-   every song against `mid2agb -N` (the tool's own no-compression flag), so this unit can be byte-checked
-   before compression exists. Done when all 347 match under `-N`.
-2. **Songs II: compression, the rest of the flags, the bytes.** CalculateWaits and the PATT compression
-   (CalculateCompressionScore, IsCompressionMatch, CompressWholeNote, Compress: midi.cpp:759-915, ~160), the
-   memacc / extended ops (agb.cpp:254-349, ~95), the loop labels, then an assembler for the `.s` text with
-   MPlayDef.s's symbols (the spike's took ~80 lines of Python) → `songs.json` with the song table and music player
-   table. Done when all 347 match the real flags; wired into `npm run extract`.
-3. **Voicegroups and samples.** `voice_groups.inc` (8,073 lines of data) through the `music_voice.inc` macros
+### W-audiodata: the extractor (owns `tools/extract_audio.py`, `tools/extract_audio_voices.py`, `public/gen/audio/`)
+
+1. **Songs: build and run mid2agb, assemble.** `tools/extract_audio.py`: build the decomp's `tools/mid2agb`
+   (agb.cpp, error.cpp, main.cpp, midi.cpp, tables.cpp) with `$CXX` (default `c++`) and the Makefile's flags minus
+   `-Werror` (so a newer compiler's new warnings don't break the build) into `tools/.bin/mid2agb` (gitignored),
+   compiling straight from the decomp's sources so nothing is written into the decomp's tree; rebuild only when a
+   source is newer than the binary. No compiler: fail with a clear message (what's missing, how to install it:
+   `xcode-select --install` on macOS, `g++` / `build-essential` on Linux; `CXX=` to pick one). Run it on every
+   `sound/songs/midi/*.mid` named in `midi.cfg` with its flags (MID_RULE in `audio_rules.mk`), writing the `.s`
+   files to a temporary directory (deleted afterwards: only `public/gen/audio/` keeps anything), then a Python
+   assembler for the `.s` text with `sound/MPlayDef.s`'s symbols (the spike's took ~80 lines) → `songs.json`
+   with `sound/song_table.inc` and `sound/music_player_table.inc`. Wired into `npm run extract` (one line in
+   `tools/extract.py`), README's setup section names the new requirement, `.gitignore` gets `tools/.bin/`. Unit
+   test on `songs.json` (section 5). Small: probably done well inside the hour.
+2. **Voicegroups and samples.** `tools/extract_audio_voices.py`: `voice_groups.inc` (8,073 lines of data) through the `music_voice.inc` macros
    (~160 lines: every voice type in section 1), `keysplit_tables.inc` (393, with the label offsets),
    `direct_sound_data.inc` → the WAVs (`smpl`, `agbp`, `agbl`), `programmable_wave_data.inc`, `cry_tables.inc`
-   → `voicegroups.json`, `samples.json`, `samples.bin`, `waves.json`. Unit test: every song's voicegroup
-   resolves, every voice's sample exists.
+   → `voicegroups.json`, `samples.json`, `samples.bin`, `waves.json`; wired into `npm run extract` with its own
+   line in `tools/extract.py` (W-audiodata 1 adds the other: the merger keeps both). Unit test: every voice's
+   sample exists, every keysplit resolves, and (once both units are on master) every song's voicegroup resolves.
 
 ### W-m4a: the engine (owns `src/audio/`)
 
@@ -512,31 +542,45 @@ in parallel: the engine's first unit tests on hand-written song bytes.
    (~80), the m4aMPlay* controls (~330), m4aSoundInit / SoundInit / m4aSoundMode / SampleFreqSet (~170),
    `m4aSoundMain` (the player chain in its newest-first order); ~1,060 lines of C plus ~710 of asm. Notes only
    set gate times here (no channels). Unit tests: tempo and tick counts, MPlayStart's priority rule, pause /
-   continue, fades (16 × speed frames), on hand-written bytes, then on `songs.json` once W-audiodata 2 lands.
+   continue, fades (16 × speed frames), on hand-written bytes, then on `songs.json` once W-audiodata 1 lands.
 2. **Notes, channels and cries (silent).** ply_note (280 asm: voice lookup through keysplit and rhythm voices,
    PCM channel allocation and stealing, CGB channel claim), ply_endtie (41 asm), ChnVolSetAsm (30 asm),
    MidiKeyToFreq (21), Clear/RealClearChain (34), the per-frame half of SoundMainRAM that isn't mixing (the
    envelope state machine, the sample position, loop and end: ~200 of its 381 asm lines, plus the reverse start
    from SoundMainRAM_Unk1), the cry song (SetPokemonCryTone and its setters, IsPokemonCryPlaying, the template:
-   ~130); ~190 lines of C plus ~600 of asm. Needs W-audiodata 3's voicegroups. Unit tests: channel lifetimes,
+   ~130); ~190 lines of C plus ~600 of asm. Needs W-audiodata 2's voicegroups. Unit tests: channel lifetimes,
    the cry table in section 2 (pin the real numbers), channel stealing between BGM and an SE.
-3. **The mixer and the output (first audible).** SoundMainRAM's mixing (resampling, ADSR applied, reverb, master
-   volume, mono: the other ~180 asm lines), SoundMainRAM_Unk1's mixing loop (201 asm; DPCM isn't needed, spike 3),
-   `output.ts` and the worklet's PCM path, autoplay resume, visibility, the `?audio=` flag, Phaser `noAudio`.
-   ~380 asm plus new web code. Songs play without their PSG parts.
+3. **The mixer (first audible).** SoundMainRAM's mixing (resampling, ADSR applied, reverb, master volume, mono:
+   the other ~180 asm lines), SoundMainRAM_Unk1's mixing loop (201 asm; DPCM isn't needed, spike 3), handing each
+   frame's 224-sample block to W-out 1's `output.ts`. ~380 asm. Unit tests: a single note's block against a
+   hand-computed one, reverb, mono. Songs play without their PSG parts.
 4. **The CGB channels.** CgbSound (309), MidiKeyToCgbFreq (47), CgbOscOff / CgbPan / CgbModVol (68),
    MPlayExtender (71) as per-frame register state, and the worklet's PSG synth (squares with duty and sweep,
    the wave channel, noise with both LFSR widths, the hardware envelope, pan: new code, poryaaaa's
    `m4a_channel.c` as the reference). ~500 lines of C plus ~300 new. Music is complete after this.
+
+### W-out: the browser output (owns `src/audio/output.ts`, `src/audio/worklet.ts`)
+
+1. **Output, autoplay and the mute key.** `output.ts` and the worklet's PCM path (decision 3: the main thread
+   posts each frame's 224-sample 8-bit stereo block on a MessagePort; the worklet upsamples by sample-and-hold
+   from 13,379 Hz (decision 8) and plays, with 3-4 frames of buffering and silence on an underrun), the
+   AudioContext created suspended at boot and resumed on the first keydown / pointerdown, suspended while the tab
+   is hidden, off headless and for `?speed=` > 1, the `?audio=0/1` flag, Phaser's `noAudio`, the mute key M
+   (decision 10; its DEVIATIONS entry), the same in `battle-test.html` (decision 12). The interface the mixer
+   calls (`pushFrame(...)`) is fixed here; until W-m4a 3 lands nothing calls it, so a dev-only test tone
+   (`?audio=tone`, or a `__test` hook) proves the path. The PSG state the worklet will synthesize is W-m4a 4's.
+   Mostly new web code (~300-400 lines); no wait changes, so its own e2e checks plus the boot ones.
 
 ### W-sound: sound.c, map music and the call sites (owns `gba/sound.ts`, the audio script commands, the call-site files of each unit)
 
 1. **sound.c and the hooks.** sound.c without the cries (~450 of its 649 lines: map music state machine,
    fanfares with Task_Fanfare / WaitFanfare, PlaySE*, Is*Playing, the BGM helpers), `AgbMainFrameEnd` in both
    hosts with the fanfare task (decision 5), the script commands playse ... waitfanfare (scrcmd.c:883-990),
-   `__test.audioEvents` / `__test.audio()`, eggHatch's local fanfare counter removed. E2E
+   `__test.audioEvents` / `__test.audio()`, eggHatch's local fanfare counter removed, the audio data loaded by
+   BootScene and battle-test's BattleTestBoot, the frame hook in BattleScene's host too (decision 12). E2E
    `tests/e2e/audio.test.ts`: an item fanfare holds its message 160 frames, `waitse` holds a script. Needs
-   W-m4a 1 and W-audiodata 2 (the songs), not the mixer: the waits are right before anything is heard.
+   W-m4a 1 and W-audiodata 1 (the songs), not the mixer: the waits are right before anything is heard. Lengthens
+   waits: runs the full e2e suite and raises the tick budgets that need it.
 2. **Cries, text codes and specials.** sound.c's cries (sound.c:344-537, 194 lines: PlayCry_*, PlayCryInternal's
    mode table, the ducking task, IsCryFinished and the rest), SpeciesToCryId, `playmoncry` / `waitmoncry`
    (scrcmd.c:2088-2101), the text printer's SE_SELECT on A/B and its PLAY_BGM / PLAY_SE / WAIT_SE /
@@ -576,12 +620,13 @@ A): they need no unit, only a listen once sound.ts is real. Units 4-7 own disjoi
 
 | Batch | Workers (≤ 4) | Each needs merged |
 | --- | --- | --- |
-| A | W-audiodata 1, W-audiodata 3, W-m4a 1 | nothing |
-| B | W-audiodata 2, W-m4a 2, then W-sound 1 | W-audiodata 2: W-audiodata 1. W-m4a 2: W-m4a 1 + W-audiodata 3. W-sound 1: W-m4a 1 + W-audiodata 2 (its e2e times real SEs and fanfares, so it starts once W-audiodata 2 merges) |
-| C | W-m4a 3, W-sound 2, W-sound 3, W-sound 4 | W-m4a 3: W-m4a 2. W-sound 2: W-sound 1 + W-m4a 2. W-sound 3 and 4: W-sound 1 |
+| A | W-audiodata 1, W-audiodata 2, W-m4a 1 | nothing |
+| B | W-m4a 2, W-sound 1, W-out 1 | W-m4a 2: W-m4a 1 + W-audiodata 2. W-sound 1: W-m4a 1 + W-audiodata 1 (its e2e times real SEs and fanfares). W-out 1: nothing (it could run in A; it waits for B to keep A to three workers) |
+| C | W-m4a 3, W-sound 2, W-sound 3, W-sound 4 | W-m4a 3: W-m4a 2 + W-out 1. W-sound 2: W-sound 1 + W-m4a 2. W-sound 3 and 4: W-sound 1 |
 | D | W-m4a 4, W-sound 5, W-sound 6, W-sound 7 | W-m4a 4: W-m4a 3. W-sound 5-7: W-sound 2 (cries) |
+| later | W-ref 1 | W-m4a 4 and W-sound 2 (it compares the engine's numbers with the ROM's) |
 
-Fourteen units in four batches. Fanfare and `waitse` waits become GBA-accurate in batch B (W-sound 1), cry and
+Fourteen units in four batches, plus W-ref 1. Fanfare and `waitse` waits become GBA-accurate in batch B (W-sound 1), cry and
 warp (BGM fade) waits in batch C (W-sound 2 and 3); the first sound is heard in batch C (W-m4a 3). Every
 W-sound unit only needs `__test.audioEvents` for its tests, not audible output, which is why the call-site units
 don't wait for W-m4a 3-4.
@@ -591,6 +636,10 @@ don't wait for W-m4a 3-4.
 - The JSON shapes in section 4: fixed here; W-audiodata owns any change and says so in its PR.
 - `gba/sound.ts` (the API): W-sound 1 (cries: W-sound 2). Until they merge, other units call the existing stubs.
 - `AgbMainFrameEnd` in `OverworldScene.ts` / `GbaHostScene.ts`: W-sound 1 (two lines each).
+- `tools/extract.py`: one line each for W-audiodata 1 and 2. `.gitignore` (`tools/.bin/`) and README's setup
+  section: W-audiodata 1.
+- `src/main.ts` (Phaser `noAudio`), `src/battleTest.ts`'s output, `input/Input.ts` (the first-key resume, the
+  mute key): W-out 1. `battleTest.ts`'s data loading: W-sound 1.
 - `state/saveData.ts` (savedMusic, version bump): W-sound 3.
 - `script/ScriptEngine.ts` audio commands: W-sound 1 (`playmoncry` / `waitmoncry`: W-sound 2); `opendoor`'s SE:
   W-sound 4. `script/specials.ts` NO_OP list: W-sound 2.
@@ -600,21 +649,45 @@ don't wait for W-m4a 3-4.
   sound.ts directly.
 - Per-file call sites: appendix A names each file's unit.
 
+### W-ref: reference recordings from the user's ROM (later)
+
+1. **mGBA recordings against the engine.** Input: the ROM path, which the user gave as
+   `/Users/joshua/Coding/PokemonProjects/pret/PokemonFireRed.gba` (outside both git repos). Its SHA-1
+   `dd5945db9b930750cb39d00c84da8571feebf417` matches the decomp's `firered_rev1.sha1`: it is **FireRed rev 1
+   (1.1)**, while the decomp builds rev 0 by default. Before using a recording as a reference, check that the audio
+   data doesn't differ between the revisions: a grep at `037335f4c` finds no `REVISION` guard in `sound/`,
+   `src/m4a*.c`, `src/sound.c` or `include/gba/m4a_internal.h` (main.c's are only VCOUNT bookkeeping around
+   `m4aSoundMain`), but the unit confirms it on the data, e.g. by finding `songs.json`'s song bytes and the
+   voicegroups in the ROM (found at some offset = identical; a read only, nothing kept). Where recordings help:
+   - **Cry lengths:** `IsPokemonCryPlaying`'s frames for a few species in each mode (section 2's table), the
+     engine's unit-test numbers checked against them.
+   - **SE and fanfare lengths:** SE_SELECT, SE_DOOR, SE_SAVE, SE_EXP, MUS_LEVEL_UP, MUS_OBTAIN_ITEM,
+     MUS_POKE_FLUTE's silent tail (IsSEPlaying through it), against the sequencer's.
+   - **Song lengths:** intro and loop length in frames for a few BGMs.
+   - **A listening comparison:** the same scene recorded from mGBA and from the port, for the user to listen to
+     (PSG timbre, reverb, the mono mix).
+   How: mGBA's Lua scripting (0.10+) can poke memory (to start a song or cry) and read the players' state per frame; recordings and any
+   data read from the ROM stay in a scratch directory outside the repo. **The ROM and anything ripped from it
+   never go into the repo or `public/gen`**, and the path above is recorded only here. Only numbers derived from
+   recordings may go into tests, and only if the user agrees (open question 1).
+
 ### Rules
 
 Worker and merger rules: docs/WORKFLOW.md sections 3 and 4. On top of that: **game logic must time the same with
 the output on or off** (any branch on "is audio on" outside `audio/output.ts` is a bug); e2e tests run with the
-output off; every unit that makes a wait longer runs the full e2e suite once.
+output off; **every unit that makes a wait longer runs the full e2e suite once** and raises the tick budgets that
+were sized for today's instant waits (GBA timing is the goal: decision 11).
 
 ### Risks
 
 - **Longer waits break tests or feel slow:** warps gain 32-64 frames when the music changes, cries hold battle
-  intros, `waitse` holds scripts. This is the GBA's timing; tests that budget ticks may need more.
-- **mid2agb's port is subtle** (running status, PATT compression, rounding of volumes): the C++ tool as a
-  differential check makes this safe, but the first unit may run long.
+  intros, `waitse` holds scripts. This is the GBA's timing (decision 11); tests that budget ticks get more.
+- **A new setup requirement:** `npm run extract` needs a C++ compiler for mid2agb. The tool is small, portable
+  C++11 and builds with Apple clang; dropping `-Werror` keeps a newer compiler's warnings from failing the build.
 - **m4a_1.s is assembly:** the mixer and ply_note need careful reading; poryaaaa (MIT, C) has worked through the
   same code and is a second reading.
-- **PSG fidelity:** the hardware envelope and the noise channel are emulation, not C; expect a listening pass.
+- **PSG fidelity:** the hardware envelope and the noise channel are emulation, not C; expect a listening pass
+  (W-ref 1 gives the reference).
 - **Frame jitter:** the worklet's buffer (3-4 frames) trades latency for no crackle. A long main-thread stall
   (a map load) will drop audio for its length, as a lagging GBA game does.
 - **Determinism:** the engine must not read anything from the AudioContext (time, state), or headless and
@@ -622,19 +695,9 @@ output off; every unit that makes a wait longer runs the full e2e suite once.
 
 ### Open questions for the user
 
-1. **How GBA-exact should it sound?** Exact (13,379 Hz 8-bit mix, sample-and-hold upsampling: the GBA's grit)
-   or a cleaned-up mix (linear interpolation, poryaaaa's optional analog filter)? The plan builds exact and can
-   add a filter later.
-2. **mid2agb in Python vs the decomp's own tool:** the plan ports it to Python so `npm run extract` keeps needing
-   only Python + Pillow. The alternative is building the decomp's mid2agb with the system C++ compiler during
-   extract: byte-exact for free, but a new setup requirement.
-3. **A volume / mute control** (not on the GBA): a key, a field in OPTIONS, or none? If any, it goes in
-   DEVIATIONS' "Deliberate QOL changes".
-4. **Timing changes:** OK that warps, battle intros and scripted scenes get as long as on the GBA once the engine
-   lands (before anything is audible)?
-5. **The battle test harness** (`battle-test.html`): audio there too?
-6. **A ROM for comparisons:** if you have a FireRed ROM, mGBA recordings would let unit tests pin cry lengths and
-   SE lengths to the real thing; otherwise poryaaaa and the decomp's C are the references.
+1. **Numbers from the ROM recordings in tests:** W-ref 1 measures cry / SE / song lengths on the user's ROM in
+   mGBA. May those numbers (frame counts only, nothing ripped) go into the unit tests? Until then, the tests pin
+   the engine's own numbers and the recordings are only compared in the unit's report.
 
 ## Decisions
 
@@ -653,6 +716,29 @@ output off; every unit that makes a wait longer runs the full e2e suite once.
 6. **sound.c's state machines land before anything is audible** (W-sound 1 on W-m4a 1)
    (coordinator, revisit if you disagree): fanfare waits are frame counters, so they can be right first.
 7. **Phaser's sound manager off** (`noAudio`) (coordinator, revisit if you disagree).
+8. **GBA-exact first** (user): the 13,379 Hz 8-bit mix with sample-and-hold upsampling, the GBA's grit. An
+   optional smoothing filter (linear interpolation, an analog-style low-pass) can come later as a deliberate QOL
+   option.
+9. **Build the decomp's own mid2agb during `npm run extract`** (user) instead of porting it to Python: the song
+   bytes are the ROM's by construction, and the Python port and its differential check go away (W-audiodata 1).
+   Built with the system C++ compiler into the gitignored `tools/.bin/`; extract fails with a clear message
+   without one; the `.s` files go to a temporary directory and only `public/gen/audio/` keeps anything; nothing
+   is committed. The other decomp tools aren't built (section 3, "Which decomp tools `npm run extract` builds").
+   README's setup section names the compiler requirement. How it is built (coordinator, revisit if you
+   disagree): `$CXX` straight from the decomp's sources with the Makefile's flags minus `-Werror`, not `make` in
+   the decomp's tree, so the decomp checkout stays untouched.
+10. **A mute key** (user): one key toggles all output. **M** (coordinator, revisit if you disagree): no game
+    binding or dev key uses it. Remembered in `localStorage` (coordinator, revisit if you disagree). Logged in
+    docs/DEVIATIONS.md "Deliberate QOL changes" when it lands (W-out 1).
+11. **GBA timing** (user): warps, battle intros and scenes get as long as on the GBA; tests that budget ticks are
+    updated (Rules).
+12. **`battle-test.html` gets audio too** (user): W-out 1 (output) and W-sound 1 (data, frame hook).
+13. **mGBA reference recordings from the user's ROM** (user): a later unit, W-ref 1, with the ROM path as input.
+    The ROM and anything ripped from it never go into the repo or `public/gen`; numbers in tests only with the
+    user's agreement (open question 1).
+14. **W-audiodata re-split, W-out split off** (coordinator, revisit if you disagree): with mid2agb built, songs are
+    one small unit and voicegroups another, both in batch A; the browser output (W-out 1) is split from the
+    mixer so batch B runs three workers and W-m4a 3 is only the mixer.
 
 ## Not in this plan
 
