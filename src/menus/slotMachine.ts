@@ -709,6 +709,9 @@ function SetMainTask(taskFunc: TaskFunc): void {
 
 /** Task_SpinReels: the logic's spin step, then the icons follow it. */
 function Task_SpinReels(_taskId: number): void {
+  // MainTask_ExitSlots frees the screen inside the same RunTasks, and this task (priority 1) still runs after it: on
+  // the GBA, UpdateReelIconSprites then reads through the NULL sSlotMachineGfxManager (harmlessly). Not here.
+  if (!sSlotMachineGfxManager) return;
   SpinReels();
   UpdateReelIconSprites(sSlotMachineState.reelPositions, sSlotMachineState.reelSubpixel);
 }
@@ -1128,7 +1131,7 @@ function SlotsTask_ShowHelp(t: SetupTask, ptr: SlotMachineSetupTaskData): boolea
         t.state++;
       }
       ChangeBgX(1, 256 * (256 - ptr.bg1X), 0);
-      SetGpuReg(REG_OFFSET_WIN0H, WIN_RANGE(0, ptr.bg1X & 0xff)); // (u8: 256 is 0, X2 > 240 there anyway)
+      SetGpuReg(REG_OFFSET_WIN0H, (0 << 8) | ptr.bg1X); // WIN_RANGE(0, bg1X): 256 makes it 0x100, X1 1 > X2 0, so X2 = 240
       break;
     case 2:
       return false;
@@ -1150,7 +1153,7 @@ function SlotsTask_HideHelp(t: SetupTask, ptr: SlotMachineSetupTaskData): boolea
         t.state++;
       }
       ChangeBgX(1, 256 * (256 - ptr.bg1X), 0);
-      SetGpuReg(REG_OFFSET_WIN0H, WIN_RANGE(0, ptr.bg1X & 0xff));
+      SetGpuReg(REG_OFFSET_WIN0H, (0 << 8) | ptr.bg1X);
       break;
     case 2:
       HideBg(1);
