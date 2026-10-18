@@ -2737,3 +2737,29 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   three times; titleScreen + newGame e2e (7). battle-test.html by hand with tools/browser-test.mjs
   (`?audio=tone`: suspended → running on a key, the tone's peak 0.3125, M ignored in the panel's input, muted
   outside it).
+### W-m4a 2: notes, channels and cries (silent) (AUDIO_PLAN.md batch B)
+
+- `src/audio/m4a.ts`: ply_note from `_081DDB46` on (the voice through keysplit and rhythm voices, the priority,
+  DirectSound channel allocation and stealing, the CGB channel claim, the channel set-up), ChnVolSetAsm,
+  ChnVolPitUpdate (MPlayMain's per-channel volume / pitch), umul3232H32, MidiKeyToFreq, MPlayExtender's gCgbChans,
+  the cry song (gPokemonCrySong, SetPokemonCryTone, the SetPokemonCry* setters incl. Stereo, IsPokemonCryPlaying)
+  and `setVoiceData(voicegroups, samples, waves, pcm?)` / `setSamplePcm(pcm)`, which bind the extracted voice data
+  (songs' SongHeader.tone, gCryTable / gCryTable_Reverse). New `m4aMixer.ts` (SoundMainRAM's bookkeeping: the
+  DirectSound envelope state machine, the sample position, loop and end, SoundMainRAM_Unk1's reverse start),
+  `m4aCgb.ts` (CgbSound as a lifetime placeholder for W-m4a 4), `m4aVoices.ts` (JSON → ToneData / WaveData);
+  gScaleTable, gFreqTable and gPokemonCrySongTemplate in `m4aTables.ts`; the full SoundChannel / CgbChannel /
+  WaveData / PokemonCrySong structs in `m4aInternal.ts`. Still silent and not wired into the game.
+- Found on the way: ply_note breaks priority ties by comparing track *pointers* (`chan.track >= track`), so the
+  tracks' IWRAM order matters: gMPlayTrack_BGM < _SE1 < _SE2 < _SE3 (.bss) < gPokemonCryTracks (COMMON). A
+  playing channel of the same priority is only stolen by a track at the same or a higher address, and once a
+  released channel is seen no playing channel is a candidate. ply_note copies the track's gate time, key and
+  velocity to the channel as one word (so midiKey is set there). A cry's sample advances 175.9993 samples a frame
+  at key 60 (divFreq 627 × 10,512 / 2^23 × 224), not 176. A compressed voice (the cries) relies on its sample's
+  WaveData.type being non-zero (SoundMainRAM_Unk1 plays nothing otherwise), so the port marks the `Cry_*` samples
+  as compressed although their PCM is decoded. IsPokemonCryPlaying's lifetimes for AUDIO_PLAN.md section 2's
+  species and modes equal its hand estimates in every cell (Pidgey 12 / 12 / 14 / 11 / 12 ... Jynx 135 / 129 /
+  141 / 51 / 21 for NORMAL / ENCOUNTER / FAINT / HIGH_PITCH / DOUBLES).
+- Verified: typecheck; `npm test` (34 files, 400 tests; tests/unit/m4aChannels.test.ts 33: hand-built envelopes,
+  sample ends and loops, FIX / reverse voices, stealing, the CGB claim, keysplit / rhythm, the cry song; on the
+  extracted data: setVoiceData, voicegroup000's keysplit / rhythm voices, no song reaching a null keysplit entry,
+  the cry table, a cry stealing from MUS_PALLET); `tests/e2e/titleScreen.test.ts` (6) as the boot check.

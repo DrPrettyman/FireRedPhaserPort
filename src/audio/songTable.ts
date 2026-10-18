@@ -70,7 +70,7 @@ export function loadSongTable(json: SongsJson): SongTable {
       priority: s.priority,
       reverb: s.reverb,
       voicegroup: s.voicegroup,
-      tone: null, // W-m4a 2: the voicegroup, once voicegroups.json is loaded
+      tone: null, // the voicegroup: setSongTable sets it once setVoiceData has run
       part: s.tracks,
       data: decodeBase64(s.data),
     };
