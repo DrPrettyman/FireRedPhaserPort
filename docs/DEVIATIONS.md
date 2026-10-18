@@ -149,8 +149,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
     GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
   - Field steps: eggs count down egg cycles and the daycare mons count their steps (world/daycare.ts), but the
-    Four Island daycare's breeding (TriggerPendingDaycareEgg, eggs) and the hatching scene (`special EggHatch`)
-    aren't ported.
+    Four Island daycare's breeding (TriggerPendingDaycareEgg, eggs) isn't ported.
+  - Egg hatching (menus/eggHatch.ts): no audio (the cry, SE_BALL / SE_EGG_HATCH, MUS_EVOLUTION, the MUS_EVOLVED
+    fanfare). "X hatched from the EGG!" still waits the fanfare's 220 frames (sFanfares) with a local counter, as
+    gba/sound.ts's IsFanfareTaskInactive is always true and the nickname prompt would replace it at once. The C
+    loads five palettes from gTradeGba2_Pal, two of them past the file's end (ROM that follows); the port loads
+    the file's three (the shadow tilemap uses none of the other two). BG palette 15 (the YES/NO's text) is loaded
+    with the field's message box palette, which the GBA field leaves there. The mon sprite buffers are freed on
+    the NO path too (the C leaks them). The hatched mon's language, met game and fateful-encounter bit aren't
+    modelled.
   - Daycare (world/daycare.ts): mail isn't modelled, so a mon left holding mail doesn't have it moved into
     struct DayCareMail (StorePokemonInDaycare's MonHasMail branch) and back.
   - Safari Zone: the entrance's SE/fanfare are silent.

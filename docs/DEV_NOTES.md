@@ -179,6 +179,17 @@ this is the next level down. When you add or change a subsystem, update its entr
   (the Four Island specials) go into the same two files. Tests: tests/unit/daycare.test.ts,
   tests/e2e/daycare.test.ts (`?start=after-rival&map=Route5_PokemonDayCare&x=4&y=5`, face up; set
   `t.state.route5DayCareMon.steps` to skip the walking).
+- **Egg hatching:** `menus/eggHatch.ts` is daycare.c's hatching half. ShouldEggHatch (world/daycare.ts) leaves the
+  egg's slot in VAR_0x8004; OverworldScene counts GAME_STAT_HATCHED_EGGS and runs EventScript_EggHatch, whose
+  `special EggHatch` (EGG_HATCH_SPECIALS, spread into SPECIALS) fades out and `runScreenFromScript(StartEggHatch,
+  eggHatchGfxSymbols(...))`: CB2_EggHatch_0 (the battle textbox, the trade shadow on BG1, the egg and shard sheets,
+  AddHatchedMonToParty, the mon pic through gMonSpritesGfxPtr's position 1), CB2_EggHatch_1 (states 0-12: wobbles
+  SpriteCB_Egg_0..5, 19 shards, the white flash, the message, the nickname YES/NO → DoNamingScreen →
+  EggHatchSetMonNickname), back through CB2_ReturnToField. AddHatchedMonToParty / ScriptHatchMon take the
+  GameState and need no screen (unit tests). Probe `__test.eggHatch()` (CB2_state, the egg's anim and
+  visibility, the mon's, shards on screen / made). Test hook: a `MonSpec` with `egg: <cycles left>` is made as
+  CreateEgg would (isEgg, friendship = cycles); set `t.state.daycare.stepCounter = 254` so the next step counts
+  the cycle. Tests: tests/unit/eggHatch.test.ts, tests/e2e/eggHatch.test.ts.
 - **Multichoice / elevators:** `ui/MultichoiceMenu.ts` (vertical list and grid, field windows); the script engine
   sets VAR_RESULT from `ScriptHost.openMultichoice`. `text/stringWidth.ts` is GetStringWidth for any font set
   (the field's or the GBA layer's). Specials can start field tasks that outlive them (`ScriptHost.startFieldTask`,

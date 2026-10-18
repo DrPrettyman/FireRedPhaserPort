@@ -2202,3 +2202,28 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   levels with Quick Attack and Hyper Fang learned, not enough money first; a one-mon party refused and B in the
   party menu; save and CONTINUE keeps the mon and its steps), saveContinue, wildBattle; a screenshot of the
   daycare party menu's STORE / SUMMARY / CANCEL.
+
+### Egg hatching (W-daycare unit 4, as W-hatch)
+
+- `menus/eggHatch.ts` (new): daycare.c's EggHatch / Task_EggHatch (the special: fade, then
+  `runScreenFromScript`), CB2_EggHatch_0 / CB2_EggHatch_1 with EggHatchCreateMonSprite, SpriteCB_Egg_0..5,
+  CreateRandomEggShardSprite / SpriteCB_EggShard (sEggShardVelocities), Task_EggHatchPlayBGM (silent),
+  EggHatchPrintMessage, EggHatchSetMonNickname; CreatedHatchedMon / AddHatchedMonToParty (level 5, the egg's
+  personality / IVs / moves / markings / Pokérus, friendship 120, species name, Poké Ball, met level 0 at the
+  current map section, Pokédex seen + caught, PP restored) and ScriptHatchMon. EGG_HATCH_SPECIALS spread into
+  SPECIALS; EggHatch is off scriptCoverageGaps.ts.
+- OverworldScene: IncrementGameStat(GAME_STAT_HATCHED_EGGS) before EventScript_EggHatch, as
+  TryStartStepCountScript does (game stats are kept now).
+- Graphics: the egg sheets and palette were already extracted (graphics/misc/, graphics/pokemon/); the shadow
+  (gTradeGba_Gfx, gTradeGba2_Pal, gTradeOrHatchMonShadowTilemap) comes with W-trade's `graphics/trade/` prefix.
+- Found on the way: BG palette 15 is the YES/NO's text palette and the scene never loads it (the GBA field leaves
+  the message box palette there); without it the YES/NO was a black box. The scene loads it at start. Also, with
+  `graphics/trade/` extracted, trade_scene.c's sBlackPalette shadows evolution_scene.c's (both all black, so
+  harmless).
+- Test hooks: `MonSpec.egg` (an egg with that many cycles left, as CreateEgg makes it), `__test.eggHatch()`.
+- Verified: typecheck; `npm test` (209, incl. the new eggHatch.test.ts); e2e eggHatch.test.ts (new, 2 tests: the
+  step that hatches the egg, the scene's states / cracks / 19 shards / the mon shown, NO, the hatched mon's level,
+  IVs, moves, personality, friendship, met level, the game stat and the Pokédex, back on the field with the script
+  done; YES and "AA" through the naming screen) and daycare.test.ts, twice each. Screenshots: the cracked egg, the
+  "BULBASAUR hatched from the EGG!" message over the shadow, the YES/NO, the naming screen with the mon icon.
+
