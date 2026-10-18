@@ -2844,3 +2844,32 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   merging master in: 389 passed, no budgets raised); #92 none (unit test and docs only). Full run on master
   097f0fb (everything but #92's unit test): typecheck clean, 426 unit in 36 files, **393 e2e in 60 files, all
   passed first time, 20.8 min**. Final master 5ae37a9: typecheck clean, 491 unit in 37 files.
+
+### W-m4a 3: the mixer, first sound (AUDIO_PLAN.md batch C)
+
+- **Mixer** (`audio/m4aMixer.ts`, m4a_1.s SoundMainRAM / SoundMainRAM_Unk1): the reverb pass (SoundMainRAM_Reverb:
+  this slot's and the next slot's A + B × reverb >> 9, +1 when bit 7 is set, into both FIFOs) or the clearing,
+  then each DirectSound channel's samples (interpolated by `fw` for resampled voices, as read for FIX ones, reverse
+  voices backwards) × envelopeVolumeRight / Left >> 8 added into FIFO A / B with 8-bit wraparound, inside the
+  per-sample loops W-m4a 2 left (`mix:` comments); FastForward only when nothing is mixed. No DPCM (decision 4).
+- **DMA ring:** `gSoundInfo.pcmBuffer` (PCM_DMA_BUF_SIZE × 2), `m4aSoundVSync` (VCountIntr: pcmDmaCounter) and
+  `PcmSlotOffset` (SoundMain's r5: the slot this frame mixes into); `m4aPcmFrame()` returns it with REG_SOUNDCNT_H.
+- **Output:** `AgbMainFrameEnd` runs m4aSoundVSync before m4aSoundMain, turns the mixing on while
+  `audioOutputWantsFrames()` and then calls `pushFrame(m4aPcmFrame())`; `loadAudioData` fetches samples.bin in the
+  background when the output is on (`setSamplePcm`).
+- **Mono:** found on the way: FRLG's mixer never reads `soundInfo.mode` bit 0 (no reference in m4a_1.s); mono is
+  SetPokemonCryStereo's REG_SOUNDCNT_H (both FIFOs to both speakers at half volume), now kept as `gRegSoundCntH`
+  and sent with each frame (the DAC already applied it), and the bit is CgbSound's (W-m4a 4). Callers wired:
+  title_screen.c:742 (`titleScreenEnv.savedOptionsSound`, set by MainMenuScene from the loaded save) and
+  option_menu.c:519; reset_save_heap.c's ReloadSave is the link's (not ported).
+- **Found on the way:** SE_SELECT (and SE_DOOR, SE_EXIT, SE_PC_ON, SE_WALL_HIT, SE_USE_ITEM, SE_FLEE) are PSG only,
+  so the menus' cursor sound stays silent until W-m4a 4; SE_SAVE, SE_BALL_OPEN, SE_SHOP, SE_BIKE_BELL, SE_EXP, SE_BANG
+  and the cries are DirectSound. The "silent until the mixer" entries in DEVIATIONS.md now say what is left (PSG).
+- **Headless render** (`tests/audioRender.ts`, `tools/render-audio.ts`: `npx vite-node tools/render-audio.ts
+  MUS_TITLE 1200 out.wav`): MUS_TITLE 1,200 frames = 268,800 samples per FIFO, RMS 18.0, peak 106 (s8), zero for the
+  30 frames before it starts; MUS_PALLET RMS 9.6, peak 47; SE_SAVE RMS 8.5 over its first 30 frames, last non-zero
+  sample 41 frames after its start (reverb tail included); cry 25 and its reverse RMS 10.9.
+- Tests: typecheck; unit (`tests/unit/m4aMixer.test.ts`, 14: hand-computed blocks, interpolation, envelope,
+  wraparound, slots, reverb impulse, mono through the DAC, bookkeeping on / off by hand and over MUS_TITLE + SEs +
+  cries for 900 frames, the renders); e2e audioOutput (now: `?audio=1` frames reach the worklet with a non-zero
+  peak on the title screen), titleScreen, audio.
