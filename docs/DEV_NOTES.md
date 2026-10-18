@@ -316,6 +316,19 @@ this is the next level down. When you add or change a subsystem, update its entr
   RestartWildEncounterImmunitySteps. Tests: tests/e2e/pokemonTower.test.ts (walk onto the 6F trigger at 11,15),
   tests/e2e/scriptedBattles.test.ts (Snorlax from Route 12 (14, 69) facing down with FLAG_GOT_POKE_FLUTE, Route
   16 (30, 13) facing right; Zapdos from Power Plant (5, 12) and Mewtwo from Cerulean Cave B1F (7, 13), facing up).
+- **In-game trades and the Name Rater:** `script/tradeSpecials.ts` (TRADE_SPECIALS, spread into SPECIALS) is
+  trade_scene.c's in-game path: GetInGameTradeSpeciesInfo, GetTradeSpecies, CreateInGameTradePokemon(Internal)
+  (the trade's mon into `state.enemyParty[0]`), TradeMons, UpdatePokedexForReceivedMon, BufferInGameTradeMonName,
+  and DoInGameTradeScene, for now a stand-in (fade to black, TradeMons + BufferInGameTradeMonName, fade back in;
+  the script's `waitstate` ends after the fade in). W-trade unit 2 puts the cable animation in its place. The data
+  is sInGameTrades (src/data/ingame_trades.h) through `tools/extract_trades.py` → `public/gen/trades.json`, loaded by
+  `Assets.init` and handed over with `initInGameTrades` (OverworldScene). The scripts' VARs: 0x8008 = the
+  INGAME_TRADE_*, copied to 0x8004 for the specials; ChoosePartyMon's slot (0x8004) is kept in 0x800A and copied
+  to 0x8005; 0x8009 = the requested species. The Name Rater's specials (IsMonOTIDNotPlayers, which writes
+  VAR_RESULT itself, IsMonOTNameNotPlayers, NameRaterWasNicknameChanged against the gStringVar3 that
+  ChangePokemonNickname leaves) are in the same file. Tests: tests/unit/inGameTrades.test.ts,
+  tests/e2e/inGameTrades.test.ts (Reyley in Route2_House, talk from (7, 3); the Name Rater in LavenderTown_House2,
+  talk from (4, 5)).
 - **Step counters:** `world/stepCounters.ts` (happiness, VS Seeker, field poison, egg cycles), called from
   `OverworldScene.tryStartStepCountScript`; `world/roamer.ts` is roamer.c with its EWRAM statics as module state
   (`roamerLocation()` for tests). Field code may call battle-engine pokemon.c functions (AdjustFriendship): the
