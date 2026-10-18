@@ -1194,6 +1194,35 @@ or extend them:
   ball: MUS_LEVEL_UP holds "put the POTION away" 80 + 3 frames with MUS_VIRIDIAN_FOREST paused; the Game Corner
   fisher's `waitse` holds `setflag` until SE_SHOP stops).
 
+### Field SEs (W-sound 4)
+
+- **Where:** each C call sits at its port function, citing it: field_player_avatar.c in `world/playerAvatar.ts`
+  (PlayCollisionSoundIfNotFacingWarp, PlayerJumpLedge, PlaySpinSound, DoBoulderDust), field_control_avatar.c in
+  `scenes/OverworldScene.ts` (SE_WIN_OPEN where START opens the menu, `startInteractionScript` =
+  TryStartInteractionScript's SE_SELECT except for the PCs, the boulder's SE_FALL in `boulderPushed`), the heal
+  machine's glow in `world/hallOfFameRecord.ts` (SE_BALL, MUS_HEAL, PokeballGlowEffect_WaitForSound's
+  IsFanfareTaskInactive: the nurse's `waitfieldeffect` holds until the fanfare task ends), the fldeff_*.c SEs in
+  `world/fieldMoves.ts` / `flash.ts` / `fieldMoveShowMon.ts` (the banner's cry), `world/elevator.ts`,
+  `world/itemfinder.ts`, `world/vsSeeker.ts`, `world/ssAnne.ts`, `menus/seagallop.ts`, `entities/FieldEffects.ts`
+  (puddles), `entities/FieldPoisonEffect.ts` (its constructor is FldEffPoison_Start), the PCs' menus
+  (`ui/PlayerPcMenu.ts`, `ui/StoragePcMenu.ts`), the start menu and save dialog (`ui/StartMenu.ts`,
+  `ui/SaveDialog.ts`: SE_SAVE, then SaveDialogCB_ReturnSuccess's 60 frames only count once !IsSEPlaying).
+- **Menus:** `ui/Menu.ts` plays menu.c's SEs itself (Menu_ProcessInput with `wrap`, else
+  Menu_ProcessInputNoWrapAround: SE_SELECT on A and on UP / DOWN, without wrap only if the cursor moved; none on B),
+  so the start menu, YES/NO, multichoice and the shop's menu get them; the callers add what their C adds on B
+  (CloseStartMenu, script_menu.c's NO / B with YesNoMenu's `seOnNo`, the multichoice's B, Task_ShopMenu's B). The
+  multichoice grid has Menu_ProcessInputGridLayout's.
+- **Doors:** `FieldDoors.getDoorSoundEffect(x, y)` (world coords) is GetDoorSoundEffect; `opendoor` plays it via
+  the ScriptHost's `doorSoundEffect` (map-local). The warp paths' door SEs (field_fadetransition.c) are W-sound 3's.
+- **Not here:** the warp tasks' sounds (Escape Rope, Dig, Teleport, the fall arrival, Fly's music) and map music
+  (W-sound 3), the cries' timing (W-sound 2), the bike bell (item_use.c, W-sound 7). Not in the port: escalators,
+  the Lavaridge warps, FldEff_NpcFlyOut, Birth Island's rock (SE_THUNDER), ShakeScreen, LoopWingFlapSound, the
+  Acro Bike and secret base mats (field_player_avatar.c's SE_BIKE_HOP / SE_WARP_IN), the mailbox, field weather.
+- **Tests:** `tests/e2e/fieldSounds.test.ts` (a bump's SE_WALL_HIT, a ledge's SE_LEDGE, talking's SE_SELECT, Bill's
+  `opendoor` SE_SLIDING_DOOR, the bedroom PC's SE_PC_ON without SE_SELECT, START's SE_WIN_OPEN and the menu's
+  SE_SELECTs, the save dialog closing SE_SAVE's length + 60 frames after it, the heal machine's SE_BALLs 25 frames
+  apart, MUS_HEAL 32 frames after the last, the effect running until the fanfare task resumes the BGM).
+
 ## Game state
 
 - **PC boxes and save data:** `state/PokemonStorage.ts` is struct PokemonStorage (`state.storage`: 14 boxes of 30
