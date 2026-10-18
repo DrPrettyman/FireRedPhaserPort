@@ -15,11 +15,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - The S.S. Anne leaving (`special DoSSAnneDepartureCutscene`, ss_anne.c) isn't ported: the ship doesn't sail off
     (no wake or smoke sprites), the script's `waitstate` passes at once and `removeobject` hides it. Its graphics
     (graphics/ss_anne/) aren't extracted yet.
-  - In-game trades (script/tradeSpecials.ts): DoInGameTradeScene is a stand-in until W-trade unit 2: a fade to
-    black, the swap and a fade back in on the same field (no trade_scene.c animation, no MUS_EVOLUTION, no
-    CB2_ReturnToField rebuild of the field). The traded mon's contest conditions and sheen aren't kept (Pokémon
+  - In-game trades (script/tradeSpecials.ts): the traded mon's contest conditions and sheen aren't kept (Pokémon
     have no contest stats), and DONTAE's Jynx holds its Fab Mail without the message (mail isn't modelled:
-    GetInGameTradeMail / gLinkPartnerMail / MON_DATA_MAIL).
+    GetInGameTradeMail / gLinkPartnerMail / MON_DATA_MAIL). The trade scene (menus/tradeScene.ts) skips
+    CheckPartnersMonForRibbons (no ribbons; no in-game trade mon has any) and TradeEvolutionScene (no FRLG
+    in-game trade evolves), and is silent (no MUS_EVOLUTION / MUS_EVOLVED, cries or SEs). Only the in-game
+    (wireless) path is ported: DoTradeAnim_Cable is a link trade's.
   - Lt. Surge's trash cans, Bill's cell separator: silent (SE_PIN, SE_UNLOCK, SE_BALL, SE_WARP_IN).
   - The Elite Four and Champion rooms' lighting (`special DoPokemonLeagueLightingEffect`, field_specials.c) isn't
     ported: the rooms keep their tileset's BG palette 7 (no sEliteFourLightingPalettes / sChampionRoomLightingPalettes

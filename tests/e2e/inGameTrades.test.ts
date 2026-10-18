@@ -1,5 +1,5 @@
-// In-game trades (trade_scene.c's specials, script/tradeSpecials.ts; the scene is a fade stand-in until W-trade
-// unit 2) on Route 2's trade (Reyley: Abra for Mr. Mime, INGAME_TRADE_MR_MIME), and Lavender Town's Name Rater.
+// In-game trades (trade_scene.c's specials, script/tradeSpecials.ts, and its scene, menus/tradeScene.ts) on Route
+// 2's trade (Reyley: Abra for Mr. Mime, INGAME_TRADE_MR_MIME), and Lavender Town's Name Rater.
 
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
@@ -61,6 +61,101 @@ async function choose(game: Game, slot: number | 'cancel'): Promise<void> {
   await game.press('A');
 }
 
+interface SceneFrame {
+  /** share of non-black pixels */
+  nonBlack: number;
+  colours: number;
+  /** the player's and the partner's mon sprite: visible, x + x2, y + y2 */
+  mons: { visible: boolean; x: number; y: number }[];
+  /** per mon sprite: pixels in its 64x64 box drawn in one of its palette's colours (0 if invisible) */
+  monPixels: number[];
+}
+
+/**
+ * Watch the trade scene from the page until the field is back: its states in order, the GBA main callbacks it ran
+ * under, whether the party changed while it was up, and a frame (the PPU's renderFrame) at a few points. With
+ * TRADE_SHOTS=<dir> in the environment, those frames are saved there as PNGs too.
+ */
+function watchTradeScene(game: Game) {
+  const shots = process.env.TRADE_SHOTS;
+  return game
+    .eval(async (t, wantShots) => {
+      const imp = (p: string) => new Function('p', 'return import(p)')(p);
+      const scene = await imp('/src/menus/tradeScene.ts');
+      const ppu = await imp('/src/gba/ppu.ts');
+      const hw = await imp('/src/gba/hw.ts');
+      const spr = await imp('/src/gba/sprite.ts');
+      // the frames to capture: [state, ticks into it]
+      const want: Record<string, [number, number]> = {
+        sendMsg: [11, 5], gbaSend: [126, 10], linkMonOut: [200, 10], crossing: [38, 30], gbaRecv: [146, 5], zoomIn: [51, 5], newMon: [167, 50], end: [71, 1],
+      };
+      const states: number[] = [];
+      const screens: string[] = [];
+      const frames: Record<string, unknown> = {};
+      const png: Record<string, string> = {};
+      let swappedInScene: boolean | undefined;
+      let ticks = 0;
+      const buf = new Uint32Array(240 * 160);
+      const capture = (key: string, ids: number[]) => {
+        ppu.renderFrame(buf);
+        const colours = new Set<number>();
+        let nonBlack = 0;
+        for (const px of buf) {
+          colours.add(px);
+          if ((px & 0xffffff) !== 0) nonBlack++;
+        }
+        const sprites = ids.map((id) => spr.gSprites[id]);
+        const mons = sprites.map((s) => ({ visible: !s.invisible, x: s.x + s.x2, y: s.y + s.y2 }));
+        const monPixels = sprites.map((s) => {
+          if (s.invisible) return 0;
+          const pal = new Set<number>();
+          for (let i = 1; i < 16; i++) {
+            const c = hw.pltt[256 + s.oam.paletteNum * 16 + i];
+            pal.add(((c & 0x1f) << 3) | (((c >> 5) & 0x1f) << 11) | (((c >> 10) & 0x1f) << 19));
+          }
+          let n = 0;
+          const x0 = s.x + s.x2 - 32;
+          const y0 = s.y + s.y2 - 32;
+          for (let y = Math.max(0, y0); y < Math.min(160, y0 + 64); y++)
+            for (let x = Math.max(0, x0); x < Math.min(240, x0 + 64); x++) if (pal.has(buf[y * 240 + x] & 0xf8f8f8)) n++;
+          return n;
+        });
+        frames[key] = { nonBlack: nonBlack / buf.length, colours: colours.size, mons, monPixels };
+        if (wantShots) {
+          const canvas = document.createElement('canvas');
+          canvas.width = 240;
+          canvas.height = 160;
+          canvas.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(buf.buffer.slice(0)), 240, 160), 0, 0);
+          png[key] = canvas.toDataURL('image/png');
+        }
+      };
+      await t.until(() => {
+        const p = scene.tradeSceneProbe();
+        const screen = t.gbaScreen();
+        if (screen && screen !== screens.at(-1) && /Trade/.test(screen)) screens.push(screen);
+        if (p) {
+          if (states.at(-1) !== p.state) {
+            states.push(p.state);
+            ticks = 0;
+          }
+          ticks++;
+          for (const [key, [st, n]] of Object.entries(want)) if (st === p.state && n === ticks) capture(key, p.monSpriteIds);
+        }
+        if (swappedInScene === undefined && t.party()[1]?.species === 'MR_MIME') swappedInScene = !!p;
+        return states.length > 0 && !p && !screen;
+      }, 20000);
+      return { states, screens, frames, swappedInScene, png };
+    }, !!shots)
+    .then(async (r) => {
+      if (shots) {
+        const fs = await import('node:fs');
+        fs.mkdirSync(shots, { recursive: true });
+        for (const [key, url] of Object.entries(r.png)) fs.writeFileSync(`${shots}/${key}.png`, Buffer.from(url.split(',')[1], 'base64'));
+      }
+      return r as Omit<typeof r, 'frames'> & { frames: Record<string, SceneFrame> };
+    });
+}
+
 /** The party mon in `slot` as the trade sets it. */
 const tradedMon = (game: Game, slot: number) =>
   game.eval((t, i) => {
@@ -72,20 +167,34 @@ test('Reyley trades his MR. MIME for an ABRA: species, nickname, OT, level and t
   const game = await session.start({ ...REYLEY, party: [{ species: 'PIDGEY', level: 9 }, { species: 'ABRA', level: 12 }] });
   expect(await game.eval((t) => t.state!.dexCaught.has(122))).toBe(false); // national dex #122 MR. MIME
   await talk(game, 'partyMenu'); // A answers YES
-  // The swap happens behind the fade (it fades back in from that tick on): watch it from the page, since a poll
-  // from here could come after the fade is over.
-  const fadingAtSwap = game.eval(async (t) => {
-    let fading: boolean | undefined;
-    await t.until(() => {
-      if (t.party()[1]?.species !== 'MR_MIME') return false;
-      fading = !!t.field()?.fading;
-      return true;
-    }, 20000);
-    return fading;
-  });
+  // The trade scene, watched from the page (a poll from here could miss its states)
+  const scene = watchTradeScene(game);
   await choose(game, 1);
   const messages = await mashOn(game, 'idle');
-  expect(await fadingAtSwap).toBe(true);
+  const seen = await scene;
+  // DoTradeAnim_Wireless from start to end (the in-game path never sets isCableTrade); A ends STATE_END_LINK_TRADE
+  expect(seen.screens).toEqual(['CB2_InitInGameTrade', 'CB2_InGameTrade']);
+  expect(seen.states[0]).toBe(0);
+  expect(seen.states).toEqual(expect.arrayContaining([10, 124, 126, 200, 38, 144, 146, 51, 63, 167, 68, 71, 72, 74]));
+  expect(seen.states.at(-1)).toBe(74);
+  // STATE_TRY_EVOLUTION swaps the mons while the scene is up
+  expect(seen.swappedInScene).toBe(true);
+  // Every captured frame draws something: none is a black screen (the GBA, the link mon and the signal are drawn
+  // on black, so some are mostly black)
+  expect(Object.keys(seen.frames).sort()).toEqual(['crossing', 'end', 'gbaRecv', 'gbaSend', 'linkMonOut', 'newMon', 'sendMsg', 'zoomIn']);
+  for (const [key, f] of Object.entries(seen.frames)) {
+    expect.soft(f.nonBlack, key).toBeGreaterThan(0.01);
+    expect.soft(f.colours, key).toBeGreaterThan(2);
+  }
+  expect(seen.frames.zoomIn.nonBlack).toBeGreaterThan(0.9); // the GBA fills the screen
+  // The mon pics: ABRA in the middle when it's sent off, both crossing, MR. MIME in the middle at the end
+  expect(seen.frames.sendMsg.mons[0]).toMatchObject({ visible: true, x: 120 });
+  expect(seen.frames.sendMsg.mons[1].visible).toBe(false);
+  expect(seen.frames.crossing.mons.map((m) => m.visible)).toEqual([true, true]);
+  expect(seen.frames.newMon.mons[1].visible).toBe(true);
+  expect(seen.frames.end.mons[1]).toMatchObject({ visible: true, x: 120 });
+  expect(seen.frames.sendMsg.monPixels[0]).toBeGreaterThan(200);
+  expect(seen.frames.end.monPixels[1]).toBeGreaterThan(200);
   expect(messages).toMatch(/Hey, thanks!/);
   const party = await game.eval((t) => t.party());
   expect(party.map((m) => m.species)).toEqual(['PIDGEY', 'MR_MIME']);

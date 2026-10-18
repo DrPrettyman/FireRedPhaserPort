@@ -9,6 +9,7 @@
 //
 // Audio isn't implemented: cries and sound effects count as already finished (see gba/sound.ts).
 
+import { setBattleUi, ui } from '../battle/battleUi';
 import { K } from '../battle/constants';
 import { bdata, pokemon, state } from '../battle/env';
 import {
@@ -674,6 +675,8 @@ export function CB2_InitInGameTrade(): void {
       ResetSpriteData();
       FreeAllSpritePalettes();
       SetVBlankCallback(VBlankCB_TradeAnim);
+      // The Poké Balls' open particles (battle_anim_special.c) play their SE through the battle's hooks
+      if (!ui) setBattleUi({ joyNew: () => false, joyHeld: () => false, anyNewKeys: () => false, playSE() {}, playCry() {}, playBGM() {}, playFanfare() {}, addBagItem() {}, playerGender: () => 0 });
       TradeAnimInit_LoadGfx();
       const a = anim();
       a.state = 0;

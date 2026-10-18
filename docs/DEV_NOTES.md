@@ -319,8 +319,16 @@ this is the next level down. When you add or change a subsystem, update its entr
 - **In-game trades and the Name Rater:** `script/tradeSpecials.ts` (TRADE_SPECIALS, spread into SPECIALS) is
   trade_scene.c's in-game path: GetInGameTradeSpeciesInfo, GetTradeSpecies, CreateInGameTradePokemon(Internal)
   (the trade's mon into `state.enemyParty[0]`), TradeMons, UpdatePokedexForReceivedMon, BufferInGameTradeMonName,
-  and DoInGameTradeScene, for now a stand-in (fade to black, TradeMons + BufferInGameTradeMonName, fade back in;
-  the script's `waitstate` ends after the fade in). W-trade unit 2 puts the cable animation in its place. The data
+  and DoInGameTradeScene: the fade to black (the scene's graphics and both mon pics load meanwhile:
+  `tradeSceneGfxSymbols`), then `ScriptHost.runScreenFromScript` runs `menus/tradeScene.ts` on FieldMenuScene:
+  CB2_InitInGameTrade → CB2_InGameTrade (DoTradeAnim) → CB2_ReturnToField, and the script's `waitstate` ends once
+  the field has faded back in. FireRed's in-game trades never set `isCableTrade` (only CB2_LinkTrade does), so
+  the scene is DoTradeAnim_Wireless (the GBA's wireless signal, the white column where the mons cross); the cable
+  path isn't ported. STATE_TRY_EVOLUTION calls TradeMons(VAR_0x8005, 0), the end BufferInGameTradeMonName. The
+  graphics are graphics/trade/ (extract_gfx.py's GFX_PREFIXES); the scene sets a silent BattleUi if none is set
+  (the Poké Balls' open particles play their SE through it). Probe: `tradeSceneProbe()` (the state, the mon
+  sprite ids), imported in the page; the e2e's `watchTradeScene` records the states and renders frames at a few
+  of them (`TRADE_SHOTS=<dir>` saves them as PNGs). The data
   is sInGameTrades (src/data/ingame_trades.h) through `tools/extract_trades.py` → `public/gen/trades.json`, loaded by
   `Assets.init` and handed over with `initInGameTrades` (OverworldScene). The scripts' VARs: 0x8008 = the
   INGAME_TRADE_*, copied to 0x8004 for the specials; ChoosePartyMon's slot (0x8004) is kept in 0x800A and copied
