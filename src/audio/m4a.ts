@@ -170,7 +170,7 @@ export const NUM_MUSIC_PLAYERS = gMPlayTable.length;
 /** gMPlayMemAccArea: the 16 bytes MEMACC reads and writes, shared by the four players. */
 export const gMPlayMemAccArea = new Uint8Array(0x10);
 
-/** gPokemonCryMusicPlayers / gPokemonCryTracks: two players of two tracks each. The cry songs are W-m4a 2. */
+/** gPokemonCryMusicPlayers / gPokemonCryTracks: two players of two tracks each (SetPokemonCryTone). */
 export const gPokemonCryMusicPlayers: readonly MusicPlayerInfo[] = Array.from({ length: MAX_POKEMON_CRIES }, (_, i) =>
   newMusicPlayerInfo(`gPokemonCryMusicPlayers[${i}]`),
 );
@@ -868,7 +868,7 @@ export function ply_keysh(_mplayInfo: MusicPlayerInfo, track: MusicPlayerTrack):
 }
 
 /** ply_voice (m4a_1.s:945): copies voice n of the player's voicegroup into the track's tone. Until the
- *  voicegroups are loaded (W-m4a 2) the tone stays as it was. */
+ *  voicegroups are loaded (setVoiceData) the tone stays as it was. */
 export function ply_voice(mplayInfo: MusicPlayerInfo, track: MusicPlayerTrack): void {
   const n = ld_r3_tp_adr_i(track);
   const tone = mplayInfo.tone?.[n];

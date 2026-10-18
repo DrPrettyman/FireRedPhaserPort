@@ -141,7 +141,7 @@ export function emptyToneData(): ToneData {
 }
 
 /** struct SongHeader. `part[i]` is track i's start as a byte offset into `data` (the song's bytes). `voicegroup` is
- *  the voicegroup's name from songs.json; `tone` is that voicegroup once resolved (W-m4a 2), else null. */
+ *  the voicegroup's name from songs.json; `tone` is that voicegroup once resolved (setVoiceData), else null. */
 export interface SongHeader {
   name: string;
   trackCount: number;

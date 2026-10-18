@@ -350,6 +350,13 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     the port skips it. No quest log entry (SetQLPlayedTheSlots) and no GAME_STAT_SLOT_JACKPOTS.
   - The Game Corner's photo printer flash (FldEff_PhotoFlash) is the field's FADE_FROM_WHITE (16 → 0 in steps of 2)
     where the C fades from 15 to 0 in steps of 3, a few frames longer.
+  - The m4a engine (src/audio/, AUDIO_PLAN.md): the CGB (PSG) channels are a placeholder until W-m4a 4
+    (`m4aCgb.ts`): a note on a square / wave / noise voice claims its channel as ply_note does, but the channel
+    goes off as soon as it is released (CgbSound's release envelope, pseudo echo and the hardware length counter
+    aren't run) and MidiKeyToCgbFreq returns 0. Only claims between CGB notes can differ (a released note frees its
+    channel a few frames early); no wait depends on them. A note on a keysplit entry that voicegroups.json has as
+    null (a ROM pointer byte, outside the table's key range) is dropped, where the GBA would play the subgroup voice
+    that byte names; no FRLG song plays one (tests/unit/m4aChannels.test.ts).
 - **Data:** Castform has no front pic (its `front.png` isn't in the decomp; it's built from per-form images).
 
 ## Deliberate QOL changes
