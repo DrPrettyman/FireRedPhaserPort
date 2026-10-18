@@ -3038,3 +3038,25 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   CB2_InitInGameTrade's one frame): the modules now load in an awaited eval first, 3 reruns green, cause added to
   tests/README.md. A headless render of MUS_PALLET (`tools/render-audio.ts`, 600 frames) gave 134,400 samples per
   FIFO, RMS 9.7 / peak 47 of 128.
+
+### W-sound 5a: battle music, the BattleUi hooks, the battle scripts' sounds (AUDIO_PLAN.md batch D)
+
+- BattleScene's `ui.playSE / playCry / playBGM / playFanfare` pass through to gba/sound.ts (PlaySE, PlayCry_Normal(species,
+  0), PlayBGM, PlayFanfare), so the controllers', battle/gfx.ts', battleInterface's and the anims' calls are heard
+  until their units call sound.ts directly (decision 21; W-sound 8 deletes the hooks).
+- Battle music: new `battle/battleBgm.ts` (pokemon.c's GetBattleBGM and PlayMapChosenOrBattleBGM, taking the flags
+  and the trainer class as arguments). `OverworldScene.runBattle` is CreateBattleStartTask: it starts the song before
+  the transition; `song` is 0 (the default: MUS_VS_WILD, MUS_VS_TRAINER, MUS_VS_GYM_LEADER for leaders and the
+  Elite Four, MUS_VS_CHAMPION), MUS_VS_LEGEND for a roamer, StartLegendaryBattle's MUS_VS_MEWTWO / _VS_DEOXYS /
+  _VS_LEGEND / MUS_RS_VS_TRAINER (`ScriptHost.startScriptedBattle` takes an optional `song`). battle-test.html
+  starts the battle music on launch.
+- SE_MUGSHOT in the mugshot transitions (Mugshot_StartOpponentSlide). battle_main.c: HandleEndTurn_BattleWon's
+  victory music (MUS_VICTORY_GYM_LEADER for leaders and the Champion, else MUS_VICTORY_TRAINER), FadeOutMapMusic(5)
+  in HandleEndTurn_FinishBattle, SE_FLEE (Safari run), m4aSongNumStop(SE_LOW_HEALTH) in ReturnFromBattleToOverworld.
+  battle_script_commands.c: getexp's MUS_VICTORY_WILD, the level-up's HandleLowHpMusicChange call (gfx.ts' function,
+  still a no-op until W-sound 6a), the yes / no boxes' SE_SELECT, VARIOUS_WAIT_FANFARE's IsFanfareTaskInactive.
+  BattleStopLowHpSound (battle_gfx_sfx_util.c) is a TODO in main.ts / bsCommands2.ts for W-sound 6a.
+- Found on the way: the level-up fanfare holds nothing on the GBA. BattleScript_LevelUp has `fanfare MUS_LEVEL_UP`
+  and no `waitfanfare`, so it only pauses the victory music for 80 frames. The one battle script that waits
+  (VARIOUS_WAIT_FANFARE) is the Poké Flute's (BattleScript_PokeFluteWakeUp: MUS_POKE_FLUTE, 450 frames). A level-100
+  mon gets no MUS_VICTORY_WILD: getexp's music change is in the branch that MAX_LEVEL skips (as in the C).
