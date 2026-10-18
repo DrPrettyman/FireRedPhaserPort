@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 import type { Pokemon } from '../../src/pokemon/Pokemon';
 import { clearSave, fromSaveData, hasSave, readSave, SAVE_STORAGE_KEY, SAVE_VERSION, toSaveData, writeSave } from '../../src/state/saveData';
+import { boxMonFromMon as boxMon } from '../../src/state/PokemonStorage';
 import { newGame, type TestGame } from './gameData';
 
 let t: TestGame;
@@ -56,7 +57,10 @@ function playedState(): TestGame['state'] {
   s.setFlag('FLAG_BADGE01_GET');
   s.setVar('VAR_MAP_SCENE_PALLET_TOWN_PROFESSOR_OAKS_LAB', 3);
   s.setVar('VAR_TEMP_1', 9); // a temp var is still in gSaveBlock1Ptr->vars
-  s.daycareStepCounter = 77;
+  s.daycare.stepCounter = 77;
+  s.daycare.mons[1] = { mon: boxMon(mon('DITTO', 30)), steps: 0x12345 };
+  s.daycare.offspringPersonality = 0xbeef;
+  s.route5DayCareMon = { mon: boxMon({ ...mon('ODDISH', 20), nickname: t.charmap.encodePlain('ODDY') }), steps: 4321 };
   s.roamer = { ivs: { hp: 1, attack: 2, defense: 3, speed: 4, spAttack: 5, spDefense: 6 }, personality: 0x89abcdef, species: t.d('SPECIES_ENTEI'), hp: 100, level: 50, status: 0, active: true };
   const st = s.storage;
   st.setCurrentBox(3);
@@ -121,7 +125,8 @@ describe('save data (save.c / load_save.c)', () => {
       flashLevel: 4,
       trainerRematchStepCounter: 0x1234,
       trainerRematches: [0, 1, 0, 1],
-      daycareStepCounter: 77,
+      daycare: s.daycare,
+      route5DayCareMon: s.route5DayCareMon,
       roamer: s.roamer,
     });
     // The loaded state shares nothing with the save it came from.

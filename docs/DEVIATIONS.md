@@ -148,8 +148,18 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
     GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
-  - Field steps: eggs count down egg cycles, but the daycare (breeding,
-    its mons' steps) and the hatching scene (`special EggHatch`) aren't ported.
+  - Field steps: eggs count down egg cycles and the daycare mons count their steps (world/daycare.ts), but the
+    Four Island daycare's breeding (TriggerPendingDaycareEgg, eggs) isn't ported.
+  - Egg hatching (menus/eggHatch.ts): no audio (the cry, SE_BALL / SE_EGG_HATCH, MUS_EVOLUTION, the MUS_EVOLVED
+    fanfare). "X hatched from the EGG!" still waits the fanfare's 220 frames (sFanfares) with a local counter, as
+    gba/sound.ts's IsFanfareTaskInactive is always true and the nickname prompt would replace it at once. The C
+    loads five palettes from gTradeGba2_Pal, two of them past the file's end (ROM that follows); the port loads
+    the file's three (the shadow tilemap uses none of the other two). BG palette 15 (the YES/NO's text) is loaded
+    with the field's message box palette, which the GBA field leaves there. The mon sprite buffers are freed on
+    the NO path too (the C leaks them). The hatched mon's language, met game and fateful-encounter bit aren't
+    modelled.
+  - Daycare (world/daycare.ts): mail isn't modelled, so a mon left holding mail doesn't have it moved into
+    struct DayCareMail (StorePokemonInDaycare's MonHasMail branch) and back.
   - Safari Zone: the entrance's SE/fanfare are silent.
   - The money box and Safari stats window are Phaser MenuWindows (the field isn't on the GBA layer).
   - Pokémon Storage System (menus/pokemonStorage*.ts): silent (SE_PC_LOGIN / SE_PC_OFF and the menu SEs); no
@@ -165,7 +175,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     save slots, so there are no sector checksums, no alternating slots / save counter, no backup of the previous
     save and no encryption of money, coins and bag quantities (gSaveBlock2Ptr->encryptionKey). The save holds
     what the port keeps; left out because the port doesn't keep them: the current map's object events and object
-    templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail, the daycare mons,
+    templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail,
     Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, the fame
     checker, Trainer Tower and minigame records, the enigma berry, mystery gift, easy chat, link records and
     the region map zoom option. The player's position is stored only when the field writes it before
@@ -232,8 +242,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     profile isn't kept (only a link card prints it). The flip's per-line BG0VOFS gives line L buffer[L] (the PPU's
     HBlank convention), where the GBA's HBlank interrupt sets it for the line after, a one-line shift of the squash.
     LoadMonIconGfx's 96 colours read 48 past gMonIconPalettes on the GBA; those palettes (BG 8-10) are zeros here and
-    no icon uses them. The photo's icons need special UpdateTrainerCardPhotoIcons (the Celadon Game Corner printer),
-    which isn't in specials.ts yet, so they only show with the vars set by hand.
+    no icon uses them.
   - Credits (menus/credits.ts): no audio (MUS_CREDITS, the cries). A map scene loads asynchronously, so it can start
     a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
     GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.
@@ -302,9 +311,16 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Castform's form change (HandleSpeciesGfxDataChange) takes the new form's palette row from that battler's own
     Castform palette. The GBA keeps one gBattleStruct->castformPalette, written by whichever Castform's gfx
     loaded last, so it only differs with two Castforms of different shininess on the field.
-  - Slot machine: `playslotmachine` (the screen) isn't ported yet (W-slots unit 2), nor FLDEFF_SMILEY_FACE_ICON
-    before it. In `menus/slotMachineLogic.ts` the state's machineBias, biasCooldown and reelStopOrder start at 0;
-    PlaySlotMachine Allocs the state without zeroing it, so on the GBA they start as whatever the heap held.
+  - Slot machine: in `menus/slotMachineLogic.ts` the state's machineBias, biasCooldown and reelStopOrder start at 0;
+    PlaySlotMachine Allocs the state without zeroing it, so on the GBA they start as whatever the heap held. The
+    screen (`menus/slotMachine.ts`) has no audio, and IsFanfareTaskInactive is always TRUE, so the payout counts up
+    (and START pays it at once) without waiting for MUS_SLOTS_WIN / MUS_SLOTS_JACKPOT. HBlankCB_SlotMachine's
+    per-line squash and darkening of the reels apply to the line REG_VCOUNT names (the PPU calls it before drawing
+    that line); the GBA's HBlank interrupt for line L sets them for line L + 1, a one-line shift. After
+    MainTask_ExitSlots frees the screen, the C's Task_SpinReels still runs that frame through the NULL gfx manager;
+    the port skips it. No quest log entry (SetQLPlayedTheSlots) and no GAME_STAT_SLOT_JACKPOTS.
+  - The Game Corner's photo printer flash (FldEff_PhotoFlash) is the field's FADE_FROM_WHITE (16 → 0 in steps of 2)
+    where the C fades from 15 to 0 in steps of 3, a few frames longer.
 - **Data:** Castform has no front pic (its `front.png` isn't in the decomp; it's built from per-form images).
 
 ## Deliberate QOL changes

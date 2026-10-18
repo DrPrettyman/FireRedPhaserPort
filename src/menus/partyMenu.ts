@@ -4223,6 +4223,7 @@ function CB2_SetUpExitToBattleScreen(): void {
 }
 
 export function ChooseMonForDaycare(): void {
+  gFieldCallback2.fn = CB2_FadeFromPartyMenu;
   InitPartyMenu(K.PARTY_MENU_TYPE_DAYCARE, K.PARTY_LAYOUT_SINGLE, K.PARTY_ACTION_CHOOSE_MON, false, K.PARTY_MSG_CHOOSE_MON_2, Task_HandleChooseMonInput, CB2_ReturnToField);
 }
 

@@ -164,6 +164,32 @@ this is the next level down. When you add or change a subsystem, update its entr
   extract_gfx.py (`graphics/script_menu/`), preloaded with the field's gfx. Probe: `__test.museumFossilPic()`.
   Tests: tests/e2e/sideEvents.test.ts (Oak in his lab at (6, 4), the Viridian PC, the museum's fossils from
   (5, 4) / (5, 7) facing left, the Cinnabar lab's fossil revival), tests/unit/sideSpecials.test.ts.
+- **Daycare:** `world/daycare.ts` is daycare.c's storage: `GameState.route5DayCareMon` (struct DaycareMon: a
+  BoxPokemon or null, u32 steps; no mail) and `GameState.daycare` (struct DayCare, the Four Island daycare: two
+  DaycareMons, offspringPersonality, the u8 egg-cycle stepCounter), both saved (SAVE_VERSION 4; a version 3 save
+  had only `daycareStepCounter`). StorePokemonInDaycare, TakeSelectedPokemonFromDaycare (BoxMonToMon, one exp per
+  step, ApplyDaycareExperience: TryIncrementMonLevel level by level with MonTryLearningNewMove, the first move
+  pushed out when full), the level / cost helpers (cost 100 + 100 per level), ShiftDaycareSlots,
+  CountPokemonInDaycare, and ShouldEggHatch / TryProduceOrHatchEgg (the Route 5 mon's and the daycare mons'
+  steps, party eggs' egg cycles; egg production is a TODO for unit 3). The script specials are
+  `script/daycareSpecials.ts` (DAYCARE_SPECIALS: ChooseSendDaycareMon through `runScreenFromScript` and
+  partyMenu.ts's ChooseMonForDaycare (PARTY_MENU_TYPE_DAYCARE: STORE leaves the slot in VAR_0x8004), the Route 5
+  ones, GetSelectedMonNicknameAndSpecies; they read the chosen slot with GetCursorSelectionMonId, as the C does);
+  IsEnoughForCostInVar0x8005 / SubtractMoneyFromVar0x8005 / CalculatePlayerPartyCount are in SIDE_SPECIALS. Eggs
+  (the Four Island specials) go into the same two files. Tests: tests/unit/daycare.test.ts,
+  tests/e2e/daycare.test.ts (`?start=after-rival&map=Route5_PokemonDayCare&x=4&y=5`, face up; set
+  `t.state.route5DayCareMon.steps` to skip the walking).
+- **Egg hatching:** `menus/eggHatch.ts` is daycare.c's hatching half. ShouldEggHatch (world/daycare.ts) leaves the
+  egg's slot in VAR_0x8004; OverworldScene counts GAME_STAT_HATCHED_EGGS and runs EventScript_EggHatch, whose
+  `special EggHatch` (EGG_HATCH_SPECIALS, spread into SPECIALS) fades out and `runScreenFromScript(StartEggHatch,
+  eggHatchGfxSymbols(...))`: CB2_EggHatch_0 (the battle textbox, the trade shadow on BG1, the egg and shard sheets,
+  AddHatchedMonToParty, the mon pic through gMonSpritesGfxPtr's position 1), CB2_EggHatch_1 (states 0-12: wobbles
+  SpriteCB_Egg_0..5, 19 shards, the white flash, the message, the nickname YES/NO → DoNamingScreen →
+  EggHatchSetMonNickname), back through CB2_ReturnToField. AddHatchedMonToParty / ScriptHatchMon take the
+  GameState and need no screen (unit tests). Probe `__test.eggHatch()` (CB2_state, the egg's anim and
+  visibility, the mon's, shards on screen / made). Test hook: a `MonSpec` with `egg: <cycles left>` is made as
+  CreateEgg would (isEgg, friendship = cycles); set `t.state.daycare.stepCounter = 254` so the next step counts
+  the cycle. Tests: tests/unit/eggHatch.test.ts, tests/e2e/eggHatch.test.ts.
 - **Multichoice / elevators:** `ui/MultichoiceMenu.ts` (vertical list and grid, field windows); the script engine
   sets VAR_RESULT from `ScriptHost.openMultichoice`. `text/stringWidth.ts` is GetStringWidth for any font set
   (the field's or the GBA layer's). Specials can start field tasks that outlive them (`ScriptHost.startFieldTask`,
@@ -348,8 +374,9 @@ this is the next level down. When you add or change a subsystem, update its entr
   ChangePokemonNickname leaves) are in the same file. Tests: tests/unit/inGameTrades.test.ts,
   tests/e2e/inGameTrades.test.ts (Reyley in Route2_House, talk from (7, 3); the Name Rater in LavenderTown_House2,
   talk from (4, 5)).
-- **Step counters:** `world/stepCounters.ts` (happiness, VS Seeker, field poison, egg cycles), called from
-  `OverworldScene.tryStartStepCountScript`; `world/roamer.ts` is roamer.c with its EWRAM statics as module state
+- **Step counters:** `world/stepCounters.ts` (happiness, VS Seeker, field poison; ShouldEggHatch is re-exported
+  from world/daycare.ts), called from `OverworldScene.tryStartStepCountScript`;
+  `world/roamer.ts` is roamer.c with its EWRAM statics as module state
   (`roamerLocation()` for tests). Field code may call battle-engine pokemon.c functions (AdjustFriendship): the
   overworld initialises the battle env at boot.
 
@@ -367,7 +394,7 @@ this is the next level down. When you add or change a subsystem, update its entr
   `LoadFieldTilesetsForShop` puts the map's tiles/palettes where the overworld would have left them in VRAM.
   `menus/objectEventGraphics.ts` is CreateObjectGraphicsSprite for any GBA-layer screen that needs NPC sprites.
   Test: `?start=after-rival&map=PewterCity_Mart&x=4&y=3`, face left, A (TM layout: Celadon Dept. Store 2F, x=3 y=6).
-- **Game Corner (coins box, slot machine logic):** `ui/CoinsBox.ts` is coins.c's field window (ShowCoinsWindow /
+- **Game Corner (coins box, slot machine, photo printer):** `ui/CoinsBox.ts` is coins.c's field window (ShowCoinsWindow /
   PrintCoinsString / HideCoinsWindow), drawn like `ui/MoneyBox.ts`; the script commands `showcoinsbox` /
   `updatecoinsbox` / `hidecoinsbox` call `ScriptHost.showCoinsBox` etc. (OverworldScene; the box's last printed
   `amount` is the test probe). `menus/slotMachineLogic.ts` is slot_machine.c's game logic without the screen: a
@@ -377,11 +404,31 @@ this is the next level down. When you add or change a subsystem, update its entr
   GetWinFlagByLine; functions that roll take an optional `rand` (default Random()). Its tables (reel icons, payouts,
   bias chances, the line tables, field_specials.c's sSlotMachineIndices and the file-local enums) are extracted by
   `tools/extract_slots.py` to `slotMachine.json`, loaded by OverworldScene (`loadSlotMachineData`). Game Corner
-  specials go in `script/gameCornerSpecials.ts` (GAME_CORNER_SPECIALS, spread into SPECIALS): GetRandomSlotMachineId.
-  The screen (`playslotmachine`, CB2_InitSlotMachine, MainTask_*) is W-slots unit 2 and builds on this module.
+  specials go in `script/gameCornerSpecials.ts` (GAME_CORNER_SPECIALS, spread into SPECIALS): GetRandomSlotMachineId,
+  UpdateTrainerCardPhotoIcons (the photo printer: the party as mail species and the tint into the trainer card's
+  VAR_TRAINER_CARD_MON_ICON_* vars). The same file has the Game Corner scripts' field effect natives,
+  FldEff_SmileyFaceIcon (the field's Phaser emote over the object) and FldEff_PhotoFlash (a FADE_FROM_WHITE), which
+  `registerGameCornerFieldEffects(host, defines)` registers from the ScriptEngine constructor (they need the host).
+  The screen: `menus/slotMachine.ts` is the rest of slot_machine.c. `playslotmachine` (ScriptEngine →
+  `PlaySlotMachineFromScript`) loads `slotMachineGfxSymbols()`, then `host.runScreenFromScript` runs PlaySlotMachine
+  on FieldMenuScene with CB2_ReturnToFieldContinueScriptPlayMapMusic; the script waits (ScriptContext_Stop) until
+  the field has faded back in. Structure as in the C: a main task (MainTask_SlotsGameLoop and the others, switched by
+  SetMainTask), Task_SpinReels (the logic's SpinReels + UpdateReelIconSprites), and Task_SlotMachine running up to 8
+  setup tasks (SlotsTask_*, `SetSlotMachineSetupTask(funcno, slot)` / `IsSlotMachineSetupTaskActive(slot)`), whose
+  data (struct SlotMachineSetupTaskData) is the module's `sSetupTaskData`. The reels are 15 affine sprites sharing
+  OAM matrix 0; HBlankCB_SlotMachine writes its PA (`oamMatrices[0].a`) and BLDY per line, which squashes and darkens
+  the reels towards their top and bottom (BLDCNT darkens BG3, OBJ and the backdrop, which shows through BG2's reel
+  window). The help (RIGHT) slides BG1's combos window in through WIN0; the field leaves WIN0V at (0, 255), which
+  PlaySlotMachineFromScript sets since FieldMenuScene starts from reset registers. The slot machine's graphics come
+  from `graphics/slot_machine/`; its `sBg_Pal` clashes with main_menu.c's, so extract_gfx.py now also writes a
+  clashing static symbol as `<file stem>.<symbol>` (`slot_machine.sBg_Pal`; the plain name stays the first file's,
+  in sorted order). Probe `__test.slotMachine()`: the main task and step, `ready`, bet, reels, win flags, payout,
+  the CREDIT / PAYOUT digits drawn, Clefairy's anim, the help slide, the line lights' palettes, the reel buttons.
   Tests: `tests/unit/slotMachine.test.ts` (hand-worked reel positions), `tests/e2e/gameCorner.test.ts` (the coin
-  clerk, the prize room, the Fisher, hidden coins). To wait for a message's `\p` in a test without a press reaching
-  the menu after it, wait in the page for `messageBox.waitingForButton` (TextPrinter.waitingForButton).
+  clerk, the prize room, the Fisher, hidden coins; the slot machine: bet with R and DOWN, spins checked against a
+  payout worked out from the reel table, START to pay, the help window, YES/NO to quit, no coins; the smiley; the
+  photo printer). To wait for a message's `\p` in a test without a press reaching the menu after it, wait in the
+  page for `messageBox.waitingForButton` (TextPrinter.waitingForButton).
 - **TM case:** `menus/tmCase.ts` is tm_case.c. `InitTMCase(type, exitCallback, allowSelectClose)` runs on whichever
   GBA host has the bag (FieldMenuScene); `menuGfxSymbols` preloads `TM_CASE_GFX`. Ways in: the bag's KEY ITEMS → TM
   CASE → OPEN (`FieldUseFunc_TmCase` in menus/itemUse.ts → TMCASE_FIELD, back to CB2_BagMenuFromStartMenu), the

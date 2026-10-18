@@ -2,6 +2,8 @@
 // hidecoinsbox) next to the money box at the coin clerk (CeladonCity_GameCorner_EventScript_CoinsClerk), and the
 // prize room's clerks (CeladonCity_GameCorner_PrizeRoom_EventScript_PrizeClerkMons / PrizeClerkTMs).
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
 
@@ -163,4 +165,206 @@ test('a slot machine without a Coin Case asks for one; GetRandomSlotMachineId pi
     return [...out].sort();
   });
   expect(ids).toEqual([0, 1, 2, 3, 4, 5]);
+});
+
+// ------------------------------------------------------------------ the slot machine screen (W-slots unit 2)
+
+/** slot_machine.c's sReelIconAnimByReelAndPos, read from the extracted data. */
+const reelIcons: number[][] = JSON.parse(readFileSync(join(__dirname, '../../public/gen/slotMachine.json'), 'utf8')).reelIcons;
+
+/**
+ * What a stop pays, worked out from the C (CalcPayout) independently of the port's: the icons each reel shows are the
+ * three after its position; the lines the bet covers (1: middle; 2: + top, bottom; 3: + both diagonals) pay
+ * cherries in the first column 2 coins (6 with cherries in the second), or three of a kind 8 (Magnemite, Shellder),
+ * 15 (Pikachu, Psyduck), 100 (Rocket), 300 (7).
+ */
+function expectedPayout(reelPositions: number[], bet: number): number {
+  const icon = (reel: number, row: number) => reelIcons[reel][(reelPositions[reel] + 1 + row) % 21];
+  // [row on reel 0, row on reel 1, row on reel 2, min bet]
+  const lines = [
+    [0, 0, 0, 2], // top row
+    [1, 1, 1, 1], // middle row
+    [2, 2, 2, 2], // bottom row
+    [0, 1, 2, 3], // top left to bottom right
+    [2, 1, 0, 3], // bottom left to top right
+  ];
+  const [ICON_7, ICON_ROCKET, ICON_PIKACHU, ICON_PSYDUCK, ICON_CHERRIES, ICON_MAGNEMITE, ICON_SHELLDER] = [0, 1, 2, 3, 4, 5, 6];
+  let total = 0;
+  for (const [r0, r1, r2, minBet] of lines) {
+    if (bet < minBet) continue;
+    const [a, b, c] = [icon(0, r0), icon(1, r1), icon(2, r2)];
+    if (a === ICON_CHERRIES) total += b === ICON_CHERRIES ? 6 : 2;
+    else if (a === b && b === c) {
+      if (a === ICON_MAGNEMITE || a === ICON_SHELLDER) total += 8;
+      else if (a === ICON_PIKACHU || a === ICON_PSYDUCK) total += 15;
+      else if (a === ICON_ROCKET) total += 100;
+      else if (a === ICON_7) total += 300;
+    }
+  }
+  return total;
+}
+
+/** Sit at SlotMachine0 (the machine left of (1, 7)) and answer YES; resolves once the screen takes input. */
+async function sitAtSlotMachine(game: Game) {
+  await game.eval((t) => t.face('left'));
+  // dofieldeffect FLDEFF_SMILEY_FACE_ICON (FldEff_SmileyFaceIcon) over the player before the screen
+  const smiley = game.watch((t) => t.field()?.fieldEffects.includes('FLDEFF_SMILEY_FACE_ICON'), { what: 'the smiley over the player' });
+  await game.mashUntil((t) => t.gbaScreen() === 'CB2_InitSlotMachine' || t.gbaScreen() === 'CB2_RunSlotMachine', { what: 'playslotmachine' });
+  await game.waitFor((t) => t.slotMachine()?.ready, { what: 'the slot machine to fade in' });
+  await smiley;
+}
+
+/** Wait until the game loop is back at its betting step. */
+async function waitBetting(game: Game) {
+  await game.waitFor(
+    (t) => {
+      const p = t.slotMachine();
+      return p?.mainTask === 'MainTask_SlotsGameLoop' && p.step === 0;
+    },
+    { what: 'the betting step' },
+  );
+}
+
+/** Bet the most (R), start the reels and stop them one by one; returns what the stop showed and the coins after the payout. */
+async function spin(game: Game, payWithStart: boolean) {
+  await waitBetting(game);
+  const before = await game.eval((t) => t.state!.coins);
+  await game.press('R');
+  const bet = await game.eval((t) => t.slotMachine()!.bet);
+  for (let reel = 0; reel < 3; reel++) {
+    // MainTask_SlotsGameLoop's step 3: A stops the next reel (StopCurrentReel + PressReelButton)
+    await game.eval((t, r) => t.until(() => t.slotMachine()?.step === 3 && t.slotMachine()?.currentReel === r && t.slotMachine()?.reelIsSpinning[r]), reel);
+    await game.press('A');
+  }
+  const result = await game.eval((t) =>
+    t.until(() => /Darn|Win/.test(t.slotMachine()?.mainTask ?? '')).then(() => {
+      const p = t.slotMachine()!;
+      return { mainTask: p.mainTask, reelPositions: p.reelPositions, winFlags: p.winFlags, payout: p.payout, buttonsPressed: p.buttonsPressed, linePalettes: p.linePalettes };
+    }),
+  );
+  if (result.payout && !payWithStart) await game.screenshot('slots-win');
+  if (payWithStart && result.payout) {
+    // MainTask_WinHandlePayout's step 2 (a coin every 8 ticks): START pays the rest at once
+    await game.eval(async (t) => {
+      await t.until(() => t.slotMachine()?.mainTask !== 'MainTask_WinHandlePayout' || t.slotMachine()?.step === 2);
+      await t.press('START');
+    });
+  }
+  await waitBetting(game);
+  const after = await game.eval((t) => ({ coins: t.state!.coins, p: t.slotMachine()! }));
+  return { before, bet, ...result, after: after.coins, probe: after.p };
+}
+
+test('the slot machine: bet, spin, stop the reels, the payout; the help window; quit with YES', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'CeladonCity_GameCorner', x: 1, y: 7, seed: 7 });
+  await setUp(game, 0, 100);
+  await sitAtSlotMachine(game);
+  let p = (await game.eval((t) => t.slotMachine()))!;
+  expect(p).toMatchObject({ bet: 0, credit: 100, payoutShown: 0, clefairyAnim: 0, linePalettes: [4, 4, 4, 4, 4] });
+  expect(p.machineIdx).toBeGreaterThanOrEqual(0);
+  await game.screenshot('slots-start');
+
+  // A loss and a win, each checked against the coins: spins until both have happened
+  let sawWin = false;
+  let sawLoss = false;
+  for (let i = 0; i < 12 && !(sawWin && sawLoss); i++) {
+    const r = await spin(game, sawWin);
+    expect(r.bet).toBe(3);
+    const payout = expectedPayout(r.reelPositions, 3);
+    expect(r.after - r.before, `spin ${i}: reels ${r.reelPositions}`).toBe(payout - 3);
+    expect(r.mainTask).toBe(payout ? 'MainTask_WinHandlePayout' : 'MainTask_DarnNoPayout');
+    expect(r.payout).toBe(payout);
+    expect(r.buttonsPressed).toEqual([true, true, true]);
+    expect(r.probe).toMatchObject({ bet: 0, credit: r.after, payoutShown: 0, clefairyAnim: 0, buttonsPressed: [false, false, false], linePalettes: [4, 4, 4, 4, 4] });
+    if (payout) sawWin = true;
+    else sawLoss = true;
+  }
+  expect([sawWin, sawLoss]).toEqual([true, true]);
+
+  // DOWN bets one coin at a time and lights the middle line, then the top and bottom
+  await waitBetting(game);
+  const coins = await game.eval((t) => t.state!.coins);
+  await game.press('DOWN');
+  await waitBetting(game);
+  await game.press('DOWN');
+  await waitBetting(game);
+  p = (await game.eval((t) => t.slotMachine()))!;
+  expect(p).toMatchObject({ bet: 2, credit: coins - 2, linePalettes: [4, 5, 5, 5, 4] });
+
+  // RIGHT slides the combos window in, LEFT out
+  await game.press('RIGHT');
+  await game.waitFor((t) => t.slotMachine()?.mainTask === 'MainTask_ShowHelp' && t.slotMachine()?.step === 2, { what: 'the help window' });
+  expect((await game.eval((t) => t.slotMachine()))!.helpShown).toBe(256);
+  await game.screenshot('slots-help');
+  await game.press('LEFT');
+  await waitBetting(game);
+  expect((await game.eval((t) => t.slotMachine()))!.helpShown).toBe(0);
+
+  // B: "Quit playing?" B answers NO; B again and YES gives the bet back and leaves
+  await game.press('B');
+  await game.waitFor((t) => t.slotMachine()?.mainTask === 'MainTask_ConfirmExitGame' && t.slotMachine()?.step === 2, { what: 'Quit playing?' });
+  expect((await game.eval((t) => t.slotMachine()))!.yesNo).toBe(true);
+  await game.screenshot('slots-quit');
+  await game.press('B');
+  await waitBetting(game);
+  expect((await game.eval((t) => t.slotMachine()))!).toMatchObject({ yesNo: false, bet: 2 });
+  await game.press('B');
+  await game.waitFor((t) => t.slotMachine()?.mainTask === 'MainTask_ConfirmExitGame' && t.slotMachine()?.step === 2, { what: 'Quit playing? again' });
+  await game.press('A');
+  await game.waitFor((t) => t.idle() && !t.field()!.script && t.gbaScreen() === undefined, { what: 'the field after the slot machine', timeout: 30000 });
+  expect(await game.eval((t) => [t.state!.coins, t.field()!.map, t.slotMachine()])).toEqual([coins, 'CeladonCity_GameCorner', null]);
+});
+
+test('the slot machine without coins: "Game over!" and back to the field', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'CeladonCity_GameCorner', x: 1, y: 7 });
+  await setUp(game, 0, 0);
+  await game.eval((t) => t.face('left'));
+  await game.mashUntil((t) => t.gbaScreen() === 'CB2_InitSlotMachine' || t.gbaScreen() === 'CB2_RunSlotMachine', { what: 'playslotmachine' });
+  // MainTask_NoCoinsGameOver: the message, then any key leaves
+  await game.waitFor((t) => t.slotMachine()?.mainTask === 'MainTask_NoCoinsGameOver' && t.slotMachine()?.step === 2 && t.slotMachine()?.ready, { what: 'Game over!' });
+  await game.screenshot('slots-no-coins');
+  await game.press('A');
+  await game.waitFor((t) => t.idle() && !t.field()!.script && t.gbaScreen() === undefined, { what: 'the field after the slot machine', timeout: 30000 });
+  expect(await game.eval((t) => [t.state!.coins, t.field()!.map])).toEqual([0, 'CeladonCity_GameCorner']);
+});
+
+test("the photo printer: ¥50, a pink print, the flash; the party goes on the trainer card's photo", async () => {
+  const game = await session.start({
+    start: 'after-rival',
+    map: 'CeladonCity_GameCorner',
+    x: 16,
+    y: 13,
+    party: [
+      { species: 'PIKACHU', level: 20 },
+      { species: 'UNOWN', level: 20 },
+    ],
+  });
+  await game.eval((t) => (t.state!.money = 1000));
+  const unownLetter = await game.eval((t) => {
+    const p = t.state!.party[1].personality;
+    return (((p & 0x03000000) >>> 18) | ((p & 0x030000) >>> 12) | ((p & 0x0300) >>> 6) | (p & 0x03)) % 28; // GetUnownLetterByPersonality
+  });
+  // CeladonCity_GameCorner_EventScript_PhotoPrinter (the printer east of (16, 13)): YES, then MULTICHOICE_TRAINER_CARD_ICON_TINT
+  const since = await game.mark();
+  await game.eval((t) => t.face('right'));
+  await game.mashUntil((t) => t.events().some((e) => e.type === 'multichoice') && t.money() === 950, { what: 'the print type menu' });
+  await game.waitForEvent('multichoice', { since });
+  await game.pressTimes('DOWN', 2); // PINK
+  await game.press('A');
+  // "A big smile for the photo, please! Three… Two… One…\p Flash!", then dofieldeffect FLDEFF_PHOTO_FLASH
+  await game.eval((t) => t.until(() => (window as any).game.scene.getScene('Overworld').messageBox.waitingForButton));
+  const flash = game.watch((t) => t.field()?.fading && t.field()?.fadeWhite, { what: 'FLDEFF_PHOTO_FLASH' });
+  await game.press('A');
+  await flash;
+  await scriptDone(game, 'the photo printer');
+  expect(await game.eval((t) => [1, 2, 3, 4, 5, 6].map((i) => t.var(`VAR_TRAINER_CARD_MON_ICON_${i}`)).concat(t.var('VAR_TRAINER_CARD_MON_ICON_TINT_IDX'), t.money()))).toEqual([
+    25, // SPECIES_PIKACHU
+    30000 + unownLetter, // SpeciesToMailSpecies: UNOWN_OFFSET + the letter
+    0,
+    0,
+    0,
+    0,
+    2, // MON_ICON_TINT_PINK
+    950,
+  ]);
 });

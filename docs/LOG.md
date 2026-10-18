@@ -2179,3 +2179,79 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   and the money box; no Coin Case; the prize room's Abra for 180 coins and TM13 for 4000, not enough coins; the
   Fisher's 10 coins and hidden coins; a slot machine without a Coin Case and GetRandomSlotMachineId's spread),
   storyCeladonSaffron's Game Corner test. Screenshot of the coin clerk: money and coins boxes as on the GBA.
+
+### W-slots unit 2: the slot machine screen, the Game Corner's smiley and photo printer
+
+- slot_machine.c's screen as `menus/slotMachine.ts`: PlaySlotMachine / CB2_InitSlotMachine / CB2_RunSlotMachine, the
+  main tasks (game loop, no coins, help, confirm exit, no payout, payout, exit), Task_SlotMachine's setup tasks
+  (graphics init, fade out, line lights, Clefairy, coins display, out of coins, quit YES/NO, reel buttons, help
+  slide), the reel icon sprites with HBlankCB_SlotMachine (OAM matrix 0's PA and BLDY per line), the score digits,
+  the two Clefairy, Task_FlashWinningLine. `playslotmachine` (ScrCmd_playslotmachine) runs it from the Game Corner's
+  machines through `host.runScreenFromScript` and the script continues once the field is back.
+- The Game Corner's other gaps: FLDEFF_SMILEY_FACE_ICON (FldEff_SmileyFaceIcon: the Phaser emote over the player),
+  FLDEFF_PHOTO_FLASH (FldEff_PhotoFlash: a fade from white) and special UpdateTrainerCardPhotoIcons (the photo
+  printer fills the trainer card's photo vars), in `script/gameCornerSpecials.ts`. The Game Corner has no gaps left
+  in scriptCoverageGaps.ts.
+- tools/extract_gfx.py: `graphics/slot_machine/` in GFX_PREFIXES; the C files are read in sorted order, and a static
+  symbol that two files define (slot_machine.c's and main_menu.c's `sBg_Pal`) is also written as
+  `<file stem>.<symbol>`. Diffed gfx/index.json: only the new symbols, and two unused palettes (`sUnusedPal`,
+  `sUnused_Pal`) whose plain name now belongs to another file.
+- Fixes found on the way: WIN0H is written as the C does (WIN_RANGE(0, 256) is 0x100, X1 > X2, so the window spans
+  to 240; masking to (0, 0) hid the combos window); Task_SpinReels no longer touches the freed gfx manager in the
+  exit frame (a TypeError). The e2e's own payout table had the top row wrong; the port was right.
+- Verified: typecheck; `npm test` (193); e2e `tests/e2e/gameCorner.test.ts` (8 tests, twice: the 5 before, plus the
+  slot machine (the smiley; R bets 3; spins until a win and a loss, each checked against the payout worked out from
+  the reel table and the coins; START pays at once; DOWN bets one at a time and lights the lines; the help window in
+  and out; B on the YES/NO is NO; YES gives the bet back and returns to the field), no coins ("Game over!" and back),
+  the photo printer (¥50, PINK, the white flash, Pikachu and an Unown's mail species and the tint in the vars)),
+  saveContinue.test.ts and trainerCard.test.ts (the main menu's sBg_Pal, the trainer card). Screenshots of the
+  machine, a win (flashing lines and payout lights), the help window and the quit YES/NO compared with the C's
+  layout: reels at x 80/120/160, CREDIT / PAYOUT digits at y 30, Clefairy at (16, 136) and (224, 136), the YES/NO at
+  tile (19, 9), the message window at (5, 15).
+### The Route 5 daycare (W-daycare unit 2)
+
+- `world/daycare.ts` (new): daycare.c's storage. struct DaycareMon / DayCare in GameState (`route5DayCareMon`,
+  `daycare`, which takes over `daycareStepCounter` as `daycare.stepCounter`), StorePokemonInDaycare,
+  TakeSelectedPokemonFromDaycare, ApplyDaycareExperience, GetLevelAfterDaycareSteps, GetNumLevelsGained*,
+  GetDaycareCostForSelectedMon, ShiftDaycareSlots, CountPokemonInDaycare; ShouldEggHatch / TryProduceOrHatchEgg
+  moved here from world/stepCounters.ts (which re-exports it) and now count the Route 5 mon's steps (and the Four
+  Island mons', for unit 3).
+- `script/daycareSpecials.ts` (new, spread into SPECIALS): ChooseSendDaycareMon, GetSelectedMonNicknameAndSpecies,
+  PutMonInRoute5Daycare, GetCostToWithdrawRoute5DaycareMon, IsThereMonInRoute5Daycare,
+  GetNumLevelsGainedForRoute5DaycareMon, TakePokemonFromRoute5Daycare. SIDE_SPECIALS: IsEnoughForCostInVar0x8005,
+  SubtractMoneyFromVar0x8005 (money.c), CalculatePlayerPartyCount (also used by the cable club attendants).
+- Fix on the way: partyMenu.ts's ChooseMonForDaycare didn't set gFieldCallback2 = CB2_FadeFromPartyMenu, so the
+  field wouldn't have faded back in after the daycare's party menu.
+- Save format version 4: `daycare` and `route5DayCareMon` replace `daycareStepCounter`; `upgradeSave` turns a
+  version 3 save into one with both daycares empty and the old step counter kept.
+- Ten entries off `scriptCoverageGaps.ts`. Route5_PokemonDayCare's script runs end to end.
+- Verified: typecheck; `npm test` (205, incl. the new daycare.test.ts and a version 3 save upgrade); e2e
+  daycare.test.ts (new, 4 tests: leave a mon, 46 steps "back already" and NO, 92 steps a level for ¥200; eight
+  levels with Quick Attack and Hyper Fang learned, not enough money first; a one-mon party refused and B in the
+  party menu; save and CONTINUE keeps the mon and its steps), saveContinue, wildBattle; a screenshot of the
+  daycare party menu's STORE / SUMMARY / CANCEL.
+
+### Egg hatching (W-daycare unit 4, as W-hatch)
+
+- `menus/eggHatch.ts` (new): daycare.c's EggHatch / Task_EggHatch (the special: fade, then
+  `runScreenFromScript`), CB2_EggHatch_0 / CB2_EggHatch_1 with EggHatchCreateMonSprite, SpriteCB_Egg_0..5,
+  CreateRandomEggShardSprite / SpriteCB_EggShard (sEggShardVelocities), Task_EggHatchPlayBGM (silent),
+  EggHatchPrintMessage, EggHatchSetMonNickname; CreatedHatchedMon / AddHatchedMonToParty (level 5, the egg's
+  personality / IVs / moves / markings / Pokérus, friendship 120, species name, Poké Ball, met level 0 at the
+  current map section, Pokédex seen + caught, PP restored) and ScriptHatchMon. EGG_HATCH_SPECIALS spread into
+  SPECIALS; EggHatch is off scriptCoverageGaps.ts.
+- OverworldScene: IncrementGameStat(GAME_STAT_HATCHED_EGGS) before EventScript_EggHatch, as
+  TryStartStepCountScript does (game stats are kept now).
+- Graphics: the egg sheets and palette were already extracted (graphics/misc/, graphics/pokemon/); the shadow
+  (gTradeGba_Gfx, gTradeGba2_Pal, gTradeOrHatchMonShadowTilemap) comes with W-trade's `graphics/trade/` prefix.
+- Found on the way: BG palette 15 is the YES/NO's text palette and the scene never loads it (the GBA field leaves
+  the message box palette there); without it the YES/NO was a black box. The scene loads it at start. Also, with
+  `graphics/trade/` extracted, trade_scene.c's sBlackPalette shadows evolution_scene.c's (both all black, so
+  harmless).
+- Test hooks: `MonSpec.egg` (an egg with that many cycles left, as CreateEgg makes it), `__test.eggHatch()`.
+- Verified: typecheck; `npm test` (209, incl. the new eggHatch.test.ts); e2e eggHatch.test.ts (new, 2 tests: the
+  step that hatches the egg, the scene's states / cracks / 19 shards / the mon shown, NO, the hatched mon's level,
+  IVs, moves, personality, friendship, met level, the game stat and the Pokédex, back on the field with the script
+  done; YES and "AA" through the naming screen) and daycare.test.ts, twice each. Screenshots: the cracked egg, the
+  "BULBASAUR hatched from the EGG!" message over the shadow, the YES/NO, the naming screen with the mon icon.
+

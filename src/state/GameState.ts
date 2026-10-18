@@ -4,6 +4,7 @@ import { TEMP_VARS_END, TEMP_VARS_START, type Defines } from '../script/Defines'
 import type { TextSpeed } from '../text/TextPrinter';
 import { random32 } from '../util/random';
 import type { Direction } from '../world/direction';
+import type { DayCare, DaycareMon } from '../world/daycare';
 import { Bag, type ItemSlot } from './Bag';
 import type { PlayTime } from './playTime';
 import { NewGameInitPCItems } from './pcItems';
@@ -54,8 +55,10 @@ export class GameState {
   trainerRematches: number[] = [];
   /** gSaveBlock1Ptr->trainerRematchStepCounter: low byte = steps with the VS Seeker in the bag, high byte = charging steps. */
   trainerRematchStepCounter = 0;
-  /** gSaveBlock1Ptr->daycare.stepCounter (u8): party eggs lose an egg cycle each time it reaches 255. */
-  daycareStepCounter = 0;
+  /** gSaveBlock1Ptr->daycare (world/daycare.ts): the Four Island daycare's two mons, pending egg and egg-cycle step counter. */
+  daycare: DayCare = { mons: [{ mon: null, steps: 0 }, { mon: null, steps: 0 }], offspringPersonality: 0, stepCounter: 0 }; // DAYCARE_MON_COUNT
+  /** gSaveBlock1Ptr->route5DayCareMon: the Route 5 daycare man's one mon (world/daycare.ts). */
+  route5DayCareMon: DaycareMon = { mon: null, steps: 0 };
   /** gSaveBlock1Ptr->roamer (struct Roamer). The contest stats are left out: FRLG mons never have any. */
   roamer: RoamerSave = { ivs: { hp: 0, attack: 0, defense: 0, speed: 0, spAttack: 0, spDefense: 0 }, personality: 0, species: 0, hp: 0, level: 0, status: 0, active: false };
   /** gNumSafariBalls / gSafariZoneStepCounter (safari_zone.c, EWRAM): set by EnterSafariMode. */

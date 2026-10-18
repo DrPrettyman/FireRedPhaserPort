@@ -785,7 +785,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       if (updatePoisonStepCounter(this.state, this.world.current.data.mapType, () => this.startPoisonEffect())) {
         return this.startFieldScript('EventScript_FieldPoison');
       }
-      if (shouldEggHatch(this.state)) return this.startFieldScript('EventScript_EggHatch'); // (GAME_STAT_HATCHED_EGGS isn't kept)
+      if (shouldEggHatch(this.state)) {
+        this.state.incrementGameStat(this.defines.require('GAME_STAT_HATCHED_EGGS'));
+        return this.startFieldScript('EventScript_EggHatch');
+      }
     }
     return this.safariZoneTakeStep();
   }
