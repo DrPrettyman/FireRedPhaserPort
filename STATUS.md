@@ -19,11 +19,16 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
   catching tutorial, Viridian Forest trainers, Brock; every gym and required story event after it, as e2e tests
   (`story.test.ts`, `storyCeladonSaffron.test.ts`, `storyLeague.test.ts`: Misty to Giovanni, Bill, the S.S. Anne,
   the Rocket Hideout, Pokémon Tower, Silph Co., the Safari Zone, Cinnabar, Route 22/23, the Elite Four and the
-  Champion); the ending (Hall of Fame room → Hall of Fame → credits → reset → CONTINUE in Pallet Town).
+  Champion); the ending (Hall of Fame room → Hall of Fame → credits → reset → CONTINUE in Pallet Town); Bill's
+  Sevii 1-3 trip after Blaine (`seviiQuest.test.ts`: Celio, the bikers, Lostelle, back to Cinnabar).
 
 ## Next up
 
-[SIDE_PLAN.md](SIDE_PLAN.md) batch 1 is in (PRs #56-#67): Prof. Oak's Pokédex rating (in person and on the
+[SIDE_PLAN.md](SIDE_PLAN.md) batch 2 is in (PRs #69-#77): the Seagallop ferry from every harbor and Bill's
+One Island trip and back, the S.S. Anne's departure (ss_anne.c) and a sweep of the S.S. Anne (nothing else was
+wrong), the Elite Four / Champion rooms' lighting, `multichoice` resuming a frame after the choice, and Easy Chat
+(easy_chat*.c: the Pewter profile, the questionnaire, the trainer card's profile words; save version 5).
+Batch 1 (PRs #56-#67): Prof. Oak's Pokédex rating (in person and on the
 PC), the move tutors, move deleter, move relearner and Cape Brink tutor, ChoosePartyMon, the in-game trades with
 their trade scene, the Name Rater, the Game Corner (coins box, clerks, prize room, slot machine, photo printer),
 the museum's fossil pics and the fossil revival, the Route 5 and Four Island daycares, eggs, `giveegg`, egg
@@ -36,11 +41,9 @@ the trainer card, and headless story checks from Brock to the Hall of Fame.
 No known main-path blockers are left: the story checks found and fixed four (Lt. Surge's trash cans, the Rocket
 Hideout's `call_if_defeated` barrier, `GetQuestLogState` leaving VAR_RESULT stale so `trainerbattle_no_intro`
 could skip its battle, every nurse's YES/NO throwing on a constant expression). `tests/unit/scriptCoverageGaps.ts`
-lists what the scripts use that isn't ported: 2 main (both visual: the Elite Four lighting, the S.S. Anne
-departure), 11 side, 42 postgame, 44 link. Next: the last side gaps (the Seagallop ferry for Bill's One Island
-trip, Easy Chat for the Pewter questionnaire, IsPlayerLeftOfVermilionSailor, GetMartClerkObjectId), then audio
-(SE, cries and BGM are no-ops; see DEVIATIONS for what waits on them), then the postgame (Sevii 4-7, Trainer
-Tower).
+lists what the scripts use that isn't ported: 0 main, 0 side, 42 postgame, 44 link (and 3 tagged `unused`: shared
+with Emerald, reached by no FRLG map). Next: audio (SE, cries and BGM are no-ops; see DEVIATIONS for what waits on
+them), then the postgame (Sevii 4-7, Mt. Ember, Trainer Tower, the event islands).
 
 Other open work:
 
@@ -139,7 +142,13 @@ Loose ends:
 - [x] Daycares and eggs (daycare.c): Route 5 and Four Island, egg production, egg species / IVs / moves, `giveegg`,
   the level menu, the hatching scene
 - [x] Side specials: Oak's Pokédex rating, the museum fossil pics, holes (DoFallWarp), Daisy, the Magikarp record,
-  the diploma (diploma.c), the Trainer Fan Club
+  the diploma (diploma.c), the Trainer Fan Club, GetMartClerkObjectId
+- [x] The Seagallop ferry (seagallop.c): the ferry scene, the harbors' destination menus (Tri-Pass, Rainbow Pass
+  pages), Bill's One Island trip; the Navel Rock / Birth Island harbors without the event tickets
+- [x] The S.S. Anne's departure (ss_anne.c: the ship sails off with its wake and smoke) and the Elite Four /
+  Champion rooms' lighting (field_specials.c: BG palette 7 cycles, redrawn through world/TilesetVram.ts)
+- [x] Easy Chat (easy_chat.c, easy_chat_2.c, easy_chat_3.c): the words, the screen (groups, A-Z keyboard, word
+  list), ShowEasyChatScreen / ShowEasyChatMessage, the profile and the questionnaire; saved
 - [x] Items: additem/removeitem/checkitem/checkitemspace/checkitemtype, giveitem/giveitem_msg through the std scripts,
   item balls (`finditem` → Std_FindItem), hidden items (EventScript_HiddenItemScript, incl. hidden coins); coins
   (checkcoins/addcoins/removecoins)
@@ -238,7 +247,8 @@ Loose ends:
   the Pokédex (lists, mon page, habitats, area page, registering a catch), TM case / berry pouch, rods, Escape
   Rope, VS Seeker, Itemfinder, registered items, options, trainer card, the story gym by gym; move tutors /
   deleter / relearner, in-game trades and the Name Rater, the Game Corner, Oak's rating and the fossils, the
-  daycares, eggs and hatching, holes and the other side specials
+  daycares, eggs and hatching, holes and the other side specials; the Seagallop ferry from every harbor and the
+  Sevii 1-3 quest, the S.S. Anne (ticket check, departure, the dock after), the league lighting, Easy Chat
 - [x] Script coverage unit test: every script command, special, std script, movement action and field effect the
   scripts use, against the port's tables; known gaps tagged in `tests/unit/scriptCoverageGaps.ts`
 - [ ] More scenarios: party menu from the start menu, items in battle, level-up move learning, the Old Man

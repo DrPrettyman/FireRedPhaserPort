@@ -2550,3 +2550,24 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   merging master. A first run beside five other files failed three ferry tests on the `warp` race above, fixed
   before the green runs. Screenshots of a harbor menu, Three Island's bikers, Berry Forest and Navel Rock's harbor
   checked by eye.
+
+### SIDE_PLAN.md batch 2 merged (PRs #69-#77)
+
+- Plan: SIDE_PLAN.md batch 2 (#69). Merged one PR per unit as each went green: #70 the S.S. Anne departure
+  (ss_anne.c) and an S.S. Anne sweep (nothing else wrong); #71 the league lighting (and MAP_SCRIPT_ON_RESUME on
+  every map load), GetMartClerkObjectId, the `unused` gap tag, a Trainer Fan Club e2e, the e2e egg hook through
+  createEgg; #73 the Seagallop ferry and Bill's trip; #72 / #74 / #75 / #77 Easy Chat units 1-4; #76 every harbor,
+  the Sevii 1-3 quest, `multichoice` resuming a frame after the choice.
+- Conflict resolutions: `tests/unit/scriptCoverageGaps.ts` in every merge (each side removed its own entries). In
+  #73 the conflict resolution kept the three entries #71 had moved to `unused` and GetMartClerkObjectId, which the
+  coverage test caught; rebuilt as master's file minus #73's lines (do this rather than resolving the conflict
+  blocks by hand). `src/dev/testHooks.ts` (kept both probes), `script/specials.ts` (kept both spread lines),
+  `tools/extract_gfx.py`'s GFX_PREFIXES comment.
+- Races found in #71's full merge run at load ~230 (passed alone, fixed in #71): transitions.test.ts read the field
+  after `waitForEvent('barnDoorWipe')` with a round trip that could land after the fade (now read in the page on
+  the wipe's tick); storyLeague.test.ts's Champion battle ran past mashUntil's 120 s wall-clock default (now 300 s
+  for whole battles; the frame budget stays the bound; tests/README.md item 8).
+- Verified: each PR after merging master in: typecheck, `npm test`, its own e2e file plus the files for shared code;
+  the full e2e suite for #71 (ON_RESUME on map loads), #76 (ScriptEngine's multichoice) and #77 (the final tree).
+  Last run, on the final tree (#77 with master merged, identical to master after its squash): typecheck clean, 289
+  unit, 385 e2e in 57 files.

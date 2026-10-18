@@ -144,7 +144,12 @@ pic, the daycare and egg fields in GameState / saveData.
 | Batch | Workers | Why together |
 |---|---|---|
 | 1 (done, PRs #56-#67) | W-moves (1, 2), W-trade (1, 2), W-slots (1, 2; spare 3 not needed), W-daycare (1, 2, 3), W-hatch (unit 4, alongside 2-3), W-misc (the other small side specials) | Different files; all four are side content the user asked for, ordered by how often a player meets it |
-| 2 | W-ferry (1, 2), W-ssanne (1), W-league (1, 2), then W-easychat if there's room | The user's focus: the ferry for Bill's trip, the S.S. Anne, the last two main gaps; three workers, a fourth for Easy Chat once the focus is done |
+| 2 (done, PRs #69-#77) | W-ferry (1, 2), W-ssanne (1), W-league (1, 2), W-easychat (1-4) | The user's focus: the ferry for Bill's trip, the S.S. Anne, the last two main gaps; three workers, then Easy Chat in the freed slots |
+
+Batch 2 merged: #69 the plan; #70 the S.S. Anne departure and sweep; #71 the league lighting, GetMartClerkObjectId,
+the `unused` gap tag, the fan club e2e, the egg hook; #73 the ferry and Bill's trip; #72, #74, #75, #77 Easy Chat
+(data and easy_chat.c, the screen model, the main layer and ShowEasyChatScreen, choosing words); #76 every harbor,
+the Sevii 1-3 quest played headless, `multichoice` resuming a frame after the choice. No side gaps are left.
 
 Batch 1 merged: #57 party selection, tutors, deleter; #58 trades behind a fade, Name Rater; #59 coins box, Game
 Corner clerks, slot machine logic; #60 Oak's rating, fossil pics, fossil revival check; #61 move relearner, Cape
@@ -339,7 +344,9 @@ Worker and merger rules: docs/WORKFLOW.md sections 3 and 4. Each worker's e2e fi
    `bufferdecorationname` (Std_ObtainDecoration) and FLDEFF_USE_DIVE (EventScript_DeepWater / TrySurface) are
    shared with Emerald's std scripts but no FRLG map calls them. They get their own tag rather than being ported.
 9. **Easy Chat waits for the focus** (the user's call): W-easychat starts only when the other three workstreams
-   have no units left to start, in the slot one of them frees.
+   have no units left to start, in the slot one of them frees. (Coordinator, revisit if you disagree: it started
+   once W-ssanne and W-league had finished and W-ferry's unit 1 was running, since W-ferry's unit 2 could only
+   follow its unit 1 and the free slots had no focus work left to take. It never held up the ferry.)
 
 ## Not in this plan
 
