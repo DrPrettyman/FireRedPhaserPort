@@ -63,6 +63,7 @@ GFX_PREFIXES = (
     "graphics/pokedex/",
     "graphics/itemfinder/",
     "graphics/trainer_card/",
+    "graphics/trade/",
     "data/tilesets/",
 )
 

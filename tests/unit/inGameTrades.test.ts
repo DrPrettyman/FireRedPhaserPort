@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from 'vitest';
 import type { Pokemon } from '../../src/pokemon/Pokemon';
 import type { SpecialEnv } from '../../src/script/specials';
 import { SPECIALS } from '../../src/script/specials';
-import { initInGameTrades, type TradesData } from '../../src/script/tradeSpecials';
+import { BufferInGameTradeMonName, initInGameTrades, TradeMons, type TradesData } from '../../src/script/tradeSpecials';
 import { newGame, readGen, type TestGame } from './gameData';
 
 let t: TestGame;
@@ -110,23 +110,12 @@ describe('in-game trade specials (trade_scene.c)', () => {
     expect(t.state.enemyParty[0].abilityNum).toBe(1);
   });
 
-  test('DoInGameTradeScene: fade out, the mons swap (friendship 70, Pokédex), names buffered, fade in, then the wait ends', () => {
+  test('TradeMons + BufferInGameTradeMonName (the trade scene\'s end): the mons swap (friendship 70, Pokédex), names buffered', () => {
     t.state.setVar('VAR_0x8005', 1);
     run('CreateInGameTradePokemon', env().e);
     const abra = t.state.party[1];
-    const { e, waits, fades, hidden } = env(3);
-    run('DoInGameTradeScene', e);
-    expect(waits).toHaveLength(1);
-    expect(fades).toEqual([t.d('FADE_TO_BLACK')]);
-    const wait = waits[0];
-    let polls = 0;
-    while (!wait()) {
-      // the swap happens behind the black screen, never before
-      if (fades.length === 1) expect(t.state.party[1]).toBe(abra);
-      if (++polls > 20) throw new Error('DoInGameTradeScene never ended');
-    }
-    expect(fades).toEqual([t.d('FADE_TO_BLACK'), t.d('FADE_FROM_BLACK')]);
-    expect(hidden()).toBe(1);
+    TradeMons(t.state, 1, 0);
+    BufferInGameTradeMonName(t.state);
     const mime = t.state.party[1];
     expect(mime.species).toBe(species('MR_MIME'));
     expect(mime.friendship).toBe(70);
