@@ -36,6 +36,7 @@ import { pokedexAreaProbe } from '../menus/pokedexArea';
 import { pokedexScreenProbe } from '../menus/pokedexScreen';
 import { regionMapProbe } from '../menus/regionMap';
 import { trainerCardProbe } from '../menus/trainerCard';
+import { slotMachineProbe } from '../menus/slotMachine';
 import { mainMenuProbe } from '../menus/mainMenu';
 import { titleScreenProbe } from '../menus/titleScreen';
 import { clearSaveDataProbe } from '../menus/clearSaveDataScreen';
@@ -613,6 +614,12 @@ function createApi(game: Phaser.Game) {
       const p = trainerCardProbe();
       return p && { ...p, printed: Object.fromEntries(Object.entries(p.printed).map(([k, v]) => [k, decode(v!)])) as Record<string, string> };
     },
+    /**
+     * The slot machine while it's up (menus/slotMachine.ts): the main task and its step, `ready` (CB2_RunSlotMachine,
+     * no fade), the game state (bet, reels, win lines, payout), the CREDIT / PAYOUT digits drawn, Clefairy's anim,
+     * the help window's slide, the line lights' palettes and the reel buttons.
+     */
+    slotMachine: () => slotMachineProbe(),
     /** The item PC's list (WITHDRAW ITEM, item_pc.c) while it runs: its task, scroll/row and item count. */
     itemPc: () => (gMain.callback2?.name === 'ItemPc_MainCB' ? itemPcProbe() : undefined),
     /** The TM case while it's open (menus/tmCase.ts): TMCASE_* type, task, scroll/row and the pocket's item ids in list order. */

@@ -24,7 +24,7 @@ from extract import read_jasc
 # credits, the region map (town map / fly map) with the dungeon map previews it shows, the TM case, the berry
 # pouch, and the Pokédex (pokedex_screen.c with the mons' footprints, the area page's maps and
 # pokedex_area_markers.c's markers), the Itemfinder's arrows and star (itemfinder.c), and the trainer card
-# (trainer_card.c).
+# (trainer_card.c), the slot machine (slot_machine.c).
 GFX_PREFIXES = (
     "graphics/battle_interface/",
     "graphics/battle_terrain/",
@@ -63,6 +63,7 @@ GFX_PREFIXES = (
     "graphics/pokedex/",
     "graphics/itemfinder/",
     "graphics/trainer_card/",
+    "graphics/slot_machine/",
     "data/tilesets/",
 )
 
@@ -256,16 +257,21 @@ def firered_only(text):
 def incbin_symbols(decomp):
     """symbol -> [build product paths] across src/ (C files and the headers they include)."""
     syms = {}
-    for f in list((decomp / "src").rglob("*.c")) + list((decomp / "src/data").rglob("*.h")):
+    owner = {}  # symbol -> file stem that holds the plain name
+    for f in sorted((decomp / "src").rglob("*.c")) + sorted((decomp / "src/data").rglob("*.h")):
         text = firered_only(f.read_text(errors="replace"))
         for sym, paths in INCBIN.findall(text) + INCBIN_ARRAY.findall(text):
             files = re.findall(r"\"([^\"]+)\"", paths)
             if not all(p.startswith(GFX_PREFIXES) for p in files):
                 continue
             if sym in syms and syms[sym] != files:
-                print(f"  gfx: duplicate symbol {sym} ({f.name}); keeping first")
+                # Static symbols with the same name in two files (sBg_Pal): each is also kept as
+                # <file stem>.<symbol> (slot_machine.sBg_Pal), the plain name stays the first one's.
+                syms.setdefault(f"{owner[sym]}.{sym}", syms[sym])
+                syms[f"{f.stem}.{sym}"] = files
                 continue
             syms[sym] = files
+            owner.setdefault(sym, f.stem)
     return syms
 
 

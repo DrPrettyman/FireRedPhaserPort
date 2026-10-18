@@ -29,7 +29,6 @@ export const KNOWN_GAPS: KnownGap[] = [
   // ---------------------------------------------------------------- side: optional content before the Hall of Fame (NPCs, trades, the Game Corner, the daycare, the Sevii 1-3 trip).
   { kind: 'command', name: 'adddecoration', tag: 'side', where: "(Std_ObtainDecoration)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
   { kind: 'command', name: 'bufferdecorationname', tag: 'side', where: "(EventScript_ObtainDecorMessage)", note: "Std_ObtainDecoration: no FRLG script gives a decoration" },
-  { kind: 'command', name: 'playslotmachine', tag: 'side', where: "CeladonCity_GameCorner" },
   { kind: 'special', name: 'BackupHelpContext', tag: 'side', where: "(EventScript_AccessHallOfFame), PalletTown_ProfessorOaksLab", note: "the Hall of Fame PC and the Pokédex rating; help system (a no-op like the other help specials)" },
   { kind: 'special', name: 'BufferBigGuyOrBigGirlString', tag: 'side', where: "ThreeIsland_BerryForest, ThreeIsland_House1, TwoIsland_JoyfulGameCorner" },
   { kind: 'special', name: 'CalculatePlayerPartyCount', tag: 'side', where: "CeladonCity_PokemonCenter_2F, CeruleanCity_PokemonCenter_2F, CinnabarIsland_PokemonCenter_2F, FiveIsland_PokemonCenter_2F, FourIsland, ... (22 in all)" },
