@@ -3,6 +3,7 @@ import { spriteTextureKey, type Assets } from '../data/assets';
 import type { MapData, ObjectEventData, WarpEventData } from '../data/types';
 import { bdata, initBattleEnv } from '../battle/env';
 import { K } from '../battle/constants';
+import { PlaySE } from '../gba/sound'; // field_control_avatar.c's SEs (W-sound 4)
 import { BattleTransition_StartOnField, battleTransitionGfxSymbols, IsBattleTransitionDone, setTransitionFieldCamera } from '../battle/transition';
 import { loadGfx } from '../gba/gfx';
 import { RGB_BLACK, RGB_WHITE } from '../gba/hw';
@@ -650,6 +651,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (!this.busy && !lockedAtFrameStart && !blocked) {
       if (this.startMenuWhenFree) {
         this.startMenuWhenFree = false;
+        PlaySE(K.SE_WIN_OPEN);
         this.openStartMenu();
         return;
       }
@@ -746,6 +748,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (input.pressedAButton && this.interact()) return true;
     if (input.heldDirection2 && input.dpadDirection === facing && this.tryDoorWarp(facing)) return true;
     if (input.pressedStartButton) {
+      PlaySE(K.SE_WIN_OPEN);
       this.openStartMenu();
       return true;
     }
@@ -879,13 +882,19 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         this.scripts.npcTextColor = textColorFromId(npc.brain.obj.info.textColor, this.defines);
         this.state.setVar('VAR_LAST_TALKED', npc.localId);
         this.state.setVar('VAR_FACING', directionId(dir, this.defines));
-        return this.scripts.start(script);
+        return this.startInteractionScript(script);
       }
     }
     const script = this.interactedBackgroundEventScript(behavior, dir) ?? this.interactedMetatileScript(behavior, dir) ?? GetInteractedWaterScript(behavior);
     if (!script) return false;
     this.selectedObject = undefined;
     this.scripts.npcTextColor = 'neutral';
+    return this.startInteractionScript(script);
+  }
+
+  /** TryStartInteractionScript: SE_SELECT (except for the PCs), then ScriptContext_SetupScript. */
+  private startInteractionScript(script: string): boolean {
+    if (script !== 'PalletTown_PlayersHouse_2F_EventScript_PC' && script !== 'EventScript_PC') PlaySE(K.SE_SELECT);
     return this.scripts.start(script);
   }
 
@@ -2864,7 +2873,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const npc = this.npcs.find((n) => n.brain.obj === boulder && n.chunk === cur);
     if (this.behaviors.is(behavior, 'FALL_WARP') && npc) {
       // RemoveObjectEventByLocalIdAndMap, then FlagClear(GetBoulderRevealFlagByLocalIdAndMap): a boulder's
-      // template keeps the flag of its twin on the floor below in its trainer type (SE_FALL: no audio).
+      // template keeps the flag of its twin on the floor below in its trainer type.
+      PlaySE(K.SE_FALL);
       const reveal = this.templatesFor(cur)[npc.localId - 1]?.trainer_type;
       this.removeObject(npc.localId);
       if (reveal && reveal.startsWith('FLAG_')) this.state.setFlag(reveal, false);

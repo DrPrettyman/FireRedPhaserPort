@@ -4,7 +4,9 @@
 // The GBA-layer screens (the bag) use src/gba/listMenu.ts; the field draws with Phaser windows.
 
 import Phaser from 'phaser';
+import { K } from '../battle/constants';
 import { gfx, gfx16 } from '../gba/gfx';
+import { PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import { gSineTable } from '../battle/trig';
 import type { GameState } from '../state/GameState';
@@ -456,8 +458,9 @@ class ScriptListMenuTask implements FieldTask {
     this.func = 'Task_ListMenuHandleInput';
   }
 
-  /** ScriptListMenuMoveCursorFunction (PlaySE(SE_SELECT) is silent) */
+  /** ScriptListMenuMoveCursorFunction */
   private scriptListMenuMoveCursorFunction(): void {
+    PlaySE(K.SE_SELECT);
     // FindTaskIdByFunc(Task_ListMenuHandleInput): not yet while the list is being created
     if (this.func === 'Task_ListMenuHandleInput' && this.list) sListMenuLastScrollPosition = this.list.cursorPos;
   }
@@ -470,10 +473,12 @@ class ScriptListMenuTask implements FieldTask {
         break;
       case LIST_CANCEL:
         this.state.setVar('VAR_RESULT', SCR_MENU_CANCEL);
+        PlaySE(K.SE_SELECT);
         this.destroyListMenu();
         break;
       default:
         this.state.setVar('VAR_RESULT', input);
+        PlaySE(K.SE_SELECT);
         if (this.data[6] === 0 || input === this.data[1] - 1) {
           this.destroyListMenu();
         } else {
