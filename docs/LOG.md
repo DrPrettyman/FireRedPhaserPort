@@ -2102,6 +2102,45 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   four moves, B in the tutor's party menu, deleting GROWL from the middle of four moves with PP Ups shifted, B out
   of the deleter's party menu and summary screen), tests/e2e/tmCase.test.ts; screenshots of the field after both.
 
+### The in-game trade scene (W-trade unit 2)
+
+- `menus/tradeScene.ts`: trade_scene.c's in-game path: CB2_InitInGameTrade (TradeAnimInit_LoadGfx, LoadTradeMonPic,
+  LoadTradeGbaSpriteGfx, TradeBufferOTnameAndNicknames), CB2_InGameTrade / DoTradeAnim, SetTradeSequenceBgGpuRegs
+  (incl. the affine BG2 for the zooming GBA, set through BgAffineSet like SetTradeBGAffine), VBlankCB_TradeAnim,
+  the sprite templates and callbacks (the bouncing Poké Ball leaving and arriving, the link mon glow and its
+  shadow's palette flash, the GBA screen flash), DrawTextOnTradeWindow, Task_AnimateWirelessSignal,
+  Task_OpenCenterWhiteColumn / Task_CloseCenterWhiteColumn. `DoInGameTradeScene` (script/tradeSpecials.ts) now
+  runs it through `runScreenFromScript`, replacing unit 1's fade stand-in.
+- Found on the way: the in-game trade is the *wireless* animation, not the cable one. CB2_InitInGameTrade
+  allocates sTradeAnim zeroed and only CB2_LinkTrade sets isCableTrade, so DoTradeAnim always takes
+  DoTradeAnim_Wireless here (the plan said cable). The cable path is a link trade's and stays out.
+- Graphics: `graphics/trade/` added to extract_gfx.py's GFX_PREFIXES. trade_scene.c's unused sBlackPalette has the
+  same name as evolution_scene.c's; the extractor keeps one of them, and both files are identical (black).
+- The Poké Ball open particles (battle/anim/special.ts) play their SE through the battle's BattleUi, which isn't set
+  on FieldMenuScene: the scene sets a silent one if none is set.
+- Verified: typecheck, `npm test` (170; the stand-in's unit test became one for TradeMons + BufferInGameTradeMonName),
+  tests/e2e/inGameTrades.test.ts (6): Reyley's trade runs the scene from STATE_START to STATE_WAIT_FADE_OUT_END
+  under CB2_InitInGameTrade / CB2_InGameTrade, the swap happens while it's up, eight frames rendered mid-scene
+  draw something (the GBA fills the screen when zoomed), ABRA's and MR. MIME's pics are drawn; then back on the
+  field. Looked at the eight frames (TRADE_SHOTS) against the C's states.
+### The move relearner and the Cape Brink tutor (W-moves unit 2)
+
+- `menus/learnMove.ts`: learn_move.c (TeachMoveRelearnerMove's screen: CB2_MoveRelearner_Init / _Resume, the
+  MENU_STATE_* machine, the move list, the type / power / accuracy / PP / description windows, the "Teach X?",
+  "give up?", "trying to learn" and "stop learning" YES/NO prompts, forgetting a move through
+  ShowSelectMovePokemonSummaryScreen and back) and pokemon.c's GetMoveRelearnerMoves / GetNumberOfRelearnableMoves.
+  The scroll arrows' sprites (`graphics/learn_move/`) come through the extractor (GFX_PREFIXES).
+- `menus/partyMenuSpecials.ts`: the TeachMoveRelearnerMove special, CapeBrinkGetMoveToTeachLeadPokemon,
+  HasLearnedAllMovesFromCapeBrinkTutor (with GetLeadMonIndex); three entries off `scriptCoverageGaps.ts`.
+  The party menu's PARTY_MENU_TYPE_MOVE_RELEARNER branch sets VAR_0x8005 (it only warned before).
+- `ScriptHost.runScreenFromScript(init, gfxSymbols?)`: the screen's extra graphics are preloaded;
+  `__test.moveRelearner()` probe.
+- Two Island's Move Maniac asks for a Big Mushroom or two Tiny Mushrooms (FRLG has no Heart Scale).
+- Verified: typecheck, `npm test` (163), tests/e2e/moveTutors.test.ts (9, twice: + relearning METAL CLAW with a
+  free slot and over GROWL with four moves, B out of the list (NO back to the list, YES back to the party menu),
+  the Cape Brink tutor teaching Blast Burn, Frenzy Plant and Hydro Cannon to max-friendship starters until "passed
+  on everything"), tests/e2e/tmCase.test.ts, tests/e2e/evolution.test.ts; screenshots of the list, the YES/NO and
+  the "1, 2, and... Poof!" after the summary screen.
 ### Oak's Pokédex rating, the museum's fossil pics, the fossil revival (W-daycare unit 1)
 
 - `script/sideSpecials.ts` (new, spread into SPECIALS): GetProfOaksRatingMessage (prof_pc.c

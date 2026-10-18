@@ -1,7 +1,8 @@
 // party_menu_specials.c: the script specials that pick a party mon (ChoosePartyMon for the in-game trades, the
 // Name Rater, the move deleter...; ChooseMonForMoveRelearner), the move deleter's (SelectMoveDeleterMove,
-// MoveDeleterForgetMove and its helpers), plus party_menu.c's ChooseMonForMoveTutor for the move tutors.
-// SPECIALS (script/specials.ts) spreads PARTY_MENU_SPECIALS in.
+// MoveDeleterForgetMove and its helpers), plus party_menu.c's ChooseMonForMoveTutor for the move tutors,
+// learn_move.c's TeachMoveRelearnerMove (the relearner screen is menus/learnMove.ts) and field_specials.c's Cape
+// Brink tutor checks. SPECIALS (script/specials.ts) spreads PARTY_MENU_SPECIALS in.
 
 import { K } from '../battle/constants';
 import { bdata } from '../battle/env';
@@ -11,6 +12,7 @@ import type { Pokemon } from '../pokemon/Pokemon';
 import type { Special, SpecialEnv } from '../script/specials';
 import { GetMonNickname, strBody } from './common';
 import { CB2_ReturnToField, gFieldCallback } from './fieldCallbacks';
+import { LEARN_MOVE_GFX, StartMoveRelearner } from './learnMove';
 import { ChooseMonForMoveTutor, ChoosePartyMonByMenuType } from './partyMenu';
 import { SetPokemonSummaryScreenMode, ShowSelectMovePokemonSummaryScreen } from './summaryScreen';
 
@@ -69,7 +71,7 @@ export const PARTY_MENU_SPECIALS: Record<string, Special> = {
     chooseMon(env, env.state.defines.require('PARTY_MENU_TYPE_CHOOSE_SINGLE_MON'));
   },
 
-  /** The party menu half; the relearner screen it leads to (learn_move.c) isn't ported yet. */
+  /** The party menu half: VAR_0x8005 = GetNumberOfRelearnableMoves of the chosen mon (HandleChooseMonSelection). */
   ChooseMonForMoveRelearner(env) {
     chooseMon(env, env.state.defines.require('PARTY_MENU_TYPE_MOVE_RELEARNER'));
   },
@@ -123,4 +125,67 @@ export const PARTY_MENU_SPECIALS: Record<string, Special> = {
   IsSelectedMonEgg({ state }) {
     state.setVar('VAR_RESULT', selectedMon(state).isEgg ? 1 : 0);
   },
+
+  /**
+   * TeachMoveRelearnerMove (learn_move.c): LockPlayerFieldControls, fade to black, then Task_InitMoveRelearnerMenu
+   * hands over to the relearner (CB2_MoveRelearner_Init) for mon VAR_0x8004. It comes back through
+   * CB2_ReturnToField; FieldCB_ContinueScriptHandleMusic (the field's default return) fades in and ends the
+   * `waitstate`. VAR_0x8004 is TRUE if a move was taught.
+   */
+  TeachMoveRelearnerMove({ state, host, setWaitState }) {
+    const fade = host.fadeScreen(state.defines.require('FADE_TO_BLACK'));
+    let screen: (() => boolean) | undefined;
+    setWaitState(() => {
+      if (!screen) {
+        if (!fade()) return false;
+        screen = host.runScreenFromScript(StartMoveRelearner, LEARN_MOVE_GFX);
+      }
+      return screen();
+    });
+  },
+
+  /**
+   * CapeBrinkGetMoveToTeachLeadPokemon (field_specials.c): whether the lead mon is a fully evolved starter with
+   * max friendship that hasn't had its ultimate move yet. VAR_0x8005 = the MOVETUTOR_* index, VAR_0x8006 = how many
+   * moves the lead knows, VAR_0x8007 = the lead's slot, STR_VAR_2 = the move's name.
+   */
+  CapeBrinkGetMoveToTeachLeadPokemon({ state }) {
+    const d = state.defines;
+    const leadMonSlot = GetLeadMonIndex(state.party);
+    state.setVar('VAR_0x8007', leadMonSlot);
+    const mon = state.party[leadMonSlot];
+    // sCapeBrinkCompatibleSpecies, with the tutor move, its MOVETUTOR_* index and flag for each
+    const tutors = [
+      [K.SPECIES_VENUSAUR, K.MOVE_FRENZY_PLANT, 'MOVETUTOR_FRENZY_PLANT', 'FLAG_TUTOR_FRENZY_PLANT'],
+      [K.SPECIES_CHARIZARD, K.MOVE_BLAST_BURN, 'MOVETUTOR_BLAST_BURN', 'FLAG_TUTOR_BLAST_BURN'],
+      [K.SPECIES_BLASTOISE, K.MOVE_HYDRO_CANNON, 'MOVETUTOR_HYDRO_CANNON', 'FLAG_TUTOR_HYDRO_CANNON'],
+    ] as const;
+    const tutor = mon && !mon.isEgg ? tutors.find(([species]) => species === mon.species) : undefined;
+    if (!tutor || mon.friendship !== 255) return 0;
+    const [, move, tutorId, flag] = tutor;
+    state.stringVars[1] = strBody(moveName(move));
+    state.setVar('VAR_0x8005', d.require(tutorId));
+    if (state.getFlag(flag)) return 0;
+    let numMovesKnown = 0;
+    for (let i = 0; i < K.MAX_MON_MOVES; i++) if (mon.moves[i] !== K.MOVE_NONE) numMovesKnown++;
+    state.setVar('VAR_0x8006', numMovesKnown);
+    return 1;
+  },
+
+  /** HasLearnedAllMovesFromCapeBrinkTutor (field_specials.c): set the taught move's flag; TRUE once all three are. */
+  HasLearnedAllMovesFromCapeBrinkTutor({ state }) {
+    const tutor = state.getVar('VAR_0x8005');
+    const d = state.defines;
+    if (tutor === d.require('MOVETUTOR_FRENZY_PLANT')) state.setFlag('FLAG_TUTOR_FRENZY_PLANT');
+    else if (tutor === d.require('MOVETUTOR_BLAST_BURN')) state.setFlag('FLAG_TUTOR_BLAST_BURN');
+    else state.setFlag('FLAG_TUTOR_HYDRO_CANNON');
+    const n = ['FLAG_TUTOR_FRENZY_PLANT', 'FLAG_TUTOR_BLAST_BURN', 'FLAG_TUTOR_HYDRO_CANNON'].filter((f) => state.getFlag(f)).length;
+    return n === 3 ? 1 : 0;
+  },
 };
+
+/** GetLeadMonIndex (field_specials.c): the first party mon that isn't an egg, else slot 0. */
+function GetLeadMonIndex(party: Pokemon[]): number {
+  for (let i = 0; i < party.length; i++) if (!party[i].isEgg && party[i].species !== K.SPECIES_NONE) return i;
+  return 0;
+}

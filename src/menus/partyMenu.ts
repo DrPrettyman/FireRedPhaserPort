@@ -171,6 +171,7 @@ import { BERRYPOUCH_KEEP_PREV, BERRYPOUCH_NA, InitBerryPouch } from './berryPouc
 import { BeginEvolutionScene, setCB2_AfterEvolution } from './evolutionScene';
 import { CreateMonIcon, LoadMonIconPalettes, SetPartyHPBarSprite, SpriteCB_MonIcon, UpdateMonIconFrame } from './pokemonIcon';
 import { testEvent } from '../dev/testHooks';
+import { GetNumberOfRelearnableMoves } from './learnMove';
 
 const PARTY_PAL_SELECTED = 1 << 0;
 const PARTY_PAL_FAINTED = 1 << 1;
@@ -1198,7 +1199,7 @@ function HandleChooseMonSelection(taskId: number, slotPtr: SlotPtr): void {
     case K.PARTY_ACTION_CHOOSE_AND_CLOSE:
       PlaySE(K.SE_SELECT);
       SpecialVar.x8004 = slotPtr.get();
-      if (gPartyMenu.menuType === K.PARTY_MENU_TYPE_MOVE_RELEARNER) console.warn('[party_menu] the move relearner is not implemented');
+      if (gPartyMenu.menuType === K.PARTY_MENU_TYPE_MOVE_RELEARNER) SpecialVar.x8005 = GetNumberOfRelearnableMoves(P(slotPtr.get()));
       Task_ClosePartyMenu(taskId);
       break;
     case K.PARTY_ACTION_MINIGAME:

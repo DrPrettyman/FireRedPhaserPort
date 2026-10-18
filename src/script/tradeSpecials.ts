@@ -1,7 +1,11 @@
-// In-game trades (trade_scene.c's in-game path) and the Name Rater (field_specials.c), W-trade unit 1.
+// In-game trades (trade_scene.c's in-game path; the scene itself is menus/tradeScene.ts) and the Name Rater
+// (field_specials.c).
 // The trade data is sInGameTrades (src/data/ingame_trades.h) through tools/extract_trades.py (public/gen/trades.json),
 // set once at boot with initInGameTrades. No Phaser here: SPECIALS spreads TRADE_SPECIALS in.
 
+import { loadGfx } from '../gba/gfx';
+import { SetMainCallback2 } from '../gba/main';
+import { CB2_InitInGameTrade, tradeSceneGfxSymbols } from '../menus/tradeScene';
 import type { Pokemon } from '../pokemon/Pokemon';
 import type { GameState } from '../state/GameState';
 import type { Special } from './specials';
@@ -40,7 +44,7 @@ export function initInGameTrades(data: TradesData): void {
 /** Friendship of a mon received in a trade (TradeMons). */
 const TRADE_FRIENDSHIP = 70;
 
-function inGameTrade(idx: number): InGameTrade {
+export function inGameTrade(idx: number): InGameTrade {
   const trade = sInGameTrades[idx];
   if (!trade) throw new Error(`[trade] no in-game trade ${idx} (trades.json not loaded?)`);
   return trade;
@@ -145,24 +149,25 @@ export const TRADE_SPECIALS: Record<string, Special> = {
     CreateInGameTradePokemonInternal(state, state.getVar('VAR_0x8005'), state.getVar('VAR_0x8004'));
   },
   /**
-   * DoInGameTradeScene, a stand-in for the trade scene (W-trade unit 2 replaces it): the fade to black
-   * (BeginNormalPaletteFade), then what the scene does on the way out (DoTradeAnim_Cable's STATE_TRY_EVOLUTION:
-   * TradeMons(VAR_0x8005, 0); STATE_WAIT_FADE_OUT_END: BufferInGameTradeMonName) and the return to the field
-   * (CB2_ReturnToField + FieldCB_ContinueScriptHandleMusic: the message box is gone, the field fades back in and
-   * the script's `waitstate` ends). No FRLG in-game trade evolves, so TradeEvolutionScene never runs.
+   * DoInGameTradeScene: the fade to black (BeginNormalPaletteFade), then Task_InGameTrade hands the field over to
+   * CB2_InitInGameTrade (menus/tradeScene.ts) once it's over. The scene swaps the mons (STATE_TRY_EVOLUTION:
+   * TradeMons(VAR_0x8005, 0)), buffers the names (BufferInGameTradeMonName) and returns through
+   * CB2_ReturnToField, where FieldCB_ContinueScriptHandleMusic fades the field in and ends the script's
+   * `waitstate`. The scene's graphics (the two mon pics too) load during the fade.
    */
-  DoInGameTradeScene({ state, host, setWaitState, hideFieldMessageBox }) {
-    const d = state.defines;
-    const fadeOut = host.fadeScreen(d.require('FADE_TO_BLACK'));
-    let fadeIn: (() => boolean) | undefined;
+  DoInGameTradeScene({ state, host, setWaitState }) {
+    const fadeOut = host.fadeScreen(state.defines.require('FADE_TO_BLACK'));
+    const playerMon = state.party[state.getVar('VAR_0x8005')];
+    let loaded = false;
+    void loadGfx(tradeSceneGfxSymbols(playerMon, state.enemyParty[0])).then(() => (loaded = true));
+    let scene: (() => boolean) | undefined;
     setWaitState(() => {
-      if (fadeIn) return fadeIn();
-      if (!fadeOut()) return false;
-      TradeMons(state, state.getVar('VAR_0x8005'), 0);
-      BufferInGameTradeMonName(state);
-      hideFieldMessageBox();
-      fadeIn = host.fadeScreen(d.require('FADE_FROM_BLACK'));
-      return false;
+      if (!scene) {
+        // Task_InGameTrade
+        if (!fadeOut() || !loaded) return false;
+        scene = host.runScreenFromScript(() => SetMainCallback2(CB2_InitInGameTrade));
+      }
+      return scene();
     });
   },
 

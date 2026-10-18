@@ -345,8 +345,16 @@ this is the next level down. When you add or change a subsystem, update its entr
 - **In-game trades and the Name Rater:** `script/tradeSpecials.ts` (TRADE_SPECIALS, spread into SPECIALS) is
   trade_scene.c's in-game path: GetInGameTradeSpeciesInfo, GetTradeSpecies, CreateInGameTradePokemon(Internal)
   (the trade's mon into `state.enemyParty[0]`), TradeMons, UpdatePokedexForReceivedMon, BufferInGameTradeMonName,
-  and DoInGameTradeScene, for now a stand-in (fade to black, TradeMons + BufferInGameTradeMonName, fade back in;
-  the script's `waitstate` ends after the fade in). W-trade unit 2 puts the cable animation in its place. The data
+  and DoInGameTradeScene: the fade to black (the scene's graphics and both mon pics load meanwhile:
+  `tradeSceneGfxSymbols`), then `ScriptHost.runScreenFromScript` runs `menus/tradeScene.ts` on FieldMenuScene:
+  CB2_InitInGameTrade → CB2_InGameTrade (DoTradeAnim) → CB2_ReturnToField, and the script's `waitstate` ends once
+  the field has faded back in. FireRed's in-game trades never set `isCableTrade` (only CB2_LinkTrade does), so
+  the scene is DoTradeAnim_Wireless (the GBA's wireless signal, the white column where the mons cross); the cable
+  path isn't ported. STATE_TRY_EVOLUTION calls TradeMons(VAR_0x8005, 0), the end BufferInGameTradeMonName. The
+  graphics are graphics/trade/ (extract_gfx.py's GFX_PREFIXES); the scene sets a silent BattleUi if none is set
+  (the Poké Balls' open particles play their SE through it). Probe: `tradeSceneProbe()` (the state, the mon
+  sprite ids), imported in the page; the e2e's `watchTradeScene` records the states and renders frames at a few
+  of them (`TRADE_SHOTS=<dir>` saves them as PNGs). The data
   is sInGameTrades (src/data/ingame_trades.h) through `tools/extract_trades.py` → `public/gen/trades.json`, loaded by
   `Assets.init` and handed over with `initInGameTrades` (OverworldScene). The scripts' VARs: 0x8008 = the
   INGAME_TRADE_*, copied to 0x8004 for the specials; ChoosePartyMon's slot (0x8004) is kept in 0x800A and copied
@@ -356,7 +364,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   tests/e2e/inGameTrades.test.ts (Reyley in Route2_House, talk from (7, 3); the Name Rater in LavenderTown_House2,
   talk from (4, 5)).
 - **Step counters:** `world/stepCounters.ts` (happiness, VS Seeker, field poison; ShouldEggHatch is re-exported
-  from world/daycare.ts), called from `OverworldScene.tryStartStepCountScript`; `world/roamer.ts` is roamer.c with its EWRAM statics as module state
+  from world/daycare.ts), called from `OverworldScene.tryStartStepCountScript`;
+  `world/roamer.ts` is roamer.c with its EWRAM statics as module state
   (`roamerLocation()` for tests). Field code may call battle-engine pokemon.c functions (AdjustFriendship): the
   overworld initialises the battle env at boot.
 
@@ -424,8 +433,18 @@ this is the next level down. When you add or change a subsystem, update its entr
   gFieldCallback2 / gFieldCallback, e.g. the party menu's CB2_FadeFromPartyMenu, and the wait ends when that has).
   Followed by `waitstate`, pass the wait to `setWaitState`; without one (SelectMoveDeleterMove), to
   `SpecialEnv.stopScript`. ChoosePartyMon leaves the slot in VAR_0x8004 (SLOT_CANCEL = PARTY_SIZE + 1 on B).
-  W-trade / W-daycare: `special ChoosePartyMon` + `waitstate` just works. Tests: tests/e2e/moveTutors.test.ts
-  (Route 4's Mega Punch tutor, the Fuchsia move deleter), tests/unit/partyMenuSpecials.test.ts.
+  W-trade / W-daycare: `special ChoosePartyMon` + `waitstate` just works. `runScreenFromScript(init, gfxSymbols)`
+  preloads what the screen draws beyond prepareMenus (e.g. `LEARN_MOVE_GFX`).
+  The move relearner: `menus/learnMove.ts` is learn_move.c (CB2_MoveRelearner_Init / _Resume, the
+  MENU_STATE_* machine, the list, the move info windows, the YES/NO prompts, the forget-a-move summary through
+  ShowSelectMovePokemonSummaryScreen) plus pokemon.c's GetMoveRelearnerMoves / GetNumberOfRelearnableMoves.
+  `special TeachMoveRelearnerMove` (in PARTY_MENU_SPECIALS) fades, then `runScreenFromScript(StartMoveRelearner)`;
+  VAR_0x8004 comes back TRUE if a move was taught. ChooseMonForMoveRelearner's party menu sets VAR_0x8005 =
+  GetNumberOfRelearnableMoves (HandleChooseMonSelection). The Cape Brink tutor's CapeBrinkGetMoveToTeachLeadPokemon
+  / HasLearnedAllMovesFromCapeBrinkTutor (field_specials.c) are there too; it teaches through ChooseMonForMoveTutor.
+  Probe `__test.moveRelearner()` (MENU_STATE_* `state`, the list's move ids, `selectedIndex`, `selectedMoveSlot`).
+  Tests: tests/e2e/moveTutors.test.ts (Route 4's Mega Punch tutor, the Fuchsia move deleter, Two Island's Move
+  Maniac, the Cape Brink tutor), tests/unit/partyMenuSpecials.test.ts.
 - **Boot, title screen and soft reset:** `BootScene` loads the extracted data and starts `MainMenuScene` on the
   title screen (`entry: 'title'`). MainMenuScene is one GbaHostScene for the boot screens, which hand over through
   gMain like the C: `menus/titleScreen.ts` (title_screen.c: CB2_InitTitleScreen, the intro scenes, the run scene
