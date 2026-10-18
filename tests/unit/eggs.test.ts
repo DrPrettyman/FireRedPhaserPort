@@ -21,7 +21,6 @@ import {
   getDaycareCompatibilityScore,
   getEggMoves,
   getEggSpecies,
-  giveEggFromDaycare,
   inheritIVs,
   nameHasGenderSymbol,
   scriptGiveEgg,
