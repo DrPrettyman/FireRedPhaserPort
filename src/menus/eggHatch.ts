@@ -15,7 +15,7 @@ import { BG_ATTR_PRIORITY, ChangeBgX, ChangeBgY, CopyBgTilemapBufferToVram, Copy
 import { gfx, gfx16 } from '../gba/gfx';
 import { DISPCNT_OBJ_1D_MAP, DISPCNT_OBJ_ON, PALETTES_ALL, REG_OFFSET_DISPCNT, RGB_BLACK, RGB_WHITE, SetGpuReg } from '../gba/hw';
 import { gMain, SetMainCallback2, SetVBlankCallback } from '../gba/main';
-import { CreateYesNoMenu, LoadUserWindowGfx, Menu_ProcessInputNoWrapClearOnChoose, ResetTempTileDataBuffers } from '../gba/menu';
+import { CreateYesNoMenu, LoadUserWindowGfx, GetTextWindowPalette, Menu_ProcessInputNoWrapClearOnChoose, ResetTempTileDataBuffers } from '../gba/menu';
 import { BeginNormalPaletteFade, BG_PLTT_ID, gPaletteFade, LoadPalette, PLTT_SIZE_4BPP, ResetPaletteFade, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
 import { ScanlineEffect_Stop } from '../gba/scanline';
 import { IsCryFinished, PlayBGM, PlayCry_Normal, PlayFanfare, PlaySE } from '../gba/sound';
@@ -226,6 +226,7 @@ export function eggHatchGfxSymbols(state: GameState, slot: number): string[] {
     'gTradeGba2_Pal',
     'gTradeGba_Gfx',
     'gTradeOrHatchMonShadowTilemap',
+    'gTextWindowPalettes',
     monPicSymbol(true, species, personality),
     ...monPalSymbols(species),
     ...namingScreenGfxSymbols(NAMING_SCREEN_NICKNAME, species, personality),
@@ -240,6 +241,10 @@ export function eggHatchGfxSymbols(state: GameState, slot: number): string[] {
  * field's default return (fade in, the script's `waitstate` ends).
  */
 export function StartEggHatch(): void {
+  // The YES/NO's text uses BG palette 15 (sYesNoWinTemplate), which the scene never loads: on the GBA it still holds
+  // the field's message box palette (LoadStdWindowFrameGfx → LoadMenuMessageWindowGfx: GetTextWindowPalette(0) at
+  // DLG_WINDOW_PALETTE_NUM). The overworld isn't on the GBA layer, so load it here.
+  LoadPalette(GetTextWindowPalette(0), BG_PLTT_ID(15), PLTT_SIZE_4BPP);
   SetMainCallback2(CB2_EggHatch_0);
 }
 
