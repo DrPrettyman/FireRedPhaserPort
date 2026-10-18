@@ -5,6 +5,7 @@
   with the palette its paletteTag names, plus its frame size, anim table and callback name.
 - doors.json: field_door.c's sDoorGraphics table and its DoorAnimFrame lists. The door tiles themselves
   are GBA-native graphics (extract_gfx: sDoorAnimTiles_*), drawn at runtime with the map's palettes.
+- leagueLighting.json: field_specials.c's Elite Four / Champion room lighting palettes and timers.
 """
 
 import json
@@ -183,3 +184,30 @@ def extract_doors(decomp, out, defines):
         "doors": doors,
     }, separators=(",", ":")))
     print(f"  {len(doors)} doors, {len(frames)} door anim frame lists")
+
+
+def extract_league_lighting(decomp, out):
+    """leagueLighting.json: field_specials.c's league lighting tables (DoPokemonLeagueLightingEffect).
+
+    sEliteFourLightingPalettes / sChampionRoomLightingPalettes as JASC colours (the .pal files their .gbapal
+    INCBINs are built from), the same colour space as tilesets/palettes.json, so the redrawn metatiles match
+    the atlases; sEliteFourLightingTimers / sChampionRoomLightingTimers in frames.
+    """
+    src = (decomp / "src/field_specials.c").read_text()
+
+    def palettes(array):
+        body = re.search(rf"static const u16 {array}\[\]\[16\] = \{{(.*?)\n\}};", src, re.S).group(1)
+        paths = re.findall(r'INCBIN_U16\("([^"]+)\.gbapal"\)', body)
+        return [[c for rgb in read_jasc(decomp / f"{p}.pal") for c in rgb] for p in paths]
+
+    def timers(array):
+        body = re.search(rf"static const u8 {array}\[\] = \{{(.*?)\}};", src, re.S).group(1)
+        return [int(n) for n in re.findall(r"\d+", body)]
+
+    data = {
+        "eliteFourPalettes": palettes("sEliteFourLightingPalettes"),
+        "championRoomPalettes": palettes("sChampionRoomLightingPalettes"),
+        "eliteFourTimers": timers("sEliteFourLightingTimers"),
+        "championRoomTimers": timers("sChampionRoomLightingTimers"),
+    }
+    (out / "leagueLighting.json").write_text(json.dumps(data, separators=(",", ":")))

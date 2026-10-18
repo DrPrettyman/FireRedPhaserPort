@@ -282,6 +282,11 @@ interface OverworldLike extends Phaser.Scene {
   testFindPath(worldX: number, worldY: number): Direction[] | undefined;
   testPushWarpDirection(): Direction | undefined;
   testObjects(): FieldObjectProbe[];
+  testLeagueLighting(colorIndex?: number): {
+    tasks: { func: string; timer: number; index: number; count: number }[];
+    palette7: number[] | undefined;
+    pixel: { rgb: number[]; colorIndex: number } | undefined;
+  };
   state: GameState;
   startWildBattle(mon: Pokemon): void;
   useFlash(): void;
@@ -561,6 +566,12 @@ function createApi(game: Phaser.Game) {
     idle,
     /** The current map's objects: local id, graphics and map-local position. */
     objects: () => overworld()?.testObjects() ?? [],
+    /**
+     * The Elite Four / Champion rooms' lighting (world/leagueLighting.ts): its tasks (func, timer, palette index,
+     * count), BG palette 7 as the field holds it, and a pixel the map's atlas drew with palette 7 (of colour index
+     * `colorIndex` if given; read back from the canvas).
+     */
+    leagueLighting: (colorIndex?: number) => overworld()?.testLeagueLighting(colorIndex),
     /**
      * Put the player in an avatar state the way the game does it (SetPlayerAvatarTransitionFlags with
      * PLAYER_AVATAR_FLAG_<state>): 'MACH_BIKE' gets on the bike, 'SURFING' onto a surfing mon, 'ON_FOOT' off.

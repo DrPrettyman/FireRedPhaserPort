@@ -49,6 +49,24 @@ this is the next level down. When you add or change a subsystem, update its entr
   `writeTiles` redraws the slots whose metatiles use a changed tile. `world/tilesetAnims.ts` is tileset_anims.c,
   driven from `OverworldScene.tick` (InitTilesetAnimations on a warp, InitSecondaryTilesetAnimation on a
   connection). `__test.tilesetTile(name, tile)` shows a tile's current bytes.
+- **BG palette loads on the field:** `tilesetVram.loadBgPalette(textures, pair, slot, colors)` is LoadPalette into
+  the map BGs' palette slot (0-6 the primary's, 7-12 the secondary's; colours as palettes.json's JASC [r, g, b]): it
+  makes the pair's atlases live and redraws only the slots whose metatiles use that palette (AtlasCanvas keeps a
+  palette → slots index beside the tile → slots one). Loading the colours a slot already has costs nothing.
+  `tilesetVram.resetBgPalettes()` is LoadMapTilesetPalettes: OverworldScene calls it on a map load after ON_RESUME
+  (before it on a connection) and in `resumeMap` after ON_RESUME / ON_RETURN_TO_FIELD, as the GBA reloads the
+  palettes there. The GBA layer's copy of the map (fieldGbaScreen.ts, battle transitions) loads the changed slots
+  too (`bgPaletteOverrides`, back to BGR555). The field's fades are an overlay, so they cover a loaded palette too.
+- **League lighting:** `world/leagueLighting.ts` is field_specials.c's DoPokemonLeagueLightingEffect (registered
+  with `registerLeagueLighting()`; the rooms' ON_RESUME script), Task_RunPokemonLeagueLightingEffect /
+  Task_CancelPokemonLeagueLightingEffect as field tasks, and StopPokemonLeagueLightingEffectTask (the start menu's
+  `openFieldMenu`, itemUse.ts' FadeToScreenFromField). Palettes and timers come from `public/gen/leagueLighting.json`
+  (tools/extract_field.py `extract_league_lighting`). The field's ResetTasks (`enterMap`, `resumeMap`) ends the
+  tasks with `ResetLeagueLightingTasks`. ON_RESUME runs on every map load as on the GBA (LoadMapInStepsLocal's
+  ResumeMap: after ON_LOAD, before the objects and ON_WARP_INTO), not only on a return to the field. Probe:
+  `__test.leagueLighting(colorIndex?)` (the tasks, BG palette 7, a canvas pixel drawn with palette 7). Tests:
+  tests/e2e/leagueLighting.test.ts (dev start `?map=PokemonLeague_LoreleisRoom&x=6&y=12` or
+  `PokemonLeague_ChampionsRoom&x=6&y=19`).
 - **Map layouts (`setmaplayoutindex`):** maps carry `layoutId` (gMapHeader.mapLayoutId) and `GameState.mapLayoutId`
   is gSaveBlock1Ptr->mapLayoutId: `onMapLoaded` sets it from the header before ON_TRANSITION (LoadCurrentMapData),
   the script command changes it (SetCurrentMapLayout), and `initMapLayout` then swaps the current chunk's grid,

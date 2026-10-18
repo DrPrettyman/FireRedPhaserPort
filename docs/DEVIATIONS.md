@@ -22,9 +22,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     in-game trade evolves), and is silent (no MUS_EVOLUTION / MUS_EVOLVED, cries or SEs). Only the in-game
     (wireless) path is ported: DoTradeAnim_Cable is a link trade's.
   - Lt. Surge's trash cans, Bill's cell separator: silent (SE_PIN, SE_UNLOCK, SE_BALL, SE_WARP_IN).
-  - The Elite Four and Champion rooms' lighting (`special DoPokemonLeagueLightingEffect`, field_specials.c) isn't
-    ported: the rooms keep their tileset's BG palette 7 (no sEliteFourLightingPalettes / sChampionRoomLightingPalettes
-    cycle). It needs a runtime BG palette swap of the tileset atlases; visual only, the scripts go on.
+  - The Elite Four and Champion rooms' lighting (world/leagueLighting.ts): Task_CancelPokemonLeagueLightingEffect's
+    BlendPalettes(palette 7 → black) while a fade runs does nothing (the field's fade is an overlay over everything,
+    so the newly loaded palette is faded with the rest anyway). ApplyGlobalTintToPaletteSlot is a no-op (no quest
+    log tints).
   - Trainer Fan Club (script/miscSpecials.ts, trainer_fan_club.c): there are no link battle records, so
     Script_BufferFanClubTrainerName always names the NPC trainer (the rival, LT. SURGE, KOGA), and the link-battle
     fan updates (Special_UpdateTrainerFansAfterLinkBattle) never run.
@@ -98,9 +99,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     Task_VsSeeker_0 / ItemUseOnFieldCB_Itemfinder carry on as the item's task). The Fame Checker and Teachy TV
     from SELECT log and give the controls back (no screens). ChangeBgY(0, 0, 0) is a no-op (the field's message
     box isn't on a scrolled BG); InUnionRoom is always FALSE. No quest log events (ItemUse_SetQuestLogEvent).
-    The Town Map, TM case and berry pouch from SELECT skip StopPokemonLeagueLightingEffectTask (the league rooms'
-    lighting isn't ported), and their screen starts once the map headers the region map / party menu read have
-    loaded (prepareFieldMoveMenu), a frame or more after the fade instead of in the same frame.
+    The Town Map, TM case and berry pouch from SELECT start their screen once the map headers the region map /
+    party menu read have loaded (prepareFieldMoveMenu), a frame or more after the fade instead of in the same frame.
   - TM case (menus/tmCase.ts): silent (SE_SELECT, SE_SHOP); no quest log (RecordItemTransaction). Not ported:
     the Pokédude's Teachy TV demo (TMCASE_POKEDUDE) and the Union Room's GIVE / EXIT menu (no link play).
   - Berry pouch (menus/berryPouch.ts): silent (SE_BAG_CURSOR, SE_SELECT, SE_SHOP); no quest log

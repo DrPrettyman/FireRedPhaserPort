@@ -2326,3 +2326,27 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Verified: each PR after merging master in: typecheck, `npm test`, its own e2e file plus the files for the shared
   code it touched; the full e2e suite for #66 (warps) and #67 (yesnobox). Last run, on master with everything
   merged: typecheck clean, 229 unit, 356 e2e in 52 files.
+
+### The Elite Four and Champion rooms' lighting (SIDE_PLAN.md batch 2, W-league unit 1)
+
+- `world/leagueLighting.ts` is field_specials.c's DoPokemonLeagueLightingEffect, Task_RunPokemonLeagueLightingEffect
+  (FLAG_TEMP_2 / FLAG_TEMP_5 / palette fade checks, sEliteFourLightingTimers / sChampionRoomLightingTimers),
+  Task_CancelPokemonLeagueLightingEffect (FLAG_TEMP_4, the last palette) and StopPokemonLeagueLightingEffectTask,
+  now called from the start menu (`openFieldMenu`: StartMenu_FadeScreenIfLeavingOverworld) and the SELECT Town Map /
+  TM case / berry pouch (itemUse.ts FadeToScreenFromField). The QOL note that they skipped it is gone.
+- Palettes and timers through the extractor: `public/gen/leagueLighting.json` (tools/extract_field.py
+  `extract_league_lighting`, JASC colours like tilesets/palettes.json, so the redraw matches the atlases).
+- `tilesetVram.loadBgPalette` / `resetBgPalettes`: a BG palette load redraws only the atlas slots whose metatiles
+  use that palette (a palette → slots index next to the tile → slots one); a no-op when the colours don't change.
+  The GBA layer's copy of the field (battle transitions) loads the changed slots too.
+- Fix found on the way: map loads didn't run MAP_SCRIPT_ON_RESUME (only returns to the field did). On the GBA,
+  LoadMapInStepsLocal's ResumeMap and LoadMapFromCameraTransition run it on every load; `onMapLoaded` now does
+  (after ON_LOAD, before the objects and ON_WARP_INTO), followed by LoadMapTilesetPalettes' reset. Without it the
+  lighting never started on the warp in. The other ON_RESUME scripts are guarded by FLAG_SYS_SPECIAL_WILD_BATTLE,
+  are no-ops (InitUnionRoom) or postgame (setstepcallback, Trainer Tower).
+- `__test.leagueLighting(colorIndex?)`: the tasks, BG palette 7, a pixel the atlas canvas drew with palette 7.
+- Verified: typecheck; `npm test` (229); e2e leagueLighting.test.ts (new, 2 tests: Lorelei's room, 13 palette
+  changes each on its timer with the canvas pixel in the new colour, the start menu's BAG stopping the task and the
+  return restarting it from palette 0, the last palette after the battle; the Champion's room, 10 changes during the
+  rival's intro, the last palette after the battle), field, fieldEffects, transitions, storyLeague (TilesetVram),
+  scriptedBattles, playerAvatar, mainPathLeftovers (ON_RESUME on map loads): all green.
