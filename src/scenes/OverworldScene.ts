@@ -52,6 +52,8 @@ import { DEPTH_MIDDLE, DEPTH_TOP } from '../world/MapChunk';
 import { DEPTH_UI } from '../text/TextWindow';
 import { FieldDoors } from '../world/doors';
 import { InitSecondaryTilesetAnimation, InitTilesetAnimations, TransferTilesetAnimsBuffer, UpdateTilesetAnimations } from '../world/tilesetAnims';
+import { leagueLightingProbe, loadLeagueLightingData, registerLeagueLighting, ResetLeagueLightingTasks, setLeagueLightingHost, StopPokemonLeagueLightingEffectTask } from '../world/leagueLighting';
+import { tilesetVram } from '../world/TilesetVram';
 import { ShopMenu, type ShopHost } from '../ui/ShopMenu';
 import { StoragePcMenu } from '../ui/StoragePcMenu';
 import { PlayerPcMenu } from '../ui/PlayerPcMenu';
@@ -128,6 +130,7 @@ import { initGbaText } from '../gba/window';
 import { InitStandardTextBoxWindows, InitTextBoxGfxAndPrinters } from '../gba/menu';
 import { TEXT_SPEED } from '../text/TextPrinter';
 import { HALL_OF_FAME_RECORD_GFX, setHallOfFameRecordHost } from '../world/hallOfFameRecord';
+import { registerSSAnne, setSSAnneHost, SS_ANNE_GFX, ssAnneProbe } from '../world/ssAnne';
 import type { WarpData } from '../state/GameState';
 
 /** GBA runs at ~59.73Hz; we tick game logic at a fixed 60Hz regardless of display refresh. */
@@ -289,6 +292,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     setTextStrings(this.assets.strings); // the gText_* the field items print (a registered item needs no bag first)
     await loadMenusData('gen'); // sTMHMMoves, for BufferTMHMMoveName
     await loadSlotMachineData('gen'); // sSlotMachineIndices, for GetRandomSlotMachineId
+    await loadLeagueLightingData('gen'); // the Elite Four / Champion rooms' lighting palettes and timers
     await this.assets.loadFieldEffectTextures(this);
     const field = this.field;
     const behaviorAt = (x: number, y: number) => this.world.tileAt(x, y).behavior;
@@ -378,6 +382,13 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     });
     registerItemfinder();
     await loadGfx(ITEMFINDER_GFX);
+    setLeagueLightingHost({
+      loadBgPalette: (slot, colors) =>
+        tilesetVram.loadBgPalette(this.textures, this.assets.tilesetPair(this.world.current.data.tilesetPair), slot, colors),
+      paletteFadeActive: () => this.screenFade.active,
+      createTask: (tick) => this.fieldTasks.push({ tick }),
+    });
+    registerLeagueLighting();
     setSurfHost({
       terrainAt: (x, y) => this.world.tileAt(x, y).terrain,
       createFieldEffectSprite: (fldEff, template, x, y, subpriority, callback) => this.fieldEffects.createSprite(fldEff, template, x, y, subpriority, callback),
@@ -392,6 +403,15 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       partyCount: () => this.state.party.length,
     });
     await loadGfx(HALL_OF_FAME_RECORD_GFX);
+    // special DoSSAnneDepartureCutscene (world/ssAnne.ts) draws at screen coordinates too
+    setSSAnneHost({
+      scene: this,
+      screenOrigin: () => ({ x: this.cameras.main.scrollX, y: this.cameras.main.scrollY }),
+      cameraTop: () => this.field.cameraTop,
+      objectByLocalId: (localId) => this.npcByLocalId(localId)?.brain.obj,
+    });
+    registerSSAnne();
+    await loadGfx(SS_ANNE_GFX);
     this.cameras.main.startFollow(this.player.anchor, true, 1, 1, 0, CAMERA_FOLLOW_OFFSET_Y);
 
     if (start.continueGame) {
@@ -409,6 +429,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }
     this.busy = false;
     testEvent('ready');
+  }
+
+  /** Dev: the S.S. Anne's departure while it runs (world/ssAnne.ts), for `__test.ssAnne()`. */
+  testSSAnne() {
+    return ssAnneProbe();
   }
 
   /** Dev: what the field is doing, for the e2e tests' `__test.field()` / `__test.idle()`. */
@@ -457,6 +482,19 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         spriteY2: this.player.sprite.y - (this.player.feetY + this.player.lift),
         cameraPanY: this.cameraPanY,
       },
+    };
+  }
+
+  /**
+   * Dev: the league lighting for `__test.leagueLighting()`: its tasks, BG palette 7 as the field holds it, and a
+   * pixel the current map's atlas drew with palette 7 (of colour index `colorIndex`; read back from the canvas).
+   */
+  testLeagueLighting(colorIndex?: number) {
+    const pair = this.assets.tilesetPair(this.world.current.data.tilesetPair);
+    return {
+      tasks: leagueLightingProbe(),
+      palette7: tilesetVram.bgPalette(pair.info.secondary, 7),
+      pixel: tilesetVram.palettePixel(pair, 7, colorIndex),
     };
   }
 
@@ -1239,6 +1277,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private async enterMap(name: string, x: number, y: number, facing: Direction | undefined, warped: boolean, continued?: PlayerLocation): Promise<void> {
     this.warping = false;
     this.mapNamePopup?.destroy(); // the map load's ResetTasks
+    ResetLeagueLightingTasks();
     this.mapNamePopup = undefined;
     this.fieldEffects.clear();
     this.doors.clear();
@@ -1326,6 +1365,15 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const load = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_LOAD');
     if (load) this.scripts.runImmediately(load);
     await this.preloadMapSprites(); // again, now the map scripts have set any VAR_OBJ_GFX_ID_*
+    if (!continued) {
+      // LoadMapInStepsLocal's ResumeMap / LoadMapFromCameraTransition's RunOnResumeMapScript (CONTINUE runs it from
+      // resumeMap). A warp then reloads the BG palettes (LoadMapTilesetPalettes, after it); a connection loaded
+      // the secondary's before it (LoadSecondaryTilesetPalette).
+      if (!warped) tilesetVram.resetBgPalettes();
+      const resume = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_RESUME');
+      if (resume) this.scripts.runImmediately(resume);
+      if (warped) tilesetVram.resetBgPalettes();
+    }
     if (warped || continued) this.clearNpcs(); // ResetObjectEvents
     if (warped) this.initPlayerAvatarOnWarp();
     if (continued) {
@@ -1595,6 +1643,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    */
   private openFieldMenu(menu: 'party' | 'bag' | 'pokedex' | 'options' | 'trainerCard'): void {
     const d = this.defines;
+    StopPokemonLeagueLightingEffectTask();
     this.screenFade.begin(d.require('FADE_TO_BLACK'));
     let launched = false;
     // The party menu's Teleport / Dig prompts name maps whose headers it reads synchronously, and the fly map
@@ -2406,6 +2455,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * RunOnResumeMapScript, then ReloadObjectsAndRunReturnToFieldMapScript's RunOnReturnToFieldMapScript.
    */
   private resumeMap(): void {
+    ResetLeagueLightingTasks(); // ResumeMap's ResetTasks
     ReturnPlayerAvatarToField(); // SpawnObjectEventsOnReturnToField
     this.objectsFrozen = false; // FieldCB_ReturnToFieldNoScript's UnfreezeObjectEvents (a rod's bite froze them)
     this.player.clearHeldMovementIfFinished(); // (a finished step isn't processed again after a battle)
@@ -2414,6 +2464,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       const script = this.scripts.mapScript(name, type);
       if (script) this.scripts.runImmediately(script);
     }
+    tilesetVram.resetBgPalettes(); // InitViewGraphics' LoadMapTilesetPalettes
     // ResumeMap's ResetTasks + ScanlineEffect_Clear, then InitCurrentFlashLevelScanlineEffect
     this.flash.initCurrentFlashLevelScanlineEffect(Overworld_GetFlashLevel(this.state));
   }

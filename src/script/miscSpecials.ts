@@ -299,7 +299,32 @@ export function BufferFanClubTrainerName(state: GameState, encodeText: (label: s
 
 // ------------------------------------------------------------------ the table
 
+/** sMartMaps (field_specials.c): each Poké Mart and its clerk's local id. */
+const sMartMaps: [string, number][] = [
+  ['MAP_VIRIDIAN_CITY_MART', 1],
+  ['MAP_PEWTER_CITY_MART', 3],
+  ['MAP_CERULEAN_CITY_MART', 1],
+  ['MAP_LAVENDER_TOWN_MART', 1],
+  ['MAP_VERMILION_CITY_MART', 1],
+  ['MAP_FUCHSIA_CITY_MART', 1],
+  ['MAP_CINNABAR_ISLAND_MART', 1],
+  ['MAP_SAFFRON_CITY_MART', 1],
+  ['MAP_THREE_ISLAND_MART', 1],
+  ['MAP_FOUR_ISLAND_MART', 1],
+  ['MAP_SEVEN_ISLAND_MART', 1],
+  ['MAP_SIX_ISLAND_MART', 1],
+];
+
+/** GetMartClerkObjectId: the current mart's clerk (sMartMaps), else 1. Only EventScript_Questionnaire asks. */
+export function GetMartClerkObjectId(mapId: string): number {
+  return sMartMaps.find(([map]) => map === mapId)?.[1] ?? 1;
+}
+
 export const MISC_SPECIALS: Record<string, Special> = {
+  GetMartClerkObjectId({ state }) {
+    return GetMartClerkObjectId(state.currentMapId);
+  },
+
   /** DaisyMassageServices: AdjustFriendship(party slot VAR_0x8004, FRIENDSHIP_EVENT_MASSAGE); the cooldown restarts. */
   DaisyMassageServices({ state }) {
     const mon = state.party[state.getVar('VAR_0x8004')];

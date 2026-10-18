@@ -2359,3 +2359,69 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   plus hallOfFame and sideSpecials for the screen-exit change. seagallop.test.ts green 3 runs in a row, two of
   them beside `npm test` loops for load. Screenshots of the scene and both menu pages
   checked by eye.
+### The Elite Four and Champion rooms' lighting (SIDE_PLAN.md batch 2, W-league unit 1)
+
+- `world/leagueLighting.ts` is field_specials.c's DoPokemonLeagueLightingEffect, Task_RunPokemonLeagueLightingEffect
+  (FLAG_TEMP_2 / FLAG_TEMP_5 / palette fade checks, sEliteFourLightingTimers / sChampionRoomLightingTimers),
+  Task_CancelPokemonLeagueLightingEffect (FLAG_TEMP_4, the last palette) and StopPokemonLeagueLightingEffectTask,
+  now called from the start menu (`openFieldMenu`: StartMenu_FadeScreenIfLeavingOverworld) and the SELECT Town Map /
+  TM case / berry pouch (itemUse.ts FadeToScreenFromField). The QOL note that they skipped it is gone.
+- Palettes and timers through the extractor: `public/gen/leagueLighting.json` (tools/extract_field.py
+  `extract_league_lighting`, JASC colours like tilesets/palettes.json, so the redraw matches the atlases).
+- `tilesetVram.loadBgPalette` / `resetBgPalettes`: a BG palette load redraws only the atlas slots whose metatiles
+  use that palette (a palette → slots index next to the tile → slots one); a no-op when the colours don't change.
+  The GBA layer's copy of the field (battle transitions) loads the changed slots too.
+- Fix found on the way: map loads didn't run MAP_SCRIPT_ON_RESUME (only returns to the field did). On the GBA,
+  LoadMapInStepsLocal's ResumeMap and LoadMapFromCameraTransition run it on every load; `onMapLoaded` now does
+  (after ON_LOAD, before the objects and ON_WARP_INTO), followed by LoadMapTilesetPalettes' reset. Without it the
+  lighting never started on the warp in. The other ON_RESUME scripts are guarded by FLAG_SYS_SPECIAL_WILD_BATTLE,
+  are no-ops (InitUnionRoom) or postgame (setstepcallback, Trainer Tower).
+- `__test.leagueLighting(colorIndex?)`: the tasks, BG palette 7, a pixel the atlas canvas drew with palette 7.
+- Verified: typecheck; `npm test` (229); e2e leagueLighting.test.ts (new, 2 tests: Lorelei's room, 13 palette
+  changes each on its timer with the canvas pixel in the new colour, the start menu's BAG stopping the task and the
+  return restarting it from palette 0, the last palette after the battle; the Champion's room, 10 changes during the
+  rival's intro, the last palette after the battle), field, fieldEffects, transitions, storyLeague (TilesetVram),
+  scriptedBattles, playerAvatar, mainPathLeftovers (ON_RESUME on map loads): all green.
+
+### Side leftovers: GetMartClerkObjectId, the `unused` gap tag, a Trainer Fan Club e2e, the egg hook (W-league unit 2)
+
+- `special GetMartClerkObjectId` (field_specials.c sMartMaps, in script/miscSpecials.ts). Its only caller is
+  EventScript_Questionnaire, after the Easy Chat screen, so nothing reaches it yet.
+- `tests/unit/scriptCoverageGaps.ts`: a new tag, `unused`, for what FRLG shares with Emerald and nothing reaches
+  (checked in the decomp: no map or C code calls Std_ObtainDecoration or EventScript_DeepWater /
+  EventScript_TrySurface): `adddecoration`, `bufferdecorationname`, FLDEFF_USE_DIVE moved there from `side`.
+- tests/e2e/sideSpecials.test.ts: the Trainer Fan Club (SaffronCity_PokemonTrainerFanClub; the plan called it
+  Vermilion's, but trainer_fan_club.c is Saffron's): scene 0's crush girl, Script_UpdateTrainerFanClubGameClear
+  (scene 1, three fans, the hidden members shown), the way back in (ON_TRANSITION's seats, MeetFirstFans, scene
+  2), a fan's and a non-fan's lines.
+- The e2e hooks' `egg` MonSpec now comes from world/daycare.ts' `createEgg` instead of being built by hand.
+- Race found in my own new test: leagueLighting.test.ts read the restarted task after the start menu's bag with a
+  poll, which under load came after its first 40-tick palette; it's watched in the page now.
+- Verified: typecheck; `npm test` (230, incl. the clerk table against every mart map's objects); e2e
+  sideSpecials (9), daycare, eggHatch, leagueLighting: all green.
+### The S.S. Anne's departure and an S.S. Anne sweep (W-ssanne unit 1)
+
+- Ported ss_anne.c as `world/ssAnne.ts`: DoSSAnneDepartureCutscene, Task_SSAnneInit / Run / Finish,
+  CreateWakeBehindBoat / WakeSpriteCallback, CreateSmokeSprite / SmokeSpriteCallback, the templates and anims. The
+  boat (local id 1) slides left through its sprite's x2, a pixel per 5 frames, until x + x2 < -120; the wake
+  (16x32, two frames every 12) follows 80 px behind; a smoke puff (16x16, four frames, ANIMCMD_END) every 70
+  frames while the funnel is on screen; 40 frames after the horn, ScriptContext_Enable ends the script's
+  `waitstate` and `removeobject` takes the boat. The wake and smoke are FieldEffectSprites at screen coordinates,
+  their textures sWakeTiles / sSmokeTiles (graphics/ss_anne/, a new GFX_PREFIXES entry) on gObjectEventPal_SSAnne
+  (OBJ palette 10). Probe `__test.ssAnne()` (through OverworldScene.testSSAnne: testHooks can't import a Phaser
+  module, unit tests load it), event `ssAnneDeparture`. Off `scriptCoverageGaps.ts`: main has 1 left (the league
+  lighting).
+- Sweep, checked at runtime against the decomp's scripts: Vermilion's ticket check in both columns (refused
+  without the ticket and walked back up the pier, the sailor turning to the player and back; let through with it,
+  the other column not checking again, (22/23, 32)'s ExitedTicketCheck resetting the trigger, aboard through the
+  arrow warp); every NPC on the 24 S.S. Anne maps with objects (all texts, all 16 trainers fought, the 7 item balls,
+  the 2F gentleman's showmonpic scene, the 1F heal lady), the hidden items (B1F corridor Hyper Potion, the kitchen's
+  three berries), the captain's office signs; the rival's three triggers on 2F (the side two are new tests); the
+  captain's back turned until he's rubbed, HM01, "set sail soon" after; both branches of SSAnne_Exterior_ExitSSAnne
+  (from the ship, and walked down the dock when arriving from Vermilion with VAR_MAP_SCENE_VERMILION_CITY 1);
+  VAR_MAP_SCENE_VERMILION_CITY 1 → 2 → 3, FLAG_HIDE_SS_ANNE set by `removeobject`; Vermilion afterwards (the
+  trigger's "The ship set sail.", the ferry sailor, the old man's OldMan1SSAnneLeft, the pier sailor). No other
+  differences from the decomp found. Not reachable in the sweep: the exterior's hidden Lava Cookie at (58, 28)
+  (across the water from the dock, as in the decomp) and the deck sailor at (13, 13), who walks back and forth
+  without stopping (his movement checked tile by tile; his script is a plain MSGBOX_NPC).
+- Verified: typecheck; `npm test` (229); e2e ssAnne.test.ts (10, twice in a row) and story.test.ts (7).

@@ -22,6 +22,7 @@ import type { GameState } from '../state/GameState';
 import { TEXT_SPEED, type TextSpeed } from '../text/TextPrinter';
 import { seedRng } from '../util/random';
 import { DELTA, type Direction } from '../world/direction';
+import { createEgg } from '../world/daycare';
 import { tilesetVram } from '../world/TilesetVram';
 import { SetPlayerAvatarTransitionFlags } from '../world/playerAvatar';
 import { DestroyPlayerSurfBlob } from '../world/surf';
@@ -51,6 +52,7 @@ import { museumFossilPicProbe } from '../ui/MuseumFossilPic';
 import { daycareLevelMenuProbe } from '../ui/DaycareLevelMenu';
 import { diplomaProbe } from '../menus/diploma';
 import { seagallopProbe } from '../menus/seagallop';
+import type { SSAnneProbe } from '../world/ssAnne';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -283,6 +285,12 @@ interface OverworldLike extends Phaser.Scene {
   testFindPath(worldX: number, worldY: number): Direction[] | undefined;
   testPushWarpDirection(): Direction | undefined;
   testObjects(): FieldObjectProbe[];
+  testLeagueLighting(colorIndex?: number): {
+    tasks: { func: string; timer: number; index: number; count: number }[];
+    palette7: number[] | undefined;
+    pixel: { rgb: number[]; colorIndex: number } | undefined;
+  };
+  testSSAnne(): SSAnneProbe | undefined;
   state: GameState;
   startWildBattle(mon: Pokemon): void;
   useFlash(): void;
@@ -302,7 +310,11 @@ export interface MonSpec {
   status?: string;
   /** A personality that makes it shiny (for the player's OT id). */
   shiny?: boolean;
-  /** An egg with this many egg cycles left, as CreateEgg makes it (isEgg, friendship = cycles, met level 0, Poké Ball, the Japanese egg nickname). */
+  /**
+   * An egg with this many egg cycles left (friendship), made by world/daycare.ts' createEgg (CreateEgg: level
+   * EGG_HATCH_LEVEL, met level 0, Poké Ball, the egg nickname, a random personality); `level`, `iv` and `shiny`
+   * don't apply to it.
+   */
   egg?: number;
 }
 
@@ -381,15 +393,19 @@ function createApi(game: Phaser.Game) {
   });
   const createMon = (spec: MonSpec): Pokemon => {
     const s = requireState();
-    const mon = s.pokemon.createMon(define(`SPECIES_${spec.species}`), spec.level, {
-      otId: s.trainerId,
-      otName: s.playerName,
-      otGender: s.playerGender,
-      metLocation: s.currentMapSection,
-      fixedIV: spec.iv,
-      // shiny value = otId hi ^ otId lo ^ personality hi ^ personality lo = 0
-      personality: spec.shiny ? ((((s.trainerId >>> 16) ^ (s.trainerId & 0xffff)) << 16) >>> 0) : undefined,
-    });
+    const species = define(`SPECIES_${spec.species}`);
+    const mon =
+      spec.egg !== undefined
+        ? createEgg(s, species, false)
+        : s.pokemon.createMon(species, spec.level, {
+            otId: s.trainerId,
+            otName: s.playerName,
+            otGender: s.playerGender,
+            metLocation: s.currentMapSection,
+            fixedIV: spec.iv,
+            // shiny value = otId hi ^ otId lo ^ personality hi ^ personality lo = 0
+            personality: spec.shiny ? ((((s.trainerId >>> 16) ^ (s.trainerId & 0xffff)) << 16) >>> 0) : undefined,
+          });
     if (spec.moves) {
       mon.moves = [0, 0, 0, 0];
       mon.pp = [0, 0, 0, 0];
@@ -400,14 +416,7 @@ function createApi(game: Phaser.Game) {
     }
     if (spec.item) mon.heldItem = define(`ITEM_${spec.item}`);
     if (spec.status) mon.status = define(`STATUS1_${spec.status}`);
-    if (spec.egg !== undefined) {
-      // CreateEgg (daycare.c)
-      mon.isEgg = true;
-      mon.friendship = spec.egg;
-      mon.metLevel = 0;
-      mon.pokeball = define('ITEM_POKE_BALL');
-      mon.nickname = s.pokemon.encodeName('タマゴ'); // sJapaneseEggNickname
-    }
+    if (spec.egg !== undefined) mon.friendship = spec.egg; // the egg cycles left
     return mon;
   };
 
@@ -565,6 +574,12 @@ function createApi(game: Phaser.Game) {
     /** The current map's objects: local id, graphics and map-local position. */
     objects: () => overworld()?.testObjects() ?? [],
     /**
+     * The Elite Four / Champion rooms' lighting (world/leagueLighting.ts): its tasks (func, timer, palette index,
+     * count), BG palette 7 as the field holds it, and a pixel the map's atlas drew with palette 7 (of colour index
+     * `colorIndex` if given; read back from the canvas).
+     */
+    leagueLighting: (colorIndex?: number) => overworld()?.testLeagueLighting(colorIndex),
+    /**
      * Put the player in an avatar state the way the game does it (SetPlayerAvatarTransitionFlags with
      * PLAYER_AVATAR_FLAG_<state>): 'MACH_BIKE' gets on the bike, 'SURFING' onto a surfing mon, 'ON_FOOT' off.
      * (The game never leaves the surf blob behind that way, so it goes too.)
@@ -654,6 +669,8 @@ function createApi(game: Phaser.Game) {
     tmCase: () => (gMain.callback2?.name === 'CB2_Idle' ? tmCaseProbe() : undefined),
     /** The egg hatch scene while it's up (menus/eggHatch.ts): CB2_state, the egg's anim / visibility, the mon's, shards. */
     eggHatch: () => eggHatchProbe(),
+    /** The S.S. Anne's departure while it runs (world/ssAnne.ts): the task's state, the boat's x2, wake and smoke. */
+    ssAnne: () => overworld()?.testSSAnne(),
     /** The move relearner while it's up (menus/learnMove.ts): its MENU_STATE_*, the list's moves and selection. */
     moveRelearner: () => (gMain.callback2?.name === 'CB2_MoveRelearner' ? moveRelearnerProbe() : undefined),
     /** The berry pouch while it's open (menus/berryPouch.ts): BERRYPOUCH_* type, task, scroll/row and the pocket's berries in list order. */

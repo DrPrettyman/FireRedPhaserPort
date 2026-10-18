@@ -49,6 +49,24 @@ this is the next level down. When you add or change a subsystem, update its entr
   `writeTiles` redraws the slots whose metatiles use a changed tile. `world/tilesetAnims.ts` is tileset_anims.c,
   driven from `OverworldScene.tick` (InitTilesetAnimations on a warp, InitSecondaryTilesetAnimation on a
   connection). `__test.tilesetTile(name, tile)` shows a tile's current bytes.
+- **BG palette loads on the field:** `tilesetVram.loadBgPalette(textures, pair, slot, colors)` is LoadPalette into
+  the map BGs' palette slot (0-6 the primary's, 7-12 the secondary's; colours as palettes.json's JASC [r, g, b]): it
+  makes the pair's atlases live and redraws only the slots whose metatiles use that palette (AtlasCanvas keeps a
+  palette → slots index beside the tile → slots one). Loading the colours a slot already has costs nothing.
+  `tilesetVram.resetBgPalettes()` is LoadMapTilesetPalettes: OverworldScene calls it on a map load after ON_RESUME
+  (before it on a connection) and in `resumeMap` after ON_RESUME / ON_RETURN_TO_FIELD, as the GBA reloads the
+  palettes there. The GBA layer's copy of the map (fieldGbaScreen.ts, battle transitions) loads the changed slots
+  too (`bgPaletteOverrides`, back to BGR555). The field's fades are an overlay, so they cover a loaded palette too.
+- **League lighting:** `world/leagueLighting.ts` is field_specials.c's DoPokemonLeagueLightingEffect (registered
+  with `registerLeagueLighting()`; the rooms' ON_RESUME script), Task_RunPokemonLeagueLightingEffect /
+  Task_CancelPokemonLeagueLightingEffect as field tasks, and StopPokemonLeagueLightingEffectTask (the start menu's
+  `openFieldMenu`, itemUse.ts' FadeToScreenFromField). Palettes and timers come from `public/gen/leagueLighting.json`
+  (tools/extract_field.py `extract_league_lighting`). The field's ResetTasks (`enterMap`, `resumeMap`) ends the
+  tasks with `ResetLeagueLightingTasks`. ON_RESUME runs on every map load as on the GBA (LoadMapInStepsLocal's
+  ResumeMap: after ON_LOAD, before the objects and ON_WARP_INTO), not only on a return to the field. Probe:
+  `__test.leagueLighting(colorIndex?)` (the tasks, BG palette 7, a canvas pixel drawn with palette 7). Tests:
+  tests/e2e/leagueLighting.test.ts (dev start `?map=PokemonLeague_LoreleisRoom&x=6&y=12` or
+  `PokemonLeague_ChampionsRoom&x=6&y=19`).
 - **Map layouts (`setmaplayoutindex`):** maps carry `layoutId` (gMapHeader.mapLayoutId) and `GameState.mapLayoutId`
   is gSaveBlock1Ptr->mapLayoutId: `onMapLoaded` sets it from the header before ON_TRANSITION (LoadCurrentMapData),
   the script command changes it (SetCurrentMapLayout), and `initMapLayout` then swaps the current chunk's grid,
@@ -72,6 +90,17 @@ this is the next level down. When you add or change a subsystem, update its entr
   landing tile, for collisions). Probes: `field().fieldEffects` / `playerEffects`. Test spots: Route 1 ledge into
   grass (12, 4), Viridian pond (14, 24), Four Island puddles (10, 8; mash through the rival scene first), Five
   Island sand (8, 3), Kindle Road shallow water (4, 17), Ember Spa (11, 10).
+- **S.S. Anne departure:** `world/ssAnne.ts` is ss_anne.c: `special DoSSAnneDepartureCutscene` (registered with
+  `registerSSAnne` from OverworldScene, host `setSSAnneHost`: scene, screen origin, cameraTop, object by local id)
+  creates a field task (Task_SSAnneInit/Run/Finish) and hands the script's `waitstate` a wait that ends at
+  Task_SSAnneFinish's ScriptContext_Enable. The boat (local id 1) moves only through its sprite's x2 (the object
+  stays on its tile, `removeobject` takes it after); the wake and smoke are FieldEffectSprites at screen
+  coordinates (like world/hallOfFameRecord.ts, whose `drawFrames` / `canvasTexture` build their textures from
+  sWakeTiles / sSmokeTiles on gObjectEventPal_SSAnne, OBJ palette 10). Probe: `__test.ssAnne()` (state, frames,
+  boatX2, boatScreenX, wake, smoke, smokeCreated; the last cutscene stays there as 'done'); event
+  `ssAnneDeparture` (phase start / run / finish / done). Test spot: `?map=SSAnne_Exterior&x=32&y=14`, then set
+  VAR_MAP_SCENE_VERMILION_CITY to 1. Tests: tests/e2e/ssAnne.test.ts (also Vermilion's ticket check, the rival's
+  side triggers on 2F, the captain, the dock afterwards).
 - **Field moves:** four pieces.
   - `world/fieldEffectScripts.ts` is field_effect.c's interpreter: `FieldEffectStart('FLDEFF_*')` runs the
     decomp's own script (data/field_effect_scripts.s → `field_effects/scripts.json`), whose `callnative` calls a
@@ -205,11 +234,15 @@ this is the next level down. When you add or change a subsystem, update its entr
   diploma.c; graphics `sDiploma*` from `graphics/diploma/`; probe `__test.diploma()`), and the Trainer Fan Club
   (trainer_fan_club.c: struct TrainerFanClub packed in VAR_FANCLUB_FAN_COUNTER as on the GBA, the loss timer in
   VAR_FANCLUB_LOSE_FAN_TIMER, play hours from `state.playTime`). The Compare/Get*SizeRecordInfo pair takes a var
-  name and species, so the postgame Heracross record is two more table entries.
+  name and species, so the postgame Heracross record is two more table entries. GetMartClerkObjectId (sMartMaps)
+  is here too; its only caller is EventScript_Questionnaire, behind Easy Chat.
   Tests: tests/e2e/sideSpecials.test.ts (Daisy in PalletTown_RivalsHouse from (5, 5) facing up with
   FLAG_SYS_GAME_CLEAR; the fishing guru at Route12_FishingHouse (4, 5); the designer at
-  CeladonCity_Condominiums_3F (3, 9); the S.S. Anne gentleman), tests/unit/miscSpecials.test.ts (the size formula,
-  the friendship rating, the fan club by hand).
+  CeladonCity_Condominiums_3F (3, 9); the S.S. Anne gentleman; the Trainer Fan Club at
+  SaffronCity_PokemonTrainerFanClub (7, 14): the crush girl before the Hall of Fame, then
+  Script_UpdateTrainerFanClubGameClear called in the page, MeetFirstFans on the way back in, a fan and a non-fan),
+  tests/unit/miscSpecials.test.ts (the size formula, the friendship rating, the fan club by hand, every mart's
+  clerk).
 - **Fall warps (holes):** `world/fallWarp.ts`. Stepping onto an MB_FALL_WARP tile with a warp
   (OverworldScene.tryStartWarpEventScript, TryStartWarpEventScript's branch) runs SetupWarp (`setupWarp`, shared
   with takeWarp; the destination lands in `warpDestination` once its header has loaded: `warpSetup`) and
@@ -229,8 +262,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   SpriteCB_Egg_0..5, 19 shards, the white flash, the message, the nickname YES/NO → DoNamingScreen →
   EggHatchSetMonNickname), back through CB2_ReturnToField. AddHatchedMonToParty / ScriptHatchMon take the
   GameState and need no screen (unit tests). Probe `__test.eggHatch()` (CB2_state, the egg's anim and
-  visibility, the mon's, shards on screen / made). Test hook: a `MonSpec` with `egg: <cycles left>` is made as
-  CreateEgg would (isEgg, friendship = cycles); set `t.state.daycare.stepCounter = 254` so the next step counts
+  visibility, the mon's, shards on screen / made). Test hook: a `MonSpec` with `egg: <cycles left>` is made by
+  world/daycare.ts' `createEgg` (then friendship = cycles; `level` / `iv` / `shiny` don't apply); set `t.state.daycare.stepCounter = 254` so the next step counts
   the cycle. Tests: tests/unit/eggHatch.test.ts, tests/e2e/eggHatch.test.ts.
 - **Multichoice / elevators:** `ui/MultichoiceMenu.ts` (vertical list and grid, field windows); the script engine
   sets VAR_RESULT from `ScriptHost.openMultichoice`. `text/stringWidth.ts` is GetStringWidth for any font set
@@ -884,7 +917,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   `callnative`s against `registerFieldEffectNatives` (also read from the source). The extractor's `macros` key
   (asm/macros/event.inc + trainer_tower.inc, movement.inc, map.inc) tells commands from movement actions and map
   data; an op in none of them fails the test. The known gaps are `tests/unit/scriptCoverageGaps.ts`, each tagged
-  `main` / `side` / `postgame` / `link` with the maps that reach it (from each map's map scripts, object, coord and
+  `main` / `side` / `postgame` / `link` (or `unused`: shared with Emerald, reached by nothing in FRLG, not to be
+  ported) with the maps that reach it (from each map's map scripts, object, coord and
   bg event scripts, following every label argument) and a note (BLOCKER = the story stops there). The test fails on
   a new gap (it prints a ready-made entry with the maps; pick the tag from the decomp scripts) and on a fixed one
   (take it off the list). Porting a special in a Phaser module: register it with `registerSpecials({ ... })` as an
