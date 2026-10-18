@@ -46,6 +46,11 @@ Checked against the decomp (`pret/firered` at `037335f4c`, "Audio improvements (
    SE_DOOR 34 / 20, MUS_OBTAIN_ITEM 146 / 143, MUS_OBTAIN_BADGE 313 / 310, MUS_EVOLVED 229 / 226,
    MUS_SLOTS_WIN 151 / 151, MUS_HEAL 138 / 120. They agree to within a release tail or a trailing rest, which is
    as close as a MIDI renderer can show; the engine's unit tests should pin the exact numbers.
+   **The engine's numbers (W-m4a 1, tests/unit/m4a.test.ts) replace the spike's:** a song's first tick runs at the
+   default 150 BPM, not the song's tempo, and the player's status clears one tick after the last FINE, so e.g.
+   MUS_LEVEL_UP stops in frame 64 (not 63), SE_SELECT after 11, SE_DOOR after 36 (FINE in 34),
+   MUS_OBTAIN_BADGE after 315. `m4aMPlayFadeOutTemporarily` takes 17 steps × speed (fadeOV starts at 257),
+   `m4aMPlayFadeOut` 16.
 3. **The cry WAVs decode exactly.** All 388 cries in `sound/direct_sound_samples/cries/*.wav` are exactly
    reachable by FRLG's DPCM (every in-block step is in gDeltaEncodingTable), so decoding the WAV gives the
    samples the GBA decompresses. The port needs no DPCM code.
@@ -95,8 +100,9 @@ points and writes them as a GOTO.
   (`MPlayOpen`) and two cry players (`MAX_POKEMON_CRIES = 2`, 2 tracks each).
 - **Per frame** (main.c:406 `VBlankIntr` → `m4aSoundMain` → `SoundMain`, m4a_1.s:20-86), in this order:
   (1) the music players' sequencers, through the `MPlayMainHead` / `musicPlayerHead` chain (SoundMain_3); MPlayOpen
-  (m4a.c:565) puts each newly opened player at the head, so they run newest first: cry player 1, cry player 0,
-  SE3, SE2, SE1, BGM; (2) `CgbSound` for the four PSG channels (SoundMain_4); (3) `SoundMainRAM` (m4a_1.s:88,
+  (m4a.c:565) puts each newly opened player at the head, but MPlayMain calls the previous head (its `func`) before
+  its own work (m4a_1.s:1140), so they run **oldest first**: BGM, SE1, SE2, SE3, cry player 0, cry player 1
+  (corrected by W-m4a 1: this matters for channel stealing); (2) `CgbSound` for the four PSG channels (SoundMain_4); (3) `SoundMainRAM` (m4a_1.s:88,
   run from its RAM copy): the reverb pass over the buffer, then per DirectSound channel the envelope (attack /
   decay / sustain / release, once per frame), the pitch step, loop, reverse and DPCM playback
   (`SoundMainRAM_Unk2` decodes 64-sample blocks), mixed into the next 224-sample buffer with the master volume.
@@ -540,7 +546,7 @@ W-m4a 3 is split in two (W-m4a 3, the mixer; W-out 1, the browser output), so ba
    MPlayMain (339 asm), TrackStop (40 asm), the jump-table commands (ply_fine ... ply_port, ply_lfos, ply_mod:
    ~330 asm), ply_memacc ... ply_xcmd_0D (m4a.c, ~240), FadeOutBody (73), TrkVolPitSet (45), m4aSongNum*
    (~80), the m4aMPlay* controls (~330), m4aSoundInit / SoundInit / m4aSoundMode / SampleFreqSet (~170),
-   `m4aSoundMain` (the player chain in its newest-first order); ~1,060 lines of C plus ~710 of asm. Notes only
+   `m4aSoundMain` (the player chain, oldest first); ~1,060 lines of C plus ~710 of asm. Notes only
    set gate times here (no channels). Unit tests: tempo and tick counts, MPlayStart's priority rule, pause /
    continue, fades (16 × speed frames), on hand-written bytes, then on `songs.json` once W-audiodata 1 lands.
 2. **Notes, channels and cries (silent).** ply_note (280 asm: voice lookup through keysplit and rhythm voices,

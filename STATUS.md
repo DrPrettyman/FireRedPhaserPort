@@ -24,9 +24,12 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
 
 ## Next up
 
-[AUDIO_PLAN.md](AUDIO_PLAN.md) is written (PR #80) and waits for the user's review before any audio code: port the
-m4a engine to TypeScript, always running (output optional), 14 units in four batches; its "Open questions" need
-answers first. [SIDE_PLAN.md](SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
+Audio, [AUDIO_PLAN.md](AUDIO_PLAN.md): the user answered its questions (PR #83: GBA-exact mix, the decomp's own
+mid2agb built during `npm run extract`, a mute key M, GBA timing, battle-test audio, a later mGBA reference unit);
+batch A is in (PRs #84-#86): `public/gen/audio/` (songs via mid2agb, voicegroups, samples, waves, cries) and the m4a
+sequencer in `src/audio/` (silent, not wired into the game yet). Next: batch B, W-m4a 2 (notes, channels, cries),
+W-sound 1 (sound.c, the frame hook, fanfare and `waitse` waits; lengthens waits: full e2e), W-out 1 (the
+AudioWorklet output, autoplay, the mute key). Nothing is audible until batch C (W-m4a 3). [SIDE_PLAN.md](SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
 `bufferdecorationname` (and the other decoration commands) and FLDEFF_USE_DIVE with DoDiveWarp, ported as FRLG's C
 has them; the `unused` gap tag is gone.
 
@@ -48,8 +51,8 @@ No known main-path blockers are left: the story checks found and fixed four (Lt.
 Hideout's `call_if_defeated` barrier, `GetQuestLogState` leaving VAR_RESULT stale so `trainerbattle_no_intro`
 could skip its battle, every nurse's YES/NO throwing on a constant expression). `tests/unit/scriptCoverageGaps.ts`
 lists what the scripts use that isn't ported: 0 main, 0 side, 42 postgame, 44 link (what FRLG compiles but never
-reaches, the decoration commands and Dive, is ported as the C has it). Next: audio, planned in
-[AUDIO_PLAN.md](AUDIO_PLAN.md) (awaiting the user's review), then the postgame (Sevii 4-7, Mt. Ember, Trainer
+reaches, the decoration commands and Dive, is ported as the C has it). Next: audio
+([AUDIO_PLAN.md](AUDIO_PLAN.md) batches B-D), then the postgame (Sevii 4-7, Mt. Ember, Trainer
 Tower, the event islands).
 
 Other open work:
@@ -107,7 +110,8 @@ Loose ends:
   battle_anim_scripts.s with template/task pointers as named externs, sprite templates, anim OamData, pic/palette/bg tables)
 - [x] Evolution scene graphics (`graphics/evolution_scene/`: moving background, sparkles)
 - [x] Pure event macros (giveitem_msg, famechecker, trainerbattle_*, ...) expanded like the assembler would, incl. `.if/.elseif/.else` on arguments
-- [ ] Audio
+- [~] Audio: songs (`audio/songs.json`, the decomp's mid2agb built into `tools/.bin/` and run), voicegroups,
+  keysplits, samples, waves, cry tables (`tools/extract_audio.py`, `extract_audio_voices.py`); a C++ compiler needed
 
 ### Engine
 - [x] Map rendering (bottom/middle/top BG layers), connections, border
@@ -237,7 +241,8 @@ Loose ends:
   or an evolution stone; holding B stops it; Crobat-style evolutions stop without the National Dex; learning the
   new species' move (incl. forgetting one through the summary screen); Nincada's Shedinja. TradeEvolutionScene
   isn't ported (no FRLG in-game trade evolves; no link trading)
-- [ ] Audio playback
+- [~] Audio playback: the m4a sequencer (`src/audio/`: MPlayMain, the track commands, fades, controls), silent and
+  not wired in; notes/channels, the mixer, the output, the CGB channels and sound.c are AUDIO_PLAN.md batches B-D
 - [x] Naming screen (naming_screen.c): every template (player, rival, PC box, nickname, caught mon); opened by
   ChangePokemonNickname from scripts and by the battle's nickname prompt after a catch
 - [x] Title screen (title_screen.c, clear save data screen) and Oak's speech (oak_speech.c); intro.c isn't ported

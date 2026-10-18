@@ -2687,3 +2687,21 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   rule, pause / continue, fades, volume / pan / pitch control; on songs.json: 270 songs end, 77 loop, and the
   FINE / stop frames of 19 SEs and fanfares, e.g. SE_SELECT 10 / 11, MUS_OBTAIN_BADGE 313 / 315, MUS_EVOLVED
   229 / 230, MUS_POKE_FLUTE 3,061 / 3,063, MUS_CREDITS 14,970 / 14,971). No game code changed, so no e2e.
+
+### AUDIO_PLAN.md batch A merged (PRs #83-#86)
+
+- PR #83 (docs): the user's answers to the plan's open questions as decisions 8-13 (GBA-exact mix; the decomp's own
+  mid2agb built during `npm run extract`, so the Python port and its differential script went away; mute key M;
+  GBA timing; battle-test audio; W-ref 1 for mGBA recordings with the user's ROM, which is rev 1), W-audiodata
+  re-split to two units, W-out 1 split off the mixer (decision 14), a new open question (ROM-derived numbers in
+  tests).
+- Merged smallest first: #84 (W-audiodata 2, voicegroups and samples), #85 (W-audiodata 1, songs), #86 (W-m4a 1,
+  the sequencer). Conflicts: `tools/extract.py` (both audio calls kept, in the file's style) and two `## Audio`
+  sections in docs/DEV_NOTES.md (merged into one with the three entries under it). README's extraction table got
+  the audio rows (#85). `git diff <PR head>` after each master merge showed only master's changes.
+- AUDIO_PLAN.md corrected from W-m4a 1's findings: the music players run oldest first (MPlayMain calls the
+  previous head before its own work), the engine's song lengths replace spike 2's (MUS_LEVEL_UP stops in frame
+  64), FadeOutTemporarily takes 17 steps.
+- Verified: per merge, typecheck and `npm test` (no game code changed, so no e2e per merge); at the end on master
+  98d9ab7 after `npm run extract`: typecheck, `npm test` 33 files / 367 tests, the full e2e suite 58 files / 387
+  tests, all green.
