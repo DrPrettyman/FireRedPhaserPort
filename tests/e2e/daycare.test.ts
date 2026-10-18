@@ -167,3 +167,174 @@ test('save and continue keeps the daycare mon and its steps', async () => {
   await game.mashUntil((t) => t.idle(), { what: 'the field' });
   expect((await game.eval((t) => t.party())).map((m) => m.species)).toEqual(['PIDGEY', 'RATTATA']);
 });
+
+// ------------------------------------------------------------------ the Four Island daycare and eggs
+// FourIsland_PokemonDayCare_EventScript_DaycareWoman (two mons, the level menu), FourIsland_EventScript_DaycareMan
+// (the egg, refusing it, the compatibility message), and the Water Labyrinth's `giveegg`. Two Rattata of the
+// same OT are PARENTS_MED_COMPATIBILITY (50): "The two seem to get along."
+
+/** The daycare lady stands at (2, 2) facing down; the player starts below her. */
+const FOUR_ISLAND_DAYCARE = { start: 'after-rival', map: 'FourIsland_PokemonDayCare', x: 2, y: 3 } as const;
+const MALE_RATTATA = { species: 'RATTATA', level: 5, moves: ['TACKLE', 'TAIL_WHIP'] };
+const FEMALE_RATTATA = { species: 'RATTATA', level: 10, moves: ['TACKLE', 'QUICK_ATTACK'] };
+
+/** Party: male Rattata, female Rattata (personality low byte 0xFF / 0x00; Rattata is half and half), Pidgey. */
+async function startAtFourIsland(game: Game): Promise<void> {
+  await game.eval((t) => {
+    t.state!.party[0].personality = 0x12345fff;
+    t.state!.party[1].personality = 0x12345f00;
+  });
+}
+
+/** The Four Island daycare: species and steps per slot (null when empty), and the pending egg. */
+const fourIsland = (game: Game) =>
+  game.eval((t) => {
+    const d = t.state!.daycare;
+    return { mons: d.mons.map((m) => m.mon && { species: m.mon.species, steps: m.steps }), offspringPersonality: d.offspringPersonality };
+  });
+
+/** In the daycare party menu: STORE on slot `slot`, then the field again. */
+async function storeFromPartyMenu(game: Game, slot: number): Promise<void> {
+  await game.mashUntil((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu', { what: 'the daycare party menu' });
+  await game.waitForPartyMenu();
+  await game.pressTimes('DOWN', slot);
+  await game.mashUntil((t) => t.gbaScreen() === undefined, { what: 'back to the field' });
+}
+
+/** Leave the first two party mons with the daycare lady (YES, slot 0; YES to one more, slot 0 again). */
+async function leaveTwo(game: Game): Promise<void> {
+  await talk(game);
+  await storeFromPartyMenu(game, 0);
+  await game.mashUntil((t) => /raise one\s+more/.test(t.message() ?? ''), { what: 'one more?' });
+  await storeFromPartyMenu(game, 0);
+  await game.mashUntil((t) => t.idle(), { what: 'the script to end' });
+}
+
+/**
+ * Walk until the daycare has an egg: each try sets the second mon's steps to 254, so the next step is 255 and
+ * rolls (an egg when 50 > Random() * 100 / 0xFFFF, about half the time). Steps up and down from (x, y).
+ */
+const walkForEgg = (game: Game) =>
+  game.eval(async (t) => {
+    for (let i = 0; i < 40; i++) {
+      t.state!.daycare.mons[1].steps = 254;
+      await t.walk(i % 2 ? 'up' : 'down', 1);
+      if (t.state!.daycare.offspringPersonality !== 0) return i;
+    }
+    return -1;
+  });
+
+/** Out of the daycare (the mat at (4, 7)) onto Four Island, past its rival scene. */
+async function leaveDaycare(game: Game): Promise<void> {
+  await game.eval((t) => t.state!.setVar('VAR_MAP_SCENE_FOUR_ISLAND', 1));
+  await game.eval((t) => t.walkTo(4, 7));
+  expect(await game.eval((t) => t.enterWarp())).toBe('FourIsland');
+}
+
+test('Four Island: leave two, the compatibility, an egg, take it, refuse the next', async () => {
+  const game = await session.start({ ...FOUR_ISLAND_DAYCARE, party: [MALE_RATTATA, FEMALE_RATTATA, PIDGEY] });
+  await startAtFourIsland(game);
+  await leaveTwo(game);
+  const RATTATA = await game.eval((t) => t.define('SPECIES_RATTATA'));
+  expect(await fourIsland(game)).toEqual({ mons: [{ species: RATTATA, steps: 0 }, { species: RATTATA, steps: 0 }], offspringPersonality: 0 });
+  expect((await game.eval((t) => t.party())).map((m) => m.species)).toEqual(['PIDGEY']);
+
+  // Outside, the old man: "Your RATTATA and RATTATA are doing fine." then the compatibility.
+  await leaveDaycare(game);
+  await game.eval((t) => t.walkTo(16, 14));
+  await talk(game);
+  await game.mashUntil((t) => /doing fine/.test(t.message() ?? ''), { what: 'doing fine' });
+  expect(await game.message()).toMatch(/RATTATA and\s+RATTATA are doing fine/);
+  await game.mashUntil((t) => /get along/.test(t.message() ?? ''), { what: 'the compatibility' });
+  expect(await game.message()).toMatch(/^The two seem to get along\.$/);
+  await game.mashUntil((t) => t.idle(), { what: 'the field' });
+
+  // Walk until an egg comes; the old man has it.
+  expect(await walkForEgg(game)).toBeGreaterThanOrEqual(0);
+  expect(await game.eval((t) => t.flag('FLAG_PENDING_DAYCARE_EGG'))).toBe(true);
+  await game.eval((t) => t.walkTo(16, 14));
+  await talk(game);
+  await game.mashUntil((t) => /received the EGG/.test(t.message() ?? ''), { what: 'the egg' });
+  await game.mashUntil((t) => t.idle(), { what: 'the field' });
+  const party = await game.eval((t) => t.state!.party.map((m) => ({ species: m.species, isEgg: m.isEgg, metLevel: m.metLevel })));
+  expect(party).toHaveLength(2);
+  expect(party[1]).toEqual({ species: RATTATA, isEgg: true, metLevel: 0 });
+  expect(await game.eval((t) => t.flag('FLAG_PENDING_DAYCARE_EGG'))).toBe(false);
+  expect((await fourIsland(game)).offspringPersonality).toBe(0);
+
+  // The next egg: NO, and NO again: "Well then, I'll keep it."
+  expect(await walkForEgg(game)).toBeGreaterThanOrEqual(0);
+  await game.eval((t) => t.walkTo(16, 14));
+  await talk(game);
+  await game.mashUntil((t) => /Thanks!/.test(t.message() ?? ''), { what: 'refused', answers: [[/want it, yes|want this, yes/, 'B']] });
+  await game.mashUntil((t) => t.idle(), { what: 'the field' });
+  expect(await game.eval((t) => t.state!.party.length)).toBe(2);
+  expect(await game.eval((t) => t.flag('FLAG_PENDING_DAYCARE_EGG'))).toBe(false);
+  expect(await fourIsland(game)).toMatchObject({ offspringPersonality: 0 });
+});
+
+test('Four Island: take one back through the level menu, then the other', async () => {
+  const game = await session.start({ ...FOUR_ISLAND_DAYCARE, party: [MALE_RATTATA, FEMALE_RATTATA, PIDGEY] });
+  await startAtFourIsland(game);
+  await leaveTwo(game);
+  // The female (level 10, 1000 exp) was left second: 331 steps take her to 1331 = level 11.
+  await game.eval((t) => {
+    t.state!.daycare.mons[1].steps = 331;
+    t.state!.money = 1000;
+  });
+  await talk(game);
+  await game.mashUntil((t) => /grown by/.test(t.message() ?? ''), { what: 'the levels gained' });
+  expect(await game.message()).toMatch(/grown by 1\./);
+  // "Will you take your POKéMON back?" YES: the level menu.
+  const menu = await game.mashUntil((t) => t.daycareLevelMenu(), { what: 'the level menu' });
+  expect(menu).toEqual({ selected: 0 });
+  await game.press('DOWN');
+  await game.waitFor((t) => t.daycareLevelMenu()?.selected === 1, { what: 'the second mon' });
+  await game.mashUntil((t) => /it will cost/.test(t.message() ?? ''), { what: 'the cost' });
+  expect(await game.message()).toMatch(/RATTATA back,\s+it will cost ¥200\./);
+  await game.mashUntil((t) => /took back RATTATA/.test(t.message() ?? ''), { what: 'took back' });
+  // "Will you take back the other one, too?" NO.
+  await game.mashUntil((t) => t.idle(), { what: 'the field', answers: [[/other one/, 'B']] });
+  const party = await game.eval((t) => t.party());
+  expect(party.map((m) => [m.species, m.level])).toEqual([['PIDGEY', 10], ['RATTATA', 11]]);
+  expect(await game.eval((t) => t.money())).toBe(800);
+  const RATTATA = await game.eval((t) => t.define('SPECIES_RATTATA'));
+  expect((await fourIsland(game)).mons).toEqual([{ species: RATTATA, steps: 0 }, null]);
+
+  // One left: "raise one more?" NO, "take your POKéMON back?" YES: no menu, straight to the cost (¥100).
+  await talk(game);
+  await game.mashUntil((t) => /took back RATTATA/.test(t.message() ?? ''), { what: 'took back', answers: [[/one\s+more/, 'B']] });
+  await game.mashUntil((t) => t.idle(), { what: 'the field' });
+  expect((await game.eval((t) => t.party())).map((m) => [m.species, m.level])).toEqual([['PIDGEY', 10], ['RATTATA', 11], ['RATTATA', 5]]);
+  expect(await game.eval((t) => t.money())).toBe(700);
+  expect((await fourIsland(game)).mons).toEqual([null, null]);
+});
+
+test('Four Island: B in the level menu takes nothing back', async () => {
+  const game = await session.start({ ...FOUR_ISLAND_DAYCARE, party: [MALE_RATTATA, FEMALE_RATTATA, PIDGEY] });
+  await startAtFourIsland(game);
+  await leaveTwo(game);
+  await talk(game);
+  await game.mashUntil((t) => t.daycareLevelMenu(), { what: 'the level menu' });
+  await game.press('B');
+  await game.mashUntil((t) => /Come again/.test(t.message() ?? ''), { what: 'come again', button: 'B' });
+  await game.mashUntil((t) => t.idle(), { what: 'the field' });
+  expect(await game.eval((t) => t.daycareLevelMenu())).toBeUndefined();
+  expect(await game.eval((t) => t.party().length)).toBe(1);
+});
+
+test('the Water Labyrinth gentleman gives a Togepi egg to a trainer whose lead mon loves them', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'FiveIsland_WaterLabyrinth', x: 14, y: 12, party: [PIDGEY] });
+  await game.eval((t) => (t.state!.party[0].friendship = 255));
+  await talk(game);
+  await game.mashUntil((t) => /received an EGG/.test(t.message() ?? ''), { what: 'the egg' });
+  await game.mashUntil((t) => /glad I met/.test(t.message() ?? ''), { what: 'the comment' });
+  await game.mashUntil((t) => t.idle(), { what: 'the field' });
+  const egg = await game.eval((t) => {
+    const m = t.state!.party[1];
+    return { species: m.species, isEgg: m.isEgg, metLocation: m.metLocation, metLevel: m.metLevel, friendship: m.friendship };
+  });
+  const TOGEPI = await game.eval((t) => t.define('SPECIES_TOGEPI'));
+  expect(egg).toEqual({ species: TOGEPI, isEgg: true, metLocation: 'METLOC_SPECIAL_EGG', metLevel: 0, friendship: 10 });
+  expect(await game.eval((t) => t.flag('FLAG_GOT_TOGEPI_EGG'))).toBe(true);
+});

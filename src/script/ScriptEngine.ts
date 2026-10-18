@@ -828,7 +828,10 @@ export class ScriptEngine {
       ctx.wait = () => {
         if (!menu.tick()) return false;
         this.state.setVar('VAR_RESULT', menu.result ? 1 : 0);
-        return true;
+        // Task_HandleYesNoInput's ScriptContext_Enable: the script goes on in the next frame's
+        // ScriptContext_RunScript, so the A that chose can't also pass a `waitbuttonpress` or a menu after it.
+        ctx.wait = () => true;
+        return false;
       };
     },
 

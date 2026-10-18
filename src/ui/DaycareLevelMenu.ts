@@ -8,7 +8,7 @@ import type { GameState } from '../state/GameState';
 import { stringWidth } from '../text/stringWidth';
 import { appendMonGenderSymbol, boxMonNickname, getLevelAfterDaycareSteps } from '../world/daycare';
 import type { FieldTask } from '../world/elevator';
-import { FieldListMenu, LIST_NOTHING_CHOSEN, type ListMenuHost } from './FieldListMenu';
+import { FieldListMenu, type ListMenuHost } from './FieldListMenu';
 import { MenuWindow } from './MenuWindow';
 
 const EOS = 0xff;
@@ -89,16 +89,15 @@ class DaycareLevelMenuTask implements FieldTask {
 
   tick(): boolean {
     if (this.done) return true;
-    const input = this.list.processInput();
-    const result = this.host.input.pressed('A') ? input : this.host.input.pressed('B') ? -1 : LIST_NOTHING_CHOSEN;
-    if (result === LIST_NOTHING_CHOSEN) return false;
+    const input = this.list.processInput(); // ListMenu_ProcessInput
     const d = (name: string) => this.state.defines.require(name);
-    if (result === -1) {
+    if (this.host.input.pressed('A')) {
+      if (input === 0 || input === 1) this.state.setVar('VAR_RESULT', input);
+      else if (input === d('DAYCARE_LEVEL_MENU_EXIT')) this.state.setVar('VAR_RESULT', d('DAYCARE_EXITED_LEVEL_MENU'));
+    } else if (this.host.input.pressed('B')) {
       this.state.setVar('VAR_RESULT', d('DAYCARE_EXITED_LEVEL_MENU'));
-    } else if (result === 0 || result === 1) {
-      this.state.setVar('VAR_RESULT', result);
-    } else if (result === d('DAYCARE_LEVEL_MENU_EXIT')) {
-      this.state.setVar('VAR_RESULT', d('DAYCARE_EXITED_LEVEL_MENU'));
+    } else {
+      return false;
     }
     // DestroyListMenuTask, ClearStdWindowAndFrame(TRUE), RemoveWindow, DestroyTask, ScriptContext_Enable
     this.win.destroy();
