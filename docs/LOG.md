@@ -2055,7 +2055,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Verified: each PR after merging master in: typecheck, `npm test`, full e2e. Last run (#53 on top of everything):
   typecheck clean, 156 unit, 308 e2e in 45 files.
 
-## Workflow: branch cleanup checks, worker count and e2e scope are the coordinator's call
+### Workflow: branch cleanup checks, worker count and e2e scope are the coordinator's call
 
 - Batches 1-2 of SCREENS_PLAN.md left 15 merged branches on origin while reporting "all branches cleaned up".
   Cause: `gh pr merge --delete-branch` run while a worktree had the branch checked out fails to delete the local
