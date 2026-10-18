@@ -2069,6 +2069,39 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - CLAUDE.md "Merging PRs" points at both; the get-on skill's main coordinator now checks the cleanup itself.
 - Verified: docs only.
 
+### In-game trades without the animation, and the Name Rater (W-trade unit 1)
+
+- Data: `tools/extract_trades.py` (called from extract.py's main) writes sInGameTrades (src/data/ingame_trades.h,
+  FireRed side of its `#if` blocks via `firered_only`) to `public/gen/trades.json`; `Assets.init` loads it and
+  OverworldScene hands it to `initInGameTrades`.
+- `script/tradeSpecials.ts` (TRADE_SPECIALS, one spread line in SPECIALS): GetInGameTradeSpeciesInfo,
+  GetTradeSpecies, CreateInGameTradePokemon (CreateInGameTradePokemonInternal: the player's mon's level, the fixed
+  personality / OT id / IVs / ability / held item, OT name and gender, nickname, METLOC_IN_GAME_TRADE; CreateMon
+  still rolls the random IVs first, as on the GBA), TradeMons (friendship 70), UpdatePokedexForReceivedMon,
+  BufferInGameTradeMonName, and DoInGameTradeScene as a stand-in (fade to black, swap, fade in, the script's
+  `waitstate` ends). The Name Rater: IsMonOTIDNotPlayers (a `special` that writes VAR_RESULT itself),
+  IsMonOTNameNotPlayers, NameRaterWasNicknameChanged. All seven came off scriptCoverageGaps.ts.
+- Not modelled (DEVIATIONS): the trade animation (unit 2), contest conditions and sheen, the Jynx's mail message.
+- Verified: typecheck, `npm test` (unit: tests/unit/inGameTrades.test.ts checks the extracted table, the created
+  Mr. Mime's fields and stats worked out by hand, the swap behind the fade, the Name Rater specials),
+  tests/e2e/inGameTrades.test.ts (Reyley's trade, declining, the wrong species and a cancelled party menu; the
+  Name Rater declining, renaming and refusing a traded mon).
+### Party selection from scripts, the move tutors and the move deleter (W-moves unit 1)
+
+- `menus/partyMenuSpecials.ts`: party_menu_specials.c (ChoosePartyMon, ChooseMonForMoveRelearner's party menu
+  half, Task_ChoosePartyMon, SelectMoveDeleterMove, GetNumMovesSelectedMonHas, BufferMoveDeleterNicknameAndMove,
+  MoveDeleterForgetMove with ShiftMoveSlot / RemoveMonPPBonus, IsSelectedMonEgg) and the ChooseMonForMoveTutor
+  special, spread into SPECIALS; eight entries off `scriptCoverageGaps.ts`.
+- New `ScriptHost.runScreenFromScript(init)` (OverworldScene): a special's SetMainCallback2 to a GBA-layer screen,
+  back through RunFieldCallback; `SpecialEnv.stopScript(wait)` for a special that leaves the field without a
+  `waitstate` after it (SelectMoveDeleterMove).
+- Fix on the way: ChoosePartyMonByMenuType didn't set gFieldCallback2 = CB2_FadeFromPartyMenu.
+- The party menu's tutor path (TryTutorSelectedMon, the replace-a-move summary) was already ported and worked
+  as is. The C's B value in VAR_0x8004 is SLOT_CANCEL (PARTY_SIZE + 1); FireRed has no PARTY_NOTHING_CHOSEN.
+- Verified: typecheck, `npm test` (161), tests/e2e/moveTutors.test.ts (5: Mega Punch with a free slot and with
+  four moves, B in the tutor's party menu, deleting GROWL from the middle of four moves with PP Ups shifted, B out
+  of the deleter's party menu and summary screen), tests/e2e/tmCase.test.ts; screenshots of the field after both.
+
 ### W-slots unit 1: the coins box, the Game Corner's clerks and the slot machine's game logic
 
 - coins.c's coins box (`ui/CoinsBox.ts`): `showcoinsbox` / `updatecoinsbox` / `hidecoinsbox` (ScrCmd_* →

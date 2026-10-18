@@ -86,6 +86,7 @@ import type { ShopFieldView } from '../menus/shop';
 import { setBgMosaic } from '../world/BgMosaic';
 import { initRoamerTables, roamerMove, roamerMoveToOtherLocationSet, updateLocationHistoryForRoamer } from '../world/roamer';
 import { initWildPokemonArea } from '../menus/wildPokemonArea';
+import { initInGameTrades } from '../script/tradeSpecials';
 import {
   checkForTrainersWantingBattle,
   COLLISION_FLAG_ELEVATION_MISMATCH,
@@ -339,6 +340,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     });
     initRoamerTables(this.assets.wildEncounters);
     initWildPokemonArea(this.assets.wildEncounters);
+    initInGameTrades(this.assets.trades);
     this.wild = new WildEncounters(this.assets.wildEncounters, this.state, this.defines, {
       startWildBattle: (mon) => this.startWildBattle(mon),
       startRoamerBattle: (mon) => this.runWildBattle(this.defines.require('BATTLE_TYPE_ROAMER'), mon), // StartRoamerBattle
@@ -1623,6 +1625,23 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.messageBox.hide(); // CleanupOverworldWindowsAndTilemaps
     // The Town Map reads the player's location; the TM case's and the pouch's party menu, the map headers.
     void prepareFieldMoveMenu().then(() => this.runFieldMenu({ menu: 'itemFromField', itemScreen: { init, gfxSymbols } }, (openStartMenu) => this.runFieldCallback(openStartMenu)));
+  }
+
+  /**
+   * A special's SetMainCallback2 from the field to a GBA-layer screen (menus/partyMenuSpecials.ts: ChoosePartyMon,
+   * SelectMoveDeleterMove, ChooseMonForMoveTutor). The field is gone (black) until the screen returns through
+   * CB2_ReturnToField; then RunFieldCallback runs gFieldCallback2 / gFieldCallback (or a plain fade in), and the
+   * wait ends once that has finished (its ScriptContext_Enable).
+   */
+  runScreenFromScript(init: () => void): Wait {
+    let overlay: { tick(): boolean } | undefined;
+    this.messageBox.hide(); // CleanupOverworldWindowsAndTilemaps
+    this.screenFade.fill(false); // CB2_ReturnToField reloads the field's palettes black
+    this.runFieldMenu({ menu: 'itemFromField', itemScreen: { init, gfxSymbols: [] } }, () => {
+      this.runFieldCallback(false);
+      overlay = this.overlay;
+    });
+    return () => overlay !== undefined && this.overlay !== overlay;
   }
 
   /**

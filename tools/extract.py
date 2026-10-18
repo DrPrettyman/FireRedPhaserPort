@@ -1475,6 +1475,10 @@ def main():
     from extract_pokedex import extract_pokedex
 
     extract_pokedex(decomp, out)
+    print("trades")
+    from extract_trades import extract_trades
+
+    extract_trades(decomp, out)
     print("gfx")
     from extract_gfx import extract_gfx
     extract_gfx(decomp, out)

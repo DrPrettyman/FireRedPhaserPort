@@ -132,6 +132,11 @@ export interface ScriptHost {
   doNamingScreen(req: NamingScreenRequest): Wait;
   /** ShowTownMap: the wall map (menus/regionMap.ts, REGIONMAP_TYPE_WALL) from a black field, like doNamingScreen. */
   showTownMap(): Wait;
+  /**
+   * A special's SetMainCallback2 to a GBA-layer screen that `init` starts (the party menu, the summary screen).
+   * The wait ends when it is back on the field and RunFieldCallback's gFieldCallback(2) has finished.
+   */
+  runScreenFromScript(init: () => void): Wait;
   /** StartTrainerBattle: `done` ends when the battle is over (screen still black), with the outcome. */
   startTrainerBattle(battle: TrainerBattle): TrainerBattleRun;
   /** ClearRematchStateByTrainerId (world/vsSeeker.ts), at the end of every trainer battle. */
@@ -273,6 +278,9 @@ export class ScriptEngine {
       state,
       host,
       setWaitState: (w) => (this.waitState = w),
+      stopScript: (w) => {
+        if (this.ctx) this.ctx.wait = w;
+      },
       showFieldMessage: (label) => {
         this.showFieldMessage(label);
         return () => !this.messageBox.isPrinting;
