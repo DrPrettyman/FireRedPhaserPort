@@ -54,6 +54,7 @@ import { diplomaProbe } from '../menus/diploma';
 import { easyChatProbe } from '../menus/easyChatScreen';
 import { seagallopProbe } from '../menus/seagallop';
 import type { SSAnneProbe } from '../world/ssAnne';
+import { audioOutputTestApi } from './audioOutputHooks';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -445,6 +446,8 @@ function createApi(game: Phaser.Game) {
   };
 
   const api = {
+    /** The browser's sound output (audio/output.ts; dev/audioOutputHooks.ts). */
+    audioOutput: audioOutputTestApi(),
     /** Logic ticks sampled so far. */
     frame: () => pad.frame,
 
