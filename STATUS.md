@@ -23,6 +23,9 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
 
 ## Next up
 
+[SIDE_PLAN.md](SIDE_PLAN.md) batch 1 is running: Oak's rating, move tutors / deleter / relearner, in-game
+trades, the Game Corner, the Name Rater, fossils, the Route 5 daycare, eggs.
+
 [MAIN_PATH_PLAN.md](MAIN_PATH_PLAN.md) is done. [SCREENS_PLAN.md](SCREENS_PLAN.md) batches 1 and 2 are in: the
 Pokédex, TM case, berry pouch, field items, registered SELECT items, the option menu and start menu help window,
 the trainer card, and headless story checks from Brock to the Hall of Fame.
