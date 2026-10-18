@@ -246,9 +246,54 @@ palettes in the extractor, `tests/e2e/leagueLighting.test.ts`.
 
 ### W-easychat (only once the focus is done)
 
-Started only when W-ferry, W-ssanne and W-league have no units waiting (decision 9). Unit 1 sizes easy_chat*.c
-against the questionnaire and the Pewter Pokémon Center's scripts and ports the word data and the input screen's
-model; later units the screen. Not planned further until it starts.
+Started only when W-ferry, W-ssanne and W-league have no units waiting (decision 9). Owns `menus/easyChat*.ts`,
+`script/easyChatSpecials.ts`, `tools/extract_easy_chat.py` (public/gen/easyChat.json, later the easy chat graphics),
+the Easy Chat fields of GameState / saveData, `tests/unit/easyChat*.test.ts`, `tests/e2e/easyChat.test.ts`.
+
+What the C does (sized in unit 1):
+- **easy_chat.c (730)**: the words (lookup, text, CopyEasyChatWord, ConvertEasyChatWordsToString,
+  EC_DoesEasyChatStringFitOnLine), which groups / words are unlocked (the Pokédex, FLAG_SYS_GAME_CLEAR, the National
+  Dex; the trendy sayings never in FRLG), ShowEasyChatMessage, the trendy-saying bits (additionalPhrases,
+  EnableRareWord), InitEasyChatPhrases / InitQuestionnaireWords, and the selection lists the screen reads
+  (InitEasyChatSelection, the groups, the alphabetical lists, GetUnlockedECWords). Data: src/data/easy_chat/*.h.
+- **easy_chat_2.c (1,363)**: the screen's state machine without graphics. DoEasyChatScreen / ShowEasyChatScreen
+  (the words by EASY_CHAT_TYPE_*), Task_RunEasyChat (fade in, joypad → an interface command id 1-22 for
+  easy_chat_3.c, 23 = leave; on leaving the profile sets FLAG_SYS_SET_TRAINER_CARD_PROFILE and the profile /
+  questionnaire compare the words with their passphrase into VAR_0x8004), sEasyChatScreenTemplates, the seven input
+  states (fields, footer, group select, word select, the cancel / del-all / confirm YES/NO menus), the cursor rules
+  (group mode vs the A-Z keyboard, the "blue box" footer, wrap-around, rows scrolled above), and the getters
+  easy_chat_3.c draws from (GetMainCursorColumn, GetECSelectWordCursorCoords, ShouldDrawECUpArrow, ...).
+- **easy_chat_3.c (2,316)**: the screen. Graphics (graphics/easy_chat/: window, frames, cursors, mode / button
+  windows, scroll arrows, START/SELECT buttons), BG and window templates, the title / instructions / phrase frame
+  (sPhraseFrameDimensions by frameId) / fields / footer, the groups menu, the keyboard and the words menu on window 2
+  with BG2 scrolling and the frame resize animation, the YES/NO window; sprites (the bouncing triangle cursor, the
+  red rectangle cursor, the mode window, the scroll arrows); the 22 interface commands (ECInterfaceCmd_01-22) that
+  redraw for each action, a few frames each.
+
+Units:
+
+1. **The data and easy_chat.c** (done, PR "Easy Chat unit 1"). The word tables through the extractor, all of
+   easy_chat.c, the save fields (profile, battle words, questionnaire words, additionalPhrases; save version 5),
+   ShowEasyChatMessage and BufferRandomHobbyOrLifestyleString registered, the trainer card's profile words. E2E: the
+   Pewter profile woman reads the saved profile back (through the passphrase branch while the screen is a gap).
+2. **easy_chat_2.c as a model** (~920 lines of logic). `menus/easyChatScreen.ts` (or similar): the EasyChatScreen
+   state, EasyChat_AllocateResources, every HandleJoypad_* / *_YesNoMenu / cursor function returning the
+   interface command id, the getters, IsPhraseDifferentThanPlayerInput and the passphrase compares (the
+   templates and passphrases are already in easyChat.json). Unit tests drive it with key presses (fields → footer
+   wrap, group / alphabet cursor across the blue box, word scroll and page, DEL ALL, cancel with and without
+   changes, confirm writing the words back). No graphics: the task/CB2 wiring waits for unit 3.
+3. **The screen, main layer** (easy_chat_3.c ~1,100: graphics data and setup, LoadEasyChatGraphics, the title,
+   instructions, phrase frame, fields and footer, the triangle cursor and START/SELECT sprites, the YES/NO window,
+   ECInterfaceCmd_01-08 for the field / footer / YES/NO actions). The graphics through the extractor.
+   ShowEasyChatScreen from a script on the GBA layer (`host.runScreenFromScript`, CB2_ReturnToFieldContinueScript,
+   like the slot machine / diploma), Task_RunEasyChat's fades, leaving. E2E: the Pewter profile woman → the screen
+   → B → YES (EventScript_CancelGiveProfile), START → YES keeps the profile (EventScript_GaveProfile); take the
+   gap off scriptCoverageGaps and update the unit-1 e2e (it then goes through the screen).
+4. **The screen, choosing words** (easy_chat_3.c ~1,200: the groups menu, the A-Z keyboard and mode window, the
+   word menu with BG2 scrolling, the window-2 frame animation, the rectangle cursor, the scroll arrows,
+   ECInterfaceCmd_09-22). E2E: a new profile typed through groups and the keyboard (EventScript_GaveProfile and the
+   trainer card's profile flag), MYSTERY EVENT IS EXCITING (EventScript_GaveSpecialProfile), the Viridian Mart
+   questionnaire (needs GetMartClerkObjectId: LINK TOGETHER WITH ALL sets FLAG_SYS_MYSTERY_GIFT_ENABLED).
 
 ## Shared files in batch 2
 

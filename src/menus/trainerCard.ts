@@ -111,6 +111,7 @@ import { FONT_NORMAL, FONT_SMALL } from '../text/Font';
 import { concat, ConvertIntToDecimalStringN, STR_CONV_MODE_LEADING_ZEROS, STR_CONV_MODE_LEFT_ALIGN, STR_CONV_MODE_RIGHT_ALIGN, text } from './common';
 import { FLAG_GET_CAUGHT, GetKantoPokedexCount, GetNationalPokedexCount, HasAllKantoMons, HasAllMons } from './pokedex';
 import { menusData } from './data';
+import { CopyEasyChatWord } from './easyChat';
 import { CreateTrainerCardTrainerPicSprite, PlayerGenderToFrontTrainerPicId } from './picSprites';
 import { GetIconSpecies, GetMonIconTiles, monIconSymbol } from './pokemonIcon';
 
@@ -676,8 +677,7 @@ function SetPlayerCardData(trainerCard: TrainerCard, cardType: number): void {
 
   rse.money = state.money;
 
-  // gSaveBlock1Ptr->easyChatProfile: the port has no easy chat; the profile is only printed on a link card.
-  for (let i = 0; i < TRAINER_CARD_PROFILE_LENGTH; i++) rse.easyChatProfile[i] = 0;
+  for (let i = 0; i < TRAINER_CARD_PROFILE_LENGTH; i++) rse.easyChatProfile[i] = state.easyChatProfile[i]; // only a link card prints it
 
   rse.playerName = [...charmap.encodePlain(state.playerName), EOS];
 
@@ -1529,8 +1529,7 @@ function InitTrainerCardData(): void {
   d.onBack = false;
   d.flipBlendY = 0;
   d.cardType = GetCardType() === CARD_TYPE_RSE ? CARD_TYPE_RSE : CARD_TYPE_FRLG;
-  // CopyEasyChatWord: no easy chat in the port (only a link card prints the profile)
-  for (let i = 0; i < TRAINER_CARD_PROFILE_LENGTH; i++) d.easyChatProfile[i] = [EOS];
+  for (let i = 0; i < TRAINER_CARD_PROFILE_LENGTH; i++) d.easyChatProfile[i] = [...CopyEasyChatWord(state, d.trainerCard.rse.easyChatProfile[i]), EOS];
 }
 
 /** GetCardType */

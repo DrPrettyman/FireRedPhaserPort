@@ -18,9 +18,9 @@ import type { DaycareMon } from '../world/daycare';
 /**
  * Bump when SaveData changes shape; fromSaveData refuses other versions. Older versions that only lack fields
  * are brought up to date by `upgradeSave` (version 1 had no gameStats, version 2 no options.sound, version 3 had
- * daycareStepCounter instead of daycare and no route5DayCareMon).
+ * daycareStepCounter instead of daycare and no route5DayCareMon, version 4 no easyChat).
  */
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 5;
 
 /** The localStorage key of the one save slot. */
 export const SAVE_STORAGE_KEY = 'firered-phaser:save';
@@ -64,6 +64,15 @@ export type MonSave = Pokemon;
 export interface DaycareMonSave {
   mon: BoxMonSave | null;
   steps: number;
+}
+/** The Easy Chat words of gSaveBlock1 (GameState's fields of the same names). */
+export interface EasyChatSave {
+  profile: number[];
+  battleStart: number[];
+  battleWon: number[];
+  battleLost: number[];
+  questionnaireWords: number[];
+  additionalPhrases: number[];
 }
 /** An item slot as [itemId, quantity]. */
 export type ItemSlotSave = [number, number];
@@ -120,6 +129,13 @@ export interface SaveData {
   route5DayCareMon: DaycareMonSave;
   roamer: RoamerSave;
   rivalName: string;
+  /**
+   * gSaveBlock1Ptr->easyChatProfile / easyChatBattleStart / easyChatBattleWon / easyChatBattleLost,
+   * mysteryGift.questionnaireWords and additionalPhrases (menus/easyChatData.ts); since version 5. Absent in a
+   * save from version 4: the fresh state's new-game words (InitEasyChatPhrases, InitQuestionnaireWords) stay, as
+   * they would have on the GBA, where every new game ran them.
+   */
+  easyChat?: EasyChatSave;
 
   // ---- gPokemonStoragePtr
   storage: {
@@ -223,6 +239,14 @@ export function toSaveData(state: GameState): SaveData {
     route5DayCareMon: daycareMonSave(state.route5DayCareMon),
     roamer: structuredClone(state.roamer),
     rivalName: state.rivalName,
+    easyChat: {
+      profile: [...state.easyChatProfile],
+      battleStart: [...state.easyChatBattleStart],
+      battleWon: [...state.easyChatBattleWon],
+      battleLost: [...state.easyChatBattleLost],
+      questionnaireWords: [...state.questionnaireWords],
+      additionalPhrases: [...state.additionalPhrases],
+    },
     storage: {
       currentBox: st.currentBox,
       boxes: st.boxes.map((box) => box.map((mon) => mon && boxMonSave(mon))),
@@ -286,6 +310,14 @@ export function fromSaveData(data: SaveData, state: GameState): GameState {
   loadDaycareMon(state.route5DayCareMon, data.route5DayCareMon);
   state.roamer = structuredClone(data.roamer);
   state.rivalName = data.rivalName;
+  if (data.easyChat) {
+    state.easyChatProfile = [...data.easyChat.profile];
+    state.easyChatBattleStart = [...data.easyChat.battleStart];
+    state.easyChatBattleWon = [...data.easyChat.battleWon];
+    state.easyChatBattleLost = [...data.easyChat.battleLost];
+    state.questionnaireWords = [...data.easyChat.questionnaireWords];
+    state.additionalPhrases = [...data.easyChat.additionalPhrases];
+  }
 
   const st = state.storage;
   st.currentBox = data.storage.currentBox;
@@ -306,6 +338,8 @@ export function upgradeSave(data: SaveData): SaveData {
     const empty = (): DaycareMonSave => ({ mon: null, steps: 0 });
     data = { ...rest, version: 4, daycare: { mons: [empty(), empty()], offspringPersonality: 0, stepCounter: daycareStepCounter ?? 0 }, route5DayCareMon: empty() };
   }
+  // No easyChat: fromSaveData keeps the new-game words.
+  if (data?.version === 4) data = { ...data, version: 5 };
   return data;
 }
 

@@ -7,6 +7,7 @@ import { fontTextureKey, type FontsData } from '../text/Font';
 import { MESSAGE_TEXTURES } from '../text/MessageBox';
 import { STD_FRAME_TEXTURE, userFrameTexture } from '../ui/MenuWindow';
 import { loadGfx } from '../gba/gfx';
+import { initEasyChatData, type EasyChatData } from '../menus/easyChatData';
 import { FieldDoors, type DoorData } from '../world/doors';
 import { ATLAS_LAYERS, TilesetPair } from '../world/TilesetPair';
 import { TILESET_ANIM_SYMBOLS, type TilesetAnimInfo } from '../world/tilesetAnims';
@@ -70,6 +71,7 @@ export class Assets {
     this.fieldEffectObjects = await fetchJson<FieldEffectObjects>(`${GEN}/field_effects/objects.json`);
     this.fieldEffectScripts = await fetchJson<Record<string, string[][]>>(`${GEN}/field_effects/scripts.json`);
     this.trades = await fetchJson<TradesData>(`${GEN}/trades.json`);
+    initEasyChatData(await fetchJson<EasyChatData>(`${GEN}/easyChat.json`)); // before any GameState (InitEasyChatPhrases)
     await loadGfx(FieldDoors.gfxSymbols(this.doors));
     this.wildEncounters = wildEncounters;
     this.species = species;

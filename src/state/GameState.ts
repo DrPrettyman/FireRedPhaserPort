@@ -8,6 +8,7 @@ import type { DayCare, DaycareMon } from '../world/daycare';
 import { Bag, type ItemSlot } from './Bag';
 import type { PlayTime } from './playTime';
 import { NewGameInitPCItems } from './pcItems';
+import { InitEasyChatPhrases, InitQuestionnaireWords } from '../menus/easyChatData';
 import { boxMonFromMon, boxMonRestorePP, PokemonStorage } from './PokemonStorage';
 
 /**
@@ -80,6 +81,18 @@ export class GameState {
    * them plain). Read and written through GetGameStat / SetGameStat / IncrementGameStat.
    */
   gameStats: number[] = new Array<number>(64).fill(0);
+  /**
+   * Easy Chat (menus/easyChat.ts): gSaveBlock1Ptr->easyChatProfile / easyChatBattleStart / easyChatBattleWon /
+   * easyChatBattleLost (EASY_CHAT_BATTLE_WORDS_COUNT words each), mysteryGift.questionnaireWords and
+   * additionalPhrases (the unlocked trendy sayings, a bit each). Set by InitEasyChatPhrases / InitQuestionnaireWords
+   * in the constructor (NewGameInitData).
+   */
+  easyChatProfile: number[] = [];
+  easyChatBattleStart: number[] = [];
+  easyChatBattleWon: number[] = [];
+  easyChatBattleLost: number[] = [];
+  questionnaireWords: number[] = [];
+  additionalPhrases: number[] = [];
 
   /** GetGameStat (overworld.c): 0 for ids from NUM_USED_GAME_STATS on. */
   getGameStat(statId: number): number {
@@ -186,6 +199,8 @@ export class GameState {
     );
     this.pcItems = Array.from({ length: defines.require('PC_ITEMS_COUNT') }, () => ({ itemId: defines.require('ITEM_NONE'), quantity: 0 }));
     NewGameInitPCItems(this.pcItems, defines.require('ITEM_NONE'), defines.require('ITEM_POTION'));
+    InitEasyChatPhrases(this); // NewGameInitData
+    InitQuestionnaireWords(this); // ClearMysteryGift
     // ResetPokemonStorageSystem (NewGameInitData)
     this.storage = new PokemonStorage(
       {

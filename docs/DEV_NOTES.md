@@ -556,6 +556,59 @@ this is the next level down. When you add or change a subsystem, update its entr
   `ScriptHost.doNamingScreen` (FieldMenuScene `naming`). Oak's speech calls it with NAMING_SCREEN_PLAYER
   (monSpecies = the player's gender) and NAMING_SCREEN_RIVAL on MainMenuScene, preloading `namingScreenGfxSymbols`
   after `setObjectEventGraphicsInfo` (the icons are object event graphics) and `loadMenusData` (the keyboard).
+- **Easy Chat (easy_chat.c, easy_chat_2.c, easy_chat_3.c; SIDE_PLAN.md W-easychat, choosing words is unit 4):**
+  `menus/easyChatData.ts` holds
+  public/gen/easyChat.json (tools/extract_easy_chat.py: sEasyChatGroups, the alphabetical word lists, the group
+  names, the default words, plus easy_chat_2.c's screen templates and passphrases), set by Assets.init before any
+  GameState exists (unit tests: gameData.ts), and InitEasyChatPhrases / InitQuestionnaireWords, which the GameState
+  constructor runs (NewGameInitData). `menus/easyChat.ts` is the rest of easy_chat.c: CopyEasyChatWord (encoded,
+  no EOS), ConvertEasyChatWordsToString (with EOS, like gStringVar4), EC_DoesEasyChatStringFitOnLine (TRUE = does
+  NOT fit, as in the C), IsECWordInvalid, the unlocked groups / words (POKéMON = the 251-species list once one is
+  seen, POKéMON2 = the Hoenn list with the National Dex, EVENTS / MOVE 1 / MOVE 2 after FLAG_SYS_GAME_CLEAR, TRENDY
+  SAYING never), the trendy-saying bits (EnableRareWord, UnlockRandomTrendySaying, ...), and the screen's selection
+  lists (InitEasyChatSelection(state) → GetNumDisplayableGroups / GetSelectedGroupByIndex, GetUnlockedECWords(alpha,
+  group) → GetDisplayedWordByIndex). Words are EC_WORD(group, index); the EC_WORD_* names are in the script
+  defines, the EC_GROUP_* / EASY_CHAT_TYPE_* constants also in easyChat.json (`EC()`). Note EC_GROUP_POKEMON_2 (0)
+  holds sEasyChatGroup_Pokemon (Hoenn) and EC_GROUP_POKEMON (21) sEasyChatGroup_Pokemon2. Saved words: GameState's
+  easyChatProfile / easyChatBattleStart / easyChatBattleWon / easyChatBattleLost / questionnaireWords /
+  additionalPhrases (gSaveBlock1's names), in the save's `easyChat` since version 5 (a version-4 save keeps the
+  new-game words); `easyChatWordsForType(state, EASY_CHAT_TYPE_*)` picks the array ShowEasyChatScreen edits.
+  Specials: `script/easyChatSpecials.ts` (ShowEasyChatMessage, BufferRandomHobbyOrLifestyleString). The trainer
+  card copies the profile words (only a link card prints them). Tests: tests/unit/easyChat.test.ts,
+  tests/e2e/easyChat.test.ts (the Pewter Pokémon Center's profile woman at (13, 2), talked to from (13, 3)).
+  The screen's model, `menus/easyChatScreenModel.ts`, is easy_chat_2.c without graphics (no Phaser, no GBA
+  layer): sEasyChatScreen and the getters easy_chat_3.c reads (GetMainCursorColumn, GetECSelectWordCursorCoords,
+  ShouldDrawECUpArrow, ...; texts as src/strings.c labels). The screen (unit 3) calls InitEasyChatSelection(state),
+  `EasyChat_AllocateResources(state, type, words, { processYesNoInput })` (`words` is the saved array from
+  easyChatWordsForType: confirm writes into it), then each frame `EasyChatScreen_HandleJoypad({ newKeys,
+  newAndRepeatedKeys })` (gMain's key bits) → an `EC_CMD` id for ECInterfaceCmd_01-22 (pokeemerald's ECFUNC_*
+  names), `EC_CMD.EXIT` (23) to fade out; after the fade `EasyChat_OnLeave()` (Task_RunEasyChat case 3: the
+  profile flag, the passphrase compares into VAR_0x8004), then EasyChat_FreeResources / DestroyEasyChatSelectionData.
+  Cancel / confirm set VAR_RESULT. `processYesNoInput` is gba/menu.ts's Menu_ProcessInputNoWrapClearOnChoose for
+  the YES/NO the screen creates (initial cursor: NO for quit / DEL ALL, YES for confirm); without it a model of it
+  reads the same keys (`GetEasyChatYesNoCursor`). Tests: tests/unit/easyChatScreen.test.ts (key presses through
+  the fields, footer, groups, keyboard, blue box, word list, the YES/NO menus and both passphrases).
+  The screen, `menus/easyChatScreen.ts`, is easy_chat_2.c's task / CB2 wiring (ShowEasyChatScreen → DoEasyChatScreen
+  → Task_InitEasyChat, which runs the whole setup in one frame, → Task_RunEasyChat: fade in, joypad → command, fade
+  out, EasyChat_OnLeave, DismantleEasyChat → the callback) plus easy_chat_3.c (`sEasyChatGraphicsResources` is
+  struct ECWork). `special ShowEasyChatScreen` (script/easyChatSpecials.ts) runs it with
+  `host.runScreenFromScript(ShowEasyChatScreen, EASY_CHAT_GFX)` and `stopScript` (no `waitstate`, as
+  SelectMoveDeleterMove); it leaves through a local CB2_ReturnToFieldContinueScript (the field stays black and
+  Common_ShowEasyChatScreen's `fadescreen FADE_FROM_BLACK` fades it in). Graphics: `graphics/easy_chat/` in
+  extract_gfx.py's GFX_PREFIXES (gEasyChat* and easy_chat_3.c's static s* symbols; LoadSpriteGfx loads every sheet
+  and palette, the rectangle cursor / mode / button window ones for unit 4). Layers: BG3 the yellow window
+  (gEasyChatWindow_Tilemap) with the phrase window (sPhraseFrameDimensions[frameId], baseBlock 0x60) and the footer;
+  BG1 the orange text input frame (DrawECFrameInTilemapBuffer) and the title (window 0); BG0 the instructions
+  (window 1, the user's frame at tile 1 / palette 14) and the YES/NO (sEasyChatYesNoWindowTemplate); BG2 window 2
+  for unit 4's groups / keyboard / words, shown only inside WIN0 (WINOUT leaves BG2 out; WIN0 is empty until unit
+  4's frame animation sets it). Interface commands: `EasyChatInterfaceCommand_Setup(id)` / `_Run()`;
+  ECInterfaceCmd_01-08 are ported, 09-22 log once and return (unit 4 replaces them; UpdateVerticalScrollArrowVisibility
+  and UpdateStartSelectButtonSpriteVisibility are exported ready). Probe `__test.easyChat()`: the live model
+  (`screen`), `lastCommand`, the triangle cursor (x, y, x2, bouncing), START / SELECT visibility, `idle`
+  (Task_RunEasyChat reading keys, no fade) and `reprint()` (PrintECFields). Test: tests/e2e/easyChat.test.ts (the
+  Pewter profile woman: B → YES, the cursor over fields and footer, DEL. ALL, START → YES unchanged / changed /
+  MYSTERY EVENT IS EXCITING; the Pewter Mart questionnaire at (1, 4) with LINK TOGETHER WITH ALL). Wait for a
+  command with the probe (`lastCommand` + `screen.state` + `idle`), not a fixed number of frames.
 - **Party selection from scripts, tutors, the move deleter:** `menus/partyMenuSpecials.ts` is
   party_menu_specials.c (ChoosePartyMon, ChooseMonForMoveRelearner, SelectMoveDeleterMove, the deleter's
   helpers) plus the ChooseMonForMoveTutor special; `PARTY_MENU_SPECIALS` is spread into SPECIALS. A special that

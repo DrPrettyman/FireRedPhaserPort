@@ -2460,3 +2460,68 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   mainPathLeftovers: the e2e files with multichoice menus, all green). A first run beside five other files failed
   three ferry tests on the `warp` race above, fixed before both green runs. Screenshots of a harbor menu, Three
   Island's bikers, Berry Forest and Navel Rock's harbor checked by eye.
+### Easy Chat: the word data and easy_chat.c (W-easychat unit 1)
+
+- Sized the workstream (easy_chat.c 730, easy_chat_2.c 1,363, easy_chat_3.c 2,316 lines): four units, written into
+  SIDE_PLAN.md's W-easychat section (this one, easy_chat_2.c as a model, the screen's main layer, choosing words).
+- `tools/extract_easy_chat.py` → public/gen/easyChat.json: the 22 groups (word texts as raw decomp strings,
+  alphabeticalOrder, enabled; species / move id lists), the 27 alphabetical lists with their `-1, 2` doubled-species
+  markers, the group names, sDefaultProfileWords / sDefaultBattleStartWords / sDeoxysValue, gText_ThreeQuestionMarks,
+  easy_chat_2.c's sEasyChatScreenTemplates and the two passphrases, the EC_GROUP_* / EASY_CHAT_TYPE_* constants.
+- Ported easy_chat.c (menus/easyChatData.ts, menus/easyChat.ts): word text and validity, ConvertEasyChatWordsToString,
+  EC_DoesEasyChatStringFitOnLine, unlocked groups and words, GetRandomECPokemon, the trendy sayings
+  (additionalPhrases, EnableRareWord, UnlockRandomTrendySaying, GetRandomUnlockedTrendySaying),
+  InitEasyChatPhrases / InitQuestionnaireWords (GameState's constructor), the selection lists for the screen.
+  Specials ShowEasyChatMessage (off scriptCoverageGaps: side has one Easy Chat gap left, ShowEasyChatScreen) and
+  BufferRandomHobbyOrLifestyleString. The trainer card's link-card profile words now come from the save.
+- Save version 5: `easyChat` (profile, battle start / won / lost, questionnaire words, additionalPhrases); a
+  version-4 save loads with the new-game words.
+- Verified: typecheck; `npm test` (unit: easyChat.test.ts with cases worked from the C, e.g. with sayings 5 and 9
+  unlocked a roll of 9 unlocks saying 11, the battle-start 3x2 / 2x3 choice at 18 characters, the doubled ABRA in the A list;
+  save.test.ts's version-4 upgrade); e2e easyChat.test.ts (new), saveContinue.test.ts, trainerCard.test.ts.
+
+### Easy Chat: easy_chat_2.c as a model (W-easychat unit 2)
+
+- `menus/easyChatScreenModel.ts` (new, no Phaser / GBA imports): struct EasyChatScreen and EasyChat_AllocateResources
+  per screen template (numWords capped at 9, selectGroupNumRows from the displayable groups), the seven input states'
+  handlers (HandleJoypad_SelectField / _SelectFooter / _SelectGroup / _SelectWord, the quit / DEL ALL / confirm
+  YES/NO menus) returning the interface command ids (`EC_CMD`, 1-22 and 23 = leave), the cursor rules (field wrap
+  and the footer, the mail frame's one-field last row, group mode scrolling, the A-Z keyboard's 7/6/7/7 rows, the
+  blue box and GroupCursorMoveToBlueBox / GroupCursorWrapAroundLeft, the word list's scroll and page up / down
+  clamps), the word buffer (DEL, DEL ALL, place, CommitECWords into the saved array), the getters easy_chat_3.c
+  reads, and Task_RunEasyChat's leave step (`EasyChat_OnLeave`: FLAG_SYS_SET_TRAINER_CARD_PROFILE, the
+  MYSTERY EVENT IS EXCITING / LINK TOGETHER WITH ALL compares into VAR_0x8004). Keys come in as gMain's bits; the
+  YES/NO input is the screen's Menu_ProcessInputNoWrapClearOnChoose, or a built-in model of it.
+- C details kept: the passphrase compare reads the edited words even after a cancel (quitting with LINK TOGETHER
+  WITH ALL typed still enables Mystery Gift), and the profile flag is set on a cancel too; START with every field
+  empty asks "Quit editing?" instead of confirming; the D-pad on the groups and words repeats (JOY_REPT), on the
+  fields it doesn't.
+- Verified: typecheck; `npm test` (unit: easyChatScreen.test.ts, 31 cases driven by key presses and worked by hand
+  from the C: fields → footer wrap and column clamp, group scrolling with 16 and 17 groups, the blue box from both
+  modes, page down on 25 and 9 words, DEL / DEL ALL, quit and confirm with and without changes, a profile of MYSTERY
+  EVENT IS EXCITING typed on the keyboard, the questionnaire's LINK TOGETHER WITH ALL typed through the groups).
+  No e2e: nothing user-visible changes until the screen (unit 3).
+
+### Easy Chat: the screen's main layer and ShowEasyChatScreen (W-easychat unit 3)
+
+- `menus/easyChatScreen.ts` (new): easy_chat_2.c's DoEasyChatScreen / Task_InitEasyChat / Task_RunEasyChat (fade in,
+  joypad → interface command, fade out, EasyChat_OnLeave) / DismantleEasyChat around unit 2's model, and easy_chat_3.c's
+  main layer: LoadEasyChatGraphics with the BG and window templates, the palettes, the title, the instructions in
+  the user's window frame, the phrase window and orange frame by sPhraseFrameDimensions[frameId], the fields (red /
+  green underscores for an empty one), the DEL. ALL / CANCEL / OK footer, the bouncing triangle cursor, the START /
+  SELECT and scroll arrow sprites (created hidden), the YES/NO window, ECInterfaceCmd_01-08. Commands 09-22 (groups,
+  keyboard, word list) log once and return: unit 4.
+- Graphics: `graphics/easy_chat/` in extract_gfx.py's GFX_PREFIXES (no symbol clashes).
+- `special ShowEasyChatScreen` (script/easyChatSpecials.ts): `runScreenFromScript` + `stopScript`, back through
+  CB2_ReturnToFieldContinueScript; off scriptCoverageGaps.ts. Probe `__test.easyChat()` (src/dev/testHooks.ts).
+- Found on the way: START → YES on an unchanged profile gives VAR_RESULT FALSE (Confirm_HandleYesNoMenu's
+  HasECMessageChanged), so the profile woman says "decided not to" (EventScript_CancelGiveProfile), as on the GBA;
+  EventScript_GaveProfile needs a changed word. The Pewter Mart questionnaire is reachable (GetMartClerkObjectId was
+  already in), so LINK TOGETHER WITH ALL now enables Mystery Gift through the screen.
+- Verified: typecheck; `npm test` (289); e2e easyChat.test.ts (6, rewritten: the profile woman's B → YES with the
+  NO / B round trip, the cursor positions on the fields (HELLO's 30 px + 17) and the footer (28 / 115 / 97), DEL. ALL
+  → YES and START asking "Quit editing?" on empty fields, START → YES unchanged, a changed word (written into the
+  buffer through the probe until unit 4 types it) → EventScript_GaveProfile and the saved profile read back, MYSTERY
+  EVENT IS EXCITING → EventScript_GaveSpecialProfile, the questionnaire's LINK TOGETHER WITH ALL →
+  FLAG_SYS_MYSTERY_GIFT_ENABLED), all green on the first run. Screenshots of the profile, the three prompts, the
+  empty fields and the questionnaire checked by eye against the C's layout.
