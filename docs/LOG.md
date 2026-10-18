@@ -2665,3 +2665,25 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   by hand: the decomp's wav2agb built to a scratch dir: all 89 instruments' WaveData headers and bytes equal
   `wav2agb -b`'s, and all 388 cries equal the decoded output of `wav2agb -b -c -l 1 --no-pad` (the DPCM round trip
   is exact, as AUDIO_PLAN spike 3 found).
+
+### W-m4a 1: the m4a sequencer, track commands and controls (silent) (AUDIO_PLAN.md batch A)
+
+- `src/audio/m4a.ts`, `m4aInternal.ts`, `m4aTables.ts`, `songTable.ts`: MPlayOpen, MPlayStart, m4aMPlayStop,
+  MPlayMain (m4a_1.s), TrackStop, RealClearChain, the jump-table commands (ply_fine ... ply_port, ply_lfos,
+  ply_mod, ply_endtie), ply_memacc, ply_xcmd and the xcmds (ply_xwait, ply_xcmd_0D, ...), FadeOutBody,
+  TrkVolPitSet, m4aSongNumStart / StartOrChange / StartOrContinue / Stop / Continue, the m4aMPlay* controls,
+  m4aSoundInit / SoundInit / MPlayExtender's jump-table part / m4aSoundMode / SampleFreqSet, m4aSoundMain →
+  SoundMain → the MPlayMain chain, and `loadSongTable(songs.json)`. Notes only parse their arguments and set the
+  gate time (no channels: W-m4a 2's seam at ply_note's `_081DDB46` and `ChnVolPitUpdate`). Not wired into the
+  game (W-sound 1).
+- Found on the way: MPlayMain calls the next player in the chain *before* its own work (`o_MusicPlayerInfo_func`
+  at its top), so the players run oldest first (BGM, SE1, SE2, SE3, cry 0, cry 1), not newest first as
+  AUDIO_PLAN.md section 1 says. m4aMPlayFadeOutTemporarily takes 17 steps, not 16 (fadeOV starts at 257). The
+  status clears one tick after the last FINE, which is the same frame when a tempo above 150 BPM runs two ticks
+  (MUS_LEVEL_UP: FINE and stop both in frame 64; spike 2's model said 63 because it ran the first tick at the
+  song's TEMPO instead of the default 150) and up to two frames later below it (SE_DOOR 34 / 36).
+- Verified: typecheck; `npm test` (33 files, 367 tests; tests/unit/m4a.test.ts 52: hand-assembled songs for
+  ticks, tempos, waits, GOTO / PATT / PEND / REPT / xWAIT, the one-tick-late status, the chain order, the priority
+  rule, pause / continue, fades, volume / pan / pitch control; on songs.json: 270 songs end, 77 loop, and the
+  FINE / stop frames of 19 SEs and fanfares, e.g. SE_SELECT 10 / 11, MUS_OBTAIN_BADGE 313 / 315, MUS_EVOLVED
+  229 / 230, MUS_POKE_FLUTE 3,061 / 3,063, MUS_CREDITS 14,970 / 14,971). No game code changed, so no e2e.

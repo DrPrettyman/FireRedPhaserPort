@@ -988,6 +988,40 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   scratch dir): all 89 instrument headers and bytes identical to `wav2agb -b`, and all 388 cries identical to the
   decoded `wav2agb -b -c -l 1 --no-pad` output.
 
+### m4a engine
+
+- **Where:** `src/audio/m4a.ts` (m4a.c + m4a_1.s, named as the C: m4aSoundInit, m4aSoundMain, MPlayMain,
+  MPlayStart, the ply_* commands, the m4aSongNum* / m4aMPlay* controls, gMPlayInfo_BGM / SE1 / SE2 / SE3,
+  gPokemonCryMusicPlayers), `m4aInternal.ts` (m4a_internal.h: the structs and constants), `m4aTables.ts`
+  (gClockTable, gPcmSamplesPerVBlankTable), `songTable.ts` (`loadSongTable(json)`: songs.json → gSongTable, checks
+  the players against gMPlayTable, returns `idByName`). Pure logic: no DOM, no AudioContext, no clock; module
+  globals like the C's (call `m4aSoundInit()` to reset everything). Structs are plain objects with the C's field
+  names and ranges (u8 / s8 / u16 masked on write); a track's `data` is its song's bytes and `cmdPtr` /
+  `patternStack` are offsets into them.
+- **A frame:** `m4aSoundMain()` → SoundMain → `MPlayMain(head)`. Each MPlayMain first calls the next player in the
+  chain, so although MPlayOpen puts the newest player at the head (cry 1, cry 0, SE3, SE2, SE1, BGM), the work runs
+  oldest first: BGM, SE1, SE2, SE3, cry 0, cry 1 (it matters for channel stealing, W-m4a 2). Per player, unless
+  paused: FadeOutBody; `tempoC += tempoI`; while `tempoC >= 150` a tick (per live track: gate times, the first
+  tick's reset, commands until a wait with running status, `wait--`, the LFO), after which `status` = the tracks
+  live at the start of that tick; a tick with none sets `status = MUSICPLAYER_STATUS_PAUSE`. So the TRACK bits
+  clear one *tick* after the last FINE: the next frame at 150 BPM, the same frame above it (MUS_LEVEL_UP), up to
+  two frames later below it (SE_DOOR). `status` is 0 between MPlayStart and the first tick (frame N's VBlank for a
+  song started in frame N's logic), so `IsSEPlaying` is FALSE until then, as on the GBA.
+- **Seams:** notes (`ply_note`) parse key / velocity / extra gate and set the track's gate time, then stop where
+  the asm looks up the voice (`_081DDB46`): W-m4a 2 adds the voice lookup and channels there (or replaces
+  `gSoundInfo.plynote`), fills `ChnVolPitUpdate` (MPlayMain's per-channel volume / pitch), `SongHeader.tone` from
+  the voicegroup, and the cry songs. The channel loops (gate times, TrackStop, ply_fine, ply_endtie, RealClearChain)
+  are ported and walk an empty list until then. `SoundMain` has the hook for SoundMainRAM (the mixer, W-m4a 3);
+  `gSoundInfo.CgbSound` / `CgbOscOff` are DummyFunc and `ply_port` writes `gSoundInfo.soundRegs` (W-m4a 4).
+- **Hooking in:** W-sound 1 calls `m4aSoundInit()` and `loadSongTable()` at boot and `m4aSoundMain()` once per
+  frame (AUDIO_PLAN.md section 4, "The tick"); gba/sound.ts calls the m4a* functions on the gMPlayInfo_* players.
+- **Tests:** `tests/unit/m4a.test.ts`: hand-assembled songs (a small assembler with labels: `W(24)`, `N(12)`,
+  `GOTO, R('loop')`) for tempo and ticks, waits, GOTO / PATT / PEND / REPT / xWAIT, the one-tick-late status,
+  the chain order (through MEMACC), MPlayStart's priority rule, pause / continue, fades (FadeOut stops after 16 ×
+  speed frames, FadeOutTemporarily pauses after 17 × speed: its TEMPORARY_FADE bit makes fadeOV 257), volume / pan
+  / pitch control, the loader; then on songs.json (skipped without it): 270 songs end and 77 loop, and the FINE /
+  stop frames of a table of SEs and fanfares (SE_SELECT 10 / 11 ... MUS_POKE_FLUTE 3,061 / 3,063).
+
 ## Game state
 
 - **PC boxes and save data:** `state/PokemonStorage.ts` is struct PokemonStorage (`state.storage`: 14 boxes of 30
