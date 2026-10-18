@@ -23,7 +23,7 @@ async function startWithEgg(): Promise<{ game: Game; personality: number }> {
     const egg = t.state!.party[1];
     egg.ivs = { ...ivs };
     // The next step is the 256th: TryProduceOrHatchEgg's counter reaches 255 and the egg hatches.
-    t.state!.daycareStepCounter = 254;
+    t.state!.daycare.stepCounter = 254;
     return egg.personality;
   }, IVS);
   return { game, personality };

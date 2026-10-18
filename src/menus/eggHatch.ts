@@ -1,5 +1,5 @@
 // daycare.c's hatching half (FRLG took it over from RSE's egg_hatch.c): `special EggHatch` from
-// EventScript_EggHatch (ShouldEggHatch in world/stepCounters.ts found the party egg in VAR_0x8004), the hatch scene
+// EventScript_EggHatch (ShouldEggHatch in world/daycare.ts found the party egg in VAR_0x8004), the hatch scene
 // (CB2_EggHatch_0 / CB2_EggHatch_1: the egg's wobbles, the shards, the white flash, "X hatched from the EGG!", the
 // nickname YES/NO and the naming screen) and CreatedHatchedMon / AddHatchedMonToParty / ScriptHatchMon.
 // The daycare's storage and egg making are world/daycare.ts.

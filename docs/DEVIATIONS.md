@@ -15,11 +15,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - The S.S. Anne leaving (`special DoSSAnneDepartureCutscene`, ss_anne.c) isn't ported: the ship doesn't sail off
     (no wake or smoke sprites), the script's `waitstate` passes at once and `removeobject` hides it. Its graphics
     (graphics/ss_anne/) aren't extracted yet.
-  - In-game trades (script/tradeSpecials.ts): DoInGameTradeScene is a stand-in until W-trade unit 2: a fade to
-    black, the swap and a fade back in on the same field (no trade_scene.c animation, no MUS_EVOLUTION, no
-    CB2_ReturnToField rebuild of the field). The traded mon's contest conditions and sheen aren't kept (Pokémon
+  - In-game trades (script/tradeSpecials.ts): the traded mon's contest conditions and sheen aren't kept (Pokémon
     have no contest stats), and DONTAE's Jynx holds its Fab Mail without the message (mail isn't modelled:
-    GetInGameTradeMail / gLinkPartnerMail / MON_DATA_MAIL).
+    GetInGameTradeMail / gLinkPartnerMail / MON_DATA_MAIL). The trade scene (menus/tradeScene.ts) skips
+    CheckPartnersMonForRibbons (no ribbons; no in-game trade mon has any) and TradeEvolutionScene (no FRLG
+    in-game trade evolves), and is silent (no MUS_EVOLUTION / MUS_EVOLVED, cries or SEs). Only the in-game
+    (wireless) path is ported: DoTradeAnim_Cable is a link trade's.
   - Lt. Surge's trash cans, Bill's cell separator: silent (SE_PIN, SE_UNLOCK, SE_BALL, SE_WARP_IN).
   - The Elite Four and Champion rooms' lighting (`special DoPokemonLeagueLightingEffect`, field_specials.c) isn't
     ported: the rooms keep their tileset's BG palette 7 (no sEliteFourLightingPalettes / sChampionRoomLightingPalettes
@@ -147,8 +148,11 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
     GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
-  - Field steps: eggs count down egg cycles, but the daycare (breeding,
-    its mons' steps) and the hatching scene (`special EggHatch`) aren't ported.
+  - Field steps: eggs count down egg cycles and the daycare mons count their steps (world/daycare.ts), but the
+    Four Island daycare's breeding (TriggerPendingDaycareEgg, eggs) and the hatching scene (`special EggHatch`)
+    aren't ported.
+  - Daycare (world/daycare.ts): mail isn't modelled, so a mon left holding mail doesn't have it moved into
+    struct DayCareMail (StorePokemonInDaycare's MonHasMail branch) and back.
   - Safari Zone: the entrance's SE/fanfare are silent.
   - The money box and Safari stats window are Phaser MenuWindows (the field isn't on the GBA layer).
   - Pokémon Storage System (menus/pokemonStorage*.ts): silent (SE_PC_LOGIN / SE_PC_OFF and the menu SEs); no
@@ -164,7 +168,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     save slots, so there are no sector checksums, no alternating slots / save counter, no backup of the previous
     save and no encryption of money, coins and bag quantities (gSaveBlock2Ptr->encryptionKey). The save holds
     what the port keeps; left out because the port doesn't keep them: the current map's object events and object
-    templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail, the daycare mons,
+    templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail,
     Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, the fame
     checker, Trainer Tower and minigame records, the enigma berry, mystery gift, easy chat, link records and
     the region map zoom option. The player's position is stored only when the field writes it before

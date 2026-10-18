@@ -213,3 +213,18 @@ test('a version 2 save (no sound option) loads with MONO', () => {
   expect(read?.version).toBe(SAVE_VERSION);
   expect(fromSaveData(read!, newGame().state).optionsSound).toBe(t.d('OPTIONS_SOUND_MONO'));
 });
+
+test('a version 3 save (daycareStepCounter, no daycare mons) loads with both daycares empty', () => {
+  const storage = memoryStorage();
+  const data = toSaveData(t.state);
+  const v3 = { ...structuredClone(data), version: 3, daycareStepCounter: 200 } as Partial<typeof data> & { daycareStepCounter: number };
+  delete v3.daycare;
+  delete v3.route5DayCareMon;
+  storage.setItem(SAVE_STORAGE_KEY, JSON.stringify(v3));
+  const read = readSave(storage);
+  expect(read?.version).toBe(SAVE_VERSION);
+  expect(read).not.toHaveProperty('daycareStepCounter');
+  const loaded = fromSaveData(read!, newGame().state);
+  expect(loaded.daycare).toEqual({ mons: [{ mon: null, steps: 0 }, { mon: null, steps: 0 }], offspringPersonality: 0, stepCounter: 200 });
+  expect(loaded.route5DayCareMon).toEqual({ mon: null, steps: 0 });
+});

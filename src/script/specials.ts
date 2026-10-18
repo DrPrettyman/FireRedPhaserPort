@@ -16,6 +16,7 @@ import { ForcePlayerToStartSurfing, GetPlayerFacingDirection, SeafoamIslandsB4F_
 import { RockSmashWildEncounter } from '../world/fieldMoves';
 import { STORY_SPECIALS } from './storySpecials';
 import { SIDE_SPECIALS } from './sideSpecials';
+import { DAYCARE_SPECIALS } from './daycareSpecials';
 import { GAME_CORNER_SPECIALS } from './gameCornerSpecials';
 import { PARTY_MENU_SPECIALS } from '../menus/partyMenuSpecials';
 import { TRADE_SPECIALS } from './tradeSpecials';
@@ -76,6 +77,7 @@ export const SPECIALS: Record<string, Special> = {
   ...PARTY_MENU_SPECIALS, // menus/partyMenuSpecials.ts: party_menu_specials.c, ChooseMonForMoveTutor
   ...STORY_SPECIALS, // storySpecials.ts: field_specials.c's story specials (Lt. Surge's trash cans, ...)
   ...SIDE_SPECIALS, // sideSpecials.ts: Oak's Pokédex rating, the help context pair
+  ...DAYCARE_SPECIALS, // daycareSpecials.ts: daycare.c's Route 5 daycare specials
   ...GAME_CORNER_SPECIALS, // gameCornerSpecials.ts: GetRandomSlotMachineId
   ...TRADE_SPECIALS, // tradeSpecials.ts: in-game trades and the Name Rater
   ...EGG_HATCH_SPECIALS, // menus/eggHatch.ts: daycare.c's EggHatch scene, ScriptHatchMon
