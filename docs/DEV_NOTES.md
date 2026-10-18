@@ -1022,6 +1022,36 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   / pitch control, the loader; then on songs.json (skipped without it): 270 songs end and 77 loop, and the FINE /
   stop frames of a table of SEs and fanfares (SE_SELECT 10 / 11 ... MUS_POKE_FLUTE 3,061 / 3,063).
 
+### ROM reference measurements
+
+Frame counts measured on the user's FireRed ROM (rev 1) in mGBA, pinned against the engine in
+`tests/unit/m4aRom.test.ts` (W-ref 1; AUDIO_PLAN.md decision 15: frame counts may go into tests, nothing read from
+the ROM may). The ROM's path is in AUDIO_PLAN.md section 6 "W-ref" only; the scripts live outside the repo. To redo
+or extend them:
+
+- **mGBA:** `brew install --cask mgba-app` (0.10.5). Its Qt build has Lua scripting only through the GUI, so drive
+  it through its **GDB stub** instead: `mGBA -C fpsTarget=100000 -C audioSync=0 -C videoSync=0 -C mute=1 -g <rom>`
+  opens a window, waits on port 2345 and runs ~360 frames a second when let go. A small Python client for the GDB
+  remote protocol (`m` / `M` memory, `g` / `P` registers, `Z0` / `z0` breakpoints, `c`) does the rest. Each stop
+  costs ~60 ms, so stop per frame only where needed (cries) and use code breakpoints as events otherwise.
+- **Addresses:** no symbol file for rev 1, so find them by pattern search in the ROM: gMPlayTable (four 12-byte
+  entries with 10 / 3 / 9 / 1 tracks), gSongTable (songs.json's ms / me pairs), m4aSongNumStart (the literal pool
+  holding both), m4aSoundMain (the function before it; VBlankIntr's `bl` to it gives gMain from its pool),
+  gMPlayJumpTableTemplate (pointers to ply_fine's bytes) for ply_fine / ply_goto, MPlayMain's
+  `status = MUSICPLAYER_STATUS_PAUSE` store by its bytes, PlayCry_ByMode / PlayCryInternal through the `movs r2,
+  #85; bl m4aMPlayVolumeControl` ducking calls in sound.c, gMPlay_PokemonCry from PlayCryInternal's pool. Capstone
+  (`pip install capstone` in a venv) disassembles Thumb.
+- **Method:** break on m4aSoundMain's entry for ~10 VBlanks after boot, then freeze the game (gMain.callback1 =
+  NULL, callback2 = a lone `bx lr`) so only VBlankIntr runs. To start a song or cry, at m4aSoundMain's entry set
+  r0-r2, LR = m4aSoundMain and PC = m4aSongNumStart / PlayCry_ByMode, continue to the entry again and restore LR:
+  the call lands right before that VBlank's m4aSoundMain, which is "frame 1" as the engine's tests count it, and
+  frame k = gMain.vblankCounter2 − v0 + 1. Songs: breakpoints on ply_fine and ply_goto (r0 = player, r1 = track)
+  and on the PAUSE store (r7 = player) give the FINE, loop and stop frames. Cries: stop on every m4aSoundMain
+  entry and evaluate IsPokemonCryPlaying from memory (gMPlay_PokemonCry → tracks[0].chan → chan.track).
+- **Revision check:** songs.json's 347 songs (all track bytes, with GOTO / PATT targets relocated, and the headers)
+  and the 76 voicegroups the songs reach (every voice, keysplit table, sample header and instrument PCM) are found
+  in the ROM byte for byte, so the decomp's audio data is rev 1's.
+
 ## Game state
 
 - **PC boxes and save data:** `state/PokemonStorage.ts` is struct PokemonStorage (`state.storage`: 14 boxes of 30
