@@ -2844,3 +2844,38 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   merging master in: 389 passed, no budgets raised); #92 none (unit test and docs only). Full run on master
   097f0fb (everything but #92's unit test): typecheck clean, 426 unit in 36 files, **393 e2e in 60 files, all
   passed first time, 20.8 min**. Final master 5ae37a9: typecheck clean, 491 unit in 37 files.
+
+### W-sound 2: cries, text codes and the audio specials (AUDIO_PLAN.md batch C)
+
+- `src/gba/sound.ts`'s cries (sound.c:316-580): PlayCry_Normal / _ByMode / _Script / _NormalNoDucking /
+  _ReleaseDouble, PlayCryInternal's mode table on W-m4a 2's SetPokemonCry* setters and SetPokemonCryTone,
+  gMPlay_PokemonCry, Task_DuckBGMForPokemonCry (a sound task next to Task_Fanfare: BGM volume 85 while the cry plays,
+  256 after), IsCryFinished, IsCryPlaying, IsCryPlayingOrClearCrySongs, StopCry, StopCryAndClearCrySongs, main.c's
+  ClearPokemonCrySongs. Cry starts are reported to `__test.audioEvents` as `{type: 'cry', id: species, name: sample,
+  player: 'CRY0' | 'CRY1', mode}`; `__test.audio().cry` has the ducking task. `SpeciesToCryId` (pokemon.c) is in
+  `pokemon/Pokemon.ts`; `tools/extract.py` adds cry_ids.h's sHoennSpeciesIdToCryId to `pokemon/tables.json`.
+- Script commands: `playmoncry` (PlayCry_Script), `waitmoncry` (SetupNativeScript(IsCryFinished)), and
+  `showmonpic`'s PlayCry_Script(species, CRY_MODE_NORMAL) (ScrCmd_showmonpic plays it, not the pic box).
+- Text printer (text.c): SE_SELECT on A / B at a `\p`, `\l` or PAUSE_UNTIL_PRESS; PLAY_SE, PLAY_BGM, WAIT_SE,
+  PAUSE_MUSIC, RESUME_MUSIC.
+- Specials (new `script/audioSpecials.ts`, out of NO_OP): PlayTrainerEncounterMusic (battle_setup.c; SpecialEnv gets
+  `trainerBattle()`), Script_FadeOutMapMusic (its `waitstate` waits for BGMusicStopped, the white-out fade).
+- Found on the way: ClearPokemonCrySongs zeroes the cry song while its track may still be in the xWAIT loop (the
+  sample ran out before the length): the next tick reads 0 as running-status XCMD 0 = ply_xxx → ply_fine, so
+  IsCryFinished / IsCryPlayingOrClearCrySongs end the cry song early and free its player; and IsCryFinished right
+  after a NoDucking cry (no task) clears and cuts off that cry, as on the GBA. PLAY_BGM with a fanfare song (the gym
+  badge texts' MUS_OBTAIN_BADGE, Route 23's MUS_LEVEL_UP) starts it on SE2, its own player, so WAIT_SE-style checks
+  see it. At text speed 1 every control code after the first in a frame costs a frame (RenderText's delayCounter).
+  No `it.todo`s were left in tests/unit/m4aRom.test.ts; its ROM cry table is now also asserted through
+  PlayCry_ByMode / IsCryPlaying / IsCryFinished (TRUE one frame after IsCryPlaying turns FALSE).
+- Waits that now take their GBA length: every IsCryFinished / IsCryPlaying wait (evolution's cries, egg hatching,
+  the trade scene, Oak's Nidoran, the battle anims' Howl / Roar / Growl / Hyper Voice tasks, `waitmoncry`), WAIT_SE in
+  text, the white-out's music fade, and any `waitse` right after a text box closed with A (SE_SELECT, 11 frames).
+- Tick budgets raised: none. The full e2e suite (61 files, 396 tests, 29 min under another worker's run) had one
+  failure, unrelated to audio: surf.test.ts "getting off on the shore" read the surf blob after `t.until` returned
+  (tests/README.md rule 5), when the jump could be over under load; it now reads it inside the predicate (and allows
+  1,200 frames for the round trip). It passed on the rerun.
+- Verified: typecheck; `npm test` (38 files, 518 tests; new tests/unit/soundCries.test.ts 11, m4aRom.test.ts +16:
+  the 8 ROM cries in 5 modes through PlayCry_ByMode for IsCryPlaying and IsCryFinished); `tests/e2e/audioCries.test.ts`
+  (3: the Celadon Condominiums Meowth's `waitmoncry` holds `release` until the cry's stop + 3 frames, SE_SELECT on
+  a `\p`, Bug Catcher Rick's MUS_ENCOUNTER_BOY), audio.test.ts; the full e2e suite once (above).

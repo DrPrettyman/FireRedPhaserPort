@@ -214,9 +214,17 @@ test('getting off on the shore: the blob stays on the water during the jump, the
   const start = await game.eval((t) => t.field()!);
   expect(start.surfBlob).toBeDefined();
   await game.eval((t) => t.face('left'));
-  const jumping = game.eval((t) =>
-    t.until(() => t.field()?.avatar.action === 'JUMP_SPECIAL_WITH_EFFECT_LEFT' && t.field()!.surfBlob, 60).then(() => t.field()!.surfBlob),
-  );
+  // Read the blob inside the predicate (tests/README.md rule 5): a read after `until` returns can come after the
+  // jump, once the blob is gone. The limit allows for the round trip before the walk's eval starts.
+  const jumping = game.eval(async (t) => {
+    let blob: unknown;
+    await t.until(() => {
+      const f = t.field();
+      if (f?.avatar.action === 'JUMP_SPECIAL_WITH_EFFECT_LEFT' && f.surfBlob) blob = f.surfBlob;
+      return blob !== undefined;
+    }, 1200);
+    return blob as Record<string, unknown> | undefined;
+  });
   await game.eval((t) => t.walk('left', 1));
   // Task_StopSurfingInit: BOB_MON_ONLY leaves the blob where the player was
   expect(await jumping).toMatchObject({ ...blobAt(start.worldX, start.worldY), bobState: 2 });
