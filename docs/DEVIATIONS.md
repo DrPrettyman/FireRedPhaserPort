@@ -69,9 +69,11 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Raise-hand movement types (entities/NpcBrain.ts, MOVEMENT_TYPE_RAISE_HAND_AND_*): leaving one zeroes the
     sprite's x2/y2 (the GBA keeps them unless ResetMovementOfRematchableTrainers zeroes them); a frozen jumper
     (any, not only `lock`'s selected object) lands before it holds still.
-  - Battles: no audio (PlaySE/cries/BGM are no-ops, so anim SE waits and cry waits end at once).
+  - Battles: no audio through BattleScene's `ui.play*` (the controllers' and scripts' SEs, cries and music are
+    no-ops until W-sound 5-6, so their cry waits end at once); the battle anims' sound tasks call gba/sound.ts
+    directly, so Howl / Roar / Growl / Hyper Voice's cries and their IsCryPlaying waits time as on the GBA.
   - Field sounds: doors (SE_DOOR / SE_SLIDING_DOOR) and puddle splashes (SE_PUDDLE) are silent.
-  - Evolution scene: silent until the mixer; the cries count as finished at once (W-sound 2) and
+  - Evolution scene: silent until the mixer (its two cries hold the scene as on the GBA);
     EVOSTATE_RESTORE_SCREEN's `if (IsSEPlaying())` after SE_EXP goes on unchecked (W-sound 7); the intro jingle
     (MUS_EVOLUTION_INTRO) and the other IsSEPlaying waits hold the scene as on the GBA; the help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
   - Audio output (audio/output.ts, audio/worklet.ts): the PCM plays at 224 samples per 60 Hz frame, 13,440 Hz,
@@ -80,8 +82,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     nudges its playback rate by up to ±0.5% to keep its 3-4 frame buffer filled (the page's frame loop and the
     audio clock drift apart); an underrun plays silence, a stall drops the oldest frames. The analog filtering
     after the GBA's DAC isn't modelled (sample-and-hold straight to the speakers, AUDIO_PLAN.md decision 8).
-  - Evolution scene: no audio, so cries and sound effects count as finished at once (the intro jingle and the SE_EXP
-    wait don't hold the scene up); the help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
+  - Evolution scene: the help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
     from the field uses fresh battle globals, so the backdrop follows the map's battle scene (gyms etc.) but not the
     last battle's type flags, which the GBA keeps (e.g. a Rare Candy right after a gym leader would draw the
     Leader terrain there). Mons have no language, markings, ribbons or mail, so EvolutionRenameMon always treats
@@ -186,8 +187,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
     GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
   - Egg hatching (menus/eggHatch.ts): silent until the mixer (SE_BALL / SE_EGG_HATCH, MUS_EVOLUTION, the MUS_EVOLVED
-    fanfare, which holds "X hatched from the EGG!" for sFanfares' 220 frames as on the GBA); the cry is a stub that
-    ends at once (W-sound 2). The C
+    fanfare, which holds "X hatched from the EGG!" for sFanfares' 220 frames as on the GBA, and the cry, which holds
+    the scene as on the GBA). The C
     loads five palettes from gTradeGba2_Pal, two of them past the file's end (ROM that follows); the port loads
     the file's three (the shadow tilemap uses none of the other two). BG palette 15 (the YES/NO's text) is loaded
     with the field's message box palette, which the GBA field leaves there. The mon sprite buffers are freed on
@@ -225,16 +226,16 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     screen and Oak's speech: the main menu with a save, the new game without. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
     before CONTINUE, no SE_SELECT. SAVE_STATUS_ERROR ("the previous save file will be loaded") can't happen: one
     slot, no backup; an unreadable slot is SAVE_STATUS_INVALID ("The save file has been deleted...").
-  - Title screen (menus/titleScreen.ts): no MUS_TITLE, no Charizard cry (the cry scene still waits its 90
-    frames), no help system (HELPCONTEXT_TITLE_SCREEN: L/R do nothing). When its 2700-frame timer runs out it goes
+  - Title screen (menus/titleScreen.ts): silent until the mixer (the Charizard cry plays, inaudibly; the cry scene
+    waits its 90 frames as on the GBA), no help system (HELPCONTEXT_TITLE_SCREEN: L/R do nothing). When its 2700-frame timer runs out it goes
     straight back to the title screen (CB2_InitCopyrightScreenAfterTitleScreen would replay the copyright screen
     and the intro). StartTimer1 / SeedRngAndSetTrainerId don't seed the RNG from the time spent on the title
     screen: the port seeds it at load. B+SELECT (REVISION 0's berry fix program, a multiboot program for Ruby and
     Sapphire's berry clock) does nothing. The clear save data screen (B+SELECT+UP) empties the one localStorage
     slot (ClearSaveData erases every flash sector, incl. the Hall of Fame) and its soft reset (DoSoftReset) is
     `softReset` in scenes/BootScene.ts: the scenes restart, the extracted data stays loaded.
-  - Oak's speech (menus/oakSpeech.ts): no BGM (MUS_NEW_GAME_INSTRUCT / _INTRO / _EXIT, MUS_ROUTE24), cry or SEs
-    (the cry waits end at once), no help context (HELPCONTEXT_NEW_GAME). After the naming screen the C loads 48
+  - Oak's speech (menus/oakSpeech.ts): no BGM (MUS_NEW_GAME_INSTRUCT / _INTRO / _EXIT, MUS_ROUTE24) or SEs (the
+    Nidoran cry and its wait are real), no help context (HELPCONTEXT_NEW_GAME). After the naming screen the C loads 48
     colours past the background palette (out of the tiles after it) into palettes the player / rival pic overwrite
     anyway; the port loads just the palette. The trainer id is still rolled when the game state is created (see the
     RNG approximation), not by the naming screen's SeedRngAndSetTrainerId. CB2_NewGame hands only the names and the
@@ -289,10 +290,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, Trainer Tower clock, cable club
     monitors) start their scripts and hit the unimplemented-special warnings.
-  - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link
-    flags, CloseLink.
+  - No-op specials (`NO_OP` in `script/specials.ts`): quest log, help system, fame checker, GameCube link flags,
+    CloseLink.
   - Player names are "PLAYER"/"RIVAL" until Oak's intro exists.
-  - No-op specials (`NO_OP` in `script/specials.ts`): audio, quest log, help system, fame checker, GameCube link flags.
+  - No-op specials (`NO_OP` in `script/specials.ts`): quest log, help system, fame checker, GameCube link flags.
   - Player names are "PLAYER"/"RIVAL" in dev starts and with `?skipIntro` (the e2e harness), which skip Oak's speech.
 - **Approximations:**
   - sound.c (gba/sound.ts, audio/frame.ts): nothing is audible yet (the mixer is W-m4a 3), but the engine's logic
@@ -306,8 +307,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     yet (savedMusic and the map's default music: W-sound 3). The script engine models SetupNativeScript's frames
     (a native wait starts checking the next frame, and the script goes on the frame after it holds) only for the
     audio commands; the port's other waits check in the same frame.
+  - Cries (gba/sound.ts): Task_DuckBGMForPokemonCry is a sound task like Task_Fanfare (same caveats: ResetTasks
+    doesn't remove it, and it runs after every screen task of the frame, as a priority-80 task after the usual
+    priority-0 ones would). PlayCry_ReleaseDouble ducks in multi battles too (BATTLE_TYPE_MULTI is link only and
+    never set); the quest log's playback (PlayCry_Script's skip) and the text printer's auto-scroll
+    (gTextFlags.autoScroll, link / recorded battles) aren't ported. PlayTrainerEncounterMusic's music plays on after
+    the battle until map music is restored on the way back (W-sound 3); before then nothing restores it.
   - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical; weather palettes ignored.
-  - `showmonpic`: the sprite appears when its PNG has loaded; no cry.
+  - `showmonpic`: the sprite appears when its PNG has loaded.
   - The Pewter Museum's fossil pics (ui/MuseumFossilPic.ts): a Phaser image over a MenuWindow, like `showmonpic`,
     not an OBJ in palette 13 over BG0 (the field isn't on the GBA layer); the graphics and positions are the C's.
   - Prof. Oak's Pokédex rating: the MUS_DEX_RATING / MUS_EVOLVED fanfares are silent until the mixer (`waitfanfare`

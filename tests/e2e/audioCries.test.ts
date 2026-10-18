@@ -1,5 +1,6 @@
 // Cries and the text printer's sounds in the game (AUDIO_PLAN.md W-sound 2): `playmoncry` / `waitmoncry` hold a script
-// for the cry's length (IsCryFinished: Task_DuckBGMForPokemonCry gone), and A at a \p plays SE_SELECT. The engine runs
+// for the cry's length (IsCryFinished: Task_DuckBGMForPokemonCry gone), A at a \p plays SE_SELECT, and a trainer's
+// encounter music starts (special PlayTrainerEncounterMusic). The engine runs
 // headless with the output off, so these time like the GBA without anything being heard. Frames are logic ticks
 // (`t.frame()`), read in the page tick by tick.
 
@@ -76,4 +77,17 @@ test('A at a \\p in a field message plays SE_SELECT (text.c TextPrinterWaitWithD
   const selects = (await game.eval((t, s) => t.audioEvents(s), mark)).filter((e) => e.name === 'SE_SELECT');
   expect(selects.length).toBeGreaterThanOrEqual(1);
   expect(selects[0]).toMatchObject({ type: 'se', player: 'SE2', started: true });
+});
+
+test("special PlayTrainerEncounterMusic plays Bug Catcher Rick's encounter music (MUS_ENCOUNTER_BOY) before the battle", async () => {
+  // Viridian Forest: Rick at (47, 45) faces left; stepping from (41, 45) to (42, 45) walks into his view.
+  // EventScript_DoTrainerBattle (trainer_battle.inc) runs the special after the approach; his gTrainers entry has
+  // TRAINER_ENCOUNTER_MUSIC_MALE.
+  const game = await session.start({ start: 'after-rival', map: 'ViridianForest', x: 41, y: 45 });
+  const mark = await game.mark();
+  await game.walk('right');
+  await game.waitForEvent('trainerApproach', { since: mark, what: 'Rick to spot the player' });
+  await game.mashUntil((t) => t.events().some((e) => e.type === 'battleStart'), { what: 'the battle' });
+  const music = (await game.eval((t, s) => t.audioEvents(s), mark)).filter((e) => e.type === 'bgm');
+  expect(music[0]).toMatchObject({ name: 'MUS_ENCOUNTER_BOY', player: 'BGM', started: true });
 });

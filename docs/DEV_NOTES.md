@@ -1152,7 +1152,7 @@ or extend them:
 
 ### sound.c
 
-- **Where:** `src/gba/sound.ts` is sound.c without the cries (those are stubs until W-sound 2): MapMusicMain and
+- **Where:** `src/gba/sound.ts` is sound.c (the cries at the bottom, see "Cries" below): MapMusicMain and
   the map music helpers (PlayNewMapMusic, StopMapMusic, FadeOutMapMusic, FadeOutAndPlayNewMapMusic,
   FadeOutAndFadeInNewMapMusic, IsNotWaitingForBGMStop; overworld.c's BGMusicStopped and Overworld_ChangeMusicTo),
   fanfares (sFanfares, PlayFanfare / PlayFanfareByFanfareNum, Task_Fanfare, WaitFanfare, IsFanfareTaskInactive),
@@ -1160,7 +1160,7 @@ or extend them:
   FadeOutBGM / FadeOutBGMTemporarily, IsSEPlaying / IsSpecialSEPlaying / IsBGMPlaying / IsBGMStopped /
   IsBGMPausedOrStopped. It is the one API the game calls; call it with song ids (`K.SE_SELECT`, `K.MUS_HEAL`).
   sFanfares names its songs and resolves them through the loaded song table.
-- **The frame:** `src/audio/frame.ts`'s `AgbMainFrameEnd()` runs the sound tasks (Task_Fanfare; W-sound 2 adds
+- **The frame:** `src/audio/frame.ts`'s `AgbMainFrameEnd()` runs the sound tasks (Task_Fanfare,
   Task_DuckBGMForPokemonCry), MapMusicMain, then m4aSoundMain. Called once per logic tick by `OverworldScene.tick`
   (after PlayTimeCounter_Update) and `GbaHostScene.update` (every tick, also the one whose callbacks stop the
   host), which also runs BattleScene in the game and on battle-test.html. Only one host ticks at a time, so it runs
@@ -1183,16 +1183,47 @@ or extend them:
   turns FALSE after the song's last tick (tests/unit/m4a.test.ts pins the lengths). A fanfare holds for sFanfares'
   count + 1 frames (80 counts, then the frame that resumes the BGM); the song plays on to its FINE (MUS_EVOLVED's
   230 frames outlast its 220).
+- **Cries** (sound.c:316-580): `PlayCry_Normal`, `PlayCry_ByMode(species, pan, CRY_MODE_*)`, `PlayCry_Script`
+  (`playmoncry`, `showmonpic`), `PlayCry_NormalNoDucking` (Pokédex, credits), `PlayCry_ReleaseDouble`; all go through
+  `PlayCryInternal` (the mode table → the engine's SetPokemonCry* setters → `SetPokemonCryTone(gCryTable[
+  SpeciesToCryId(species - 1)])`, on a free cry player, gMPlay_PokemonCry). `SpeciesToCryId` is pokemon.c's, in
+  `pokemon/Pokemon.ts` (cry_ids.h's Hoenn table comes from `pokemon/tables.json`, installed by PokemonData's
+  constructor; before that only Gen I-II species, which are their own id). Normal / ByMode (not DOUBLES) / Script
+  duck the BGM to volume 85 and start `Task_DuckBGMForPokemonCry` (a sound task): it waits 2 frames, then polls
+  `IsCryPlaying` and restores 256. **Waits:** `IsCryFinished` = that task is gone (TRUE at once for a cry without
+  it: NoDucking, DOUBLES); a cry started in frame 0's logic whose IsPokemonCryPlaying is FALSE after k hooks
+  (AUDIO_PLAN.md section 2's ROM table: "frame k") makes IsCryFinished TRUE from frame k + 1's logic on, one
+  frame later than IsCryPlaying (tests/unit/m4aRom.test.ts pins every ROM cry through the API). `IsCryPlaying` / `IsCryPlayingOrClearCrySongs`
+  read the cry player; `StopCryAndClearCrySongs` pauses it. `ClearPokemonCrySongs` (main.c; IsCryFinished,
+  IsCryPlayingOrClearCrySongs) zeroes the cry players' song bytes as the C does, which ends a cry song still in
+  its xWAIT at its next tick (a 0 byte runs as XCMD 0 → ply_fine). The constants (CRY_MODE_*, CRY_VOLUME,
+  CRY_PRIORITY_NORMAL) are sound.h's numbers in sound.ts (the title screen cries before the defines load),
+  checked against the extracted ones by tests/unit/soundCries.test.ts. `waitmoncry` uses SetupNativeScript.
+- **Text** (text/TextPrinter.ts, text.c's RenderText): A or B at a `\p` / `\l` / PAUSE_UNTIL_PRESS plays SE_SELECT
+  (TextPrinterWait / _WithDownArrow); `{PLAY_SE}`, `{PLAY_BGM}` (PlayBGM: a fanfare song goes to its own SE2 player,
+  as in the gym badge texts), `{WAIT_SE}` (holds the printer until !IsSEPlaying), `{PAUSE_MUSIC}` /
+  `{RESUME_MUSIC}` (m4aMPlayStop / Continue on the BGM). At text speed 1 each code after the first in a frame
+  costs a frame (RenderText's delayCounter), as on the GBA.
+- **Specials** (script/audioSpecials.ts): `PlayTrainerEncounterMusic` (the trainer's encounterMusic id →
+  MUS_ENCOUNTER_GIRL / _BOY / _ROCKET via PlayNewMapMusic; reads the configured trainer battle through
+  SpecialEnv.trainerBattle) and `Script_FadeOutMapMusic` (FadeOutMapMusic(4), its `waitstate` until BGMusicStopped,
+  the script on the frame after).
 - **Test hooks:** `__test.audioEvents(since)` (a seq from `game.mark()`): each start, BGM pause / resume and fade
-  as `{seq, frame, type: 'se' | 'bgm' | 'fanfare' | 'stop' | 'continue' | 'fade', id, name, player: 'BGM' | 'SE1'
-  | 'SE2' | 'SE3', pan?, started?, fade?, speed?}` (`started`: MPlayStart took it; W-sound 2 adds 'cry');
+  as `{seq, frame, type: 'se' | 'bgm' | 'fanfare' | 'cry' | 'stop' | 'continue' | 'fade', id, name, player: 'BGM' |
+  'SE1' | 'SE2' | 'SE3' | 'CRY0' | 'CRY1', pan?, started?, fade?, speed?, mode?}` (`started`: MPlayStart took it; a
+  cry: `id` the species, `name` its sample, `mode` the CRY_MODE_*);
   `__test.audio()`: each player's `{song, playing, paused, status, volume (track volX, 64 = full), fading}`, the cry
-  players, sound.c's map music state, fanfare counter and task; `__test.playSong(name)` starts a song. sound.ts
+  players, sound.c's map music state, fanfare counter and task, `cry: {player, playing, duckTaskActive,
+  duckingCounter}`; `__test.playSong(name)` starts a song. sound.ts
   reports through `setSoundEventListener` (dev only).
 - **Tests:** `tests/unit/sound.test.ts` (fanfare counts, the BGM paused and resumed, IsSEPlaying over SE_SELECT,
   FadeOutMapMusic's wait, a new map song after the fade), `tests/e2e/audio.test.ts` (Viridian Forest's Potion
   ball: MUS_LEVEL_UP holds "put the POTION away" 80 + 3 frames with MUS_VIRIDIAN_FOREST paused; the Game Corner
-  fisher's `waitse` holds `setflag` until SE_SHOP stops).
+  fisher's `waitse` holds `setflag` until SE_SHOP stops). Cries: `tests/unit/soundCries.test.ts` (constants,
+  SpeciesToCryId, ducking, ClearPokemonCrySongs, StopCryAndClearCrySongs, the text printer's codes and SE_SELECT on
+  stub surfaces), `tests/unit/m4aRom.test.ts` (the ROM's cry table through PlayCry_ByMode / IsCryPlaying /
+  IsCryFinished), `tests/e2e/audioCries.test.ts` (the Celadon Condominiums Meowth's `waitmoncry` holds `release`
+  until cry stop + 3 frames; SE_SELECT on a `\p`).
 
 ## Game state
 
