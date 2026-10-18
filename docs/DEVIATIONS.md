@@ -25,8 +25,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - The Elite Four and Champion rooms' lighting (`special DoPokemonLeagueLightingEffect`, field_specials.c) isn't
     ported: the rooms keep their tileset's BG palette 7 (no sEliteFourLightingPalettes / sChampionRoomLightingPalettes
     cycle). It needs a runtime BG palette swap of the tileset atlases; visual only, the scripts go on.
-  - `special Script_TryGainNewFanFromCounter` (after Lance) is a no-op, like Script_UpdateTrainerFanClubGameClear:
-    the Trainer Fan Club isn't kept.
+  - Trainer Fan Club (script/miscSpecials.ts, trainer_fan_club.c): there are no link battle records, so
+    Script_BufferFanClubTrainerName always names the NPC trainer (the rival, LT. SURGE, KOGA), and the link-battle
+    fan updates (Special_UpdateTrainerFansAfterLinkBattle) never run.
+  - Side specials (script/miscSpecials.ts): silent (Daisy's MUS_HEAL fanfare is the script's; the diploma's
+    FANFARE_OBTAIN_BADGE); no quest log (QuestLog_CutRecording). The Magikarp size record loads pokedex.json for the
+    heights the first time the guru measures (the script waits for it). The diploma returns through the field's
+    plain fade from black rather than FieldCB_WarpExitFadeFromBlack's Task_ExitNonDoor (same look).
+  - Fall warps (world/fallWarp.ts): silent (SE_FALL, SE_M_STRENGTH); no help context while surfing on Seafoam B4F.
   - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
   - VS Seeker (world/vsSeeker.ts): silent (SE_CONTEST_MONS_TURN, SE_PIN); no quest log event. Task_VsSeeker_0
     takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for
@@ -148,6 +154,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
     GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
+  - Egg hatching (menus/eggHatch.ts): no audio (the cry, SE_BALL / SE_EGG_HATCH, MUS_EVOLUTION, the MUS_EVOLVED
+    fanfare). "X hatched from the EGG!" still waits the fanfare's 220 frames (sFanfares) with a local counter, as
+    gba/sound.ts's IsFanfareTaskInactive is always true and the nickname prompt would replace it at once. The C
+    loads five palettes from gTradeGba2_Pal, two of them past the file's end (ROM that follows); the port loads
+    the file's three (the shadow tilemap uses none of the other two). BG palette 15 (the YES/NO's text) is loaded
+    with the field's message box palette, which the GBA field leaves there. The mon sprite buffers are freed on
+    the NO path too (the C leaks them). The hatched mon's language, met game and fateful-encounter bit aren't
+    modelled.
   - Daycare (world/daycare.ts): mail isn't modelled, so a mon left holding mail doesn't have it moved into
     struct DayCareMail (StorePokemonInDaycare's MonHasMail branch) and back (and DaycareMonReceivedMail isn't
     ported). Eggs: MON_DATA_LANGUAGE isn't modelled, so CreateEgg / SetInitialEggData's LANGUAGE_JAPANESE isn't
@@ -219,8 +233,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     Ribbons (mons have no ribbons; REVISION 0 gives no event tickets either); the help system isn't toggled and the
     quest log isn't saved; a failed save carries on (no DoSaveFailedScreen / gGameContinueCallback).
     FLDEFF_HALL_OF_FAME_RECORD's SE_BALL is silent. Other game stats than GAME_STAT_ENTERED_HOF and
-    GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted. `special Script_UpdateTrainerFanClubGameClear` is a no-op (the Trainer
-    Fan Club isn't kept).
+    GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted.
   - Pokédex screen (menus/pokedexScreen.ts, menus/pokedexArea.ts): no audio (SE_SELECT, the SE_DEX_* sounds, the
     mon page's cries and START = CRY, the page turn's SE_BALL_TRAY_ENTER and the cry after registering a catch; the
     BGM volume calls are no-ops); no help system context. The mon page and the habitat pages load the shown mons'
@@ -236,8 +249,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     profile isn't kept (only a link card prints it). The flip's per-line BG0VOFS gives line L buffer[L] (the PPU's
     HBlank convention), where the GBA's HBlank interrupt sets it for the line after, a one-line shift of the squash.
     LoadMonIconGfx's 96 colours read 48 past gMonIconPalettes on the GBA; those palettes (BG 8-10) are zeros here and
-    no icon uses them. The photo's icons need special UpdateTrainerCardPhotoIcons (the Celadon Game Corner printer),
-    which isn't in specials.ts yet, so they only show with the vars set by hand.
+    no icon uses them.
   - Credits (menus/credits.ts): no audio (MUS_CREDITS, the cries). A map scene loads asynchronously, so it can start
     a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
     GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.
@@ -306,9 +318,16 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Castform's form change (HandleSpeciesGfxDataChange) takes the new form's palette row from that battler's own
     Castform palette. The GBA keeps one gBattleStruct->castformPalette, written by whichever Castform's gfx
     loaded last, so it only differs with two Castforms of different shininess on the field.
-  - Slot machine: `playslotmachine` (the screen) isn't ported yet (W-slots unit 2), nor FLDEFF_SMILEY_FACE_ICON
-    before it. In `menus/slotMachineLogic.ts` the state's machineBias, biasCooldown and reelStopOrder start at 0;
-    PlaySlotMachine Allocs the state without zeroing it, so on the GBA they start as whatever the heap held.
+  - Slot machine: in `menus/slotMachineLogic.ts` the state's machineBias, biasCooldown and reelStopOrder start at 0;
+    PlaySlotMachine Allocs the state without zeroing it, so on the GBA they start as whatever the heap held. The
+    screen (`menus/slotMachine.ts`) has no audio, and IsFanfareTaskInactive is always TRUE, so the payout counts up
+    (and START pays it at once) without waiting for MUS_SLOTS_WIN / MUS_SLOTS_JACKPOT. HBlankCB_SlotMachine's
+    per-line squash and darkening of the reels apply to the line REG_VCOUNT names (the PPU calls it before drawing
+    that line); the GBA's HBlank interrupt for line L sets them for line L + 1, a one-line shift. After
+    MainTask_ExitSlots frees the screen, the C's Task_SpinReels still runs that frame through the NULL gfx manager;
+    the port skips it. No quest log entry (SetQLPlayedTheSlots) and no GAME_STAT_SLOT_JACKPOTS.
+  - The Game Corner's photo printer flash (FldEff_PhotoFlash) is the field's FADE_FROM_WHITE (16 → 0 in steps of 2)
+    where the C fades from 15 to 0 in steps of 3, a few frames longer.
 - **Data:** Castform has no front pic (its `front.png` isn't in the decomp; it's built from per-form images).
 
 ## Deliberate QOL changes

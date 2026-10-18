@@ -134,22 +134,6 @@ export const DAYCARE_SPECIALS: Record<string, Special> = {
   },
 
   /**
-   * GetLeadMonFriendship: the lead mon's (GetLeadMonIndex: the first that isn't an egg, else slot 0) friendship
-   * as 0 (none) .. 6 (255): 1-49, 50-99, 100-149, 150-199, 200-254.
-   */
-  GetLeadMonFriendship({ state }) {
-    const lead = state.party.find((m) => !m.isEgg) ?? state.party[0];
-    const friendship = lead.friendship;
-    if (friendship === 255) return 6;
-    if (friendship >= 200) return 5;
-    if (friendship >= 150) return 4;
-    if (friendship >= 100) return 3;
-    if (friendship >= 50) return 2;
-    if (friendship > 0) return 1;
-    return 0;
-  },
-
-  /**
    * PlayerPartyContainsSpeciesWithPlayerID: a party mon of species VAR_0x8004 (MON_DATA_SPECIES_OR_EGG: an egg
    * counts as SPECIES_EGG) with the player's trainer ID as its OT ID.
    */

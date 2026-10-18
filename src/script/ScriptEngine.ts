@@ -16,6 +16,7 @@ import type { FieldTask } from '../world/elevator';
 import type { ListMenuHost } from '../ui/FieldListMenu';
 import { SetFlashLevel } from '../world/flash';
 import { SPECIALS, StartScriptedWildBattle, type SpecialEnv } from './specials';
+import { PlaySlotMachineFromScript, registerGameCornerFieldEffects } from './gameCornerSpecials';
 import { testEvent } from '../dev/testHooks';
 import { random } from '../util/random';
 import { FieldEffectActiveListContains, FieldEffectStart, gFieldEffectArguments } from '../world/fieldEffectScripts';
@@ -276,6 +277,7 @@ export class ScriptEngine {
     private input: Input,
     private host: ScriptHost,
   ) {
+    registerGameCornerFieldEffects(host, defines); // FldEff_SmileyFaceIcon, FldEff_PhotoFlash
     this.specialEnv = {
       state,
       host,
@@ -1140,6 +1142,10 @@ export class ScriptEngine {
     /** ScrCmd_hidecoinsbox: HideCoinsWindow(); the x, y it reads are unused */
     hidecoinsbox(this: ScriptEngine) {
       this.host.hideCoinsBox();
+    },
+    /** ScrCmd_playslotmachine: PlaySlotMachine(VarGet(id), CB2_ReturnToFieldContinueScriptPlayMapMusic), ScriptContext_Stop */
+    playslotmachine(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      ctx.wait = PlaySlotMachineFromScript(this.host, this.state.value(a[0]) & 0xff);
     },
 
     // ------------------------------------------------ string buffers

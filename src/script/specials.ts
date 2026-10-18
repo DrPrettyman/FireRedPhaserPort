@@ -20,6 +20,8 @@ import { DAYCARE_SPECIALS } from './daycareSpecials';
 import { GAME_CORNER_SPECIALS } from './gameCornerSpecials';
 import { PARTY_MENU_SPECIALS } from '../menus/partyMenuSpecials';
 import { TRADE_SPECIALS } from './tradeSpecials';
+import { MISC_SPECIALS } from './miscSpecials';
+import { EGG_HATCH_SPECIALS } from '../menus/eggHatch';
 
 export interface SpecialEnv {
   state: GameState;
@@ -66,8 +68,6 @@ const NO_OP = [
   'UpdatePickStateFromSpecialVar8005',
   'SetUnlockedPokedexFlags', // gcnLinkFlags, only used for GameCube link
   'Script_FadeOutMapMusic', // audio: its waitstate ends at once
-  'Script_UpdateTrainerFanClubGameClear', // the Trainer Fan Club's state isn't kept (EventScript_SetDefeatedEliteFourFlagsVars)
-  'Script_TryGainNewFanFromCounter', // the same (after Lance); `special` drops its return value
   'InitUnionRoom', // wireless only (and stubbed out from REVISION 0xA): CableClub_OnResume in every Pokémon Center
   'CloseLink', // link play: nothing was opened (TryBattleLinkup below never connects)
   'HelpSystem_Enable', // help system
@@ -82,6 +82,8 @@ export const SPECIALS: Record<string, Special> = {
   ...DAYCARE_SPECIALS, // daycareSpecials.ts: daycare.c's Route 5 daycare specials
   ...GAME_CORNER_SPECIALS, // gameCornerSpecials.ts: GetRandomSlotMachineId
   ...TRADE_SPECIALS, // tradeSpecials.ts: in-game trades and the Name Rater
+  ...MISC_SPECIALS, // miscSpecials.ts: Daisy's grooming, the Magikarp size record, the diploma, SetSeenMon, ...
+  ...EGG_HATCH_SPECIALS, // menus/eggHatch.ts: daycare.c's EggHatch scene, ScriptHatchMon
 
   // field_player_avatar.c / bike.c / field_specials.c's player avatar specials
   ForcePlayerOntoBike,
