@@ -68,3 +68,69 @@ test('falling into Seafoam Islands B4F lands the player surfing', async () => {
   expect(f.avatar.flags).not.toContain('SURFING');
   expect([f.x, f.y]).not.toEqual([8, 17]);
 });
+
+/** Mash A until the party menu (ChoosePartyMon) takes input, then pick party slot 0. */
+async function chooseFirstMon(game: Game, what: string): Promise<void> {
+  await game.mashUntil((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu' && !t.paletteFadeActive(), { what });
+  await game.press('A');
+}
+
+// ---------------------------------------------------------------- Daisy (PalletTown_RivalsHouse, after the Hall of Fame)
+
+test('Daisy rates the lead mon, then grooms one after 500 steps', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown_RivalsHouse', x: 5, y: 5, party: [MEWTWO] });
+  await game.eval((t) => {
+    t.state!.setFlag('FLAG_SYS_GAME_CLEAR', true);
+    t.state!.party[0].friendship = 160;
+    t.state!.party[0].metLocation = 'MAPSEC_CERULEAN_CAVE'; // (met in Pallet Town would add 1)
+  });
+  // A fresh cooldown: GetLeadMonFriendship 4 (150-199) → PalletTown_RivalsHouse_EventScript_MonFriendshipHigh
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await untilMessage(game, /may I see\s+your first/, 'Daisy: "may I see your first POKéMON?"');
+  await scriptDone(game, 'the rating');
+  expect(await game.eval((t) => t.var('VAR_RESULT'))).toBe(4);
+
+  // Walk 500 steps' worth (RunMassageCooldownStepCounter caps it at 500): one real step counts too.
+  await game.eval((t) => t.state!.setVar('VAR_MASSAGE_COOLDOWN_STEP_COUNTER', 499));
+  await game.walk('down');
+  expect(await game.eval((t) => t.var('VAR_MASSAGE_COOLDOWN_STEP_COUNTER'))).toBe(500);
+  await game.walk('up');
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await untilMessage(game, /like me to groom one/, 'Daisy: "Would you like me to groom one?"');
+  await chooseFirstMon(game, "Daisy's party menu");
+  await untilMessage(game, /There you go/, 'Daisy: "There you go! All done."');
+  await scriptDone(game, 'the grooming');
+  const after = await game.eval((t) => ({ friendship: t.state!.party[0].friendship, cooldown: t.var('VAR_MASSAGE_COOLDOWN_STEP_COUNTER') }));
+  // FRIENDSHIP_EVENT_MASSAGE at 100-199: +3 (sFriendshipEventDeltas); no Luxury Ball
+  expect(after).toEqual({ friendship: 163, cooldown: 0 });
+});
+
+// ---------------------------------------------------------------- the Magikarp size record (Route12_FishingHouse)
+
+test('the fishing guru measures a Magikarp and keeps the record', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'Route12_FishingHouse', x: 4, y: 5, party: [{ species: 'MAGIKARP', level: 10, moves: ['SPLASH'] }] });
+  await game.eval((t) => {
+    t.state!.setFlag('FLAG_GOT_SUPER_ROD', true);
+    const m = t.state!.party[0];
+    m.personality = 0x12345678;
+    m.ivs = { hp: 31, attack: 31, defense: 31, speed: 31, spAttack: 31, spDefense: 31 };
+  });
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await untilMessage(game, /Allow me to see it/, 'the guru asks to see it');
+  await chooseFirstMon(game, "the guru's party menu");
+  // CompareMagikarpSize: 34.9 inches, a new record → Route12_FishingHouse_EventScript_NewRecordMagikarp
+  await untilMessage(game, /34\.9 inches!/, 'the new record');
+  await scriptDone(game, 'the Net Ball');
+  const after = await game.eval((t) => ({ record: t.var('VAR_MAGIKARP_SIZE_RECORD'), flag: t.flag('FLAG_GOT_RECORD_SETTING_MAGIKARP'), balls: t.itemCount('NET_BALL') }));
+  expect(after).toEqual({ record: 0x7856, flag: true, balls: 1 });
+
+  // The same Magikarp again ties the record (CompareMonSize 4)
+  await game.press('A');
+  await chooseFirstMon(game, "the guru's party menu again");
+  await untilMessage(game, /34\.9 inches\?/, 'the tie');
+  await untilMessage(game, /same size as the one/, 'the tie (Route12_FishingHouse_Text_HuhXInchesSameSizeAsLast)');
+  await scriptDone(game, 'the tie');
+});

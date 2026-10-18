@@ -66,6 +66,7 @@ GFX_PREFIXES = (
     "graphics/trade/",
     "graphics/learn_move/",
     "graphics/script_menu/",  # the museum's fossil pics (script_menu.c)
+    "graphics/diploma/",  # diploma.c (W-misc)
     "data/tilesets/",
 )
 

@@ -62,6 +62,7 @@ import { MenuWindow, setUserFrameTypeSource } from '../ui/MenuWindow';
 import { MapNamePopup } from '../ui/MapNamePopup';
 import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
 import { gFieldCallback, gFieldCallback2, type FieldCallbackHost } from '../menus/fieldCallbacks';
+import { RunMassageCooldownStepCounter } from '../script/miscSpecials';
 import { UseRegisteredKeyItemOnField } from '../menus/registeredItem';
 import { activeFieldEffects, setFieldEffectScriptHost, setFieldEffectScripts } from '../world/fieldEffectScripts';
 import { fieldMoveGfxSymbols, prepareFieldMoveMenu, prepareRegionMap, registerFieldMoves, setFieldMoveHost, UpdateEscapeWarp, type FieldMoveHost } from '../world/fieldMoves';
@@ -684,6 +685,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       return true;
     }
     if (this.tryOnFrameScript()) return true;
+    if (input.tookStep) RunMassageCooldownStepCounter(this.state);
     if (input.tookStep && this.tryStartStepBasedScript(x, y, tile.behavior)) return true;
     if (input.checkStandardWildEncounter) {
       if ((!input.dpadDirection || input.dpadDirection === facing) && this.tryWalkIntoSignpost()) return true;
