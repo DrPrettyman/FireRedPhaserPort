@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'vitest';
-import { FormatMonSizeRecord, GetLeadMonFriendship, GetMonSize, GetMonSizeHash } from '../../src/script/miscSpecials';
+import {
+  FormatMonSizeRecord,
+  GetLeadMonFriendship,
+  GetMonSize,
+  GetMonSizeHash,
+  GetNumFansOfPlayerInTrainerFanClub,
+  TryGainNewFanFromCounter,
+  TryLoseFansFromPlayTime,
+  UpdateTrainerFanClubGameClear,
+} from '../../src/script/miscSpecials';
 import { newGame, type TestGame } from './gameData';
 
 const mon = (t: TestGame, species: string, opts: { personality?: number; iv?: number } = {}) =>
@@ -47,5 +56,50 @@ describe("Daisy's friendship rating", () => {
       lead.friendship = friendship;
       expect(GetLeadMonFriendship(t.state), `friendship ${friendship}`).toBe(rating);
     }
+  });
+});
+
+// trainer_fan_club.c, by hand: struct TrainerFanClub in VAR_FANCLUB_FAN_COUNTER (timer:7, gotInitialFans:1, fanFlags).
+describe('Trainer Fan Club', () => {
+  test('the game clear gives the first three fans once, and the loss timer starts', () => {
+    const t = newGame();
+    t.state.playTime.hours = 30;
+    UpdateTrainerFanClubGameClear(t.state);
+    expect(t.state.getVar('VAR_FANCLUB_FAN_COUNTER')).toBe(0x0780); // fans 1-3, gotInitialFans
+    expect(t.state.getVar('VAR_FANCLUB_LOSE_FAN_TIMER')).toBe(30);
+    expect(t.state.getVar('VAR_MAP_SCENE_SAFFRON_CITY_POKEMON_TRAINER_FAN_CLUB')).toBe(1);
+    expect(GetNumFansOfPlayerInTrainerFanClub(t.state)).toBe(3);
+    t.state.setVar('VAR_FANCLUB_FAN_COUNTER', 0x0180); // lost two since: a second game clear changes nothing
+    UpdateTrainerFanClubGameClear(t.state);
+    expect(t.state.getVar('VAR_FANCLUB_FAN_COUNTER')).toBe(0x0180);
+  });
+
+  test('the counter gains a fan at 20 while under three fans', () => {
+    const t = newGame();
+    t.state.setVar('VAR_MAP_SCENE_SAFFRON_CITY_POKEMON_TRAINER_FAN_CLUB', 2);
+    t.state.setVar('VAR_FANCLUB_FAN_COUNTER', 0x0180 | 18); // one fan, timer 18
+    expect(TryGainNewFanFromCounter(t.state, 1)).toBe(19); // +1
+    expect(TryGainNewFanFromCounter(t.state, 0)).toBe(0); // 19 + 2 >= 20: a new fan, timer back to 0
+    expect(GetNumFansOfPlayerInTrainerFanClub(t.state)).toBe(2);
+    t.state.setVar('VAR_FANCLUB_FAN_COUNTER', 0x0780 | 19); // three fans: the timer sticks at 20
+    expect(TryGainNewFanFromCounter(t.state, 1)).toBe(20);
+    expect(GetNumFansOfPlayerInTrainerFanClub(t.state)).toBe(3);
+  });
+
+  test('five or more fans lose one per 12 hours played, down to four', () => {
+    const t = newGame();
+    t.state.setVar('VAR_FANCLUB_FAN_COUNTER', 0xff80); // all eight
+    t.state.setVar('VAR_FANCLUB_LOSE_FAN_TIMER', 10);
+    t.state.playTime.hours = 21; // 11 hours: nothing yet
+    TryLoseFansFromPlayTime(t.state);
+    expect(GetNumFansOfPlayerInTrainerFanClub(t.state)).toBe(8);
+    t.state.playTime.hours = 46; // 36 hours: three leave, the timer moves on by 3 * 12
+    TryLoseFansFromPlayTime(t.state);
+    expect(GetNumFansOfPlayerInTrainerFanClub(t.state)).toBe(5);
+    expect(t.state.getVar('VAR_FANCLUB_LOSE_FAN_TIMER')).toBe(46);
+    t.state.playTime.hours = 200; // the next one leaves; at four the timer resets to now
+    TryLoseFansFromPlayTime(t.state);
+    expect(GetNumFansOfPlayerInTrainerFanClub(t.state)).toBe(4);
+    expect(t.state.getVar('VAR_FANCLUB_LOSE_FAN_TIMER')).toBe(200);
   });
 });

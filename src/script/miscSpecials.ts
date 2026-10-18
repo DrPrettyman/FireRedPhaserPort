@@ -1,10 +1,13 @@
 // Small side specials a player meets before the Hall of Fame (SIDE_PLAN.md W-misc): Daisy's grooming
 // (PalletTown_RivalsHouse), the Route 12 fishing guru's Magikarp size record (pokemon_size_record.c),
-// SetSeenMon, BufferBigGuyOrBigGirlString, and the Celadon game designer's diploma (CeladonCity_Condominiums_3F).
+// SetSeenMon, BufferBigGuyOrBigGirlString, the Celadon game designer's diploma (CeladonCity_Condominiums_3F) and
+// the Saffron Pokémon Trainer Fan Club (trainer_fan_club.c).
 // MISC_SPECIALS is spread into SPECIALS. The fall warp's DoFallWarp is world/fallWarp.ts (registered with the
 // field moves).
 
+import { charmap } from '../battle/env';
 import { adjustFriendship } from '../battle/pokemonBattle';
+import { random } from '../util/random';
 import { ConvertIntToDecimalStringN, STR_CONV_MODE_LEFT_ALIGN } from '../battle/stringUtil';
 import { SetMainCallback2 } from '../gba/main';
 import { CB2_ShowDiploma, DIPLOMA_GFX } from '../menus/diploma';
@@ -143,6 +146,157 @@ function withPokedexData(env: SpecialEnv, fn: () => void): void {
   env.stopScript(() => done);
 }
 
+// ------------------------------------------------------------------ trainer_fan_club.c
+
+/**
+ * struct TrainerFanClub, kept in VAR_FANCLUB_FAN_COUNTER as the GBA lays it out: bits 0-6 the timer, bit 7
+ * gotInitialFans, bits 8-15 fanFlags (one per FANCLUB_MEMBER*). The loss timer is VAR_FANCLUB_LOSE_FAN_TIMER.
+ */
+export class TrainerFanClub {
+  constructor(private readonly state: GameState) {}
+  private get raw(): number {
+    return this.state.getVar('VAR_FANCLUB_FAN_COUNTER');
+  }
+  private set raw(v: number) {
+    this.state.setVar('VAR_FANCLUB_FAN_COUNTER', v & 0xffff);
+  }
+  get timer(): number {
+    return this.raw & 0x7f;
+  }
+  set timer(v: number) {
+    this.raw = (this.raw & ~0x7f) | (v & 0x7f);
+  }
+  get gotInitialFans(): boolean {
+    return (this.raw & 0x80) !== 0;
+  }
+  set gotInitialFans(v: boolean) {
+    this.raw = v ? this.raw | 0x80 : this.raw & ~0x80;
+  }
+  get fanFlags(): number {
+    return this.raw >> 8;
+  }
+  set fanFlags(v: number) {
+    this.raw = (this.raw & 0xff) | ((v & 0xff) << 8);
+  }
+  flag(member: number): boolean {
+    return ((this.fanFlags >> member) & 1) !== 0;
+  }
+  setFlag(member: number): void {
+    this.fanFlags |= 1 << member;
+  }
+  flipFlag(member: number): void {
+    this.fanFlags ^= 1 << member;
+  }
+}
+
+const NUM_TRAINER_FAN_CLUB_MEMBERS = 8;
+// FANCLUB_MEMBER1..8 are 0..7 (constants/trainer_fan_club.h)
+const sCounterIncrements = [2, 1, 2, 1];
+const sGainOrder = [1, 3, 5, 0, 7, 6, 4, 2]; // PlayerGainRandomTrainerFan's sFanClubMemberIds
+const sLoseOrder = [5, 6, 3, 7, 4, 1, 0, 2]; // PlayerLoseRandomTrainerFan's sFanClubMemberIds
+
+/** UpdateTrainerFanClubGameClear: the first three fans and the members who move in, once. */
+export function UpdateTrainerFanClubGameClear(state: GameState): void {
+  const fanClub = new TrainerFanClub(state);
+  if (fanClub.gotInitialFans) return;
+  fanClub.gotInitialFans = true; // SetPlayerGotFirstFans
+  // SetInitialFansOfPlayer: FANCLUB_MEMBER1..3
+  fanClub.setFlag(0);
+  fanClub.setFlag(1);
+  fanClub.setFlag(2);
+  state.setVar('VAR_FANCLUB_LOSE_FAN_TIMER', state.playTime.hours);
+  for (const f of ['BLACK_BELT', 'ROCKER', 'WOMAN', 'BEAUTY']) state.setFlag(`FLAG_HIDE_SAFFRON_FAN_CLUB_${f}`, false);
+  state.setVar('VAR_MAP_SCENE_SAFFRON_CITY_POKEMON_TRAINER_FAN_CLUB', 1);
+}
+
+/** TryGainNewFanFromCounter: after the fan club's scene 2, a new fan every 20 counts (2 or 1 per event). */
+export function TryGainNewFanFromCounter(state: GameState, which: number): number {
+  const fanClub = new TrainerFanClub(state);
+  if (state.getVar('VAR_MAP_SCENE_SAFFRON_CITY_POKEMON_TRAINER_FAN_CLUB') === 2) {
+    if (fanClub.timer + sCounterIncrements[which] >= 20) {
+      if (GetNumFansOfPlayerInTrainerFanClub(state) < 3) {
+        PlayerGainRandomTrainerFan(fanClub);
+        fanClub.timer = 0;
+      } else {
+        fanClub.timer = 20;
+      }
+    } else {
+      fanClub.timer += sCounterIncrements[which];
+    }
+  }
+  return fanClub.timer;
+}
+
+/** PlayerGainRandomTrainerFan: walk the order, taking each non-fan with a coin flip; else the last non-fan. */
+function PlayerGainRandomTrainerFan(fanClub: TrainerFanClub): number {
+  let idx = 0;
+  for (let i = 0; i < NUM_TRAINER_FAN_CLUB_MEMBERS; i++) {
+    if (!fanClub.flag(sGainOrder[i])) {
+      idx = i;
+      if (random() % 2) {
+        fanClub.setFlag(sGainOrder[i]);
+        return sGainOrder[i];
+      }
+    }
+  }
+  fanClub.setFlag(sGainOrder[idx]);
+  return sGainOrder[idx];
+}
+
+/** PlayerLoseRandomTrainerFan: the last fan always stays. */
+function PlayerLoseRandomTrainerFan(fanClub: TrainerFanClub, state: GameState): number {
+  if (GetNumFansOfPlayerInTrainerFanClub(state) === 1) return 0;
+  let idx = 0;
+  for (let i = 0; i < NUM_TRAINER_FAN_CLUB_MEMBERS; i++) {
+    if (fanClub.flag(sLoseOrder[i])) {
+      idx = i;
+      if (random() % 2) {
+        fanClub.flipFlag(sLoseOrder[i]);
+        return sLoseOrder[i];
+      }
+    }
+  }
+  if (fanClub.flag(sLoseOrder[idx])) fanClub.flipFlag(sLoseOrder[idx]);
+  return sLoseOrder[idx];
+}
+
+/** GetNumFansOfPlayerInTrainerFanClub */
+export function GetNumFansOfPlayerInTrainerFanClub(state: GameState): number {
+  const fanClub = new TrainerFanClub(state);
+  let count = 0;
+  for (let i = 0; i < NUM_TRAINER_FAN_CLUB_MEMBERS; i++) if (fanClub.flag(i)) count++;
+  return count;
+}
+
+/** TryLoseFansFromPlayTime: with 5 or more fans, one leaves per 12 hours played since the timer. */
+export function TryLoseFansFromPlayTime(state: GameState): void {
+  const fanClub = new TrainerFanClub(state);
+  const hours = state.playTime.hours;
+  if (hours >= 999) return;
+  for (let i = 0; ; i++) {
+    if (GetNumFansOfPlayerInTrainerFanClub(state) < 5) {
+      state.setVar('VAR_FANCLUB_LOSE_FAN_TIMER', hours);
+      break;
+    }
+    if (i === NUM_TRAINER_FAN_CLUB_MEMBERS) break;
+    if (hours - state.getVar('VAR_FANCLUB_LOSE_FAN_TIMER') < 12) break;
+    PlayerLoseRandomTrainerFan(fanClub, state);
+    state.setVar('VAR_FANCLUB_LOSE_FAN_TIMER', state.getVar('VAR_FANCLUB_LOSE_FAN_TIMER') + 12);
+  }
+}
+
+/**
+ * BufferFanClubTrainerName: STR_VAR_1 = the trainer member VAR_0x8004 is a fan of. With no link battle records
+ * (the port has no link play) that is the rival, LT. SURGE or KOGA.
+ */
+export function BufferFanClubTrainerName(state: GameState, encodeText: (label: string) => number[]): void {
+  const member = state.getVar('VAR_0x8004');
+  const whichNPCTrainer = member === 4 ? 1 : member === 6 ? 2 : 0; // FANCLUB_MEMBER5: Surge, FANCLUB_MEMBER7: Koga
+  if (whichNPCTrainer === 1) state.stringVars[0] = encodeText('gText_LtSurge');
+  else if (whichNPCTrainer === 2) state.stringVars[0] = encodeText('gText_Koga');
+  else state.stringVars[0] = charmap.encodePlain(state.rivalName); // gSaveBlock1Ptr->rivalName
+}
+
 // ------------------------------------------------------------------ the table
 
 export const MISC_SPECIALS: Record<string, Special> = {
@@ -197,5 +351,26 @@ export const MISC_SPECIALS: Record<string, Special> = {
    */
   ShowDiploma({ host, setWaitState }) {
     setWaitState(host.runScreenFromScript(() => SetMainCallback2(CB2_ShowDiploma), DIPLOMA_GFX));
+  },
+
+  // trainer_fan_club.c (SaffronCity_PokemonTrainerFanClub; the game-clear and Lance's counter from the league)
+  Script_UpdateTrainerFanClubGameClear({ state }) {
+    UpdateTrainerFanClubGameClear(state);
+  },
+  Script_TryGainNewFanFromCounter({ state }) {
+    return TryGainNewFanFromCounter(state, state.getVar('VAR_0x8004'));
+  },
+  Script_GetNumFansOfPlayerInTrainerFanClub({ state }) {
+    return GetNumFansOfPlayerInTrainerFanClub(state);
+  },
+  Script_TryLoseFansFromPlayTime({ state }) {
+    TryLoseFansFromPlayTime(state);
+  },
+  /** IsFanClubMemberFanOfPlayer: member VAR_0x8004's fan flag. */
+  Script_IsFanClubMemberFanOfPlayer({ state }) {
+    return new TrainerFanClub(state).flag(state.getVar('VAR_0x8004')) ? 1 : 0;
+  },
+  Script_BufferFanClubTrainerName({ state, encodeText }) {
+    BufferFanClubTrainerName(state, encodeText);
   },
 };
