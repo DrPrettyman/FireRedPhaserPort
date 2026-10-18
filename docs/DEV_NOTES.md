@@ -568,6 +568,18 @@ this is the next level down. When you add or change a subsystem, update its entr
   Specials: `script/easyChatSpecials.ts` (ShowEasyChatMessage, BufferRandomHobbyOrLifestyleString). The trainer
   card copies the profile words (only a link card prints them). Tests: tests/unit/easyChat.test.ts,
   tests/e2e/easyChat.test.ts (the Pewter Pokémon Center's profile woman at (13, 2), talked to from (13, 3)).
+  The screen's model, `menus/easyChatScreenModel.ts`, is easy_chat_2.c without graphics (no Phaser, no GBA
+  layer): sEasyChatScreen and the getters easy_chat_3.c reads (GetMainCursorColumn, GetECSelectWordCursorCoords,
+  ShouldDrawECUpArrow, ...; texts as src/strings.c labels). The screen (unit 3) calls InitEasyChatSelection(state),
+  `EasyChat_AllocateResources(state, type, words, { processYesNoInput })` (`words` is the saved array from
+  easyChatWordsForType: confirm writes into it), then each frame `EasyChatScreen_HandleJoypad({ newKeys,
+  newAndRepeatedKeys })` (gMain's key bits) → an `EC_CMD` id for ECInterfaceCmd_01-22 (pokeemerald's ECFUNC_*
+  names), `EC_CMD.EXIT` (23) to fade out; after the fade `EasyChat_OnLeave()` (Task_RunEasyChat case 3: the
+  profile flag, the passphrase compares into VAR_0x8004), then EasyChat_FreeResources / DestroyEasyChatSelectionData.
+  Cancel / confirm set VAR_RESULT. `processYesNoInput` is gba/menu.ts's Menu_ProcessInputNoWrapClearOnChoose for
+  the YES/NO the screen creates (initial cursor: NO for quit / DEL ALL, YES for confirm); without it a model of it
+  reads the same keys (`GetEasyChatYesNoCursor`). Tests: tests/unit/easyChatScreen.test.ts (key presses through
+  the fields, footer, groups, keyboard, blue box, word list, the YES/NO menus and both passphrases).
 - **Party selection from scripts, tutors, the move deleter:** `menus/partyMenuSpecials.ts` is
   party_menu_specials.c (ChoosePartyMon, ChooseMonForMoveRelearner, SelectMoveDeleterMove, the deleter's
   helpers) plus the ChooseMonForMoveTutor special; `PARTY_MENU_SPECIALS` is spread into SPECIALS. A special that

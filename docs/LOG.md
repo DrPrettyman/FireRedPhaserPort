@@ -2445,3 +2445,25 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Verified: typecheck; `npm test` (unit: easyChat.test.ts with cases worked from the C, e.g. with sayings 5 and 9
   unlocked a roll of 9 unlocks saying 11, the battle-start 3x2 / 2x3 choice at 18 characters, the doubled ABRA in the A list;
   save.test.ts's version-4 upgrade); e2e easyChat.test.ts (new), saveContinue.test.ts, trainerCard.test.ts.
+
+### Easy Chat: easy_chat_2.c as a model (W-easychat unit 2)
+
+- `menus/easyChatScreenModel.ts` (new, no Phaser / GBA imports): struct EasyChatScreen and EasyChat_AllocateResources
+  per screen template (numWords capped at 9, selectGroupNumRows from the displayable groups), the seven input states'
+  handlers (HandleJoypad_SelectField / _SelectFooter / _SelectGroup / _SelectWord, the quit / DEL ALL / confirm
+  YES/NO menus) returning the interface command ids (`EC_CMD`, 1-22 and 23 = leave), the cursor rules (field wrap
+  and the footer, the mail frame's one-field last row, group mode scrolling, the A-Z keyboard's 7/6/7/7 rows, the
+  blue box and GroupCursorMoveToBlueBox / GroupCursorWrapAroundLeft, the word list's scroll and page up / down
+  clamps), the word buffer (DEL, DEL ALL, place, CommitECWords into the saved array), the getters easy_chat_3.c
+  reads, and Task_RunEasyChat's leave step (`EasyChat_OnLeave`: FLAG_SYS_SET_TRAINER_CARD_PROFILE, the
+  MYSTERY EVENT IS EXCITING / LINK TOGETHER WITH ALL compares into VAR_0x8004). Keys come in as gMain's bits; the
+  YES/NO input is the screen's Menu_ProcessInputNoWrapClearOnChoose, or a built-in model of it.
+- C details kept: the passphrase compare reads the edited words even after a cancel (quitting with LINK TOGETHER
+  WITH ALL typed still enables Mystery Gift), and the profile flag is set on a cancel too; START with every field
+  empty asks "Quit editing?" instead of confirming; the D-pad on the groups and words repeats (JOY_REPT), on the
+  fields it doesn't.
+- Verified: typecheck; `npm test` (unit: easyChatScreen.test.ts, 31 cases driven by key presses and worked by hand
+  from the C: fields → footer wrap and column clamp, group scrolling with 16 and 17 groups, the blue box from both
+  modes, page down on 25 and 9 words, DEL / DEL ALL, quit and confirm with and without changes, a profile of MYSTERY
+  EVENT IS EXCITING typed on the keyboard, the questionnaire's LINK TOGETHER WITH ALL typed through the groups).
+  No e2e: nothing user-visible changes until the screen (unit 3).
