@@ -144,6 +144,7 @@ pic, the daycare and egg fields in GameState / saveData.
 | Batch | Workers | Why together |
 |---|---|---|
 | 1 (done, PRs #56-#67) | W-moves (1, 2), W-trade (1, 2), W-slots (1, 2; spare 3 not needed), W-daycare (1, 2, 3), W-hatch (unit 4, alongside 2-3), W-misc (the other small side specials) | Different files; all four are side content the user asked for, ordered by how often a player meets it |
+| 2 | W-ferry (1, 2), W-ssanne (1), W-league (1, 2), then W-easychat if there's room | The user's focus: the ferry for Bill's trip, the S.S. Anne, the last two main gaps; three workers, a fourth for Easy Chat once the focus is done |
 
 Batch 1 merged: #57 party selection, tutors, deleter; #58 trades behind a fade, Name Rater; #59 coins box, Game
 Corner clerks, slot machine logic; #60 Oak's rating, fossil pics, fossil revival check; #61 move relearner, Cape
@@ -155,6 +156,109 @@ Left for a batch 2 (the side gaps in `tests/unit/scriptCoverageGaps.ts`): the Se
 IsPlayerLeftOfVermilionSailor) for Bill's One Island trip; Easy Chat (ShowEasyChatScreen / ShowEasyChatMessage,
 the Pewter questionnaire); GetMartClerkObjectId. Outside the gap list: mail (daycare mail, the trade's Fab Mail),
 contest conditions, TradeEvolutionScene and link trading, audio.
+
+## Batch 2: what was checked
+
+Checked against the decomp and master at `6a154b0` (2026-10-18):
+
+- **The Seagallop ferry** is small: seagallop.c (504 lines: CB2_SetUpSeagallopScene, the scrolling water BG3, the
+  ferry and wake sprites, Task_Seagallop_0-3 and the warp through sSeag, GetDirectionOfTravel's
+  sTravelDirectionMatrix, GetSeagallopNumber, IsPlayerLeftOfVermilionSailor), plus script_menu.c's
+  DrawSeagallopDestinationMenu / GetSelectedSeagallopDestination (~110 lines, the two-page menu on the existing
+  multichoice input task). Graphics: graphics/seagallop/ (water tiles, the WB/EB tilemaps, ferry, wake, palette).
+  The scripts are data/scripts/seagallop.inc and each harbor's sailor. Bill's trip: CinnabarIsland_EventScript_BillScene
+  → CinnabarIsland_EventScript_SailToOneIsland (the Seagallop object arrives with plain movements) →
+  EventScript_SetSail → One Island harbor → One Island PC (MeetCelioScene: Tri-Pass, FLAG_SYS_SEVII_MAP_123, the
+  Town Map page). The way back (OneIsland_PokemonCenter_1F_EventScript_LeaveOneIslandScene) needs
+  VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F = 2, which TwoIsland_JoyfulGameCorner sets after Lostelle's rescue
+  (the Three Island bikers, Berry Forest); then CinnabarIsland_EventScript_ReturnFromSeviiIslands. Nothing else on
+  the Sevii 1-3 maps is in the gap list.
+- **The S.S. Anne departure** (ss_anne.c, 200 lines): DoSSAnneDepartureCutscene: SE horn, a 50-frame wait, the wake
+  sprite behind the boat, a smoke puff every 70 frames, the boat object's sprite x2 moving left by one pixel per 5
+  frames until it's off screen (x < -120), 40 frames, ScriptContext_Enable. Graphics: graphics/ss_anne/ (wake,
+  smoke). Today `waitstate` passes at once and `removeobject LOCALID_SS_ANNE` hides the ship. story.test.ts checks
+  the ticket, the rival, the captain and the exit, not the ship. The rest (the ship's 26 maps, the Vermilion ticket
+  check and VAR_VERMILION_CITY_TICKET_CHECK_TRIGGER, the captain's HM01, VAR_MAP_SCENE_VERMILION_CITY 1→2→3 and
+  the "SS Anne has departed" texts, the dock afterwards) runs on generic script commands: the sweep is a runtime check
+  against the decomp, map by map.
+- **The league lighting** (field_specials.c 2050-2210, ~160 lines with the data): DoPokemonLeagueLightingEffect
+  cycles BG palette 7 through 12 (Elite Four) or 9 (Champion) palettes on timers while FLAG_TEMP_2 is set;
+  Task_CancelPokemonLeagueLightingEffect sets the last palette once FLAG_TEMP_4 is set (after the battle);
+  StopPokemonLeagueLightingEffectTask runs from the start menu and five item_use.c paths. The field draws metatiles
+  from tile atlases (`world/TilesetVram.ts` keeps the GBA tiles and redraws metatiles that tile animations change),
+  so a palette swap means redrawing the metatiles that use palette 7: the same mechanism, keyed on palettes.
+- **Leftovers:** GetMartClerkObjectId (field_specials.c, sMartMaps, 20 lines; its only caller is
+  EventScript_Questionnaire, which needs Easy Chat); `adddecoration` / `bufferdecorationname` and FLDEFF_USE_DIVE are
+  reached only from std scripts no FRLG map calls; the Trainer Fan Club has no e2e; the e2e egg hook builds eggs by
+  hand instead of world/daycare.ts's createEgg.
+- **Easy Chat** is big: easy_chat.c 730, easy_chat_2.c 1,363, easy_chat_3.c 2,316 lines, plus the word tables and
+  graphics. Its users before the Hall of Fame are the Pewter Pokémon Center's questionnaire (ShowEasyChatScreen /
+  ShowEasyChatMessage) and EventScript_Questionnaire. Only if the rest is done (the user's call).
+
+## Batch 2 workstreams
+
+One PR per unit as in batch 1. Each workstream registers its specials in its own module spread into
+`script/specials.ts`.
+
+### W-ferry: the Seagallop ferry
+
+Owns `menus/seagallop.ts` (new: seagallop.c), `script/ferrySpecials.ts` (new: the ferry specials, incl. the two
+from script_menu.c), the seagallop graphics in the extractor, `tests/e2e/seagallop.test.ts`.
+
+1. **The ferry and Bill's trip.** All of seagallop.c (the scene on the GBA layer, the warp through sSeag with
+   FieldCB_DefaultWarpExit, GetDirectionOfTravel, GetSeagallopNumber, IsPlayerLeftOfVermilionSailor),
+   DrawSeagallopDestinationMenu and GetSelectedSeagallopDestination. E2E: Bill's scene on Cinnabar → YES → the
+   Seagallop arrives → the ferry scene → One Island harbor → One Island → the PC's Celio scene (Tri-Pass); then set
+   VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F to 2 (Lostelle's rescue, unit 2 plays it) → the leave scene → the
+   ferry → Cinnabar → Bill's goodbye. Also declining Bill (he waits in the Pokémon Center, the trip from there),
+   Vermilion → Two Island with the Tri-Pass and back, and cancelling left of the Vermilion sailor (walk up the pier).
+2. **Every harbor and the Sevii 1-3 quest.** The ferry from each harbor (Vermilion, Cinnabar, One to Seven Island),
+   both pages of the Rainbow Pass menu (from Vermilion and from an island, the "OTHER" page and EXIT), the Navel
+   Rock / Birth Island harbors as far as their scripts go without the tickets; the Sevii 1-3 story played headless
+   (Kindle Road, the Three Island bikers, Berry Forest's Lostelle, Two Island's game corner) so the way back is
+   reached without setting the var. Fix what the play-through finds.
+
+### W-ssanne: the S.S. Anne
+
+Owns `world/ssAnne.ts` (new: ss_anne.c), the ss_anne graphics in the extractor, `tests/e2e/ssAnne.test.ts`.
+
+1. **The departure and the sweep.** DoSSAnneDepartureCutscene with the wake and smoke sprites on the field (the
+   boat object's sprite offset, sprites over the field like the other field effects), `waitstate` waiting for
+   ScriptContext_Enable. Then sweep everything S.S. Anne against the decomp at runtime: the Vermilion ticket check
+   (without and with the ticket, both trigger columns, walking away), every S.S. Anne map's NPCs, trainers, items
+   and signs, the kitchen / rooms' hidden items, the rival on 2F, the captain and HM01, the departure, Vermilion's
+   dock and NPC texts after the ship has left (VAR_MAP_SCENE_VERMILION_CITY 3), the dock sailor afterwards. Fix
+   what's wrong; log what's left in DEVIATIONS. E2E covers the ticket check, the departure (the ship moves off, the
+   wake and smoke show, the script waits) and the dock afterwards.
+
+### W-league: the league lighting, then the leftovers
+
+Owns the lighting (a module under `world/`, the palette-redraw hook in `world/TilesetVram.ts`), the lighting
+palettes in the extractor, `tests/e2e/leagueLighting.test.ts`.
+
+1. **The league lighting.** DoPokemonLeagueLightingEffect, Task_RunPokemonLeagueLightingEffect,
+   Task_CancelPokemonLeagueLightingEffect, StopPokemonLeagueLightingEffectTask (from the start menu and the
+   item_use.c paths, which today skip it: remove that QOL note), the palettes through the extractor. E2E: the
+   palette changes on the timers in an Elite Four room and the Champion's room, stops after the battle.
+2. **Leftovers** (small, may go with unit 1): GetMartClerkObjectId; tag `adddecoration`, `bufferdecorationname`
+   and FLDEFF_USE_DIVE as not reached by FRLG (a new gap tag, decision 8); an e2e for the Trainer Fan Club; the e2e
+   egg hook using world/daycare.ts's createEgg.
+
+### W-easychat (only once the focus is done)
+
+Started only when W-ferry, W-ssanne and W-league have no units waiting (decision 9). Unit 1 sizes easy_chat*.c
+against the questionnaire and the Pewter Pokémon Center's scripts and ports the word data and the input screen's
+model; later units the screen. Not planned further until it starts.
+
+## Shared files in batch 2
+
+- `script/specials.ts`: one spread line per workstream; `tests/unit/scriptCoverageGaps.ts`: each takes its own
+  lines off (the merger keeps both sides).
+- `tools/extract*.py`: W-ferry (graphics/seagallop/), W-ssanne (graphics/ss_anne/), W-league (the lighting
+  palettes). Own functions and keys.
+- The field's sprite layer: W-ssanne adds sprites that follow an object's sprite; the ferry scene is a GBA screen of
+  its own, so W-ferry doesn't touch the field.
+- `world/TilesetVram.ts`: W-league only.
 
 ## Rules
 
@@ -183,8 +287,18 @@ Worker and merger rules: docs/WORKFLOW.md sections 3 and 4. Each worker's e2e fi
    W-trade finished early, a free slot took the side gaps a player meets before the Hall of Fame (holes, Daisy, the
    Magikarp record, the diploma, the fan club) rather than starting the Seagallop ferry, which is left for batch 2.
 
+7. **Bill's way back is tested with the var first** (coordinator, revisit if you disagree): the leave scene in the
+   One Island Pokémon Center needs Lostelle's rescue (VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F = 2). W-ferry unit 1
+   sets the var in its e2e to reach the way back; unit 2 plays the Sevii 1-3 quest headless and drops the shortcut.
+8. **A gap tag for what FRLG never reaches** (coordinator, revisit if you disagree): `adddecoration`,
+   `bufferdecorationname` (Std_ObtainDecoration) and FLDEFF_USE_DIVE (EventScript_DeepWater / TrySurface) are
+   shared with Emerald's std scripts but no FRLG map calls them. They get their own tag rather than being ported.
+9. **Easy Chat waits for the focus** (the user's call): W-easychat starts only when the other three workstreams
+   have no units left to start, in the slot one of them frees.
+
 ## Not in this plan
 
-Link trading and the cable trade animation, TradeEvolutionScene, mail, the Seagallop ferry, the Heracross size
-contest (postgame), Easy Chat; audio. (DoFallWarp holes, the Trainer Fan Club, the Magikarp record, the diploma and
-Daisy's grooming were planned out but done in batch 1 by W-misc: decision 6.)
+Link trading and the cable trade animation, TradeEvolutionScene, mail, the Heracross size contest (postgame),
+the event tickets (Navel Rock, Birth Island); audio. Easy Chat only if batch 2 has room (decision 9). (DoFallWarp
+holes, the Trainer Fan Club, the Magikarp record, the diploma and Daisy's grooming were planned out but done in
+batch 1 by W-misc: decision 6.)
