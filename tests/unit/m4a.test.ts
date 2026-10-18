@@ -575,56 +575,55 @@ describe.skipIf(!existsSync(SONGS_JSON))('the extracted songs', () => {
   };
 
   /** Plays one song alone from a fresh engine. */
-  function measure(name: string): { fine: number; stopped: number } {
+  function measure(name: string, cap = 20000): { fine: number; stopped: number } {
     m4aSoundInit();
     loadSongTable(json!);
     const songId = id(name);
     m4aSongNumStart(songId);
-    return runToEnd(gMPlayTable[json!.songs[songId].ms].info, 5000);
+    return runToEnd(gMPlayTable[json!.songs[songId].ms].info, cap);
   }
 
   test('every song ends in FINE or loops', () => {
+    // MUS_CREDITS is the longest that ends (14,971 frames); a song still playing after 15,000 frames loops.
     let ended = 0;
     let looped = 0;
     for (const s of json!.songs) {
-      if (s.name === 'mus_dummy' || s.tracks.length === 0) continue;
       m4aSoundInit();
       loadSongTable(json!);
       m4aSongNumStart(s.id);
-      const { stopped } = runToEnd(gMPlayTable[s.ms].info, 5000);
+      const { stopped } = runToEnd(gMPlayTable[s.ms].info, 15000);
       if (stopped > 0) ended++;
       else looped++;
     }
-    expect({ ended, looped }).toEqual({ ended: 270, looped: 77 - 1 }); // spike 2 (its 77 loops count mus_dummy)
-  });
+    expect({ ended, looped }).toEqual({ ended: 270, looped: 77 }); // spike 2's counts (MUS_DUMMY ends at once)
+  }, 30_000);
 
-  // Frames to the last FINE, and the frame after which IsSEPlaying turns FALSE (the status clears the next tick).
+  // The frame of the last FINE and the frame after which the player's status has no live track (IsSEPlaying /
+  // IsBGMPlaying turn FALSE): the next tick after the FINE, which is the next frame at tempos up to 150 BPM
+  // (tempoI 150), can be the same frame above it (two ticks in a frame) and can be two frames later below it.
+  // Spike 2's model (AUDIO_PLAN.md) agrees on the FINE frames except MUS_LEVEL_UP (63 there): its first tick runs
+  // at the default 150 BPM before its TEMPO 87, which the model didn't count.
   test.each([
-    ['SE_SELECT', 10],
-    ['SE_LEDGE', 13],
-    ['SE_WALL_HIT', 18],
-    ['SE_SAVE', 43],
-    ['SE_PC_ON', 61],
-    ['SE_FAINT', 51],
-    ['SE_FLEE', 40],
-    ['SE_EXP', 99],
-    ['SE_DOOR', 34],
-    ['MUS_LEVEL_UP', 63],
-    ['MUS_OBTAIN_ITEM', 146],
-    ['MUS_OBTAIN_BADGE', 313],
-    ['MUS_EVOLVED', 229],
-    ['MUS_SLOTS_WIN', 151],
-    ['MUS_SLOTS_JACKPOT', 262],
-    ['MUS_DEX_RATING', 200],
-    ['MUS_HEAL', 138],
-    ['MUS_POKE_FLUTE', 3061],
-  ])('%s: FINE in frame %i', (name, fine) => {
-    const r = measure(name);
-    expect(r.fine).toBe(fine);
-  });
-
-  test('IsSEPlaying turns FALSE the tick after the FINE', () => {
-    expect(measure('SE_SELECT')).toEqual({ fine: 10, stopped: 11 });
-    expect(measure('MUS_LEVEL_UP')).toEqual({ fine: 63, stopped: 64 });
+    ['SE_SELECT', 10, 11],
+    ['SE_LEDGE', 13, 14],
+    ['SE_WALL_HIT', 18, 19],
+    ['SE_SAVE', 43, 44],
+    ['SE_PC_ON', 61, 62],
+    ['SE_FAINT', 51, 53],
+    ['SE_FLEE', 40, 41],
+    ['SE_EXP', 99, 100],
+    ['SE_DOOR', 34, 36],
+    ['MUS_LEVEL_UP', 64, 64],
+    ['MUS_OBTAIN_ITEM', 146, 147],
+    ['MUS_OBTAIN_BADGE', 313, 315],
+    ['MUS_EVOLVED', 229, 230],
+    ['MUS_SLOTS_WIN', 151, 153],
+    ['MUS_SLOTS_JACKPOT', 262, 264],
+    ['MUS_DEX_RATING', 200, 202],
+    ['MUS_HEAL', 138, 139],
+    ['MUS_POKE_FLUTE', 3061, 3063],
+    ['MUS_CREDITS', 14970, 14971],
+  ])('%s: FINE in frame %i, stopped after frame %i', (name, fine, stopped) => {
+    expect(measure(name)).toEqual({ fine, stopped });
   });
 });
