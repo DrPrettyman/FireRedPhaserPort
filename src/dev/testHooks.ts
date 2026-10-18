@@ -247,6 +247,10 @@ export interface FieldProbe {
     /** The held MOVEMENT_ACTION_* (without the prefix), if any. */
     action: string | undefined;
     movementDirection: Direction;
+    /** The player sprite's y offset off its tile (sprite->y2 beyond a jump's lift: the fall warp's drop). */
+    spriteY2: number;
+    /** SetCameraPanning's vertical offset (the fall warp's landing shake, the elevator). */
+    cameraPanY: number;
   };
 }
 

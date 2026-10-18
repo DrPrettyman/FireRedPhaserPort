@@ -210,6 +210,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private cameraPanY = 0;
   /** sWarpDestination as set by `setwarp` (only Safari Zone's out-of-balls exit reads it so far). */
   private warpDestination?: { mapId: string; warpId: number; x: number; y: number };
+  /** A fall warp's SetupWarp, which loads the destination's header before warpDestination is set. */
+  private warpSetup: Promise<void> = Promise.resolve();
   /** FldEffPoison's task while it runs. */
   private poisonEffect?: FieldPoisonEffect;
   /** The approach task of the trainer that last saw the player (trainer_see.c), until it ends. */
@@ -451,6 +453,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         graphicsId: this.player.graphicsId,
         action: this.player.heldMovementActive ? movementActionName(this.player.movementActionId) : undefined,
         movementDirection: this.player.movementDirection,
+        spriteY2: this.player.sprite.y - (this.player.feetY + this.player.lift),
+        cameraPanY: this.cameraPanY,
       },
     };
   }
@@ -713,8 +717,15 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private tryStartWarpEventScript(x: number, y: number, behavior: number): boolean {
     const warp = this.warpAt(x, y);
     if (!warp || !this.behaviors.isStepWarp(behavior)) return false;
-    if (this.behaviors.is(behavior, 'FALL_WARP')) ResetInitialPlayerAvatarState();
-    else StoreInitialPlayerAvatarState();
+    StoreInitialPlayerAvatarState();
+    if (this.behaviors.is(behavior, 'FALL_WARP')) {
+      // SetupWarp, then ResetInitialPlayerAvatarState and EventScript_DoFallWarp (world/fallWarp.ts)
+      this.warpSetup = this.setupWarp(warp).then((dest) => {
+        if (dest) this.warpDestination = dest;
+      });
+      ResetInitialPlayerAvatarState();
+      return this.startFieldScript('EventScript_DoFallWarp');
+    }
     void this.takeWarp(warp);
     return true;
   }
@@ -965,41 +976,49 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     return cur.data.warpEvents.find((w) => w.x === wx - cur.originX && w.y === wy - cur.originY);
   }
 
-  /** SetupWarp (field_control_avatar.c), then the warp. */
-  private async takeWarp(w: WarpEventData): Promise<void> {
-    // Lock the controls now: the destination may still be loading on the next frames, and a held push
-    // direction (stairs, arrow mats) must not set up the same warp again meanwhile.
-    this.busy = true;
-    this.warping = true;
+  /**
+   * SetupWarp (field_control_avatar.c): the warp destination (SetWarpDestinationToDynamicWarp / ToMapWarp),
+   * UpdateEscapeWarp, and SetDynamicWarp into a map whose matching warp is dynamic. Undefined if unsupported.
+   */
+  private async setupWarp(w: WarpEventData): Promise<{ mapId: string; warpId: number; x: number; y: number } | undefined> {
     if (w.dest_map === 'MAP_DYNAMIC') {
-      // SetWarpDestinationToDynamicWarp
       const dyn = this.state.dynamicWarp;
-      const dynName = dyn && this.assets.mapNameForId(dyn.mapId);
-      if (!dyn || !dynName) {
+      if (!dyn || !this.assets.mapNameForId(dyn.mapId)) {
         console.warn('[warp] no dynamic warp set');
-        this.busy = false;
-        this.warping = false;
-        return;
+        return undefined;
       }
-      await this.warpTo(dynName, dyn.warpId, dyn.x, dyn.y);
-      return;
+      return { ...dyn };
     }
     const name = this.assets.mapNameForId(w.dest_map);
     const destIndex = Number(w.dest_warp_id);
     if (!name || !Number.isInteger(destIndex)) {
       console.warn('[warp] unsupported destination', w.dest_map, w.dest_warp_id);
+      return undefined;
+    }
+    const cur = this.world.current;
+    const { tileX: x, tileY: y } = this.player; // gSaveBlock1Ptr->pos
+    const destData = await this.assets.loadMap(name);
+    UpdateEscapeWarp(this.mapType(cur.data), this.mapType(destData), w.x, w.y);
+    if (destData.warpEvents[destIndex]?.dest_map === 'MAP_DYNAMIC') {
+      this.state.dynamicWarp = { mapId: cur.data.id, warpId: cur.data.warpEvents.indexOf(w), x: x - cur.originX, y: y - cur.originY };
+    }
+    return { mapId: w.dest_map, warpId: destIndex, x: -1, y: -1 };
+  }
+
+  /** SetupWarp, then the warp. */
+  private async takeWarp(w: WarpEventData): Promise<void> {
+    // Lock the controls now: the destination may still be loading on the next frames, and a held push
+    // direction (stairs, arrow mats) must not set up the same warp again meanwhile.
+    this.busy = true;
+    this.warping = true;
+    const dest = await this.setupWarp(w);
+    const name = dest && this.assets.mapNameForId(dest.mapId);
+    if (!dest || !name) {
       this.busy = false;
       this.warping = false;
       return;
     }
-    // A warp into a map whose matching warp is dynamic remembers where it came from (SetDynamicWarp)
-    const destData = await this.assets.loadMap(name);
-    UpdateEscapeWarp(this.mapType(this.world.current.data), this.mapType(destData), w.x, w.y);
-    if (destData.warpEvents[destIndex]?.dest_map === 'MAP_DYNAMIC') {
-      const cur = this.world.current;
-      this.state.dynamicWarp = { mapId: cur.data.id, warpId: cur.data.warpEvents.indexOf(w), x: this.player.tileX - cur.originX, y: this.player.tileY - cur.originY };
-    }
-    await this.warpTo(name, destIndex, -1, -1);
+    await this.warpTo(name, dest.warpId, dest.x, dest.y);
   }
 
   /**
@@ -2715,18 +2734,23 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         }
         return () => started && !this.screenFade.active;
       },
-      warpIntoMap: (mapId, x, y, fieldCallback) => {
+      warpIntoMap: (mapId, x, y, fieldCallback, warpId = -1) => {
         const name = this.assets.mapNameForId(mapId);
         if (!name) {
           console.warn('[warp] unknown map', mapId);
           return;
         }
-        void this.loadWarpedMap(name, -1, x, y, this.screenFade.white).then((isExit) => {
+        void this.loadWarpedMap(name, warpId, x, y, this.screenFade.white).then((isExit) => {
           lastWarpIsExit = isExit;
           fieldCallback(); // gFieldCallback, instead of FieldCB_DefaultWarpExit
           this.busy = false;
         });
       },
+      warpDestination: async () => {
+        await this.warpSetup;
+        return this.warpDestination;
+      },
+      setCameraPanning: (dy) => this.setCameraPanning(dy),
       warpFadeInScreen: () => {
         this.warpFadeInScreen(lastWarpIsExit);
         return () => !this.screenFade.active;

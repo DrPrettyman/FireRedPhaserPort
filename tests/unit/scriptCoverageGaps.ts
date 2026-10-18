@@ -35,7 +35,6 @@ export const KNOWN_GAPS: KnownGap[] = [
   { kind: 'special', name: 'ChooseSendDaycareMon', tag: 'side', where: "FourIsland_PokemonDayCare, Route5_PokemonDayCare" },
   { kind: 'special', name: 'CompareMagikarpSize', tag: 'side', where: "Route12_FishingHouse" },
   { kind: 'special', name: 'DaisyMassageServices', tag: 'side', where: "PalletTown_RivalsHouse" },
-  { kind: 'special', name: 'DoFallWarp', tag: 'side', where: "(EventScript_DoFallWarp)", note: "EventScript_DoFallWarp: the port treats MB_FALL_WARP as a plain warp and doesn't run it" },
   { kind: 'special', name: 'DoSeagallopFerryScene', tag: 'side', where: "BirthIsland_Harbor, CinnabarIsland, FiveIsland_Harbor, FourIsland_Harbor, NavelRock_Harbor, ... (12 in all)", note: "the ferry; Bill's One Island trip after Blaine can be declined, so it's off the main path" },
   { kind: 'special', name: 'DoesPlayerPartyContainSpecies', tag: 'side', where: "FiveIsland_ResortGorgeous_House, Route12_FishingHouse, SixIsland_WaterPath_House1" },
   { kind: 'special', name: 'DrawSeagallopDestinationMenu', tag: 'side', where: "FiveIsland_Harbor, FourIsland_Harbor, OneIsland_Harbor, SevenIsland_Harbor, SixIsland_Harbor, ... (8 in all)" },
