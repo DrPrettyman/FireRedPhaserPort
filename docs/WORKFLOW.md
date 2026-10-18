@@ -112,7 +112,7 @@ free port, so parallel runs don't clash.
 - **Only change what you own.** Keep shared changes small and list them in the PR. Don't build a shared building
   block another workstream owns; leave a stub or a TODO and say so in the PR.
 - **Tests:** typecheck, `npm test`, your own e2e file, and the e2e files for any shared code you change. Don't run
-  the full e2e suite while other workers are running theirs (it takes ~10 minutes, and four copies at once overload
+  the full e2e suite while other workers are running theirs (it takes ~20 minutes, and four copies at once overload
   the machine); the merger runs it. Run it yourself only if the plan says so (e.g. a refactor everything goes
   through).
 - **A test that fails and then passes on a rerun has a race. Fix it, or name it in the PR as unfixed.** Never
@@ -139,7 +139,7 @@ free port, so parallel runs don't clash.
 Follow CLAUDE.md's "Merging PRs" (smallest first, merge `origin/master` in, tests, push, squash, clean up), for
 the PRs whose workstream is finished (not drafts). On top of that:
 
-- **Which tests to run per merge is your call.** Typecheck and unit tests always. The full e2e suite (~10
+- **Which tests to run per merge is your call.** Typecheck and unit tests always. The full e2e suite (~20
   minutes) when the PR, or what merging master brought in, touches code many scenarios go through: the engine,
   scenes, the script engine, field movement, battle, save format, `tools/`. For a PR that adds something
   self-contained (a screen, a special) with its own e2e file, run that file plus the e2e files for any shared code
@@ -176,7 +176,7 @@ the PRs whose workstream is finished (not drafts). On top of that:
   git reset --hard && git switch <branch> && git merge --ff-only $C
   ```
 
-- **The full e2e suite takes ~10 minutes,** longer than a foreground shell command may run. Run it in the
+- **The full e2e suite takes ~20 minutes,** longer than a foreground shell command may run. Run it in the
   background with its output to a file, and read the failures from the file.
 - **A test that fails in the merge run:** rerun its file alone. If it passes, it's a race: find it and fix it (in the
   PR branch, with a commit saying what it was) rather than rerunning the suite until it's green. Add the cause to

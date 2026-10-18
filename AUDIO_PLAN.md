@@ -5,8 +5,8 @@ commands do nothing, the GBA-layer menus call the stubs, and the field, the batt
 their calls for a comment. This plan says how the GBA
 makes its sound, where the game uses it (and where game logic *waits* on it), how to bring it into the port, and
 how to split the work into batches. It was written as research (batch 3 of [SIDE_PLAN.md](SIDE_PLAN.md),
-W-audioplan); the user has reviewed it and answered its open questions ("Decisions", marked "(user)"), and batch A
-is under way.
+W-audioplan); the user has reviewed it and answered its open questions ("Decisions", marked "(user)"), batch A is
+in and batch B is under way.
 
 **The recommendation in one paragraph:** port the m4a engine itself (the sequencer, the channel allocator, the
 mixer and the CGB channels: `src/m4a.c`, `src/m4a_1.s`) to TypeScript and drive it from the 60 Hz tick, once per
@@ -627,12 +627,12 @@ A): they need no unit, only a listen once sound.ts is real. Units 4-7 own disjoi
 | Batch | Workers (≤ 4) | Each needs merged |
 | --- | --- | --- |
 | A | W-audiodata 1, W-audiodata 2, W-m4a 1 | nothing |
-| B | W-m4a 2, W-sound 1, W-out 1 | W-m4a 2: W-m4a 1 + W-audiodata 2. W-sound 1: W-m4a 1 + W-audiodata 1 (its e2e times real SEs and fanfares). W-out 1: nothing (it could run in A; it waits for B to keep A to three workers) |
-| C | W-m4a 3, W-sound 2, W-sound 3, W-sound 4 | W-m4a 3: W-m4a 2 + W-out 1. W-sound 2: W-sound 1 + W-m4a 2. W-sound 3 and 4: W-sound 1 |
+| B | W-m4a 2, W-sound 1, W-out 1, W-ref 1 | W-m4a 2: W-m4a 1 + W-audiodata 2. W-sound 1: W-m4a 1 + W-audiodata 1 (its e2e times real SEs and fanfares). W-out 1: nothing (it could run in A; it waits for B to keep A to three workers). W-ref 1: W-m4a 1 (it measures the ROM; its cry numbers wait for W-sound 2) |
+| C | W-m4a 3, W-sound 2, W-sound 3, W-sound 4 | W-m4a 3: W-m4a 2 + W-out 1. W-sound 2: W-sound 1 + W-m4a 2 (it also pins W-ref 1's cry numbers). W-sound 3 and 4: W-sound 1 |
 | D | W-m4a 4, W-sound 5, W-sound 6, W-sound 7 | W-m4a 4: W-m4a 3. W-sound 5-7: W-sound 2 (cries) |
-| later | W-ref 1 | W-m4a 4 and W-sound 2 (it compares the engine's numbers with the ROM's) |
+| later | W-ref 2 | W-m4a 4 (the listening comparison needs the whole mix) |
 
-Fourteen units in four batches, plus W-ref 1. Fanfare and `waitse` waits become GBA-accurate in batch B (W-sound 1), cry and
+Fourteen units in four batches, plus W-ref 1 (batch B) and W-ref 2 (later). Fanfare and `waitse` waits become GBA-accurate in batch B (W-sound 1), cry and
 warp (BGM fade) waits in batch C (W-sound 2 and 3); the first sound is heard in batch C (W-m4a 3). Every
 W-sound unit only needs `__test.audioEvents` for its tests, not audible output, which is why the call-site units
 don't wait for W-m4a 3-4.
@@ -655,9 +655,26 @@ don't wait for W-m4a 3-4.
   sound.ts directly.
 - Per-file call sites: appendix A names each file's unit.
 
-### W-ref: reference recordings from the user's ROM (later)
+### W-ref: reference recordings from the user's ROM (W-ref 1 in batch B, W-ref 2 later)
 
-1. **mGBA recordings against the engine.** Input: the ROM path, which the user gave as
+Split in two (decision 16): the timings need only the ROM and the sequencer, the listening comparison needs the
+whole mix.
+
+1. **mGBA timings (batch B).** Install mGBA with Homebrew (the `mgba-app` cask or the `mgba` formula, both 0.10.5:
+   no sudo; if anything asks for a password or a manual step, stop and say so in the PR), confirm the revision
+   check below, then measure on the ROM, in frames from the call: IsSEPlaying for SE_SELECT, SE_DOOR, SE_SAVE,
+   SE_EXP and a few more, the fanfares (MUS_LEVEL_UP, MUS_OBTAIN_ITEM, MUS_OBTAIN_BADGE, MUS_EVOLVED,
+   MUS_POKE_FLUTE's silent tail), a few BGMs' intro and loop lengths, and IsPokemonCryPlaying for section 2's
+   species in each cry mode. The SE / fanfare / song numbers are pinned against the engine in a unit test
+   (`tests/unit/m4aRom.test.ts`, on W-m4a 1's sequencer); a mismatch is either an engine bug (fix it if small,
+   else name it in the PR) or a difference in what is counted (say which). The cry numbers go into section 2's
+   table (replacing the estimates) and into the test file as data with `it.todo`; W-sound 2 turns them into
+   assertions on the cry API W-m4a 2 builds. The Lua scripts stay in a scratch directory outside the repo
+   (they name the ROM path and RAM addresses); the PR says how they worked, so W-ref 2 can redo them.
+2. **The listening comparison (later, after W-m4a 4).** The same scenes recorded from mGBA and from the port, for
+   the user to listen to (PSG timbre, reverb, the mono mix); a song's loudness envelope and note onsets compared.
+
+Details for both. Input: the ROM path, which the user gave as
    `/Users/joshua/Coding/PokemonProjects/pret/PokemonFireRed.gba` (outside both git repos). Its SHA-1
    `dd5945db9b930750cb39d00c84da8571feebf417` matches the decomp's `firered_rev1.sha1`: it is **FireRed rev 1
    (1.1)**, while the decomp builds rev 0 by default. Before using a recording as a reference, check that the audio
@@ -674,8 +691,8 @@ don't wait for W-m4a 3-4.
      (PSG timbre, reverb, the mono mix).
    How: mGBA's Lua scripting (0.10+) can poke memory (to start a song or cry) and read the players' state per frame; recordings and any
    data read from the ROM stay in a scratch directory outside the repo. **The ROM and anything ripped from it
-   never go into the repo or `public/gen`**, and the path above is recorded only here. Only numbers derived from
-   recordings may go into tests, and only if the user agrees (open question 1).
+   never go into the repo or `public/gen`**, and the path above is recorded only here. Frame counts measured
+   from the ROM may go into unit tests (decision 15).
 
 ### Rules
 
@@ -701,9 +718,7 @@ were sized for today's instant waits (GBA timing is the goal: decision 11).
 
 ### Open questions for the user
 
-1. **Numbers from the ROM recordings in tests:** W-ref 1 measures cry / SE / song lengths on the user's ROM in
-   mGBA. May those numbers (frame counts only, nothing ripped) go into the unit tests? Until then, the tests pin
-   the engine's own numbers and the recordings are only compared in the unit's report.
+None open (question 1 became decision 15).
 
 ## Decisions
 
@@ -740,11 +755,18 @@ were sized for today's instant waits (GBA timing is the goal: decision 11).
     updated (Rules).
 12. **`battle-test.html` gets audio too** (user): W-out 1 (output) and W-sound 1 (data, frame hook).
 13. **mGBA reference recordings from the user's ROM** (user): a later unit, W-ref 1, with the ROM path as input.
-    The ROM and anything ripped from it never go into the repo or `public/gen`; numbers in tests only with the
-    user's agreement (open question 1).
+    The ROM and anything ripped from it never go into the repo or `public/gen`; frame counts in tests:
+    decision 15.
 14. **W-audiodata re-split, W-out split off** (coordinator, revisit if you disagree): with mid2agb built, songs are
     one small unit and voicegroups another, both in batch A; the browser output (W-out 1) is split from the
     mixer so batch B runs three workers and W-m4a 3 is only the mixer.
+15. **Frame counts from the ROM in tests** (user): cry, SE and song lengths measured from the ROM in mGBA may go
+    into unit tests. Nothing ripped from the ROM goes into the repo or `public/gen`.
+16. **W-ref split, W-ref 1 in batch B** (coordinator, revisit if you disagree): mGBA installs from Homebrew
+    without sudo (checked when batch B was planned: the `mgba-app` cask and the `mgba` formula, 0.10.5; neither
+    installed yet). The timings need only the ROM and the sequencer, so W-ref 1 runs as batch B's fourth worker
+    (it runs no e2e, so it adds little load) and its numbers are in before W-sound 2 and the call-site units
+    time against the engine. The listening comparison is W-ref 2, after W-m4a 4.
 
 ## Not in this plan
 
