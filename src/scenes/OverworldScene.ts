@@ -3053,6 +3053,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     else this.doors.animateClose(x + originX, y + originY);
   }
 
+  /** GetDoorSoundEffect at map-local coords (opendoor) */
+  doorSoundEffect(x: number, y: number): number {
+    const { originX, originY } = this.world.current;
+    return this.doors.getDoorSoundEffect(x + originX, y + originY);
+  }
+
   /** FieldIsDoorAnimationRunning (waitdooranim) */
   doorAnimationRunning(): boolean {
     return this.doors.running;

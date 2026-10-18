@@ -72,6 +72,8 @@ export interface ScriptHost {
   setMetatile(x: number, y: number, metatile: number, impassable: boolean): void;
   /** opendoor / closedoor (FieldAnimateDoorOpen / FieldAnimateDoorClose), map-local coords */
   animateDoor(x: number, y: number, open: boolean): void;
+  /** GetDoorSoundEffect at map-local coords (opendoor) */
+  doorSoundEffect(x: number, y: number): number;
   /** FieldIsDoorAnimationRunning */
   doorAnimationRunning(): boolean;
   /** setdooropen / setdoorclosed (FieldSetDoorOpened / FieldSetDoorClosed), map-local coords */
@@ -984,9 +986,12 @@ export class ScriptEngine {
     warpdoor(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
       this.doWarp(ctx, a);
     },
-    /** ScrCmd_opendoor (PlaySE(GetDoorSoundEffect) is silent: no audio yet) */
+    /** ScrCmd_opendoor: PlaySE(GetDoorSoundEffect), then FieldAnimateDoorOpen */
     opendoor(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
-      this.host.animateDoor(this.state.value(a[0]), this.state.value(a[1]), true);
+      const x = this.state.value(a[0]);
+      const y = this.state.value(a[1]);
+      PlaySE(this.host.doorSoundEffect(x, y));
+      this.host.animateDoor(x, y, true);
     },
     closedoor(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       this.host.animateDoor(this.state.value(a[0]), this.state.value(a[1]), false);
