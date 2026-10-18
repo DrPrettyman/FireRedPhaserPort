@@ -327,6 +327,19 @@ this is the next level down. When you add or change a subsystem, update its entr
   RestartWildEncounterImmunitySteps. Tests: tests/e2e/pokemonTower.test.ts (walk onto the 6F trigger at 11,15),
   tests/e2e/scriptedBattles.test.ts (Snorlax from Route 12 (14, 69) facing down with FLAG_GOT_POKE_FLUTE, Route
   16 (30, 13) facing right; Zapdos from Power Plant (5, 12) and Mewtwo from Cerulean Cave B1F (7, 13), facing up).
+- **In-game trades and the Name Rater:** `script/tradeSpecials.ts` (TRADE_SPECIALS, spread into SPECIALS) is
+  trade_scene.c's in-game path: GetInGameTradeSpeciesInfo, GetTradeSpecies, CreateInGameTradePokemon(Internal)
+  (the trade's mon into `state.enemyParty[0]`), TradeMons, UpdatePokedexForReceivedMon, BufferInGameTradeMonName,
+  and DoInGameTradeScene, for now a stand-in (fade to black, TradeMons + BufferInGameTradeMonName, fade back in;
+  the script's `waitstate` ends after the fade in). W-trade unit 2 puts the cable animation in its place. The data
+  is sInGameTrades (src/data/ingame_trades.h) through `tools/extract_trades.py` → `public/gen/trades.json`, loaded by
+  `Assets.init` and handed over with `initInGameTrades` (OverworldScene). The scripts' VARs: 0x8008 = the
+  INGAME_TRADE_*, copied to 0x8004 for the specials; ChoosePartyMon's slot (0x8004) is kept in 0x800A and copied
+  to 0x8005; 0x8009 = the requested species. The Name Rater's specials (IsMonOTIDNotPlayers, which writes
+  VAR_RESULT itself, IsMonOTNameNotPlayers, NameRaterWasNicknameChanged against the gStringVar3 that
+  ChangePokemonNickname leaves) are in the same file. Tests: tests/unit/inGameTrades.test.ts,
+  tests/e2e/inGameTrades.test.ts (Reyley in Route2_House, talk from (7, 3); the Name Rater in LavenderTown_House2,
+  talk from (4, 5)).
 - **Step counters:** `world/stepCounters.ts` (happiness, VS Seeker, field poison, egg cycles), called from
   `OverworldScene.tryStartStepCountScript`; `world/roamer.ts` is roamer.c with its EWRAM statics as module state
   (`roamerLocation()` for tests). Field code may call battle-engine pokemon.c functions (AdjustFriendship): the
@@ -346,6 +359,21 @@ this is the next level down. When you add or change a subsystem, update its entr
   `LoadFieldTilesetsForShop` puts the map's tiles/palettes where the overworld would have left them in VRAM.
   `menus/objectEventGraphics.ts` is CreateObjectGraphicsSprite for any GBA-layer screen that needs NPC sprites.
   Test: `?start=after-rival&map=PewterCity_Mart&x=4&y=3`, face left, A (TM layout: Celadon Dept. Store 2F, x=3 y=6).
+- **Game Corner (coins box, slot machine logic):** `ui/CoinsBox.ts` is coins.c's field window (ShowCoinsWindow /
+  PrintCoinsString / HideCoinsWindow), drawn like `ui/MoneyBox.ts`; the script commands `showcoinsbox` /
+  `updatecoinsbox` / `hidecoinsbox` call `ScriptHost.showCoinsBox` etc. (OverworldScene; the box's last printed
+  `amount` is the test probe). `menus/slotMachineLogic.ts` is slot_machine.c's game logic without the screen: a
+  module-global `sSlotMachineState` (`CreateSlotMachineState(machineIdx)` = PlaySlotMachine's Alloc +
+  InitSlotMachineState), `SpinReels` (Task_SpinReels minus the sprites), StartReels / StopCurrentReel / StopReel1-3
+  with TwoReelBiasCheck / OneReelBiasCheck, CalcSlotBias / ResetMachineBias, CalcPayout / GetPayout /
+  GetWinFlagByLine; functions that roll take an optional `rand` (default Random()). Its tables (reel icons, payouts,
+  bias chances, the line tables, field_specials.c's sSlotMachineIndices and the file-local enums) are extracted by
+  `tools/extract_slots.py` to `slotMachine.json`, loaded by OverworldScene (`loadSlotMachineData`). Game Corner
+  specials go in `script/gameCornerSpecials.ts` (GAME_CORNER_SPECIALS, spread into SPECIALS): GetRandomSlotMachineId.
+  The screen (`playslotmachine`, CB2_InitSlotMachine, MainTask_*) is W-slots unit 2 and builds on this module.
+  Tests: `tests/unit/slotMachine.test.ts` (hand-worked reel positions), `tests/e2e/gameCorner.test.ts` (the coin
+  clerk, the prize room, the Fisher, hidden coins). To wait for a message's `\p` in a test without a press reaching
+  the menu after it, wait in the page for `messageBox.waitingForButton` (TextPrinter.waitingForButton).
 - **TM case:** `menus/tmCase.ts` is tm_case.c. `InitTMCase(type, exitCallback, allowSelectClose)` runs on whichever
   GBA host has the bag (FieldMenuScene); `menuGfxSymbols` preloads `TM_CASE_GFX`. Ways in: the bag's KEY ITEMS → TM
   CASE → OPEN (`FieldUseFunc_TmCase` in menus/itemUse.ts → TMCASE_FIELD, back to CB2_BagMenuFromStartMenu), the
@@ -746,6 +774,10 @@ this is the next level down. When you add or change a subsystem, update its entr
   `talk` / `approach`. Read the decomp map scripts first for the coord events and flags on the way (e.g. Vermilion's
   ticket check, VAR_MAP_SCENE_*). New story specials go in `script/storySpecials.ts` (STORY_SPECIALS, spread into
   SPECIALS); ones that draw with Phaser use `registerSpecials` from their own module.
+- **Build conditionals in scripts:** the script extractor keeps only the taken branch of top-level `.ifdef` /
+  `.ifndef` / `.if` / `.else` / `.endif` (and cpp `#ifdef` / `#else` / `#endif`) in data/ script files, for
+  `BUILD_SYMBOLS` in tools/extract.py (FIRERED, REVISION 0, ENGLISH; no BUGFIX). Before, both branches ran (the
+  prize room charged LeafGreen's prices). `.if` inside macros is still expand_conditionals'.
 - **Script argument expressions:** `Defines.get` folds constant expressions over known names (`FALSE | (TRUE <<
   1)`, `(MAX_COINS + 1) - 20`), as GAS does; before, the Pokémon Center nurse's `multichoice` threw.
 - **Story checks (Erika to Sabrina):** `tests/e2e/storyCeladonSaffron.test.ts` plays each required story event

@@ -82,6 +82,10 @@ export interface ScriptHost {
   showMoneyBox(x: number, y: number): void;
   updateMoneyBox(): void;
   hideMoneyBox(): void;
+  /** ShowCoinsWindow / PrintCoinsString / HideCoinsWindow (coins.c) */
+  showCoinsBox(x: number, y: number): void;
+  updateCoinsBox(): void;
+  hideCoinsBox(): void;
   /** ScriptMenu_Multichoice(WithDefault) or, with `columns`, ScriptMenu_MultichoiceGrid. */
   openMultichoice(opts: MultichoiceRequest): { tick(): boolean; result: number };
   /** DrawElevatorCurrentFloorWindow / CloseElevatorCurrentFloorWindow (FLOOR_NAMES index, or undefined to close) */
@@ -1119,6 +1123,18 @@ export class ScriptEngine {
     },
     removecoins(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       this.state.setVar('VAR_RESULT', this.state.removeCoins(this.state.value(a[0])) ? 0 : 1);
+    },
+    /** ScrCmd_showcoinsbox: ShowCoinsWindow(GetCoins(), x, y) */
+    showcoinsbox(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      this.host.showCoinsBox(this.state.value(a[0]), this.state.value(a[1]));
+    },
+    /** ScrCmd_updatecoinsbox: PrintCoinsString(GetCoins()); the x, y it reads are unused */
+    updatecoinsbox(this: ScriptEngine) {
+      this.host.updateCoinsBox();
+    },
+    /** ScrCmd_hidecoinsbox: HideCoinsWindow(); the x, y it reads are unused */
+    hidecoinsbox(this: ScriptEngine) {
+      this.host.hideCoinsBox();
     },
 
     // ------------------------------------------------ string buffers

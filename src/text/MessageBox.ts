@@ -119,6 +119,11 @@ export class MessageBox {
     return this.printer !== undefined && !this.printer.finished;
   }
 
+  /** The printer waits for A or B mid-message (a \p, \l or {PAUSE_UNTIL_PRESS}); for tests. */
+  get waitingForButton(): boolean {
+    return this.printer?.waitingForButton ?? false;
+  }
+
   /** Called once per logic tick. */
   tick(): void {
     this.printer?.tick();

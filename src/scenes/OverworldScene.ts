@@ -42,6 +42,8 @@ import { YesNoMenu } from '../ui/YesNoMenu';
 import { MonPicBox } from '../ui/MonPicBox';
 import { museumFossilPicGfxSymbols, registerMuseumFossilPic } from '../ui/MuseumFossilPic';
 import { MoneyBox } from '../ui/MoneyBox';
+import { CoinsBox } from '../ui/CoinsBox';
+import { loadSlotMachineData } from '../menus/slotMachineLogic';
 import { DEPTH_FADE, ScreenFade } from '../ui/ScreenFade';
 import { BarnDoorWipe } from '../ui/BarnDoorWipe';
 import { FieldGbaScreen, fieldGbaScreenGfxSymbols, type FieldGbaSource } from '../world/fieldGbaScreen';
@@ -85,6 +87,7 @@ import type { ShopFieldView } from '../menus/shop';
 import { setBgMosaic } from '../world/BgMosaic';
 import { initRoamerTables, roamerMove, roamerMoveToOtherLocationSet, updateLocationHistoryForRoamer } from '../world/roamer';
 import { initWildPokemonArea } from '../menus/wildPokemonArea';
+import { initInGameTrades } from '../script/tradeSpecials';
 import {
   checkForTrainersWantingBattle,
   COLLISION_FLAG_ELEVATION_MISMATCH,
@@ -194,6 +197,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private mapNamePopup?: MapNamePopup;
   private wild!: WildEncounters;
   private moneyBox?: MoneyBox;
+  private coinsBox?: CoinsBox;
   /** DrawElevatorCurrentFloorWindow's window while it's up. */
   private elevatorWindow?: MenuWindow;
   /** Tasks started by specials that run on their own, after the script each frame (RunTasks). */
@@ -281,6 +285,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     initBattleEnv(await sharedBattleData(), this.assets.scripts.defines, this.state.pokemon, this.state, this.charmap);
     setTextStrings(this.assets.strings); // the gText_* the field items print (a registered item needs no bag first)
     await loadMenusData('gen'); // sTMHMMoves, for BufferTMHMMoveName
+    await loadSlotMachineData('gen'); // sSlotMachineIndices, for GetRandomSlotMachineId
     await this.assets.loadFieldEffectTextures(this);
     const field = this.field;
     const behaviorAt = (x: number, y: number) => this.world.tileAt(x, y).behavior;
@@ -337,6 +342,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     });
     initRoamerTables(this.assets.wildEncounters);
     initWildPokemonArea(this.assets.wildEncounters);
+    initInGameTrades(this.assets.trades);
     this.wild = new WildEncounters(this.assets.wildEncounters, this.state, this.defines, {
       startWildBattle: (mon) => this.startWildBattle(mon),
       startRoamerBattle: (mon) => this.runWildBattle(this.defines.require('BATTLE_TYPE_ROAMER'), mon), // StartRoamerBattle
@@ -1999,6 +2005,20 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   hideMoneyBox(): void {
     this.moneyBox?.destroy();
     this.moneyBox = undefined;
+  }
+
+  showCoinsBox(x: number, y: number): void {
+    this.coinsBox?.destroy();
+    this.coinsBox = new CoinsBox(this, this.fonts, this.buttons, this.charmap, this.assets.strings, this.state.coins, x, y);
+  }
+
+  updateCoinsBox(): void {
+    this.coinsBox?.change(this.state.coins);
+  }
+
+  hideCoinsBox(): void {
+    this.coinsBox?.destroy();
+    this.coinsBox = undefined;
   }
 
   setWarpDestination(mapId: string, warpId: number, x: number, y: number): void {
