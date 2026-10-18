@@ -51,6 +51,7 @@ import { optionMenuProbe } from '../menus/optionMenu';
 import { museumFossilPicProbe } from '../ui/MuseumFossilPic';
 import { daycareLevelMenuProbe } from '../ui/DaycareLevelMenu';
 import { diplomaProbe } from '../menus/diploma';
+import type { SSAnneProbe } from '../world/ssAnne';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -288,6 +289,7 @@ interface OverworldLike extends Phaser.Scene {
     palette7: number[] | undefined;
     pixel: { rgb: number[]; colorIndex: number } | undefined;
   };
+  testSSAnne(): SSAnneProbe | undefined;
   state: GameState;
   startWildBattle(mon: Pokemon): void;
   useFlash(): void;
@@ -664,6 +666,8 @@ function createApi(game: Phaser.Game) {
     tmCase: () => (gMain.callback2?.name === 'CB2_Idle' ? tmCaseProbe() : undefined),
     /** The egg hatch scene while it's up (menus/eggHatch.ts): CB2_state, the egg's anim / visibility, the mon's, shards. */
     eggHatch: () => eggHatchProbe(),
+    /** The S.S. Anne's departure while it runs (world/ssAnne.ts): the task's state, the boat's x2, wake and smoke. */
+    ssAnne: () => overworld()?.testSSAnne(),
     /** The move relearner while it's up (menus/learnMove.ts): its MENU_STATE_*, the list's moves and selection. */
     moveRelearner: () => (gMain.callback2?.name === 'CB2_MoveRelearner' ? moveRelearnerProbe() : undefined),
     /** The berry pouch while it's open (menus/berryPouch.ts): BERRYPOUCH_* type, task, scroll/row and the pocket's berries in list order. */

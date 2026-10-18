@@ -27,7 +27,7 @@ export interface KnownGap {
 
 export const KNOWN_GAPS: KnownGap[] = [
   // ---------------------------------------------------------------- main: on the main path to the Hall of Fame. BLOCKER in the note = the story can't go on without it.
-  { kind: 'special', name: 'DoSSAnneDepartureCutscene', tag: 'main', where: "SSAnne_Exterior", note: "the S.S. Anne sails off after Cut; its waitstate passes, so the script runs on without the cutscene" },
+  // (none left: the S.S. Anne departure and the league lighting were the last two, batch 2 of SIDE_PLAN.md)
   // ---------------------------------------------------------------- side: optional content before the Hall of Fame (NPCs, trades, the Game Corner, the daycare, the Sevii 1-3 trip).
   { kind: 'special', name: 'DoSeagallopFerryScene', tag: 'side', where: "BirthIsland_Harbor, CinnabarIsland, FiveIsland_Harbor, FourIsland_Harbor, NavelRock_Harbor, ... (12 in all)", note: "the ferry; Bill's One Island trip after Blaine can be declined, so it's off the main path" },
   { kind: 'special', name: 'DrawSeagallopDestinationMenu', tag: 'side', where: "FiveIsland_Harbor, FourIsland_Harbor, OneIsland_Harbor, SevenIsland_Harbor, SixIsland_Harbor, ... (8 in all)" },

@@ -90,6 +90,17 @@ this is the next level down. When you add or change a subsystem, update its entr
   landing tile, for collisions). Probes: `field().fieldEffects` / `playerEffects`. Test spots: Route 1 ledge into
   grass (12, 4), Viridian pond (14, 24), Four Island puddles (10, 8; mash through the rival scene first), Five
   Island sand (8, 3), Kindle Road shallow water (4, 17), Ember Spa (11, 10).
+- **S.S. Anne departure:** `world/ssAnne.ts` is ss_anne.c: `special DoSSAnneDepartureCutscene` (registered with
+  `registerSSAnne` from OverworldScene, host `setSSAnneHost`: scene, screen origin, cameraTop, object by local id)
+  creates a field task (Task_SSAnneInit/Run/Finish) and hands the script's `waitstate` a wait that ends at
+  Task_SSAnneFinish's ScriptContext_Enable. The boat (local id 1) moves only through its sprite's x2 (the object
+  stays on its tile, `removeobject` takes it after); the wake and smoke are FieldEffectSprites at screen
+  coordinates (like world/hallOfFameRecord.ts, whose `drawFrames` / `canvasTexture` build their textures from
+  sWakeTiles / sSmokeTiles on gObjectEventPal_SSAnne, OBJ palette 10). Probe: `__test.ssAnne()` (state, frames,
+  boatX2, boatScreenX, wake, smoke, smokeCreated; the last cutscene stays there as 'done'); event
+  `ssAnneDeparture` (phase start / run / finish / done). Test spot: `?map=SSAnne_Exterior&x=32&y=14`, then set
+  VAR_MAP_SCENE_VERMILION_CITY to 1. Tests: tests/e2e/ssAnne.test.ts (also Vermilion's ticket check, the rival's
+  side triggers on 2F, the captain, the dock afterwards).
 - **Field moves:** four pieces.
   - `world/fieldEffectScripts.ts` is field_effect.c's interpreter: `FieldEffectStart('FLDEFF_*')` runs the
     decomp's own script (data/field_effect_scripts.s → `field_effects/scripts.json`), whose `callnative` calls a

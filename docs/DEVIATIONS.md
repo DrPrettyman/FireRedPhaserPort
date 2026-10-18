@@ -12,9 +12,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Pokémon Center nurse: the heal machine's SE_BALL and MUS_HEAL are silent (no audio);
     SetUsedPkmnCenterQuestLogEvent is a no-op (no quest log) and BufferUnionRoomPlayerName always says no wireless
     player was seen.
-  - The S.S. Anne leaving (`special DoSSAnneDepartureCutscene`, ss_anne.c) isn't ported: the ship doesn't sail off
-    (no wake or smoke sprites), the script's `waitstate` passes at once and `removeobject` hides it. Its graphics
-    (graphics/ss_anne/) aren't extracted yet.
+  - The S.S. Anne's departure (world/ssAnne.ts, ss_anne.c): silent (SE_SS_ANNE_HORN at the start and once the ship
+    is off screen; the script's MUS_SURF).
   - In-game trades (script/tradeSpecials.ts): the traded mon's contest conditions and sheen aren't kept (Pokémon
     have no contest stats), and DONTAE's Jynx holds its Fab Mail without the message (mail isn't modelled:
     GetInGameTradeMail / gLinkPartnerMail / MON_DATA_MAIL). The trade scene (menus/tradeScene.ts) skips
