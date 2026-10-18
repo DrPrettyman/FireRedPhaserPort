@@ -29,6 +29,7 @@ import type { FieldListMenuProbe } from '../ui/FieldListMenu';
 import { storageProbe } from '../menus/pokemonStorage';
 import { itemPcProbe } from '../menus/itemPc';
 import { tmCaseProbe } from '../menus/tmCase';
+import { eggHatchProbe } from '../menus/eggHatch';
 import { moveRelearnerProbe } from '../menus/learnMove';
 import { berryPouchProbe } from '../menus/berryPouch';
 import { hallOfFameProbe } from '../menus/hallOfFame';
@@ -293,6 +294,8 @@ export interface MonSpec {
   status?: string;
   /** A personality that makes it shiny (for the player's OT id). */
   shiny?: boolean;
+  /** An egg with this many egg cycles left, as CreateEgg makes it (isEgg, friendship = cycles, met level 0, Poké Ball, the Japanese egg nickname). */
+  egg?: number;
 }
 
 /** Argument bytes after FC <code> (as TextPrinter reads them); codes not listed take none. */
@@ -389,6 +392,14 @@ function createApi(game: Phaser.Game) {
     }
     if (spec.item) mon.heldItem = define(`ITEM_${spec.item}`);
     if (spec.status) mon.status = define(`STATUS1_${spec.status}`);
+    if (spec.egg !== undefined) {
+      // CreateEgg (daycare.c)
+      mon.isEgg = true;
+      mon.friendship = spec.egg;
+      mon.metLevel = 0;
+      mon.pokeball = define('ITEM_POKE_BALL');
+      mon.nickname = s.pokemon.encodeName('タマゴ'); // sJapaneseEggNickname
+    }
     return mon;
   };
 
@@ -621,6 +632,8 @@ function createApi(game: Phaser.Game) {
     itemPc: () => (gMain.callback2?.name === 'ItemPc_MainCB' ? itemPcProbe() : undefined),
     /** The TM case while it's open (menus/tmCase.ts): TMCASE_* type, task, scroll/row and the pocket's item ids in list order. */
     tmCase: () => (gMain.callback2?.name === 'CB2_Idle' ? tmCaseProbe() : undefined),
+    /** The egg hatch scene while it's up (menus/eggHatch.ts): CB2_state, the egg's anim / visibility, the mon's, shards. */
+    eggHatch: () => eggHatchProbe(),
     /** The move relearner while it's up (menus/learnMove.ts): its MENU_STATE_*, the list's moves and selection. */
     moveRelearner: () => (gMain.callback2?.name === 'CB2_MoveRelearner' ? moveRelearnerProbe() : undefined),
     /** The berry pouch while it's open (menus/berryPouch.ts): BERRYPOUCH_* type, task, scroll/row and the pocket's berries in list order. */

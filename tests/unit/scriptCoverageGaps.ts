@@ -39,7 +39,6 @@ export const KNOWN_GAPS: KnownGap[] = [
   { kind: 'special', name: 'DoSeagallopFerryScene', tag: 'side', where: "BirthIsland_Harbor, CinnabarIsland, FiveIsland_Harbor, FourIsland_Harbor, NavelRock_Harbor, ... (12 in all)", note: "the ferry; Bill's One Island trip after Blaine can be declined, so it's off the main path" },
   { kind: 'special', name: 'DoesPlayerPartyContainSpecies', tag: 'side', where: "FiveIsland_ResortGorgeous_House, Route12_FishingHouse, SixIsland_WaterPath_House1" },
   { kind: 'special', name: 'DrawSeagallopDestinationMenu', tag: 'side', where: "FiveIsland_Harbor, FourIsland_Harbor, OneIsland_Harbor, SevenIsland_Harbor, SixIsland_Harbor, ... (8 in all)" },
-  { kind: 'special', name: 'EggHatch', tag: 'side', where: "(EventScript_EggHatch)" },
   { kind: 'special', name: 'GetCostToWithdrawRoute5DaycareMon', tag: 'side', where: "Route5_PokemonDayCare" },
   { kind: 'special', name: 'GetLeadMonFriendship', tag: 'side', where: "FiveIsland_WaterLabyrinth, PalletTown_RivalsHouse" },
   { kind: 'special', name: 'GetMagikarpSizeRecordInfo', tag: 'side', where: "Route12_FishingHouse" },
