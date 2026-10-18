@@ -1513,6 +1513,10 @@ def main():
     from extract_audio import extract_audio
 
     extract_audio(decomp, out)
+    print("audio voicegroups + samples")
+    from extract_audio_voices import extract_audio_voices
+
+    extract_audio_voices(decomp, out)
 
 
 if __name__ == "__main__":

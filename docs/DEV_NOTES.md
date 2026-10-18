@@ -945,6 +945,49 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   extract_audio; extract_audio(Path('../pret/firered'), Path('public/gen'))"` (~1.5 s; the first build of mid2agb
   adds ~1.5 s).
 
+### Audio data: voicegroups and samples
+
+- **Where:** `tools/extract_audio_voices.py` (`extract_audio_voices(decomp, out)`, the last line of
+  `tools/extract.py`'s main; ~0.2 s) → `public/gen/audio/voicegroups.json` (1.2 MB), `samples.json` (45 KB),
+  `samples.bin` (3.7 MB), `waves.json` (1 KB). Its docstring lists every macro and byte.
+- **voicegroups.json:** `{ voicegroups: { voicegroupNNN: [voice | null] }, voicegroupSizes: { name: voices the
+  source defines }, keysplits: { KeySplitTableN: [128 subgroup indices | null] }, cries: [388 voices],
+  criesReverse: [388 voices] }`. A voice is struct ToneData's bytes as `asm/macros/music_voice.inc` emits them:
+  `type` (0x00 / 0x08 no-resample / 0x10 reverse / 0x20 compressed (cries) / 0x30; CGB 1-4, +8 for `_alt`;
+  0x40 keysplit; 0x80 rhythm), `key`, `length`, `panSweep`, `attack`, `decay`, `sustain`, `release`, and in place
+  of the `wav` word one of `sample` (a samples.json name), `wave` (a waves.json name), `duty` (squares) or `period`
+  (noise), or `subgroup` (a voicegroup name) + `keysplit` (a table name, `null` for 0x80 rhythm sets).
+  Read it the way ply_note reads the ROM:
+  - **Voicegroups run on into the next one.** ply_note indexes `voicegroup + 12 * n` without a bound, and the
+    source defines many voicegroups with fewer than 128 voices (`voicegroupSizes`), so each list is the 128 voices
+    from its label on, through the following voicegroups (cry_tables.inc is `.include`d between voicegroup128 and
+    voicegroup129, so the cry voices sit in that run too, out of every window's reach). `null` = past the end of voice_groups.inc (only
+    voicegroup190, from index 88: the ROM has keysplit table bytes there).
+  - **Keysplit subgroups have 256 entries** (voicegroup003-007): a keysplit table entry is a u8.
+  - **Keysplit tables are indexed by the MIDI key** (the `. - 36` label offsets applied). Every table maps keys
+    36-107 (KeySplitTable4 from 24); outside that, the entries are the ROM's neighbouring bytes (the next table, or
+    below KeySplitTable1 the end of voice_groups.inc, past KeySplitTable5 the programmable waves), `null` where
+    that byte is part of a pointer. Values there can be up to 255.
+  - **CGB voices:** the macros put the pan byte (`0x80 | pan`, or 0) in `length`, and square 1's sweep in
+    `panSweep`; ADSR are masked to 3/3/4/3 bits. No CGB voice in FRLG has a pan.
+  - Rhythm (0x80) voices index their subgroup by the key; a resolved voice that is itself 0x40 / 0x80 plays
+    nothing (ply_note).
+- **samples.json / samples.bin:** `{ <label>: { freq, loop, loopStart, size, offset } }`, the labels of
+  `sound/direct_sound_data.inc` (`DirectSoundWaveData_*`, `Cry_*`), the fields of struct WaveData as
+  `tools/wav2agb -b` writes them: `freq` = the WAV's `agbp` chunk (rate × 1024: 13379 × 1024 for most
+  instruments, 10512 × 1024 for cries), `loop` = the `smpl` loop, `loopStart`, `size` = the `agbl` chunk.
+  samples.bin holds signed 8-bit PCM (u8 − 128), each sample 4-byte aligned at `offset` and `size + 1` bytes long
+  (wav2agb writes the smpl loop end's worth, `agbl` is one less; the mixer's interpolation may read that byte).
+  The cries are DPCM-compressed in the ROM (type 0x20 / 0x30); here they are the decoded PCM, so the engine must
+  not decode them (AUDIO_PLAN decision 4).
+- **waves.json:** `{ ProgrammableWaveData_N: [16 bytes] }` (32 4-bit samples, high nibble first).
+- **Cries:** `cries[SpeciesToCryId(species)]` (gCryTable), `criesReverse` the same with type 0x30.
+- **Tests:** `tests/unit/audioVoices.test.ts`: every reference resolves, every sample fits samples.bin, the cry
+  count (CRY_CHIMECHO + 1), spot values from the sources; "every song's voicegroup resolves" skips until
+  `songs.json` (W-audiodata 1) is there. Checked once by hand against the decomp's own wav2agb (built to a
+  scratch dir): all 89 instrument headers and bytes identical to `wav2agb -b`, and all 388 cries identical to the
+  decoded `wav2agb -b -c -l 1 --no-pad` output.
+
 ## Game state
 
 - **PC boxes and save data:** `state/PokemonStorage.ts` is struct PokemonStorage (`state.storage`: 14 boxes of 30
