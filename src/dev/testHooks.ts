@@ -46,6 +46,7 @@ import { startMenuProbe } from '../ui/StartMenu';
 import { helpMessageWindowProbe } from '../ui/HelpMessageWindow';
 import { optionMenuProbe } from '../menus/optionMenu';
 import { museumFossilPicProbe } from '../ui/MuseumFossilPic';
+import { daycareLevelMenuProbe } from '../ui/DaycareLevelMenu';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -530,6 +531,8 @@ function createApi(game: Phaser.Game) {
     optionMenu: () => optionMenuProbe(),
     /** The Pewter Museum's fossil pic (ui/MuseumFossilPic.ts), while one is up. */
     museumFossilPic: () => museumFossilPicProbe(),
+    /** The Four Island daycare's level menu (ui/DaycareLevelMenu.ts) while it's up: the item under the cursor. */
+    daycareLevelMenu: () => daycareLevelMenuProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */
     saveDialog: () => {
       const p = saveDialogProbe();

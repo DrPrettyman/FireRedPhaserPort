@@ -227,6 +227,8 @@ export interface SpeciesInfo {
   eggCycles: number;
   friendship: number;
   growthRate: number;
+  /** EGG_GROUPS_PER_MON EGG_GROUP_* ids */
+  eggGroups: number[];
   abilities: number[];
   itemCommon: number;
   itemRare: number;
@@ -277,4 +279,8 @@ export interface PokemonTables {
   stdStrings: (string | null)[];
   kantoDexCount: number;
   nationalDexCount: number;
+  /** gEggMoves: SPECIES_X + eggMovesSpeciesOffset, then its egg moves, per species; 0xFFFF ends it. */
+  eggMoves: number[];
+  /** EGG_MOVES_SPECIES_OFFSET (data/pokemon/egg_moves.h) */
+  eggMovesSpeciesOffset: number;
 }

@@ -1,14 +1,28 @@
-// daycare.c's script specials (the Route 5 daycare man, Route5_PokemonDayCare_EventScript_DaycareMan in
-// data/scripts/day_care.inc); the storage they work on is world/daycare.ts. SPECIALS spreads DAYCARE_SPECIALS in.
-// The Four Island daycare's (StoreSelectedPokemonInDaycare, GetDaycareState, eggs, ...) come with W-daycare unit 3.
+// daycare.c's script specials: the Route 5 daycare man (Route5_PokemonDayCare_EventScript_DaycareMan in
+// data/scripts/day_care.inc), the Four Island daycare (FourIsland_PokemonDayCare_EventScript_DaycareWoman, and
+// FourIsland_EventScript_DaycareMan's eggs), plus the field_specials.c ones their scripts and the Water
+// Labyrinth's egg gentleman need. The storage and eggs they work on are world/daycare.ts. SPECIALS spreads
+// DAYCARE_SPECIALS in.
 
+import { gStringVar4 } from '../menus/common';
 import { ChooseMonForDaycare, GetCursorSelectionMonId } from '../menus/partyMenu';
+import { ShowDaycareLevelMenu } from '../ui/DaycareLevelMenu';
 import {
   boxMonNickname,
   getCostToWithdrawRoute5DaycareMon,
+  getDaycareCost,
+  getDaycareMonNicknames,
+  getDaycarePokemonCount,
+  getDaycareState,
   getNumLevelsGainedForRoute5DaycareMon,
+  getNumLevelsGainedFromDaycare,
+  giveEggFromDaycare,
   isThereMonInRoute5Daycare,
   putMonInRoute5Daycare,
+  rejectEggFromDayCare,
+  setDaycareCompatibilityString,
+  storeSelectedPokemonInDaycare,
+  takePokemonFromDaycare,
   takePokemonFromRoute5Daycare,
 } from '../world/daycare';
 import type { Special } from './specials';
@@ -53,5 +67,95 @@ export const DAYCARE_SPECIALS: Record<string, Special> = {
   /** TakePokemonFromRoute5Daycare: the mon (with its daycare levels and moves) joins the party; its species. */
   TakePokemonFromRoute5Daycare({ state }) {
     return takePokemonFromRoute5Daycare(state);
+  },
+
+  // ---------------------------------------------------------------- the Four Island daycare
+
+  /** StoreSelectedPokemonInDaycare: the mon the party menu chose goes into the first empty slot. */
+  StoreSelectedPokemonInDaycare({ state }) {
+    storeSelectedPokemonInDaycare(state, GetCursorSelectionMonId());
+  },
+
+  /** GetDaycareState: DAYCARE_NO_MONS, DAYCARE_EGG_WAITING, DAYCARE_ONE_MON or DAYCARE_TWO_MONS. */
+  GetDaycareState({ state }) {
+    return getDaycareState(state);
+  },
+
+  /** GetDaycarePokemonCount */
+  GetDaycarePokemonCount({ state }) {
+    return getDaycarePokemonCount(state);
+  },
+
+  /** GetDaycareMonNicknames: gStringVar1/2 = the two nicknames, gStringVar3 = the first one's OT. */
+  GetDaycareMonNicknames({ state }) {
+    getDaycareMonNicknames(state);
+  },
+
+  /** GetNumLevelsGainedFromDaycare: slot VAR_0x8004's levels gained (gStringVar1 nickname, gStringVar2 levels). */
+  GetNumLevelsGainedFromDaycare({ state }) {
+    return getNumLevelsGainedFromDaycare(state, state.getVar('VAR_0x8004'));
+  },
+
+  /** GetDaycareCost: gSpecialVar_0x8005 = slot VAR_0x8004's cost (gStringVar1 nickname, gStringVar2 cost). */
+  GetDaycareCost({ state }) {
+    state.setVar('VAR_0x8005', getDaycareCost(state, state.getVar('VAR_0x8004')));
+  },
+
+  /** TakePokemonFromDaycare: slot VAR_0x8004's mon joins the party (the other moves up); its species. */
+  TakePokemonFromDaycare({ state }) {
+    return takePokemonFromDaycare(state, state.getVar('VAR_0x8004'));
+  },
+
+  /** ShowDaycareLevelMenu: VAR_RESULT = 0 / 1 for a mon, DAYCARE_EXITED_LEVEL_MENU for EXIT or B. */
+  ShowDaycareLevelMenu({ state, host, setWaitState }) {
+    setWaitState(ShowDaycareLevelMenu(state, host.listMenuHost()));
+  },
+
+  /** GiveEggFromDaycare: the pending egg joins the party. */
+  GiveEggFromDaycare({ state }) {
+    giveEggFromDaycare(state);
+  },
+
+  /** RejectEggFromDayCare: the pending egg is gone. */
+  RejectEggFromDayCare({ state }) {
+    rejectEggFromDayCare(state);
+  },
+
+  /** SetDaycareCompatibilityString: gStringVar4 = how well the two get along. */
+  SetDaycareCompatibilityString({ state }) {
+    setDaycareCompatibilityString(state);
+  },
+
+  // ---------------------------------------------------------------- field_specials.c
+
+  /** ShowFieldMessageStringVar4: ShowFieldMessage(gStringVar4); the script's `waitmessage` waits for it. */
+  ShowFieldMessageStringVar4({ showFieldMessage }) {
+    showFieldMessage(gStringVar4);
+  },
+
+  /**
+   * GetLeadMonFriendship: the lead mon's (GetLeadMonIndex: the first that isn't an egg, else slot 0) friendship
+   * as 0 (none) .. 6 (255): 1-49, 50-99, 100-149, 150-199, 200-254.
+   */
+  GetLeadMonFriendship({ state }) {
+    const lead = state.party.find((m) => !m.isEgg) ?? state.party[0];
+    const friendship = lead.friendship;
+    if (friendship === 255) return 6;
+    if (friendship >= 200) return 5;
+    if (friendship >= 150) return 4;
+    if (friendship >= 100) return 3;
+    if (friendship >= 50) return 2;
+    if (friendship > 0) return 1;
+    return 0;
+  },
+
+  /**
+   * PlayerPartyContainsSpeciesWithPlayerID: a party mon of species VAR_0x8004 (MON_DATA_SPECIES_OR_EGG: an egg
+   * counts as SPECIES_EGG) with the player's trainer ID as its OT ID.
+   */
+  PlayerPartyContainsSpeciesWithPlayerID({ state }) {
+    const species = state.getVar('VAR_0x8004');
+    const SPECIES_EGG = state.defines.require('SPECIES_EGG');
+    return state.party.some((m) => (m.isEgg ? SPECIES_EGG : m.species) === species && m.otId >>> 0 === state.trainerId >>> 0) ? 1 : 0;
   },
 };

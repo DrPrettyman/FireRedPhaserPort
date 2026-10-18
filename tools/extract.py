@@ -1019,7 +1019,8 @@ def extract_scripts(decomp, out):
         )
     )
     # C strings (menu labels etc.): const u8 gText_X[] = _("..." "...");
-    for cfile in ("src/strings.c", "src/keyboard_text.c"):
+    # (+ daycare.c's sJapaneseEggNickname, trade.c's gText_MaleSymbol4 / gText_FemaleSymbol4 / gText_GenderlessSymbol)
+    for cfile in ("src/strings.c", "src/keyboard_text.c", "src/daycare.c", "src/trade.c"):
         src = (decomp / cfile).read_text(encoding="utf-8")
         for name, body in re.findall(r"const u8 (\w+)\[\]\s*=\s*_\((.*?)\);", src, re.S):
             parts = re.findall(r'"((?:\\.|[^"\\])*)"', body)
@@ -1294,8 +1295,21 @@ def extract_pokemon(decomp, out):
         std_strings[defines[key]] = sym
     std_strings = std_strings[: max(i for i, s in enumerate(std_strings) if s) + 1]
 
+    # gEggMoves (data/pokemon/egg_moves.h) flat, as daycare.c's GetEggMoves scans it: each species' block starts
+    # with SPECIES_X + EGG_MOVES_SPECIES_OFFSET, then its moves; EGG_MOVES_TERMINATOR (0xFFFF) ends the table.
+    egg_src = (data_dir / "pokemon/egg_moves.h").read_text()
+    egg_offset = int(re.search(r"#define EGG_MOVES_SPECIES_OFFSET\s+(\d+)", egg_src).group(1))
+    egg_body = egg_src[egg_src.index("gEggMoves[]"):]
+    egg_moves = []
+    for name, body in re.findall(r"egg_moves\((\w+),(.*?)\)", egg_body, re.S):
+        egg_moves.append(defines[f"SPECIES_{name}"] + egg_offset)
+        egg_moves += [defines[m] for m in re.findall(r"MOVE_\w+", body)]
+    egg_moves.append(0xFFFF)
+
     tables = {
         "experience": exp_tables,
+        "eggMoves": egg_moves,
+        "eggMovesSpeciesOffset": egg_offset,
         "natureStats": nature_stats,
         "stdStrings": std_strings,
         "kantoDexCount": national[dex_h_count(dex_h, "KANTO_DEX_COUNT")],

@@ -31,8 +31,11 @@ export interface SpecialEnv {
    * until the field is back, so it waits on `done` before its next command (SelectMoveDeleterMove).
    */
   stopScript(done: () => boolean): void;
-  /** ShowFieldMessage(label); the wait ends once it has printed (IsFieldMessageBoxHidden). */
-  showFieldMessage(label: string): () => boolean;
+  /**
+   * ShowFieldMessage(label), or of an encoded string (e.g. gStringVar4); the wait ends once it has printed
+   * (IsFieldMessageBoxHidden).
+   */
+  showFieldMessage(label: string | number[]): () => boolean;
   /** The special left the field (SetMainCallback2), so the script never resumes. */
   endScript(): void;
   /** ScriptContext_SetupScript: the running script ends and `label` starts in its place. */

@@ -70,6 +70,8 @@ export interface FieldListMenuTemplate {
   items: FieldListMenuItem[];
   /** moveCursorFunc(itemIndex, onInit) */
   moveCursorFunc?: (itemIndex: number, onInit: boolean) => void;
+  /** itemPrintFunc(itemIndex, y): prints before each item's label (the daycare level menu) */
+  itemPrintFunc?: (itemIndex: number, y: number) => void;
   totalItems: number;
   maxShowed: number;
   item_X: number;
@@ -133,6 +135,7 @@ export class FieldListMenu {
       // header_X is 0 for every field list, and none has headers
       const x = item.index !== LIST_HEADER ? this.t.item_X : 0;
       const y = (yOffset + i) * this.yMultiplier + this.t.upText_Y;
+      this.t.itemPrintFunc?.(item.index, y);
       this.win.print(item.label, x, y, this.t.fontId);
       startIndex++;
     }
