@@ -1013,14 +1013,58 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   the voicegroup, and the cry songs. The channel loops (gate times, TrackStop, ply_fine, ply_endtie, RealClearChain)
   are ported and walk an empty list until then. `SoundMain` has the hook for SoundMainRAM (the mixer, W-m4a 3);
   `gSoundInfo.CgbSound` / `CgbOscOff` are DummyFunc and `ply_port` writes `gSoundInfo.soundRegs` (W-m4a 4).
-- **Hooking in:** W-sound 1 calls `m4aSoundInit()` and `loadSongTable()` at boot and `m4aSoundMain()` once per
-  frame (AUDIO_PLAN.md section 4, "The tick"); gba/sound.ts calls the m4a* functions on the gMPlayInfo_* players.
+- **Hooking in:** see "sound.c" below: the boot loads the songs and calls `m4aSoundInit()`, AgbMainFrameEnd runs
+  `m4aSoundMain()` once per frame; gba/sound.ts calls the m4a* functions on the gMPlayInfo_* players.
 - **Tests:** `tests/unit/m4a.test.ts`: hand-assembled songs (a small assembler with labels: `W(24)`, `N(12)`,
   `GOTO, R('loop')`) for tempo and ticks, waits, GOTO / PATT / PEND / REPT / xWAIT, the one-tick-late status,
   the chain order (through MEMACC), MPlayStart's priority rule, pause / continue, fades (FadeOut stops after 16 ×
   speed frames, FadeOutTemporarily pauses after 17 × speed: its TEMPORARY_FADE bit makes fadeOV 257), volume / pan
   / pitch control, the loader; then on songs.json (skipped without it): 270 songs end and 77 loop, and the FINE /
   stop frames of a table of SEs and fanfares (SE_SELECT 10 / 11 ... MUS_POKE_FLUTE 3,061 / 3,063).
+
+### sound.c
+
+- **Where:** `src/gba/sound.ts` is sound.c without the cries (those are stubs until W-sound 2): MapMusicMain and
+  the map music helpers (PlayNewMapMusic, StopMapMusic, FadeOutMapMusic, FadeOutAndPlayNewMapMusic,
+  FadeOutAndFadeInNewMapMusic, IsNotWaitingForBGMStop; overworld.c's BGMusicStopped and Overworld_ChangeMusicTo),
+  fanfares (sFanfares, PlayFanfare / PlayFanfareByFanfareNum, Task_Fanfare, WaitFanfare, IsFanfareTaskInactive),
+  PlaySE / PlaySE12WithPanning / PlaySE1/2WithPanning / SE12PanpotControl, PlayBGM / FadeInNewBGM / FadeInBGM /
+  FadeOutBGM / FadeOutBGMTemporarily, IsSEPlaying / IsSpecialSEPlaying / IsBGMPlaying / IsBGMStopped /
+  IsBGMPausedOrStopped. It is the one API the game calls; call it with song ids (`K.SE_SELECT`, `K.MUS_HEAL`).
+  sFanfares names its songs and resolves them through the loaded song table.
+- **The frame:** `src/audio/frame.ts`'s `AgbMainFrameEnd()` runs the sound tasks (Task_Fanfare; W-sound 2 adds
+  Task_DuckBGMForPokemonCry), MapMusicMain, then m4aSoundMain. Called once per logic tick by `OverworldScene.tick`
+  (after PlayTimeCounter_Update) and `GbaHostScene.update` (every tick, also the one whose callbacks stop the
+  host), which also runs BattleScene in the game and on battle-test.html. Only one host ticks at a time, so it runs
+  exactly once per frame. Don't call it anywhere else. A new kind of host scene must call it once per tick.
+- **Sound tasks:** Task_Fanfare is a gTask in the C; the field doesn't run gTasks every frame, so sound.ts keeps
+  its own list (CreateSoundTask / FuncIsActiveSoundTask / DestroySoundTask, `RunSoundTasks` from the hook) with
+  FuncIsActiveTask's meaning (AUDIO_PLAN.md decision 5). A task created in a frame runs in that frame's hook, as a
+  priority-80 task created in CB1 runs in CB2's RunTasks.
+- **Boot:** `src/audio/audioData.ts`'s `loadAudioData()` fetches songs.json (→ `loadSongTable`), voicegroups.json,
+  samples.json and waves.json once (BootScene and battle-test's BattleTestBoot, in parallel with `Assets.init`);
+  W-m4a 2's call that binds the voices goes where its TODO says. `AgbMainSoundInit()` (frame.ts: m4aSoundInit +
+  sound.ts's ResetSoundState) runs before the first frame and again on a soft reset. samples.bin isn't loaded
+  (the mixer's).
+- **Script commands** (script/ScriptEngine.ts): `playse`, `waitse`, `playbgm` (PlayNewMapMusic), `fadenewbgm`,
+  `fadeoutbgm` (+ its IsBGMPausedOrStopped wait), `fadeinbgm`, `playfanfare`, `waitfanfare`, as scrcmd.c. The three
+  waits go through `SetupNativeScript`, which keeps script.c's frames: the check starts the frame after the
+  command, and the script goes on the frame after it holds. `savebgm`, `fadedefaultbgm` and `playbgm`'s save flag
+  wait for W-sound 3 (savedMusic, the map's music).
+- **Timing:** IsSEPlaying is FALSE in the frame an SE is started (the engine's first tick is that frame's hook) and
+  turns FALSE after the song's last tick (tests/unit/m4a.test.ts pins the lengths). A fanfare holds for sFanfares'
+  count + 1 frames (80 counts, then the frame that resumes the BGM); the song plays on to its FINE (MUS_EVOLVED's
+  230 frames outlast its 220).
+- **Test hooks:** `__test.audioEvents(since)` (a seq from `game.mark()`): each start, BGM pause / resume and fade
+  as `{seq, frame, type: 'se' | 'bgm' | 'fanfare' | 'stop' | 'continue' | 'fade', id, name, player: 'BGM' | 'SE1'
+  | 'SE2' | 'SE3', pan?, started?, fade?, speed?}` (`started`: MPlayStart took it; W-sound 2 adds 'cry');
+  `__test.audio()`: each player's `{song, playing, paused, status, volume (track volX, 64 = full), fading}`, the cry
+  players, sound.c's map music state, fanfare counter and task; `__test.playSong(name)` starts a song. sound.ts
+  reports through `setSoundEventListener` (dev only).
+- **Tests:** `tests/unit/sound.test.ts` (fanfare counts, the BGM paused and resumed, IsSEPlaying over SE_SELECT,
+  FadeOutMapMusic's wait, a new map song after the fade), `tests/e2e/audio.test.ts` (Viridian Forest's Potion
+  ball: MUS_LEVEL_UP holds "put the POTION away" 80 + 3 frames with MUS_VIRIDIAN_FOREST paused; the Game Corner
+  fisher's `waitse` holds `setflag` until SE_SHOP stops).
 
 ## Game state
 
