@@ -48,11 +48,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     QL_AvoidDisplay). The script that ran DoSeagallopFerryScene stays in its `waitstate` until the scene warps, then
     runs on to its `end` (in C, CB2_LoadMap's ScriptContext_Init drops it). The scene's WarpFadeOutScreen is a plain palette fade to
     black (FadeScreen's white fade is for underwater maps, and no harbor is one).
-  - Script timing: the `multichoice` command (ScriptEngine) resumes the script in the tick of the choice; the C's
-    Task_MultichoiceMenu_HandleInput calls ScriptContext_Enable, so the script runs on a frame later. The case seen:
-    a menu the script opens next takes the same press, still new: DrawSeagallopDestinationMenu waits
-    the frame itself (OTHER → the next page), but the ticket menus (MULTICHOICE_SEVII_NAVEL / _BIRTH / _NAVEL_BIRTH)
-    going on to it don't, so their A would also pick the Rainbow Pass menu's first row (only with the event tickets).
+  - Script timing: `special EnterHallOfFame` ends its script at the special (script/specials.ts) instead of
+    keeping it in its `waitstate` until the screen warps out (as DoSeagallopFerryScene now does), so in theory the
+    field could take input in the frame's ticks left after it. Not seen: the field sleeps under the HoF screen.
   - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
   - VS Seeker (world/vsSeeker.ts): silent (SE_CONTEST_MONS_TURN, SE_PIN); no quest log event. Task_VsSeeker_0
     takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for
