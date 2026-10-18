@@ -23,18 +23,35 @@ export const SOUND_MODE_DA_BIT_SHIFT = 20;
 
 export const TONEDATA_TYPE_CGB = 0x07;
 export const TONEDATA_TYPE_FIX = 0x08;
+export const TONEDATA_TYPE_REV = 0x10; // reverse (constants/m4a_constants.inc)
+export const TONEDATA_TYPE_CMP = 0x20; // compressed: the cries (constants/m4a_constants.inc)
 export const TONEDATA_TYPE_SPL = 0x40; // key split
 export const TONEDATA_TYPE_RHY = 0x80; // rhythm
 
+export const TONEDATA_P_S_PAN = 0xc0;
+
 export const SOUND_CHANNEL_SF_START = 0x80;
 export const SOUND_CHANNEL_SF_STOP = 0x40;
+export const SOUND_CHANNEL_SF_SPECIAL = 0x20; // SoundMainRAM_Unk1's start done (constants/m4a_constants.inc)
 export const SOUND_CHANNEL_SF_LOOP = 0x10;
 export const SOUND_CHANNEL_SF_IEC = 0x04;
 export const SOUND_CHANNEL_SF_ENV = 0x03;
+export const SOUND_CHANNEL_SF_ENV_ATTACK = 0x03;
+export const SOUND_CHANNEL_SF_ENV_DECAY = 0x02;
+export const SOUND_CHANNEL_SF_ENV_SUSTAIN = 0x01;
+export const SOUND_CHANNEL_SF_ENV_RELEASE = 0x00;
 export const SOUND_CHANNEL_SF_ON =
   SOUND_CHANNEL_SF_START | SOUND_CHANNEL_SF_STOP | SOUND_CHANNEL_SF_IEC | SOUND_CHANNEL_SF_ENV;
 
+export const CGB_CHANNEL_MO_PIT = 0x02;
+export const CGB_CHANNEL_MO_VOL = 0x01;
+
+/** WaveData.status's high byte (o_WaveData_flags): the sample loops. */
+export const WAVE_DATA_FLAG_LOOP = 0xc0;
+
 export const MAX_DIRECTSOUND_CHANNELS = 12;
+
+export const PCM_DMA_BUF_SIZE = 1584;
 
 export const MPT_FLG_VOLSET = 0x01;
 export const MPT_FLG_VOLCHG = 0x03;
@@ -56,19 +73,67 @@ export const FADE_VOL_SHIFT = 2;
 
 export const MAX_POKEMON_CRIES = 2;
 
-/** struct ToneData: one voice of a voicegroup. W-m4a 2 fills `wav` (a WaveData, or for keysplit / rhythm voices
- *  the sub-voicegroup) and `keySplitTable` (which shares `attack`'s word in the C) from voicegroups.json. */
+/** struct PokemonCrySong (m4a_internal.h): a cry's song, one or two tracks. The header's fields are fields here;
+ *  `data` is the whole struct's byte image (0x32 bytes, the track bytes from `part0` at 0x11 on), written by the
+ *  SetPokemonCry* setters at the struct's offsets (CRY_SONG_*), so the two tracks run from it like any song: part 0
+ *  at 0x11 (TUNE, GOTO cont), part 1 at 0x18 (TUNE), both on through `cont` at 0x1A. */
+export interface PokemonCrySong {
+  trackCount: number;
+  blockCount: number;
+  priority: number;
+  reverb: number;
+  tone: ToneData | null;
+  data: Uint8Array;
+}
+
+export const CRY_SONG_SIZE = 0x32;
+export const CRY_SONG_PART0 = 0x11;
+export const CRY_SONG_TUNE_VALUE = 0x12;
+export const CRY_SONG_GOTO_TARGET = 0x14; // u32
+export const CRY_SONG_PART1 = 0x18;
+export const CRY_SONG_TUNE_VALUE2 = 0x19;
+export const CRY_SONG_CONT = 0x1a;
+export const CRY_SONG_VOLUME_VALUE = 0x1d;
+export const CRY_SONG_UNK_CMD_0D_PARAM = 0x20; // u32
+export const CRY_SONG_RELEASE_VALUE = 0x26;
+export const CRY_SONG_PAN_VALUE = 0x28;
+export const CRY_SONG_TIE_KEY_VALUE = 0x2a;
+export const CRY_SONG_TIE_VELOCITY_VALUE = 0x2b;
+export const CRY_SONG_LENGTH = 0x2e; // u16
+
+/** struct WaveData: a DirectSound sample (samples.json + samples.bin). `type` is 1 for the compressed samples
+ *  (the cries: wav2agb -c; here already decoded to PCM, AUDIO_PLAN decision 4) and 0 otherwise; `status`'s high
+ *  byte holds WAVE_DATA_FLAG_LOOP. `freq` is the rate × 1024, `size` the sample count. `data` is the signed 8-bit
+ *  PCM (null until samples.bin is loaded: the engine's logic needs only the header). `name` is the sample's label
+ *  (`DirectSoundWaveData_*`, `Cry_*`), for debugging. */
+export interface WaveData {
+  name: string;
+  type: number;
+  status: number;
+  freq: number;
+  loopStart: number;
+  size: number;
+  data: Int8Array | null;
+}
+
+/** What ToneData.wav points at, by voice type: a WaveData (DirectSound), the square's duty or the noise period
+ *  (CGB 1, 2, 4), the programmable wave's 16 bytes (CGB 3), or for keysplit / rhythm voices the sub-voicegroup.
+ *  (ply_xwave can write a raw ROM address, a number: no FRLG song uses it.) */
+export type ToneWav = WaveData | ToneData[] | Uint8Array | number | null;
+
+/** struct ToneData: one voice of a voicegroup (m4aVoices.ts builds them from voicegroups.json). `keySplitTable`
+ *  (TONEDATA_TYPE_SPL voices: the subgroup index by MIDI key) shares `attack`'s word in the C. */
 export interface ToneData {
   type: number;
   key: number;
   length: number;
   pan_sweep: number;
-  wav: unknown;
+  wav: ToneWav;
   attack: number;
   decay: number;
   sustain: number;
   release: number;
-  keySplitTable?: Uint8Array | null;
+  keySplitTable?: readonly (number | null)[] | null;
 }
 
 export function emptyToneData(): ToneData {
@@ -76,7 +141,7 @@ export function emptyToneData(): ToneData {
 }
 
 /** struct SongHeader. `part[i]` is track i's start as a byte offset into `data` (the song's bytes). `voicegroup` is
- *  the voicegroup's name from songs.json; `tone` is that voicegroup once resolved (W-m4a 2), else null. */
+ *  the voicegroup's name from songs.json; `tone` is that voicegroup once resolved (setVoiceData), else null. */
 export interface SongHeader {
   name: string;
   trackCount: number;
@@ -84,7 +149,7 @@ export interface SongHeader {
   priority: number;
   reverb: number;
   voicegroup: string | null;
-  tone: ToneData[] | null;
+  tone: readonly (ToneData | null)[] | null;
   part: number[];
   data: Uint8Array;
 }
@@ -96,19 +161,59 @@ export interface Song {
   me: number;
 }
 
-/** struct SoundChannel (the DirectSound channels) and struct CgbChannel share their first fields, which is all the
- *  sequencer touches. W-m4a 2 adds the rest (envelope, frequency, sample position). */
+/** struct SoundChannel: a DirectSound channel (gSoundInfo.chans). struct CgbChannel (below) shares its first
+ *  fields, which is what the sequencer and ply_note touch, so both live in a track's channel list.
+ *
+ *  The sample position (SoundMainRAM): `count` is the samples left from the current one to the end (before the
+ *  START frame: the start offset, the track's unk_3C), `fw` the fractional position (23 bits), `currentPointer`
+ *  the current sample's index into `wav.data` (reverse voices: one past it, as they read backwards). */
 export interface SoundChannel {
   statusFlags: number;
   type: number;
+  rightVolume: number;
+  leftVolume: number;
+  attack: number;
+  decay: number;
+  sustain: number;
+  release: number;
+  /** The MIDI key as translated into the final pitch (rhythm voices: the drum's key). */
   key: number;
+  envelopeVolume: number;
+  envelopeVolumeRight: number;
+  envelopeVolumeLeft: number;
+  pseudoEchoVolume: number;
+  pseudoEchoLength: number;
   gateTime: number;
+  /** The MIDI key as the track played it (ply_endtie matches it). */
   midiKey: number;
   velocity: number;
   priority: number;
+  rhythmPan: number; // s8
+  count: number; // s32 in SoundMainRAM's arithmetic
+  fw: number; // u32
+  frequency: number; // u32
+  /** DirectSound: the WaveData. CGB (CgbChannel.wavePointer): the duty, wave bytes or noise period. */
+  wav: ToneWav;
+  currentPointer: number;
   track: MusicPlayerTrack | null;
   prevChannelPointer: SoundChannel | null;
   nextChannelPointer: SoundChannel | null;
+}
+
+/** struct CgbChannel: the four PSG channels (gCgbChans: square 1, square 2, wave, noise). The fields after the
+ *  shared ones are CgbSound's (W-m4a 4); `wav` is the C's wavePointer. */
+export interface CgbChannel extends SoundChannel {
+  envelopeGoal: number;
+  envelopeCounter: number;
+  sustainGoal: number;
+  n4: number;
+  pan: number;
+  panMask: number;
+  modify: number;
+  length: number;
+  sweep: number;
+  /** The wave last loaded into wave RAM (CGB 3). */
+  cgbCurrentPointer: Uint8Array | null;
 }
 
 /** struct MusicPlayerTrack. */
@@ -154,6 +259,10 @@ export interface MusicPlayerTrack {
   data: Uint8Array;
   cmdPtr: number;
   patternStack: [number, number, number];
+  /** The track's place in IWRAM, standing in for its address: ply_note compares track pointers to break
+   *  priority ties. gMPlayTrack_BGM, _SE1, _SE2, _SE3 (sound/music_player_table.inc, in .bss) come before
+   *  gPokemonCryTracks (m4a.c, COMMON). Set once by m4a.ts; not part of the C struct (Clear64byte keeps it). */
+  addr: number;
 }
 
 export type MPlayMainFunc = (mplayInfo: MusicPlayerInfo) => void;
@@ -177,7 +286,7 @@ export interface MusicPlayerInfo {
   fadeOC: number;
   fadeOV: number;
   tracks: MusicPlayerTrack[];
-  tone: ToneData[] | null;
+  tone: readonly (ToneData | null)[] | null;
   ident: number;
   MPlayMainNext: MPlayMainFunc | null;
   musicPlayerNext: MusicPlayerInfo | null;
@@ -194,8 +303,8 @@ export interface MusicPlayer {
 
 export type PlyNoteFunc = (noteCmd: number, mplayInfo: MusicPlayerInfo, track: MusicPlayerTrack) => void;
 
-/** struct SoundInfo: the parts the sequencer and the controls use. The mixer's fields (pcmBuffer, the channels'
- *  sample state) and the CGB channels come with W-m4a 2-4. */
+/** struct SoundInfo: the parts the sequencer, the channels and the controls use. The mixer's pcmBuffer comes with
+ *  W-m4a 3. */
 export interface SoundInfo {
   ident: number;
   pcmDmaCounter: number;
@@ -214,8 +323,11 @@ export interface SoundInfo {
   musicPlayerHead: MusicPlayerInfo | null;
   CgbSound: () => void;
   CgbOscOff: (chanNum: number) => void;
+  MidiKeyToCgbFreq: (chanNum: number, key: number, fineAdjust: number) => number;
   plynote: PlyNoteFunc;
   ExtVolPit: () => void;
+  /** gCgbChans, set by MPlayExtender (null before: ply_note then drops CGB notes, as the C does). */
+  cgbChans: CgbChannel[] | null;
   chans: SoundChannel[];
   /** The PSG registers ply_port writes (REG_SOUND1CNT_L + offset): W-m4a 4 reads them. */
   soundRegs: Uint8Array;

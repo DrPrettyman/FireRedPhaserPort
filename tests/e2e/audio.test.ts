@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { expect, test } from 'vitest';
-import { gMPlayTable, m4aSongNumStart, m4aSoundInit, m4aSoundMain } from '../../src/audio/m4a';
+import { gMPlayTable, m4aSongNumStart, m4aSoundInit, m4aSoundMain, setVoiceData } from '../../src/audio/m4a';
 import { MUSICPLAYER_STATUS_TRACK } from '../../src/audio/m4aInternal';
 import { loadSongTable, type SongsJson } from '../../src/audio/songTable';
 import { useGame } from './harness';
@@ -15,9 +15,10 @@ const session = useGame();
 
 /** The frame after which song `name` alone has no live track left (the engine on songs.json, as m4a.test.ts). */
 function songStopFrame(name: string): number {
-  const json = JSON.parse(readFileSync(resolve(__dirname, '../../public/gen/audio/songs.json'), 'utf8')) as SongsJson;
+  const gen = (f: string) => JSON.parse(readFileSync(resolve(__dirname, '../../public/gen/audio', f), 'utf8'));
   m4aSoundInit();
-  const table = loadSongTable(json);
+  const table = loadSongTable(gen('songs.json') as SongsJson);
+  setVoiceData(gen('voicegroups.json'), gen('samples.json'), gen('waves.json')); // as the game's boot does
   const id = table.idByName.get(name)!;
   m4aSongNumStart(id);
   const info = gMPlayTable[table.songs[id].ms].info;

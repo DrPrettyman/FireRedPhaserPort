@@ -2,6 +2,8 @@
 // directly, without the overworld. Dev-only tooling; nothing here is part of the game.
 
 import Phaser from 'phaser';
+import { startAudioOutput } from './audio/output';
+import { listenForOutputKeys } from './input/Input';
 import type { BattleTablesData } from './battle/data';
 import { Assets } from './data/assets';
 import { loadAudioData } from './audio/audioData';
@@ -446,6 +448,10 @@ const game = new Phaser.Game({
     const harness = new Harness(game, assets, trainerIds, document.getElementById('panel')!);
     (window as unknown as { battleTest: unknown }).battleTest = harness;
   }), BattleScene],
+  audio: { noAudio: true }, // the sound output is audio/output.ts's, as in main.ts
 });
+
+// The same sound output as the game (AUDIO_PLAN.md decision 12): starts on the first key press or click; M mutes.
+startAudioOutput(listenForOutputKeys);
 
 (window as unknown as { game: Phaser.Game }).game = game;

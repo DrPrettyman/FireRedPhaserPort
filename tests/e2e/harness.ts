@@ -172,6 +172,8 @@ export interface StartOptions {
    * passes `?skipIntro`, which boots to the main menu (with a save) or the new game.
    */
   title?: boolean;
+  /** More URL parameters (e.g. `{ audio: '1' }`, audioOutput.test.ts). */
+  query?: Record<string, string>;
 }
 
 export interface WaitOptions {
@@ -217,6 +219,7 @@ export class Game {
     q.set('speed', String(opts.speed ?? 8));
     q.set('textSpeed', opts.textSpeed ?? 'fast');
     if (!opts.title) q.set('skipIntro', '1');
+    for (const [k, v] of Object.entries(opts.query ?? {})) q.set(k, v);
     this.errors = [];
     this.log = [];
     if (!opts.keepSave) await this.clearSave();
@@ -233,6 +236,20 @@ export class Game {
     await this.waitFor((t) => t.events().some((e) => e.type === 'ready'), { what: 'the field to load', timeout: 60_000 });
     if (opts.party) await this.eval((t, party) => t.setParty(party), opts.party);
     return this;
+  }
+
+  /**
+   * A real key press through the browser (DevTools Input.dispatchKeyEvent), for what listens to the page's own
+   * keyboard events rather than the virtual pad: the audio output's user gesture and mute key (audioOutput.test.ts).
+   * `code` is a KeyboardEvent code of a letter key, e.g. 'KeyM'. Turns on focus emulation first: without it, a
+   * dispatched key turns headless Chrome's page hidden, and Phaser stops its loop.
+   */
+  async realKey(code: string): Promise<void> {
+    const letter = code.replace(/^Key/, '');
+    const k = { code, key: letter.toLowerCase(), windowsVirtualKeyCode: letter.charCodeAt(0), nativeVirtualKeyCode: letter.charCodeAt(0) };
+    await this.cdp.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+    await this.cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', text: k.key, ...k });
+    await this.cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', ...k });
   }
 
   /** Empty the game's localStorage (the save slot) before the next load. */

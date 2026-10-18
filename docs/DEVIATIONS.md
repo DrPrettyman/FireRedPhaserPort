@@ -74,6 +74,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Evolution scene: silent until the mixer; the cries count as finished at once (W-sound 2) and
     EVOSTATE_RESTORE_SCREEN's `if (IsSEPlaying())` after SE_EXP goes on unchecked (W-sound 7); the intro jingle
     (MUS_EVOLUTION_INTRO) and the other IsSEPlaying waits hold the scene as on the GBA; the help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
+  - Audio output (audio/output.ts, audio/worklet.ts): the PCM plays at 224 samples per 60 Hz frame, 13,440 Hz,
+    not the GBA's 13,379 Hz: the port's frame is 60 Hz rather than 59.7275 Hz, so the output keeps the GBA's
+    samples per frame and music is 0.46% (8 cents) higher and faster, like all the port's timing. The worklet also
+    nudges its playback rate by up to ±0.5% to keep its 3-4 frame buffer filled (the page's frame loop and the
+    audio clock drift apart); an underrun plays silence, a stall drops the oldest frames. The analog filtering
+    after the GBA's DAC isn't modelled (sample-and-hold straight to the speakers, AUDIO_PLAN.md decision 8).
+  - Evolution scene: no audio, so cries and sound effects count as finished at once (the intro jingle and the SE_EXP
+    wait don't hold the scene up); the help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
     from the field uses fresh battle globals, so the backdrop follows the map's battle scene (gyms etc.) but not the
     last battle's type flags, which the GBA keeps (e.g. a Rare Candy right after a gym leader would draw the
     Leader terrain there). Mons have no language, markings, ribbons or mail, so EvolutionRenameMon always treats
@@ -362,6 +370,13 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     the port skips it. No quest log entry (SetQLPlayedTheSlots) and no GAME_STAT_SLOT_JACKPOTS.
   - The Game Corner's photo printer flash (FldEff_PhotoFlash) is the field's FADE_FROM_WHITE (16 → 0 in steps of 2)
     where the C fades from 15 to 0 in steps of 3, a few frames longer.
+  - The m4a engine (src/audio/, AUDIO_PLAN.md): the CGB (PSG) channels are a placeholder until W-m4a 4
+    (`m4aCgb.ts`): a note on a square / wave / noise voice claims its channel as ply_note does, but the channel
+    goes off as soon as it is released (CgbSound's release envelope, pseudo echo and the hardware length counter
+    aren't run) and MidiKeyToCgbFreq returns 0. Only claims between CGB notes can differ (a released note frees its
+    channel a few frames early); no wait depends on them. A note on a keysplit entry that voicegroups.json has as
+    null (a ROM pointer byte, outside the table's key range) is dropped, where the GBA would play the subgroup voice
+    that byte names; no FRLG song plays one (tests/unit/m4aChannels.test.ts).
 - **Data:** Castform has no front pic (its `front.png` isn't in the decomp; it's built from per-form images).
 
 ## Deliberate QOL changes
@@ -386,3 +401,7 @@ Places where we choose to differ from the GBA on purpose (not placeholders). Kee
     scroll off screen, and a trainer among them can still spot you; here a neighbour's trainers never do.
   - Future: any other per-object logic should likewise check that an object belongs to the current map where the
     GBA would only have current-map objects alive.
+- **A mute key, M** (`input/Input.ts` listenForOutputKeys, `audio/output.ts`; AUDIO_PLAN.md decision 10). The GBA
+  has no volume control; M toggles all sound output on and off. It only silences the output: the m4a engine runs
+  on, so nothing times differently. The setting is kept in localStorage (`firered-phaser:audio-muted`), not in
+  the save. Ignored with Ctrl / Cmd / Alt held and in text fields (the battle test panel).

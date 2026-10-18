@@ -57,6 +57,7 @@ import type { SSAnneProbe } from '../world/ssAnne';
 import { gMPlayTable, gPokemonCryMusicPlayers, gSongTable } from '../audio/m4a';
 import { MPT_FLG_EXIST, MUSICPLAYER_STATUS_PAUSE, MUSICPLAYER_STATUS_TRACK, type MusicPlayerInfo } from '../audio/m4aInternal';
 import { m4aSongNumStart, musicPlayerName, setSoundEventListener, songName, soundProbe, type SoundEvent } from '../gba/sound';
+import { audioOutputTestApi } from './audioOutputHooks';
 
 let enabled = false;
 /** `?textSpeed=`: applied to the new game's options by applyTestOptions. */
@@ -479,6 +480,8 @@ function createApi(game: Phaser.Game) {
   };
 
   const api = {
+    /** The browser's sound output (audio/output.ts; dev/audioOutputHooks.ts). */
+    audioOutput: audioOutputTestApi(),
     /** Logic ticks sampled so far. */
     frame: () => pad.frame,
 

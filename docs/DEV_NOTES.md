@@ -991,10 +991,13 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
 ### m4a engine
 
 - **Where:** `src/audio/m4a.ts` (m4a.c + m4a_1.s, named as the C: m4aSoundInit, m4aSoundMain, MPlayMain,
-  MPlayStart, the ply_* commands, the m4aSongNum* / m4aMPlay* controls, gMPlayInfo_BGM / SE1 / SE2 / SE3,
-  gPokemonCryMusicPlayers), `m4aInternal.ts` (m4a_internal.h: the structs and constants), `m4aTables.ts`
-  (gClockTable, gPcmSamplesPerVBlankTable), `songTable.ts` (`loadSongTable(json)`: songs.json → gSongTable, checks
-  the players against gMPlayTable, returns `idByName`). Pure logic: no DOM, no AudioContext, no clock; module
+  MPlayStart, the ply_* commands incl. ply_note, ChnVolSetAsm, MidiKeyToFreq, the m4aSongNum* / m4aMPlay*
+  controls, gMPlayInfo_BGM / SE1 / SE2 / SE3, gPokemonCryMusicPlayers, the cry song and its setters,
+  `setVoiceData`), `m4aMixer.ts` (SoundMainRAM's bookkeeping: the DirectSound envelopes and sample positions),
+  `m4aCgb.ts` (gCgbChans, CgbSound: a placeholder until W-m4a 4), `m4aVoices.ts` (voicegroups / samples / waves
+  JSON → ToneData / WaveData), `m4aInternal.ts` (m4a_internal.h: the structs and constants), `m4aTables.ts`
+  (gClockTable, gPcmSamplesPerVBlankTable, gScaleTable, gFreqTable, gPokemonCrySongTemplate), `songTable.ts`
+  (`loadSongTable(json)`: songs.json → gSongTable, checks the players against gMPlayTable, returns `idByName`). Pure logic: no DOM, no AudioContext, no clock; module
   globals like the C's (call `m4aSoundInit()` to reset everything). Structs are plain objects with the C's field
   names and ranges (u8 / s8 / u16 masked on write); a track's `data` is its song's bytes and `cmdPtr` /
   `patternStack` are offsets into them.
@@ -1015,12 +1018,100 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   `gSoundInfo.CgbSound` / `CgbOscOff` are DummyFunc and `ply_port` writes `gSoundInfo.soundRegs` (W-m4a 4).
 - **Hooking in:** see "sound.c" below: the boot loads the songs and calls `m4aSoundInit()`, AgbMainFrameEnd runs
   `m4aSoundMain()` once per frame; gba/sound.ts calls the m4a* functions on the gMPlayInfo_* players.
+- **Voices:** `setVoiceData(voicegroups, samples, waves, pcm?)` (m4a.ts) takes the parsed voicegroups.json,
+  samples.json and waves.json (and optionally samples.bin as a Uint8Array / ArrayBuffer; `setSamplePcm(pcm)` adds it
+  later) and returns the built `VoiceData`. It sets every song's `SongHeader.tone` to its voicegroup (also for a
+  song table installed afterwards: `setSongTable` applies it), and `gCryTable` / `gCryTable_Reverse`. ToneData.wav
+  is a WaveData (DirectSound), the duty / noise period (a number), the wave bytes, or the subgroup (keysplit /
+  rhythm); `keySplitTable` is the JSON's table. WaveData.type is 1 for the `Cry_*` samples (compressed in the ROM:
+  SoundMainRAM_Unk1 checks it), the loop flag is `status`'s 0xC000. Only the headers matter to the logic.
+- **Notes and channels:** `ply_note` (m4a_1.s:1538) resolves the voice (keysplit: the subgroup voice at
+  keySplitTable[key]; rhythm: subgroup[key] at that voice's own key, its pan as rhythmPan; a resolved keysplit /
+  rhythm voice is silent), the priority (player + track, ≤ 255), then a channel: a CGB voice claims its PSG channel
+  (`gSoundInfo.cgbChans[type & 7 - 1]`) unless that plays a higher priority, or the same priority from a lower
+  track; a DirectSound voice takes the first free of the 5 channels, else the released channel of lowest priority,
+  else the playing one of lowest priority ≤ its own. Ties go to the channel whose track is at the highest address:
+  `MusicPlayerTrack.addr` ranks the tracks as IWRAM has them (BGM < SE1 < SE2 < SE3 < the cry tracks); a playing
+  channel of equal priority is only taken from a track at the same or a higher address, so the BGM can't steal from
+  an SE of its own priority. Since the players run oldest first, an SE's note in the frame the BGM's runs wins.
+  `ChnVolPitUpdate` (MPlayMain's VOLCHG / PITCHG pass) and `ChnVolSetAsm` set the channel volumes and frequency.
+- **A channel's life:** SoundMainRAM (`m4aMixer.ts`, after the sequencers and CgbSound in the same frame) starts a
+  START channel (ATTACK, its sample from the start offset, the WaveData's loop flag), steps the envelope once per
+  frame (attack +n to 255, decay ×n/256 to sustain, release ×n/256 to the echo volume, then pseudoEchoLength
+  frames), and moves the sample over the frame's 224 output samples (`fw += divFreq × frequency`, 2^23 per sample;
+  FIX voices one per output sample; reverse voices from the end) to its loop or its end. A channel that ends
+  (release done, sample out) gets statusFlags 0 there; the track unlinks it in its next tick (MPlayMain's
+  ClearChain), so `IsPokemonCryPlaying` turns false the frame after. `FastForward` takes a frame's steps in one go
+  when the sample doesn't end in it (exact: see its comment); the per-sample loops are where W-m4a 3 mixes.
+- **Cries:** `gPokemonCrySong` (the template's byte image, m4aInternal's CRY_SONG_* offsets), the setters
+  `SetPokemonCryVolume / Panpot / Pitch / Length / Release / Progress / Chorus / Priority / Stereo`,
+  `SetPokemonCryTone(tone)` (a free cry player, else the one with the highest clock; returns it) and
+  `IsPokemonCryPlaying(mplayInfo)`. sound.c's PlayCryInternal (W-sound 2) calls them in that order with a
+  `gCryTable[SpeciesToCryId(species - 1)]` entry. Lifetimes for section 2's species and modes are pinned in
+  tests/unit/m4aChannels.test.ts (they equal AUDIO_PLAN's estimates, e.g. Charizard NORMAL 56 frames, Jynx
+  NORMAL 135, any species DOUBLES ≤ 21).
+- **Seams:** `SoundMainRAM` mixes nothing (W-m4a 3: the reverb pass, each sample scaled by envelopeVolumeRight /
+  Left into a pcmBuffer, mono via `soundInfo.mode & 1`); `m4aCgb.ts`'s CgbSound / CgbOscOff / MidiKeyToCgbFreq are
+  placeholders (W-m4a 4: CGB channels go off as soon as released, frequency 0); `ply_port` writes
+  `gSoundInfo.soundRegs` (W-m4a 4).
+- **Hooking in:** W-sound 1 calls `m4aSoundInit()`, `loadSongTable()` and `setVoiceData()` at boot and
+  `m4aSoundMain()` once per frame (AUDIO_PLAN.md section 4, "The tick"); gba/sound.ts calls the m4a* functions on
+  the gMPlayInfo_* players.
 - **Tests:** `tests/unit/m4a.test.ts`: hand-assembled songs (a small assembler with labels: `W(24)`, `N(12)`,
   `GOTO, R('loop')`) for tempo and ticks, waits, GOTO / PATT / PEND / REPT / xWAIT, the one-tick-late status,
   the chain order (through MEMACC), MPlayStart's priority rule, pause / continue, fades (FadeOut stops after 16 ×
   speed frames, FadeOutTemporarily pauses after 17 × speed: its TEMPORARY_FADE bit makes fadeOV 257), volume / pan
   / pitch control, the loader; then on songs.json (skipped without it): 270 songs end and 77 loop, and the FINE /
   stop frames of a table of SEs and fanfares (SE_SELECT 10 / 11 ... MUS_POKE_FLUTE 3,061 / 3,063).
+  `tests/unit/m4aChannels.test.ts`: hand-built voices and samples for MidiKeyToFreq, envelopes frame by frame, a
+  sample's end and loop, FIX / reverse voices, EOT / FINE, stealing (5 channels, priorities, track order, released
+  channels, the CGB claim), keysplit / rhythm resolution, the cry song; then on the extracted voices: setVoiceData,
+  voicegroup000's keysplit / rhythm voices, no song reaching a null keysplit entry, the cry lifetime table, a cry
+  stealing from MUS_PALLET.
+
+### Audio output
+
+- **Where:** `src/audio/output.ts` (the AudioContext, the worklet node, autoplay, visibility, mute, `pushFrame`, the
+  dev test tone, `audioOutputProbe`), `src/audio/worklet.ts` (the AudioWorkletProcessor), `src/audio/outputCore.ts`
+  (pure: `decideOutput`, the message types, the DAC, `SampleHoldResampler`). Started by
+  `startAudioOutput(listenForOutputKeys)` in `main.ts` and `battleTest.ts`; Phaser's own sound is off there
+  (`audio: { noAudio: true }`). The keys: `listenForOutputKeys` in `input/Input.ts` (passed in, so output.ts loads
+  without Phaser: testHooks imports it, and the unit tests import testHooks).
+- **When it's on:** by default in a browser; off headless (navigator.webdriver or a `HeadlessChrome` user agent:
+  the e2e harness's Chrome has webdriver false) and for `?speed=` > 1 (dev). `?audio=0` / `?audio=1` force it (any
+  build), `?audio=tone` (dev) is on and plays the test tone. The AudioContext is created at boot; the browser holds
+  it suspended until the first keydown / pointerdown anywhere (a capture listener on window, so typing in the
+  battle test panel counts), which resumes it. Hidden tab: suspended; visible again: the worklet's buffer is
+  flushed and it resumes.
+- **pushFrame(frame)** (for the mixer, W-m4a 3, once per frame after SoundMainRAM): `{ fifoA, fifoB, soundcntH?,
+  psg? }`: the frame's 224 signed 8-bit samples per FIFO (A = `pcmBuffer`, B = `pcmBuffer + PCM_DMA_BUF_SIZE`),
+  REG_SOUNDCNT_H (`SOUNDCNT_H_STEREO` by default, `SOUNDCNT_H_MONO` after SetPokemonCryStereo(0)) and, TODO W-m4a 4,
+  `psg: { writes: Uint16Array }` (the frame's sound register writes, `offset << 8 | value` from REG_SOUND1CNT_L; a
+  proposal, W-m4a 4 owns the shape). The arrays are copied into one transferable buffer and posted on the node's
+  port; a no-op while the output is off, suspended, loading or playing the tone. `audioOutputWantsFrames()` lets the
+  mixer skip writing samples when nobody listens (never its bookkeeping). Nothing else may read the output's state
+  (AUDIO_PLAN.md "Rules").
+- **The worklet:** `frameToDac` turns each frame into speaker samples as the GBA does: each routed FIFO ×4 (full)
+  or ×2 (half), + SOUNDBIAS 0x200, clipped to 10 bits, the 2 low bits dropped (SOUNDBIAS_H 0x40: 8-bit
+  resolution). `SampleHoldResampler` buffers them and plays them by sample-and-hold at 224 × 60 = 13,440 Hz
+  (docs/DEVIATIONS.md) in the context's rate: it starts once 3 frames are buffered, nudges its step by up to ±0.5%
+  (0.5% per frame off) to keep the fill at 3.5 frames, plays silence on an underrun until 3 frames are back, and
+  drops the oldest samples back to 3.5 frames when a push passes 7 (after a stall). The PSG synth goes here
+  (TODO W-m4a 4). It reports stats (frames, underruns, dropped, buffered, peak, rendered) every 64 render quanta.
+- **Mute key M** (docs/DEVIATIONS.md "Deliberate QOL changes"): toggles the output only (the worklet writes zeros,
+  the frames keep flowing); ignored with Ctrl / Cmd / Alt and in text fields; saved as
+  `firered-phaser:audio-muted` in localStorage (try/catch). Works with the output off too (it is remembered).
+- **Bundling:** `import workletUrl from './worklet.ts?worker&url'`: Vite serves it as a module in dev and builds it
+  as its own chunk (`assets/worklet-*.js`, imports inlined) in `npm run build`.
+- **Try it:** `npm run dev`, open `/?audio=tone`, press any key: a square wave alternating A4 / E5 every half
+  second; M mutes it. In the console: `__test.audioOutput.state()`, `__test.audioOutput.tone(false)`. Same on
+  `/battle-test.html?audio=tone`.
+- **Tests:** `tests/unit/audioOutput.test.ts` (decideOutput, the DAC's stereo / mono / clipping values, the
+  resampler's holds, rate nudge, start, underrun, overflow, and a simulated 60 Hz loop with drift and 30 Hz rAF);
+  `tests/e2e/audioOutput.test.ts` (off headless; `?audio=1` suspended → running after a real key press
+  (`game.realKey`); M toggles, survives a reload, not in a text field; the tone's peak 0.3125 = 40 / 128 reaches the
+  speakers and M silences it: headless Chrome runs the audio graph on a fake device). Hooks:
+  `__test.audioOutput` (`src/dev/audioOutputHooks.ts`). Harness: `query: { audio: '1' }` adds URL parameters.
 
 ### sound.c
 
@@ -1042,10 +1133,10 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   FuncIsActiveTask's meaning (AUDIO_PLAN.md decision 5). A task created in a frame runs in that frame's hook, as a
   priority-80 task created in CB1 runs in CB2's RunTasks.
 - **Boot:** `src/audio/audioData.ts`'s `loadAudioData()` fetches songs.json (→ `loadSongTable`), voicegroups.json,
-  samples.json and waves.json once (BootScene and battle-test's BattleTestBoot, in parallel with `Assets.init`);
-  W-m4a 2's call that binds the voices goes where its TODO says. `AgbMainSoundInit()` (frame.ts: m4aSoundInit +
+  samples.json and waves.json (→ `setVoiceData`) once (BootScene and battle-test's BattleTestBoot, in parallel with
+  `Assets.init`). `AgbMainSoundInit()` (frame.ts: m4aSoundInit +
   sound.ts's ResetSoundState) runs before the first frame and again on a soft reset. samples.bin isn't loaded
-  (the mixer's).
+  yet: the mixer (W-m4a 3) adds the `setSamplePcm` fetch to loadAudioData.
 - **Script commands** (script/ScriptEngine.ts): `playse`, `waitse`, `playbgm` (PlayNewMapMusic), `fadenewbgm`,
   `fadeoutbgm` (+ its IsBGMPausedOrStopped wait), `fadeinbgm`, `playfanfare`, `waitfanfare`, as scrcmd.c. The three
   waits go through `SetupNativeScript`, which keeps script.c's frames: the check starts the frame after the

@@ -1,26 +1,12 @@
 // Loads public/gen/audio/ at boot (BootScene, battle-test's BattleTestBoot): songs.json into the engine's song table
-// (loadSongTable), and voicegroups.json, samples.json and waves.json, kept for the engine's voices. samples.bin (the
+// (loadSongTable), and voicegroups.json, samples.json and waves.json into its voices (setVoiceData). samples.bin (the
 // PCM, ~3.7 MB) is only needed by the mixer (W-m4a 3) and isn't fetched here.
 
+import { setVoiceData } from './m4a';
+import type { SamplesJson, VoicegroupsJson, WavesJson } from './m4aVoices';
 import { loadSongTable, type SongsJson, type SongTable } from './songTable';
 
 const GEN = 'gen/audio';
-
-/** voicegroups.json (tools/extract_audio_voices.py; shape in docs/DEV_NOTES.md "Audio data: voicegroups and
- *  samples"). Typed loosely here: the engine (W-m4a 2) owns the reading. */
-export interface VoicegroupsJson {
-  voicegroups: Record<string, (Record<string, unknown> | null)[]>;
-  voicegroupSizes: Record<string, number>;
-  keysplits: Record<string, (number | null)[]>;
-  cries: Record<string, unknown>[];
-  criesReverse: Record<string, unknown>[];
-}
-
-/** samples.json: struct WaveData's header per sample label, and where its bytes are in samples.bin. */
-export type SamplesJson = Record<string, { freq: number; loop: boolean; loopStart: number; size: number; offset: number }>;
-
-/** waves.json: the programmable wave samples (16 bytes each). */
-export type WavesJson = Record<string, number[]>;
 
 export interface AudioData {
   songs: SongTable;
@@ -51,8 +37,9 @@ export function loadAudioData(): Promise<AudioData> {
       fetchJson<WavesJson>('waves.json'),
     ]);
     const songs = loadSongTable(songsJson);
-    // TODO(merger, W-m4a 2): bind the voicegroups, samples and waves to the engine here (W-m4a 2's loader call,
-    // e.g. its loadVoices(voicegroups, samples, waves)), so each song's tone and the cry tables resolve.
+    // Each SongHeader's tone (its voicegroup) and the cry tables; m4aSoundInit keeps them. The PCM (samples.bin)
+    // comes later through setSamplePcm, for the mixer (W-m4a 3).
+    setVoiceData(voicegroups, samples, waves);
     loaded = { songs, voicegroups, samples, waves };
     return loaded;
   })();

@@ -42,7 +42,8 @@ test('...', async () => {
 ```
 
 Start options: `map`/`x`/`y`, `start: 'after-rival' | 'evolution'` (+ `starter`; see `src/dev/startPresets.ts`), `party`, `seed` (default 1),
-`speed` (logic ticks per frame, default 8) and `textSpeed` (default fast). Every load starts with an empty save
+`speed` (logic ticks per frame, default 8), `textSpeed` (default fast) and `query` (more URL parameters, e.g.
+`{ audio: '1' }`). Every load starts with an empty save
 slot (localStorage) unless `keepSave: true`; with a save and no `map`/`start`, the game boots to the main menu, so
 pass `mainMenu: true` to wait for it instead of the field (see saveContinue.test.ts). The harness skips the title
 screen and Oak's speech: it loads the game with `?skipIntro` (dev only), which boots to the main menu with a save
@@ -56,7 +57,7 @@ sent as source text, so it can't use the test file's variables: pass them as arg
 
 | | |
 |---|---|
-| **Input** | A virtual gamepad that the game samples with the keyboard, once per logic tick. `game.press('A')` taps a button for 2 ticks. `t.walk(dir, n)` / `t.walkTo(x, y)` (pathfinding) / `t.face(dir)` / `t.enterWarp()` (stairs, mats). |
+| **Input** | A virtual gamepad that the game samples with the keyboard, once per logic tick. `game.press('A')` taps a button for 2 ticks. `game.realKey('KeyM')` sends a real key press through the browser instead (a user gesture, the mute key: audioOutput.test.ts). `t.walk(dir, n)` / `t.walkTo(x, y)` (pathfinding) / `t.face(dir)` / `t.enterWarp()` (stairs, mats). |
 | **Mashing** | `game.mashUntil(t => cond)` presses A until `cond` holds. The check runs in the page at the start of every tick, so a press can't land on a menu that just opened. `answers: [[/nickname/, 'B']]` presses another button while the message matches. `trace: true` logs the messages it went through. |
 | **State** | `t.field()` (map, x, y, facing, script, …), `t.idle()`, `t.message()`, `t.party()`, `t.money()`, `t.itemCount('POTION')`, `t.flag(...)`, `t.var(...)`, `t.trainerDefeated('BUG_CATCHER_RICK')`, `t.battle()` (battlers, the player's `controller` function, the last battle `message`), `t.gbaScreen()` (e.g. `CB2_BuyMenu`, `CB2_NamingScreen`), `t.snapshot()` (every set flag and var), `t.state` (the GameState itself). |
 | **Events** | Milestones the game reports: `map`, `script`, `trainerApproach`, `battleTransition` (`transition`), `battleTransitionEnd` (`black`: share of black pixels in its last frame), `battleStart`, `battleEnd`, `whiteOut`, `evolution` (`from`, `to`, `stopped`), `mapTransition` (a cave's flash screen: `from`, `to`), `barnDoorWipe`, `mapNamePopupText` (each name the map name popup prints: `text`), `multichoice` (a multichoice menu opened: `mcId`), `titleScreen`, `titleScene` (`scene`: each SetTitleScreenScene), `mainMenu`, `oakSpeech`. Use `game.mark()` then `game.waitForEvent(type, { since })`. |

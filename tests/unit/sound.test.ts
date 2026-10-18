@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, test } from 'vitest';
-import { gMPlayInfo_BGM, gMPlayInfo_SE2 } from '../../src/audio/m4a';
+import { gMPlayInfo_BGM, gMPlayInfo_SE2, setVoiceData } from '../../src/audio/m4a';
 import { MUSICPLAYER_STATUS_PAUSE } from '../../src/audio/m4aInternal';
 import { loadSongTable, type SongsJson } from '../../src/audio/songTable';
 import { AgbMainFrameEnd, AgbMainSoundInit } from '../../src/audio/frame';
@@ -34,6 +34,8 @@ const SONGS_JSON = resolve(__dirname, '../../public/gen/audio/songs.json');
 
 describe.skipIf(!existsSync(SONGS_JSON))('sound.c on the extracted songs', () => {
   const json = existsSync(SONGS_JSON) ? (JSON.parse(readFileSync(SONGS_JSON, 'utf8')) as SongsJson) : null;
+  const gen = (f: string) => JSON.parse(readFileSync(resolve(__dirname, '../../public/gen/audio', f), 'utf8'));
+  if (json) setVoiceData(gen('voicegroups.json'), gen('samples.json'), gen('waves.json')); // as audioData.ts does
   let id: (name: string) => number;
 
   beforeEach(() => {
