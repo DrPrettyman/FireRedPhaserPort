@@ -24,14 +24,17 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
 
 ## Next up
 
-Audio, [AUDIO_PLAN.md](AUDIO_PLAN.md): batches A (PRs #84-#86) and B (PRs #89-#92) are in. The m4a engine
-(`src/audio/`) now runs every frame from both hosts (`AgbMainFrameEnd`): notes take channels, envelopes and sample
-positions run, cries have their song; `gba/sound.ts` is sound.c without the cries (fanfares, SEs, BGM, map music
-state), so `playfanfare` / `waitfanfare` / `waitse` and every IsSEPlaying / fanfare wait time as on the GBA. The
-browser output (AudioWorklet, autoplay, mute key M, `?audio=0/1/tone`) is in, but nothing feeds it yet: the game
-is still silent until batch C's mixer (W-m4a 3). SE, fanfare, song-loop and cry lengths measured on the user's ROM
-in mGBA all equal the engine's (`tests/unit/m4aRom.test.ts`). Next: batch C, W-m4a 3 (the mixer, first sound),
-W-sound 2 (cries, text codes), W-sound 3 (map music, savedMusic), W-sound 4 (field SEs); then batch D.
+Audio, [AUDIO_PLAN.md](AUDIO_PLAN.md): batches A (PRs #84-#86), B (PRs #89-#92) and C (PRs #95-#98) are in.
+**The game makes sound** (`npm run dev`, press any key; M mutes): the m4a engine (`src/audio/`) runs every frame
+from both hosts and its mixer (W-m4a 3) feeds the AudioWorklet; the DirectSound parts of the music, SEs and cries
+are heard, the PSG parts (squares, wave, noise: SE_SELECT, SE_DOOR, ...) are silent until W-m4a 4. `gba/sound.ts`
+is all of sound.c (cries with the BGM ducking, `playmoncry` / `waitmoncry`, the text printer's SE_SELECT and audio
+codes); map music (`gba/overworldMusic.ts`: every map's music, warps waiting for the fade, connections, bike and
+surf music, `savedMusic` in the save, version 6); the field's SEs (W-sound 4: bumps, ledges, doors, PCs, the save
+dialog, the Pokémon Center heal, field moves, menus). Every audio wait (fanfares, `waitse`, cries, warps) times
+as on the GBA. Next: batch D, W-m4a 4 (the PSG channels: music complete), W-sound 5 (battle I: controllers,
+scripts, battle music), W-sound 6 (battle II: balls, interface, anim SE panning / waits), W-sound 7 (scenes:
+evolution, trades, Hall of Fame, credits, Pokédex, bag); then W-ref 2 (listening comparison with mGBA).
 [SIDE_PLAN.md](SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
 `bufferdecorationname` (and the other decoration commands) and FLDEFF_USE_DIVE with DoDiveWarp, ported as FRLG's C
 has them; the `unused` gap tag is gone.
@@ -55,7 +58,7 @@ Hideout's `call_if_defeated` barrier, `GetQuestLogState` leaving VAR_RESULT stal
 could skip its battle, every nurse's YES/NO throwing on a constant expression). `tests/unit/scriptCoverageGaps.ts`
 lists what the scripts use that isn't ported: 0 main, 0 side, 42 postgame, 44 link (what FRLG compiles but never
 reaches, the decoration commands and Dive, is ported as the C has it). Next: audio
-([AUDIO_PLAN.md](AUDIO_PLAN.md) batches C-D), then the postgame (Sevii 4-7, Mt. Ember, Trainer
+([AUDIO_PLAN.md](AUDIO_PLAN.md) batch D), then the postgame (Sevii 4-7, Mt. Ember, Trainer
 Tower, the event islands).
 
 Other open work:
@@ -232,7 +235,7 @@ Loose ends:
 - [x] Battle: bag and party menu (choose item, use medicine/PP items/X items/balls, switch/send out) with reshow_battle_screen.c
 - [x] Old Man's catching tutorial (StartOldManTutorialBattle)
 - [x] Battle: move/status animations (src/battle/anim/: the battle_anim.c engine and every battle_anim_*.c file;
-  all 397 move, status, general and special anim scripts run. Without audio, SE and cry waits end at once)
+  all 397 move, status, general and special anim scripts run. The anim SEs go through BattleScene's no-op `ui.playSE` until W-sound 6, so SE waits end at once)
 - [x] Battle transitions (battle_transition.c): every FRLG B_TRANSITION_* (the grey-blink intro, Blur, Swirl,
   Shuffle, Big Poké Ball, Poké Balls trail, Clockwise wipe, Ripple, Wave, Slice, White bars fade, Grid squares,
   Angled wipes, the Elite Four / Champion mugshots) drawn over the field on the GBA layer, picked like battle_setup.c
@@ -244,10 +247,10 @@ Loose ends:
   or an evolution stone; holding B stops it; Crobat-style evolutions stop without the National Dex; learning the
   new species' move (incl. forgetting one through the summary screen); Nincada's Shedinja. TradeEvolutionScene
   isn't ported (no FRLG in-game trade evolves; no link trading)
-- [~] Audio playback: the m4a engine (`src/audio/`: sequencer, notes, channels, envelopes, the cry song) runs
-  every frame; sound.c without the cries (`gba/sound.ts`: fanfares, SEs, BGM, the fanfare / `waitse` waits); the
-  AudioWorklet output with autoplay and the mute key M. Silent until the mixer; cries, map music, the PSG channels
-  and most call sites are AUDIO_PLAN.md batches C-D
+- [~] Audio playback: the m4a engine (`src/audio/`: sequencer, notes, channels, envelopes, the cry song, the
+  DirectSound mixer and reverb) runs every frame; sound.c (`gba/sound.ts`: fanfares, SEs, BGM, cries and their
+  waits); map music (`gba/overworldMusic.ts`, savedMusic); the field's SEs; the AudioWorklet output with autoplay
+  and the mute key M. Not yet: the PSG channels, the battle's and the scenes' calls (AUDIO_PLAN.md batch D)
 - [x] Naming screen (naming_screen.c): every template (player, rival, PC box, nickname, caught mon); opened by
   ChangePokemonNickname from scripts and by the battle's nickname prompt after a catch
 - [x] Title screen (title_screen.c, clear save data screen) and Oak's speech (oak_speech.c); intro.c isn't ported

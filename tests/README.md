@@ -95,6 +95,8 @@ A test fails if the page throws or logs `console.error`. When a test fails, the 
    (Baton Pass's party screen replaces the battle sprites right after its anim ends). The same for `mashUntil`:
    have its predicate return the value (the Silph Scope's ghost is renamed ~50 ticks into the anim the mash
    waited for, and a read from Node after the mash came after that).
+   A watcher that `import()`s modules before its `until` starts late by the import's time: load them in an
+   awaited eval first (inGameTrades' trade scene missed CB2_InitInGameTrade's single frame that way).
    Several tests here failed only when four e2e runs shared the machine.
 6. Don't answer a prompt with one press after a fixed wait: if the question is still printing, the press only
    speeds the text up and the next mash answers it instead. Mash the answer button itself (a catch's "Give a

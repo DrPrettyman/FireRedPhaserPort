@@ -168,6 +168,12 @@ test('Reyley trades his MR. MIME for an ABRA: species, nickname, OT, level and t
   expect(await game.eval((t) => t.state!.dexCaught.has(122))).toBe(false); // national dex #122 MR. MIME
   await talk(game, 'partyMenu'); // A answers YES
   // The trade scene, watched from the page (a poll from here could miss its states)
+  // Load the watcher's modules first: under load, importing them inside the watcher let the trade start (and
+  // CB2_InitInGameTrade's one frame pass) before its poll began.
+  await game.eval(async () => {
+    const imp = (p: string) => new Function('p', 'return import(p)')(p);
+    await Promise.all(['/src/menus/tradeScene.ts', '/src/gba/ppu.ts', '/src/gba/hw.ts', '/src/gba/sprite.ts'].map(imp));
+  });
   const scene = watchTradeScene(game);
   await choose(game, 1);
   const messages = await mashOn(game, 'idle');

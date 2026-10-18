@@ -3011,3 +3011,30 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   wraparound, slots, reverb impulse, mono through the DAC, bookkeeping on / off by hand and over MUS_TITLE + SEs +
   cries for 900 frames, the renders); e2e audioOutput (now: `?audio=1` frames reach the worklet with a non-zero
   peak on the title screen), titleScreen, audio.
+
+### AUDIO_PLAN.md batch C merged (PRs #94-#98)
+
+- **#94** (docs): batch C's ownership (decisions 17-19, coordinator): every sound call in the warp paths to W-sound
+  3, SetPokemonCryStereo's callers to W-m4a 3, the workers' full e2e runs taking turns through a lock directory.
+- **#95** W-m4a 3 (the mixer: the first sound), **#96** W-sound 4 (the field's SEs), **#97** W-sound 3 (map music,
+  savedMusic, save version 6, the warps' music waits and SEs), **#98** W-sound 2 (cries, the text printer's audio
+  codes, the audio specials), merged in that order (as they finished).
+- Merges: #96 merged master in cleanly; #97's worker merged master itself (its warps' door SEs moved onto #96's
+  `FieldDoors.getDoorSoundEffect`); #98 conflicted on `gba/sound.ts` (header comment, probe: both kept),
+  `script/ScriptEngine.ts` (imports: both kept) and `tests/e2e/surf.test.ts` (#97 and #98 fixed the same race:
+  master's kept). The docs' union merge doubled four DEVIATIONS entries (battles, field sounds, evolution, egg
+  hatching: tidied, incl. a stale evolution fragment from batch B) and ran LOG entries together (blank lines
+  restored). Each merge's diff against the PR head was checked to hold only master's changes plus those.
+- Found on the way: FRLG's mixer never reads `soundInfo.mode & 1` (mono is SetPokemonCryStereo's DMA routing);
+  races fixed by the workers in surf, playerAvatar (a ledge jump overshooting when DOWN was released after the
+  tick batch), storyLeague (Mewtwo's PSYCHIC running out of PP in the Champion battle: 3 PP Ups) and audio.test.ts.
+- Tests: per merge typecheck and unit; e2e per PR: #95 audioOutput, titleScreen, audio, newGame; #96 fieldSounds,
+  audio, audioOutput, titleScreen, options, saveContinue; #97 mapMusic, saveContinue, newGame, field, hallOfFame,
+  fieldSounds, audio; #98 audioCries, audio, fieldSounds, mapMusic, surf, titleScreen, newGame, evolution,
+  eggHatch, trainerBattle. W-sound 2, 3 and 4 each ran the full suite before merging master in (398 / 396 / 398
+  tests, all green after their fixes; no tick budgets raised). Full run on master 8504a80: typecheck clean, 542
+  unit in 40 files, **407 e2e in 63 files: 406 passed, 20.3 min**; the one failure, inGameTrades' Reyley trade,
+  was a race (the scene watcher imported its modules inside the eval, so under load its poll began after
+  CB2_InitInGameTrade's one frame): the modules now load in an awaited eval first, 3 reruns green, cause added to
+  tests/README.md. A headless render of MUS_PALLET (`tools/render-audio.ts`, 600 frames) gave 134,400 samples per
+  FIFO, RMS 9.7 / peak 47 of 128.

@@ -5,8 +5,8 @@ commands do nothing, the GBA-layer menus call the stubs, and the field, the batt
 their calls for a comment. This plan says how the GBA
 makes its sound, where the game uses it (and where game logic *waits* on it), how to bring it into the port, and
 how to split the work into batches. It was written as research (batch 3 of [SIDE_PLAN.md](SIDE_PLAN.md),
-W-audioplan); the user has reviewed it and answered its open questions ("Decisions", marked "(user)"), batches A
-and B are in.
+W-audioplan); the user has reviewed it and answered its open questions ("Decisions", marked "(user)"), batches A,
+B and C are in.
 
 **The recommendation in one paragraph:** port the m4a engine itself (the sequencer, the channel allocator, the
 mixer and the CGB channels: `src/m4a.c`, `src/m4a_1.s`) to TypeScript and drive it from the 60 Hz tick, once per
@@ -679,6 +679,25 @@ Checked against master `15b1f5f` before starting (decisions 17-19):
 - W-sound 2, 3 and 4 lengthen waits, so each runs the full e2e suite once (Rules). Three suites at once overload
   the machine, so the workers take turns (decision 19): `mkdir /Users/joshua/Coding/PokemonProjects/.e2e-full.lock`
   before the run (it fails while another worker holds it: wait and retry), `rmdir` it afterwards, also on failure.
+
+Result (PRs #95-#98): all four units done. Notes for batch D from the workers:
+
+- **W-m4a 4:** FRLG's mixer never reads `soundInfo.mode & 1`; it matters only in CgbSound's pan (m4a.c:907). Mono
+  is the routing SetPokemonCryStereo writes to `gRegSoundCntH`, sent with each frame (outputCore's DAC applies it).
+  PSG writes go into `pushFrame`'s `psg` field: extend `PcmFrame` / `m4aPcmFrame()` and `AgbMainFrameEnd`.
+  `tools/render-audio.ts` and `tests/audioRender.ts` render the DirectSound buffers only; the PSG needs outputCore's
+  synth there too. reset_save_heap.c's SetPokemonCryStereo is in ReloadSave (link only): not wired.
+- **W-sound 5-7 (cries):** pass species ids and `K.CRY_MODE_*`. IsCryFinished waits only while the ducking task
+  exists (Normal, ByMode except DOUBLES, Script); NoDucking and DOUBLES are finished at once, and IsCryFinished
+  clears the cry songs (cutting a NoDucking cry, as on the GBA). IsCryPlaying(OrClearCrySongs) read the player.
+- **W-sound 5:** BattleScene's `ui.playCry` is still a no-op and controllerOpponent's intro-cry wait a comment. Map
+  music comes back after a battle through returnToField's Overworld_PlaySpecialMapMusic, so battle music only
+  needs starting in the transition.
+- **W-sound 7:** the credits' NoDucking cries, the Hall of Fame's cries, FadeOutBGM and its warp's music fade are
+  comments. The trades, daycare, move relearner and slot machine change the map music: `runScreenFromScript`
+  doesn't call Overworld_PlaySpecialMapMusic on return yet.
+- Text A presses play SE_SELECT on SE2 (and talking plays one), so a `waitse` right after a text box waits ~11
+  frames, as on the GBA.
 
 ### Shared building blocks and owners
 
