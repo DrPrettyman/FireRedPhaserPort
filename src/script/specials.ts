@@ -16,12 +16,18 @@ import { ForcePlayerToStartSurfing, GetPlayerFacingDirection, SeafoamIslandsB4F_
 import { RockSmashWildEncounter } from '../world/fieldMoves';
 import { STORY_SPECIALS } from './storySpecials';
 import { SIDE_SPECIALS } from './sideSpecials';
+import { PARTY_MENU_SPECIALS } from '../menus/partyMenuSpecials';
 
 export interface SpecialEnv {
   state: GameState;
   host: ScriptHost;
   /** For specials that start a task the script then blocks on with `waitstate` (ScriptContext_Stop/Enable). */
   setWaitState(done: () => boolean): void;
+  /**
+   * The special left the field (SetMainCallback2) without a `waitstate` after it: the script doesn't run again
+   * until the field is back, so it waits on `done` before its next command (SelectMoveDeleterMove).
+   */
+  stopScript(done: () => boolean): void;
   /** ShowFieldMessage(label); the wait ends once it has printed (IsFieldMessageBoxHidden). */
   showFieldMessage(label: string): () => boolean;
   /** The special left the field (SetMainCallback2), so the script never resumes. */
@@ -64,6 +70,7 @@ const NO_OP = [
 
 export const SPECIALS: Record<string, Special> = {
   ...Object.fromEntries(NO_OP.map((name) => [name, () => {}])),
+  ...PARTY_MENU_SPECIALS, // menus/partyMenuSpecials.ts: party_menu_specials.c, ChooseMonForMoveTutor
   ...STORY_SPECIALS, // storySpecials.ts: field_specials.c's story specials (Lt. Surge's trash cans, ...)
   ...SIDE_SPECIALS, // sideSpecials.ts: Oak's Pokédex rating, the help context pair
 

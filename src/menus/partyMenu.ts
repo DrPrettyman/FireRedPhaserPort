@@ -4226,7 +4226,16 @@ export function ChooseMonForDaycare(): void {
 }
 
 export function ChoosePartyMonByMenuType(menuType: number): void {
+  gFieldCallback2.fn = CB2_FadeFromPartyMenu;
   InitPartyMenu(menuType, K.PARTY_LAYOUT_SINGLE, K.PARTY_ACTION_CHOOSE_AND_CLOSE, false, K.PARTY_MSG_CHOOSE_MON, Task_HandleChooseMonInput, CB2_ReturnToField);
+}
+
+/**
+ * CB2_FadeFromPartyMenu (gFieldCallback2 after ChoosePartyMonByMenuType): FadeInFromBlack, then
+ * Task_PartyMenuWaitForFade's UnlockPlayerFieldControls + ScriptContext_Enable once it's over.
+ */
+function CB2_FadeFromPartyMenu(field: FieldCallbackHost): () => boolean {
+  return field.fadeInFromBlack();
 }
 
 /** CB2_ReturnToPartyMenuFromFlyMap: the fly map closed without a destination. */
