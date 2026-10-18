@@ -71,6 +71,7 @@ GFX_PREFIXES = (
     "graphics/diploma/",  # diploma.c (W-misc)
     "graphics/slot_machine/",
     "graphics/seagallop/",  # seagallop.c, the ferry scene (W-ferry)
+    "graphics/easy_chat/",  # easy_chat_3.c, the Easy Chat screen (W-easychat)
     "data/tilesets/",
 )
 
