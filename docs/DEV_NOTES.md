@@ -370,8 +370,18 @@ this is the next level down. When you add or change a subsystem, update its entr
   gFieldCallback2 / gFieldCallback, e.g. the party menu's CB2_FadeFromPartyMenu, and the wait ends when that has).
   Followed by `waitstate`, pass the wait to `setWaitState`; without one (SelectMoveDeleterMove), to
   `SpecialEnv.stopScript`. ChoosePartyMon leaves the slot in VAR_0x8004 (SLOT_CANCEL = PARTY_SIZE + 1 on B).
-  W-trade / W-daycare: `special ChoosePartyMon` + `waitstate` just works. Tests: tests/e2e/moveTutors.test.ts
-  (Route 4's Mega Punch tutor, the Fuchsia move deleter), tests/unit/partyMenuSpecials.test.ts.
+  W-trade / W-daycare: `special ChoosePartyMon` + `waitstate` just works. `runScreenFromScript(init, gfxSymbols)`
+  preloads what the screen draws beyond prepareMenus (e.g. `LEARN_MOVE_GFX`).
+  The move relearner: `menus/learnMove.ts` is learn_move.c (CB2_MoveRelearner_Init / _Resume, the
+  MENU_STATE_* machine, the list, the move info windows, the YES/NO prompts, the forget-a-move summary through
+  ShowSelectMovePokemonSummaryScreen) plus pokemon.c's GetMoveRelearnerMoves / GetNumberOfRelearnableMoves.
+  `special TeachMoveRelearnerMove` (in PARTY_MENU_SPECIALS) fades, then `runScreenFromScript(StartMoveRelearner)`;
+  VAR_0x8004 comes back TRUE if a move was taught. ChooseMonForMoveRelearner's party menu sets VAR_0x8005 =
+  GetNumberOfRelearnableMoves (HandleChooseMonSelection). The Cape Brink tutor's CapeBrinkGetMoveToTeachLeadPokemon
+  / HasLearnedAllMovesFromCapeBrinkTutor (field_specials.c) are there too; it teaches through ChooseMonForMoveTutor.
+  Probe `__test.moveRelearner()` (MENU_STATE_* `state`, the list's move ids, `selectedIndex`, `selectedMoveSlot`).
+  Tests: tests/e2e/moveTutors.test.ts (Route 4's Mega Punch tutor, the Fuchsia move deleter, Two Island's Move
+  Maniac, the Cape Brink tutor), tests/unit/partyMenuSpecials.test.ts.
 - **Boot, title screen and soft reset:** `BootScene` loads the extracted data and starts `MainMenuScene` on the
   title screen (`entry: 'title'`). MainMenuScene is one GbaHostScene for the boot screens, which hand over through
   gMain like the C: `menus/titleScreen.ts` (title_screen.c: CB2_InitTitleScreen, the intro scenes, the run scene

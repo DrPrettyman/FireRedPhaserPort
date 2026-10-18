@@ -52,8 +52,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Move deleter (SelectMoveDeleterMove): on the GBA the script's `fadescreen FADE_FROM_BLACK` after the special
     runs (unseen) before the summary screen takes over, and FieldCB_ContinueScriptHandleMusic fades the field in
     afterwards. Here the script waits at the special and that `fadescreen` does the fade in (same on screen).
-  - Party menu: mail, the move relearner screen (ChooseMonForMoveRelearner opens the party menu, then warns), Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
+  - Party menu: mail, Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
     field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
+  - Move relearner (menus/learnMove.ts): no audio (SE_SELECT, the MUS_LEVEL_UP fanfare after a move is learned;
+    IsFanfareTaskInactive is always true, so the screen waits only for A). The C's scroll arrows are kept as they
+    are: scrollPositionMaybe never changes, so with more than six entries the down arrow always shows and the up
+    arrow never does.
   - Region map / Fly (menus/regionMap.ts, world/fly.ts): no audio (SE_DEX_SCROLL, SE_CARD_OPEN, SE_M_FLY, ...).
     The bird of Fly always uses the extracted bird sheet's own palette (Red's), where the GBA draws it in OBJ
     palette 0, the player's (Leaf's frames would use hers). gExitStairsMovementDisabled isn't kept (no stair
