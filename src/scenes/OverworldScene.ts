@@ -40,6 +40,7 @@ import type { PlayerLocation } from '../state/GameState';
 import { GetMapName } from '../world/regionMap';
 import { YesNoMenu } from '../ui/YesNoMenu';
 import { MonPicBox } from '../ui/MonPicBox';
+import { museumFossilPicGfxSymbols, registerMuseumFossilPic } from '../ui/MuseumFossilPic';
 import { MoneyBox } from '../ui/MoneyBox';
 import { CoinsBox } from '../ui/CoinsBox';
 import { loadSlotMachineData } from '../menus/slotMachineLogic';
@@ -315,11 +316,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     });
     this.gbaScreen = new FieldGbaScreen(this, DEPTH_FADE + 10);
     setTransitionFieldCamera(() => this.gbaScreen.cameraPixelOffset());
-    await loadGfx([...mapTransitionGfxSymbols, ...fieldListMenuGfxSymbols, ...helpMessageWindowGfxSymbols]);
+    await loadGfx([...mapTransitionGfxSymbols, ...fieldListMenuGfxSymbols, ...helpMessageWindowGfxSymbols, ...museumFossilPicGfxSymbols]);
     setUserFrameTypeSource(() => this.state.optionsWindowFrameType + 1); // the options' FRAME for field windows
     this.flash = new FieldFlash(this);
     this.fonts = new Fonts(this, this.assets.fonts);
     this.messageBox = new MessageBox(this, this.fonts, this.buttons, charmap, this.state);
+    registerMuseumFossilPic({ scene: this, fonts: this.fonts, input: this.buttons });
     this.scripts = new ScriptEngine(
       this.assets.scripts,
       this.defines,
@@ -1633,11 +1635,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * CB2_ReturnToField; then RunFieldCallback runs gFieldCallback2 / gFieldCallback (or a plain fade in), and the
    * wait ends once that has finished (its ScriptContext_Enable).
    */
-  runScreenFromScript(init: () => void): Wait {
+  runScreenFromScript(init: () => void, gfxSymbols: string[] = []): Wait {
     let overlay: { tick(): boolean } | undefined;
     this.messageBox.hide(); // CleanupOverworldWindowsAndTilemaps
     this.screenFade.fill(false); // CB2_ReturnToField reloads the field's palettes black
-    this.runFieldMenu({ menu: 'itemFromField', itemScreen: { init, gfxSymbols: [] } }, () => {
+    this.runFieldMenu({ menu: 'itemFromField', itemScreen: { init, gfxSymbols } }, () => {
       this.runFieldCallback(false);
       overlay = this.overlay;
     });
