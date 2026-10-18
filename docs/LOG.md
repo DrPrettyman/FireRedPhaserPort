@@ -2824,3 +2824,23 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   throughout; the Game Corner fisher's `waitse` holds `setflag` until SE_SHOP's player stops, against the engine's
   own length for SE_SHOP), 3 runs green; the full e2e suite once before the merge (above), and after it audio,
   audioOutput, eggHatch, titleScreen and wildBattle.
+
+### AUDIO_PLAN.md batch B merged (PRs #88-#92)
+
+- **#88** (docs): the user's answer to open question 1 (decision 15: frame counts measured from the ROM may go into
+  unit tests); W-ref split in two, W-ref 1 (mGBA timings) run as batch B's fourth worker (decision 16, coordinator);
+  WORKFLOW.md's e2e suite figure raised from ~10 to ~20 minutes.
+- **#89** W-m4a 2 (notes, channels, cries; silent), **#90** W-out 1 (AudioWorklet output, autoplay, mute key M),
+  **#91** W-sound 1 (sound.c without the cries, `AgbMainFrameEnd`, fanfare and `waitse` waits, audio data at boot,
+  test hooks), **#92** W-ref 1 (mGBA timings on the rev 1 ROM: every SE, fanfare, loop and cry number equals the
+  engine's; the audio data is in the rev 1 ROM byte for byte), merged in that order (as they finished).
+- Merges: #90 and #91 merged master in (docs union-merged; #91's worker resolved `dev/testHooks.ts` and
+  `src/battleTest.ts` against W-out 1 and wired W-m4a 2's `setVoiceData` into `loadAudioData` itself); each
+  merge's diff against the PR head was checked to hold only master's changes plus those resolutions.
+- Found on the way: FRLG's item balls and `giveitem` play MUS_LEVEL_UP (80 frames), not MUS_OBTAIN_ITEM;
+  AUDIO_PLAN.md sections 5 and 6 corrected. The diploma passed fanfare 0 (fixed in #91).
+- Tests: per merge typecheck and unit; e2e per PR: #89 titleScreen; #90 audioOutput, titleScreen, newGame, field,
+  wildBattle; #91 audio, audioOutput, titleScreen, newGame, eggHatch (its worker ran the full suite before
+  merging master in: 389 passed, no budgets raised); #92 none (unit test and docs only). Full run on master
+  097f0fb (everything but #92's unit test): typecheck clean, 426 unit in 36 files, **393 e2e in 60 files, all
+  passed first time, 20.8 min**. Final master 5ae37a9: typecheck clean, 491 unit in 37 files.

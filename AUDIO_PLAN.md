@@ -5,8 +5,8 @@ commands do nothing, the GBA-layer menus call the stubs, and the field, the batt
 their calls for a comment. This plan says how the GBA
 makes its sound, where the game uses it (and where game logic *waits* on it), how to bring it into the port, and
 how to split the work into batches. It was written as research (batch 3 of [SIDE_PLAN.md](SIDE_PLAN.md),
-W-audioplan); the user has reviewed it and answered its open questions ("Decisions", marked "(user)"), batch A is
-in and batch B is under way.
+W-audioplan); the user has reviewed it and answered its open questions ("Decisions", marked "(user)"), batches A
+and B are in.
 
 **The recommendation in one paragraph:** port the m4a engine itself (the sequencer, the channel allocator, the
 mixer and the CGB channels: `src/m4a.c`, `src/m4a_1.s`) to TypeScript and drive it from the 60 Hz tick, once per
@@ -501,7 +501,8 @@ first (decision 5).
   `m4aSongNumStart`-level start, plus `__test.audio()` for the players' state (song, playing, paused, volume) and
   the cry players. Scenarios (`tests/e2e/audio.test.ts` and in the call-site units' own files): walking into a
   door plays SE_DOOR and the new map's music starts after the BGM fade (the warp now waits ~64 frames); an item
-  ball's MUS_OBTAIN_ITEM holds the message 160 frames and the BGM resumes; `waitse` holds a script until the SE
+  ball's fanfare (MUS_LEVEL_UP in FRLG: obtain_item.inc's EventScript_PlayFanfareObtainedItem) holds the
+  message 80 frames and the BGM resumes; `waitse` holds a script until the SE
   ends; a trainer's encounter music, the battle music, the victory music; a wild battle's encounter cry holds the
   intro; bike music on and off, saved and continued; surf music.
 - **Existing tests:** once the engine is in, every wait in section 2 gets longer (warps, cries, SE waits): the
@@ -593,7 +594,7 @@ W-m4a 3 is split in two (W-m4a 3, the mixer; W-out 1, the browser output), so ba
    hosts with the fanfare task (decision 5), the script commands playse ... waitfanfare (scrcmd.c:883-990),
    `__test.audioEvents` / `__test.audio()`, eggHatch's local fanfare counter removed, the audio data loaded by
    BootScene and battle-test's BattleTestBoot, the frame hook in BattleScene's host too (decision 12). E2E
-   `tests/e2e/audio.test.ts`: an item fanfare holds its message 160 frames, `waitse` holds a script. Needs
+   `tests/e2e/audio.test.ts`: an item fanfare holds its message 80 frames (MUS_LEVEL_UP), `waitse` holds a script. Needs
    W-m4a 1 and W-audiodata 1 (the songs), not the mixer: the waits are right before anything is heard. Lengthens
    waits: runs the full e2e suite and raises the tick budgets that need it.
 2. **Cries, text codes and specials.** sound.c's cries (sound.c:344-537, 194 lines: PlayCry_*, PlayCryInternal's

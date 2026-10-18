@@ -24,12 +24,15 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
 
 ## Next up
 
-Audio, [AUDIO_PLAN.md](AUDIO_PLAN.md): the user answered its questions (PR #83: GBA-exact mix, the decomp's own
-mid2agb built during `npm run extract`, a mute key M, GBA timing, battle-test audio, a later mGBA reference unit);
-batch A is in (PRs #84-#86): `public/gen/audio/` (songs via mid2agb, voicegroups, samples, waves, cries) and the m4a
-sequencer in `src/audio/` (silent, not wired into the game yet). Next: batch B, W-m4a 2 (notes, channels, cries),
-W-sound 1 (sound.c, the frame hook, fanfare and `waitse` waits; lengthens waits: full e2e), W-out 1 (the
-AudioWorklet output, autoplay, the mute key). Nothing is audible until batch C (W-m4a 3). [SIDE_PLAN.md](SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
+Audio, [AUDIO_PLAN.md](AUDIO_PLAN.md): batches A (PRs #84-#86) and B (PRs #89-#92) are in. The m4a engine
+(`src/audio/`) now runs every frame from both hosts (`AgbMainFrameEnd`): notes take channels, envelopes and sample
+positions run, cries have their song; `gba/sound.ts` is sound.c without the cries (fanfares, SEs, BGM, map music
+state), so `playfanfare` / `waitfanfare` / `waitse` and every IsSEPlaying / fanfare wait time as on the GBA. The
+browser output (AudioWorklet, autoplay, mute key M, `?audio=0/1/tone`) is in, but nothing feeds it yet: the game
+is still silent until batch C's mixer (W-m4a 3). SE, fanfare, song-loop and cry lengths measured on the user's ROM
+in mGBA all equal the engine's (`tests/unit/m4aRom.test.ts`). Next: batch C, W-m4a 3 (the mixer, first sound),
+W-sound 2 (cries, text codes), W-sound 3 (map music, savedMusic), W-sound 4 (field SEs); then batch D.
+[SIDE_PLAN.md](SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
 `bufferdecorationname` (and the other decoration commands) and FLDEFF_USE_DIVE with DoDiveWarp, ported as FRLG's C
 has them; the `unused` gap tag is gone.
 
@@ -52,7 +55,7 @@ Hideout's `call_if_defeated` barrier, `GetQuestLogState` leaving VAR_RESULT stal
 could skip its battle, every nurse's YES/NO throwing on a constant expression). `tests/unit/scriptCoverageGaps.ts`
 lists what the scripts use that isn't ported: 0 main, 0 side, 42 postgame, 44 link (what FRLG compiles but never
 reaches, the decoration commands and Dive, is ported as the C has it). Next: audio
-([AUDIO_PLAN.md](AUDIO_PLAN.md) batches B-D), then the postgame (Sevii 4-7, Mt. Ember, Trainer
+([AUDIO_PLAN.md](AUDIO_PLAN.md) batches C-D), then the postgame (Sevii 4-7, Mt. Ember, Trainer
 Tower, the event islands).
 
 Other open work:
@@ -241,8 +244,10 @@ Loose ends:
   or an evolution stone; holding B stops it; Crobat-style evolutions stop without the National Dex; learning the
   new species' move (incl. forgetting one through the summary screen); Nincada's Shedinja. TradeEvolutionScene
   isn't ported (no FRLG in-game trade evolves; no link trading)
-- [~] Audio playback: the m4a sequencer (`src/audio/`: MPlayMain, the track commands, fades, controls), silent and
-  not wired in; notes/channels, the mixer, the output, the CGB channels and sound.c are AUDIO_PLAN.md batches B-D
+- [~] Audio playback: the m4a engine (`src/audio/`: sequencer, notes, channels, envelopes, the cry song) runs
+  every frame; sound.c without the cries (`gba/sound.ts`: fanfares, SEs, BGM, the fanfare / `waitse` waits); the
+  AudioWorklet output with autoplay and the mute key M. Silent until the mixer; cries, map music, the PSG channels
+  and most call sites are AUDIO_PLAN.md batches C-D
 - [x] Naming screen (naming_screen.c): every template (player, rival, PC box, nickname, caught mon); opened by
   ChangePokemonNickname from scripts and by the battle's nickname prompt after a catch
 - [x] Title screen (title_screen.c, clear save data screen) and Oak's speech (oak_speech.c); intro.c isn't ported
