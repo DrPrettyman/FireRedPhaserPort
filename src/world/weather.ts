@@ -6,8 +6,14 @@
 //
 // FRLG's maps and scripts reach WEATHER_NONE, WEATHER_SUNNY, WEATHER_SHADE and WEATHER_FOG_HORIZONTAL
 // (POSTGAME_PLAN.md decision 1); WEATHER_UNDERWATER shares the fog's callbacks in FRLG's sWeatherFuncs, so it runs
-// too. Asking for any other weather logs once and runs as WEATHER_NONE (rain, snow, thunder, ash, sandstorm, diagonal
-// fog, underwater bubbles, drought, downpour: no FRLG map or script reaches them).
+// too. The rain weathers (RAIN, RAIN_THUNDERSTORM, DOWNPOUR: world/weatherRain.ts) no FRLG map reaches are ported as
+// the C has them (GAPS_PLAN.md batch 13), with field_weather.c's sound half (SetRainStrengthFromSoundEffect's SE3
+// loops, PlayRainStoppingSoundEffect). Asking for any other weather logs once and runs as WEATHER_NONE (clouds, snow,
+// ash, sandstorm, diagonal fog, underwater bubbles, drought).
+//
+// The weathers' sprites (but the horizontal fog's, world/fogHorizontal.ts) are world/weatherSprites.ts's: the
+// weathers create them there, the field runs their callbacks (AnimateWeatherSprites) and draws them
+// (world/weatherSpriteRenderer.ts).
 //
 // The field draws from atlases and Phaser textures, not from palette RAM: the host (OverworldScene) loads the
 // gamma-shifted BG palettes through tilesetVram (gPlttBufferFaded; tilesetVram keeps gPlttBufferUnfaded beside it)
@@ -19,6 +25,10 @@
 // gamma tables and run the fog.
 
 import { state } from '../battle/env';
+import { IsSpecialSEPlaying, PlaySE } from '../gba/sound';
+import type { Sprite } from '../gba/sprite';
+import { DOWNPOUR, RAIN, THUNDERSTORM } from './weatherRain';
+import { ResetWeatherSprites, setWeatherSpritePalette } from './weatherSprites';
 
 // The gamma types of sBasePaletteGammaTypes (field_weather.c's anonymous enum)
 const GAMMA_NONE = 0;
@@ -27,10 +37,10 @@ const GAMMA_ALT = 2;
 const GAMMA_TYPES: Record<string, number> = { GAMMA_NONE, GAMMA_NORMAL, GAMMA_ALT };
 
 // include/constants/field_weather.h
-const WEATHER_PAL_STATE_CHANGING_WEATHER = 0;
-const WEATHER_PAL_STATE_SCREEN_FADING_IN = 1;
-const WEATHER_PAL_STATE_SCREEN_FADING_OUT = 2;
-const WEATHER_PAL_STATE_IDLE = 3;
+export const WEATHER_PAL_STATE_CHANGING_WEATHER = 0;
+export const WEATHER_PAL_STATE_SCREEN_FADING_IN = 1;
+export const WEATHER_PAL_STATE_SCREEN_FADING_OUT = 2;
+export const WEATHER_PAL_STATE_IDLE = 3;
 
 /** The number of BG palettes (the OBJ palettes are 16-31 in the C's indexing). */
 const NUM_BG_PALS = 16;
@@ -65,15 +75,16 @@ export interface WeatherHost {
   /** CreateFogHorizontalSprites' sprites (LoadSpriteSheet + the 20 CreateSpriteAtEnd) and DestroyFogHorizontalSprites. */
   createFogHorizontalSprites(): void;
   destroyFogHorizontalSprites(): void;
-  /** gSpriteCoordOffsetX: the camera's horizontal offset as the sprites take it (field_camera.c UpdateCameraPanning). */
+  /** gSpriteCoordOffsetX / Y: the camera's offset as the sprites take it (field_camera.c UpdateCameraPanning). */
   spriteCoordOffsetX(): number;
+  spriteCoordOffsetY(): number;
 }
 
 /** A 5-bit channel → 5-bit channel table, for all three channels or one each for red, green and blue. */
 export type ChannelTables = Uint8Array | readonly [Uint8Array, Uint8Array, Uint8Array];
 
 /** One sWeatherFuncs row. */
-interface WeatherCallbacks {
+export interface WeatherCallbacks {
   initVars(): void;
   main(): void;
   initAll(): void;
@@ -106,7 +117,7 @@ export function fadedFieldEffectPaletteTags(): readonly string[] {
 
 // ------------------------------------------------------------------ sWeather (gWeatherPtr)
 
-/** The part of struct Weather the ported weathers use. */
+/** The part of struct Weather the ported weathers use (gWeatherPtr). */
 const sWeather = {
   gammaShifts: Array.from({ length: NUM_GAMMA_LEVELS }, () => new Uint8Array(32)),
   altGammaShifts: Array.from({ length: NUM_GAMMA_LEVELS }, () => new Uint8Array(32)),
@@ -138,7 +149,25 @@ const sWeather = {
   fogHScrollOffset: 0,
   fogHScrollPosX: 0,
   fogHSpritesCreated: false,
+  // the rain weathers (world/weatherRain.ts)
+  rainSprites: Array.from({ length: 24 }, (): Sprite | null => null),
+  rainSpriteVisibleCounter: 0,
+  curRainSpriteIndex: 0,
+  targetRainSpriteCount: 0,
+  rainSpriteCount: 0,
+  rainSpriteVisibleDelay: 0,
+  isDownpour: 0,
+  rainStrength: 0,
+  thunderDelay: 0,
+  thunderCounter: 0,
+  thunderAllowEnd: false,
+  thunderSkipShort: 0,
+  thunderShortRetries: 0,
+  thunderTriggered: false,
 };
+
+/** gWeatherPtr: the weathers' modules (world/weatherRain.ts, ...) work on it as the C's do. */
+export const gWeatherPtr = sWeather;
 
 /** The weather task: Task_WeatherInit until the screen fades in, then Task_WeatherMain; undefined once ResetTasks killed it. */
 let task: 'Task_WeatherInit' | 'Task_WeatherMain' | undefined;
@@ -274,8 +303,13 @@ function DestroyFogHorizontalSprites(): void {
 }
 
 /** gSpriteCoordOffsetX (0 without a field). */
-function spriteCoordOffsetX(): number {
+export function spriteCoordOffsetX(): number {
   return host?.spriteCoordOffsetX() ?? 0;
+}
+
+/** gSpriteCoordOffsetY (0 without a field). */
+export function spriteCoordOffsetY(): number {
+  return host?.spriteCoordOffsetY() ?? 0;
 }
 
 /** The fog sprites' callback reads this (FogHorizontalSpriteCallback): the scroll, or undefined without the sprites. */
@@ -283,15 +317,21 @@ export function fogHorizontalScrollPosX(): number | undefined {
   return sWeather.fogHSpritesCreated ? sWeather.fogHScrollPosX : undefined;
 }
 
-/** sWeatherFuncs rows the port has (FogHorizontal: WEATHER_FOG_HORIZONTAL and WEATHER_UNDERWATER). The rest run None's callbacks. */
-const PORTED: Record<string, WeatherCallbacks> = { None: NONE, Sunny: SUNNY, Shade: SHADE, FogHorizontal: FOG_HORIZONTAL };
+/**
+ * sWeatherFuncs rows the port has (FogHorizontal: WEATHER_FOG_HORIZONTAL and WEATHER_UNDERWATER; Downpour:
+ * Downpour_InitVars / _InitAll with Thunderstorm_Main / _Finish). The rest run None's callbacks. Built on first use:
+ * the weathers' modules import this one.
+ */
+let PORTED: Record<string, WeatherCallbacks> | undefined;
+const ported = (): Record<string, WeatherCallbacks> =>
+  (PORTED ??= { None: NONE, Sunny: SUNNY, Shade: SHADE, FogHorizontal: FOG_HORIZONTAL, Rain: RAIN, Thunderstorm: THUNDERSTORM, Downpour: DOWNPOUR });
 
 const loggedUnported = new Set<number>();
 
 /** sWeatherFuncs[weather] */
 function weatherFuncs(weather: number): WeatherCallbacks {
   const name = data?.funcs[weather];
-  const funcs = name ? PORTED[name] : undefined;
+  const funcs = name ? ported()[name] : undefined;
   if (funcs) return funcs;
   if (!loggedUnported.has(weather)) {
     loggedUnported.add(weather);
@@ -300,10 +340,14 @@ function weatherFuncs(weather: number): WeatherCallbacks {
   return NONE;
 }
 
-/** The weathers FadeScreen fades in with the weather's palettes (useWeatherPal), as far as they're ported. */
+/** The weathers FadeScreen fades in with the weather's palettes (useWeatherPal), but WEATHER_DROUGHT (not ported). */
 function fadesInWithWeatherPalettes(weather: number): boolean {
-  // RAIN, RAIN_THUNDERSTORM, DOWNPOUR, SNOW, FOG_HORIZONTAL, SHADE, DROUGHT in the C; SHADE and FOG_HORIZONTAL are ported
-  return weather === define('WEATHER_SHADE') || weather === define('WEATHER_FOG_HORIZONTAL');
+  return ['WEATHER_RAIN', 'WEATHER_RAIN_THUNDERSTORM', 'WEATHER_DOWNPOUR', 'WEATHER_SNOW', 'WEATHER_FOG_HORIZONTAL', 'WEATHER_SHADE'].some((w) => weather === define(w));
+}
+
+/** FadeInScreenWithWeather's FadeInScreen_RainShowShade weathers. */
+function fadesInWithRainShowShade(weather: number): boolean {
+  return ['WEATHER_RAIN', 'WEATHER_RAIN_THUNDERSTORM', 'WEATHER_DOWNPOUR', 'WEATHER_SNOW', 'WEATHER_SHADE'].some((w) => weather === define(w));
 }
 
 function define(name: string): number {
@@ -316,9 +360,14 @@ function define(name: string): number {
 export function StartWeather(): void {
   if (task === 'Task_WeatherMain') return; // FuncIsActiveTask(Task_WeatherMain)
   // AllocSpritePalette(PALTAG_WEATHER) + gDefaultWeatherSpritePalette: the fog module's texture has its colours
+  setWeatherSpritePalette('gDefaultWeatherSpritePalette');
   BuildGammaShiftTables();
-  // fogHSpritesCreated = FALSE (the other weathers' sprite counters: not ported). The map load's ResetSpriteData
-  // freed the sprites on the GBA; the port's are Phaser's, so they go here.
+  // The map load's ResetSpriteData freed the sprites on the GBA; the port's outlive it, so they go here.
+  ResetWeatherSprites();
+  sWeather.rainSpriteCount = 0;
+  sWeather.curRainSpriteIndex = 0;
+  // (cloudSpritesCreated, snowflakeSpriteCount, ashSpritesCreated, fogDSpritesCreated, sandstormSpritesCreated,
+  // sandstormSwirlSpritesCreated, bubblesSpritesCreated: their weathers aren't ported)
   if (sWeather.fogHSpritesCreated) host?.destroyFogHorizontalSprites();
   sWeather.fogHSpritesCreated = false;
   Weather_SetBlendCoeffs(16, 0);
@@ -336,7 +385,9 @@ export function ResetWeatherTask(): void {
 
 /** SetNextWeather: Task_WeatherMain finishes the current weather and starts this one. */
 export function SetNextWeather(weather: number): void {
-  // PlayRainStoppingSoundEffect: only sounds in rain (not ported, decision 1)
+  if (weather !== define('WEATHER_RAIN') && weather !== define('WEATHER_RAIN_THUNDERSTORM') && weather !== define('WEATHER_DOWNPOUR')) {
+    PlayRainStoppingSoundEffect();
+  }
   if (sWeather.nextWeather !== weather && sWeather.currWeather === weather) weatherFuncs(weather).initVars();
   sWeather.weatherChangeComplete = false;
   sWeather.nextWeather = weather;
@@ -345,7 +396,7 @@ export function SetNextWeather(weather: number): void {
 
 /** SetCurrentAndNextWeather: switch at once (the new weather's InitAll runs when the task inits). */
 export function SetCurrentAndNextWeather(weather: number): void {
-  // PlayRainStoppingSoundEffect (not ported)
+  PlayRainStoppingSoundEffect();
   sWeather.currWeather = weather;
   sWeather.nextWeather = weather;
 }
@@ -440,8 +491,7 @@ function UpdateWeatherGammaShift(): void {
 /** FadeInScreenWithWeather */
 function FadeInScreenWithWeather(): void {
   if (++sWeather.fadeInCounter > 1) sWeather.fadeInActive = 0;
-  if (sWeather.currWeather === define('WEATHER_SHADE')) {
-    // (and the unported RAIN, THUNDERSTORM, DOWNPOUR, SNOW)
+  if (fadesInWithRainShowShade(sWeather.currWeather)) {
     if (!FadeInScreen_RainShowShade()) {
       sWeather.gammaIndex = 3;
       sWeather.palProcessingState = WEATHER_PAL_STATE_IDLE;
@@ -656,6 +706,65 @@ export function weatherBlendAlpha(): { eva: number; evb: number } {
   return { eva: sWeather.currBlendEVA, evb: sWeather.currBlendEVB };
 }
 
+/** WeatherShiftGammaIfPalStateIdle: the palettes at a gamma index at once (the thunderstorm's lightning), unless they're changing. */
+export function WeatherShiftGammaIfPalStateIdle(gammaIndex: number): void {
+  if (sWeather.palProcessingState === WEATHER_PAL_STATE_IDLE) {
+    ApplyGammaShift(0, 32, gammaIndex);
+    sWeather.gammaIndex = gammaIndex;
+  }
+}
+
+/** WeatherBeginGammaFade: from one gamma index to another, a step every gammaStepDelay frames (UpdateWeatherGammaShift). */
+export function WeatherBeginGammaFade(gammaIndex: number, gammaTargetIndex: number, gammaStepDelay: number): void {
+  if (sWeather.palProcessingState === WEATHER_PAL_STATE_IDLE) {
+    sWeather.palProcessingState = WEATHER_PAL_STATE_CHANGING_WEATHER;
+    sWeather.gammaIndex = gammaIndex;
+    sWeather.gammaTargetIndex = gammaTargetIndex;
+    sWeather.gammaStepFrameCounter = 0;
+    sWeather.gammaStepDelay = gammaStepDelay;
+    WeatherShiftGammaIfPalStateIdle(gammaIndex);
+  }
+}
+
+/**
+ * LoadCustomWeatherSpritePalette: the weather palette slot's colours (a gfx16 symbol: gCloudsWeatherPalette,
+ * gSandstormWeatherPalette), then UpdateSpritePaletteWithWeather on it: the renderer shows them through the weather's
+ * GAMMA_ALT row (`objGammaTable('alt')`), the screen fades being the overlay's.
+ */
+export function LoadCustomWeatherSpritePalette(palette: string): void {
+  setWeatherSpritePalette(palette);
+}
+
+/** SetRainStrengthFromSoundEffect: the rain weathers' SE3 loop (and the strength PlayRainStoppingSoundEffect stops), unless the screen is fading out. */
+export function SetRainStrengthFromSoundEffect(soundEffect: number): void {
+  if (sWeather.palProcessingState === WEATHER_PAL_STATE_SCREEN_FADING_OUT) return;
+  if (soundEffect === define('SE_RAIN')) sWeather.rainStrength = 0;
+  else if (soundEffect === define('SE_DOWNPOUR')) sWeather.rainStrength = 1;
+  else if (soundEffect === define('SE_THUNDERSTORM')) sWeather.rainStrength = 2;
+  else return;
+  PlaySE(soundEffect);
+}
+
+/**
+ * PlayRainStoppingSoundEffect: while SE3 plays (a rain loop, or the low HP beep), the stopping sound of the last rain
+ * strength (SE_RAIN_STOP / SE_DOWNPOUR_STOP / SE_THUNDERSTORM_STOP, on SE3 too). The C calls it on a weather change,
+ * the warps (field_fadetransition.c), the start menu's screens and the Seagallop's warp.
+ */
+export function PlayRainStoppingSoundEffect(): void {
+  if (!IsSpecialSEPlaying()) return;
+  switch (sWeather.rainStrength) {
+    case 0:
+      PlaySE(define('SE_RAIN_STOP'));
+      break;
+    case 1:
+      PlaySE(define('SE_DOWNPOUR_STOP'));
+      break;
+    default:
+      PlaySE(define('SE_THUNDERSTORM_STOP'));
+      break;
+  }
+}
+
 /** IsWeatherNotFadingIn */
 export function IsWeatherNotFadingIn(): boolean {
   return sWeather.palProcessingState !== WEATHER_PAL_STATE_SCREEN_FADING_IN;
@@ -757,6 +866,18 @@ export interface WeatherProbe {
   blendEVA: number;
   blendEVB: number;
   fogHScrollPosX: number | undefined;
+  /** The weathers' init / finish steps (the thunderstorm's TSTORM_STATE_*), and the rain's and thunder's fields. */
+  initStep: number;
+  finishStep: number;
+  weatherGfxLoaded: boolean;
+  rainSpriteCount: number;
+  curRainSpriteIndex: number;
+  targetRainSpriteCount: number;
+  isDownpour: number;
+  rainStrength: number;
+  thunderDelay: number;
+  thunderCounter: number;
+  thunderTriggered: boolean;
 }
 
 /** Dev: the weather's state, for `__test.weather()`. */
@@ -773,6 +894,17 @@ export function weatherProbe(): WeatherProbe {
     blendEVA: sWeather.currBlendEVA,
     blendEVB: sWeather.currBlendEVB,
     fogHScrollPosX: fogHorizontalScrollPosX(),
+    initStep: sWeather.initStep,
+    finishStep: sWeather.finishStep,
+    weatherGfxLoaded: sWeather.weatherGfxLoaded,
+    rainSpriteCount: sWeather.rainSpriteCount,
+    curRainSpriteIndex: sWeather.curRainSpriteIndex,
+    targetRainSpriteCount: sWeather.targetRainSpriteCount,
+    isDownpour: sWeather.isDownpour,
+    rainStrength: sWeather.rainStrength,
+    thunderDelay: sWeather.thunderDelay,
+    thunderCounter: sWeather.thunderCounter,
+    thunderTriggered: sWeather.thunderTriggered,
   };
 }
 

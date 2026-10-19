@@ -79,6 +79,7 @@ import { ResetAllPicSprites } from './picSprites';
 import { BGMusicStopped } from '../gba/sound'; // Task_Seagallop_2's wait (W-sound 3)
 import { Overworld_FadeOutMapMusic } from '../gba/overworldMusic';
 import { HelpSystem_Disable, HelpSystem_Enable } from '../ui/helpSystemContext';
+import { PlayRainStoppingSoundEffect } from '../world/weather';
 
 const TILESTAG_FERRY = 3000;
 const TILESTAG_WAKE = 4000;
@@ -308,7 +309,7 @@ function Task_Seagallop_3(): void {
   }
   const [mapId, x, y] = sSeag[dest];
   sWarpDestination = { mapId, warpId: -1, x, y }; // SetWarpDestination(group, num, -1, x, y)
-  // PlayRainStoppingSoundEffect: not ported (no field weather; its SE3 loops are deferred, AUDIO_PLAN.md "Not in this plan")
+  PlayRainStoppingSoundEffect();
   PlaySE(K.SE_EXIT);
   // gFieldCallback = FieldCB_DefaultWarpExit: the field's arrival from a screen's warp (fade in, or the door's walk out)
   gFieldCallback.fn = undefined;

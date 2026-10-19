@@ -14,6 +14,7 @@ import { PlaySE } from '../gba/sound';
 import { FieldEffectActiveListContains, FieldEffectActiveListRemove, FieldEffectStart, gFieldEffectArguments, registerFieldEffectNatives } from './fieldEffectScripts';
 import { CreateTask, fieldMoveHost, LoadFieldMoveShowMonGfx, LockPlayerFieldControls, UnlockPlayerFieldControls } from './fieldMoves';
 import { avatarField, gPlayerAvatar, PlayerGetDestCoords, playerObj, StoreInitialPlayerAvatarState } from './playerAvatar';
+import { PlayRainStoppingSoundEffect } from './weather';
 
 /** What Dive needs from the field beyond the field move host. Implemented by OverworldScene. */
 export interface DiveHost {
@@ -164,7 +165,7 @@ export function SetDiveWarpDive(x: number, y: number): boolean {
 
 /**
  * DoDiveWarp: LockPlayerFieldControls, TryFadeOutOldMapMusic, WarpFadeOutScreen,
- * PlayRainStoppingSoundEffect (no field weather yet), gFieldCallback = FieldCB_DefaultWarpExit and Task_Teleport2Warp: once
+ * PlayRainStoppingSoundEffect, gFieldCallback = FieldCB_DefaultWarpExit and Task_Teleport2Warp: once
  * the fade is over, WarpIntoMap + CB2_LoadMap to the warp destination. `fieldCallback` replaces
  * FieldCB_DefaultWarpExit (DoFallWarp sets gFieldCallback = FieldCB_FallWarpExit right after DoDiveWarp). The
  * destination's map header loads first in the port (WarpFadeOutScreen fades to white into a cave).
@@ -179,6 +180,7 @@ export function DoDiveWarp(fieldCallback?: () => void): void {
       return;
     }
     const fadeOut = field.warpFadeOutScreen(dest.mapId, true); // TryFadeOutOldMapMusic, WarpFadeOutScreen
+    PlayRainStoppingSoundEffect();
     let stage = 0;
     // Task_Teleport2Warp
     CreateTask(() => {

@@ -34,6 +34,7 @@ let objTables: { normal?: ChannelTables; alt?: ChannelTables };
 let bldalpha: [number, number][] = [];
 let fogSprites = { created: 0, destroyed: 0 };
 let spriteCoordOffsetX = 0;
+let spriteCoordOffsetY = 0;
 /** One BG palette of JASC colours: 5-bit c expanded as the decomp's .pal files hold them. */
 const UNFADED = Array.from({ length: 48 }, (_, i) => Math.floor(((i % 32) * 255) / 31));
 
@@ -61,6 +62,7 @@ beforeAll(async () => {
     createFogHorizontalSprites: () => fogSprites.created++,
     destroyFogHorizontalSprites: () => fogSprites.destroyed++,
     spriteCoordOffsetX: () => spriteCoordOffsetX,
+    spriteCoordOffsetY: () => spriteCoordOffsetY,
   });
 });
 

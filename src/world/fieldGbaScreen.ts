@@ -7,11 +7,14 @@
 // Object sprites stay Phaser's: each frame they're copied into the PPU's OBJ bitmap layer. Their
 // colours go through two probe OBJ palettes (a 0-31 grey ramp), so palette fades and blends reach them
 // as they would the objects' own palettes. The horizontal fog's sprites (world/fogHorizontal.ts) go in as
-// semi-transparent OBJ pixels behind the priority-2 objects, blended by the PPU with the weather's BLDALPHA.
+// semi-transparent OBJ pixels behind the priority-2 objects, blended by the PPU with the weather's BLDALPHA; the other
+// weathers' sprites (world/weatherSpriteRenderer.ts) go in among the objects by their depth, the ST_OAM_OBJ_BLEND ones
+// as semi-transparent pixels.
 
 import Phaser from 'phaser';
 import type { TilesetSymbols } from '../data/types';
 import type { FogGbaLayer } from './fogHorizontal';
+import type { WeatherGbaSprite } from './weatherSpriteRenderer';
 import { weatherBlendAlpha } from './weather';
 import { BG_ATTR_MOSAIC, CopyBgTilemapBufferToVram, InitBgsFromTemplates, ResetBgsAndClearDma3BusyFlags, SetBgAttribute, SetBgTilemapBuffer, ShowBg, type BgTemplate } from '../gba/bg';
 import { gfx16 } from '../gba/gfx';
@@ -81,6 +84,8 @@ export interface FieldGbaSource {
   sprites(): { sprite: Phaser.GameObjects.Sprite; priority: number }[];
   /** WEATHER_FOG_HORIZONTAL's sprites while they're up (OAM priority 2, subpriority 0xFF, ST_OAM_OBJ_BLEND). */
   fog?(): FogGbaLayer | undefined;
+  /** The other weathers' sprites, back to front (world/weatherSpriteRenderer.ts). */
+  weatherSprites?(): WeatherGbaSprite[];
   /** gSaveBlock1Ptr->flashLevel: a dark cave's circle stays on WIN0 through the transition. */
   flashLevel?: number;
 }
@@ -233,7 +238,7 @@ export class FieldGbaScreen {
     SetGpuReg(REG_OFFSET_WIN1V, WIN_RANGE(255, 255));
     SetGpuReg(REG_OFFSET_BLDCNT, gOverworldBackgroundLayerFlags[1] | gOverworldBackgroundLayerFlags[2] | gOverworldBackgroundLayerFlags[3] | BLDCNT_TGT2_OBJ | BLDCNT_EFFECT_BLEND);
     SetGpuReg(REG_OFFSET_BLDALPHA, BLDALPHA_BLEND(13, 7));
-    if (source.fog?.()) {
+    if (source.fog?.() || source.weatherSprites?.().some((w) => w.semi)) {
       // The fog's Weather_SetBlendCoeffs / Weather_UpdateBlend wrote BLDALPHA after the map load
       const { eva, evb } = weatherBlendAlpha();
       SetGpuReg(REG_OFFSET_BLDALPHA, BLDALPHA_BLEND(eva, evb));
@@ -428,18 +433,31 @@ export class FieldGbaScreen {
     }
     const sprites = this.source!.sprites();
     const fog = this.source!.fog?.();
+    const weather = this.source!.weatherSprites?.() ?? [];
     for (const band of [3, 2, 1]) {
-      const inBand = sprites.filter((s) => s.priority === band);
+      // The objects and the weathers' sprites by depth, in runs of the same semi-transparency
+      const items = [
+        ...sprites.filter((s) => s.priority === band).map(({ sprite }) => ({ depth: sprite.depth, semi: 0, draw: () => drawSprite(ctx, sprite, cam.x, cam.y) })),
+        ...weather.filter((w) => Math.max(1, w.priority) === band).map((w) => ({ depth: w.depth, semi: w.semi ? 1 : 0, draw: () => drawWeatherSprite(ctx, w) })),
+      ].sort((a, b) => a.depth - b.depth);
       // The fog's sprites are the last in OAM at priority 2 (subpriority 0xFF): behind that band's objects
       const fogHere = band === 2 && fog;
-      if (!inBand.length && !fogHere) continue;
-      const layers: (() => void)[] = [];
-      if (fogHere) layers.push(() => fog.positions.forEach((p) => ctx.drawImage(fog.image, p.x, p.y)));
-      if (inBand.length) layers.push(() => inBand.forEach(({ sprite }) => drawSprite(ctx, sprite, cam.x, cam.y)));
+      if (!items.length && !fogHere) continue;
+      const layers: { semi: number; draw: () => void }[] = [];
+      if (fogHere) layers.push({ semi: 1, draw: () => fog.positions.forEach((p) => ctx.drawImage(fog.image, p.x, p.y)) });
+      for (const item of items) {
+        const last = layers[layers.length - 1];
+        if (last && last.semi === item.semi && !(fogHere && layers.length === 1)) {
+          const prev = last.draw;
+          last.draw = () => (prev(), item.draw());
+        } else {
+          layers.push({ semi: item.semi, draw: item.draw });
+        }
+      }
       for (let l = 0; l < layers.length; l++) {
-        const blend = fogHere && l === 0 ? 1 : 0;
+        const blend = layers[l].semi;
         ctx.clearRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
-        layers[l]();
+        layers[l].draw();
         const rgba = ctx.getImageData(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT).data;
         for (let i = 0, p = 0; i < color.length; i++, p += 4) {
           if (rgba[p + 3] < 128) continue;
@@ -455,6 +473,17 @@ export class FieldGbaScreen {
   semiObjPixels(): number {
     return this.source ? this.objLayer.semi!.reduce((n, v) => n + v, 0) : 0;
   }
+}
+
+/** A weather sprite at its OAM position (screen pixels), flipped as OAM flips it. */
+function drawWeatherSprite(ctx: CanvasRenderingContext2D, w: WeatherGbaSprite): void {
+  const width = w.image.width;
+  const height = w.image.height;
+  ctx.save();
+  ctx.translate(w.x + (w.hFlip ? width : 0), w.y + (w.vFlip ? height : 0));
+  ctx.scale(w.hFlip ? -1 : 1, w.vFlip ? -1 : 1);
+  ctx.drawImage(w.image, 0, 0);
+  ctx.restore();
 }
 
 /** A Phaser sprite as it would be drawn on screen (position, origin, scale and flips). */

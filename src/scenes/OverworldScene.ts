@@ -87,7 +87,10 @@ import {
   weatherProbe,
   WeatherTask,
   IsWeatherNotFadingIn,
+  PlayRainStoppingSoundEffect,
 } from '../world/weather';
+import { AnimateWeatherSprites } from '../world/weatherSprites';
+import { WeatherSpriteRenderer } from '../world/weatherSpriteRenderer';
 import { MapPreviewLayer } from '../world/mapPreviewLayer';
 import { ForestMapPreviewScreenIsRunning, MapPreview_InitFieldBg0, MapPreview_LoadGfx, MapPreview_StartForestTransition, mapPreviewGfxSymbols } from '../world/mapPreviewScreen';
 import { WeatherTextures } from '../world/weatherTextures';
@@ -291,6 +294,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private questLogWindows!: QuestLogWindows;
   /** WEATHER_FOG_HORIZONTAL's sprites (world/fogHorizontal.ts). */
   private fog!: FogHorizontal;
+  /** The other weathers' sprites on the field (world/weatherSprites.ts, drawn by world/weatherSpriteRenderer.ts). */
+  private weatherSpriteRenderer!: WeatherSpriteRenderer;
   /** The camera's left edge in world pixels as of the last camera update (cameraTop's counterpart). */
   private cameraLeft = 0;
   /**
@@ -441,6 +446,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     await loadLeagueLightingData('gen'); // the Elite Four / Champion rooms' lighting palettes and timers
     await loadWeatherData('gen'); // field_weather.c's tables
     await FogHorizontal.load(); // the fog's tiles and the weather palette
+    await WeatherSpriteRenderer.load(); // the other weathers' sheets and palettes
     await this.assets.loadFieldEffectTextures(this);
     const field = this.field;
     const behaviorAt = (x: number, y: number) => this.world.tileAt(x, y).behavior;
@@ -727,6 +733,19 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /**
+   * Dev: the weathers' sprites for `__test.weatherSprites()` (world/weatherSpriteRenderer.ts `probe`: OAM as drawn,
+   * BLDALPHA, the front sprite's colour at screen pixel (px, py)); `visible` shows or hides them.
+   */
+  testWeatherSprites(px?: number, py?: number, visible?: boolean) {
+    if (visible !== undefined) this.weatherSpriteRenderer.setVisible(visible);
+    return {
+      ...this.weatherSpriteRenderer.probe(px, py),
+      spriteCoordOffset: { x: -(this.cameraLeft - this.cameraOrigin.left), y: -(this.field.cameraTop - this.cameraOrigin.top) - 40 },
+      gbaSemiPixels: this.gbaScreen.semiObjPixels(),
+    };
+  }
+
+  /**
    * field_weather.c on the field: the palettes the weather shifts (the current map's BG palettes through tilesetVram,
    * the sprite sheets through WeatherTextures) and FadeScreen's weather half in the screen fade.
    */
@@ -742,14 +761,19 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const spriteCoordOffsetX = () => -(this.cameraLeft - this.cameraOrigin.left);
     const spriteCoordOffsetY = () => -(this.field.cameraTop - this.cameraOrigin.top) - 32 - 8;
     this.fog = new FogHorizontal({ scene: this, spriteCoordOffsetY });
+    this.weatherSpriteRenderer = new WeatherSpriteRenderer({ scene: this, spriteCoordOffsetX, spriteCoordOffsetY });
     setWeatherHost({
       bgPaletteUnfaded: (slot) => (slot < 13 && this.world.current ? tilesetVram.bgPaletteUnfaded(pair(), slot) : undefined),
       setBgPaletteFaded: (slot, colors) => tilesetVram.loadBgPaletteFaded(this.textures, pair(), slot, colors),
       setObjPaletteGamma: (normal, alt) => this.weatherTextures.setTables(normal, alt),
-      setBlendAlpha: (eva, evb) => this.fog.setBlendAlpha(eva, evb),
+      setBlendAlpha: (eva, evb) => {
+        this.fog.setBlendAlpha(eva, evb);
+        this.weatherSpriteRenderer.setBlendAlpha(eva, evb);
+      },
       createFogHorizontalSprites: () => this.fog.create(),
       destroyFogHorizontalSprites: () => this.fog.destroy(),
       spriteCoordOffsetX,
+      spriteCoordOffsetY,
     });
     setWeatherPaletteFadeActive(() => this.screenFade.active);
     this.screenFade.weather = {
@@ -843,6 +867,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       this.accumulator -= FRAME_MS;
       this.tick();
     }
+    this.weatherSpriteRenderer.draw(); // BuildOamBuffer for the weathers' sprites, with this frame's camera
     this.updateHud();
   }
 
@@ -899,6 +924,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.flash.tick(); // UpdateFlashLevelEffect / Task_WaitForFlashUpdate (priority 80)
     WeatherTask(); // Task_WeatherInit / Task_WeatherMain (priority 80)
     this.fog.update(); // AnimateSprites' FogHorizontalSpriteCallback, against last frame's camera
+    AnimateWeatherSprites(); // AnimateSprites for the other weathers' sprites (world/weatherSprites.ts)
     this.messageBox.tick();
     this.screenFade.tick();
     this.monPic?.tick();
@@ -1588,7 +1614,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const data = await this.assets.loadMap(name);
     TryFadeOutOldMapMusic(data);
     const white = this.warpFadeOutScreen(from, data);
-    // PlayRainStoppingSoundEffect: no field weather yet
+    PlayRainStoppingSoundEffect(); // DoWarp, DoDiveWarp, Task_DoorWarp's case 4, Task_StairWarp
     if (kind === 'warp') PlaySE(K.SE_EXIT);
     await this.waitFrames(() => !this.screenFade.active && BGMusicStopped());
     const isExit = await this.loadWarpedMap(name, warpId, x, y, white);
@@ -2351,6 +2377,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         if (launched || this.screenFade.active || !ready) return false;
         launched = true;
         if (menu === 'pokedex') this.state.incrementGameStat(d.require('GAME_STAT_CHECKED_POKEDEX'));
+        PlayRainStoppingSoundEffect(); // StartMenuPokedexCallback / ...PokemonCallback / ...BagCallback / ...PlayerCallback / ...OptionCallback
         this.runFieldMenu({ menu }, (openStartMenu) => this.runFieldCallback(openStartMenu));
         return false;
       },
@@ -2649,7 +2676,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /** The current map on the GBA layer for the credits: their camera, and no objects (ResetSpriteData). */
   private creditsGbaSource(): FieldGbaSource {
-    return { ...this.fieldGbaSource(), camera: () => ({ ...this.creditsCamera! }), sprites: () => [], fog: () => undefined, flashLevel: 0 };
+    return { ...this.fieldGbaSource(), camera: () => ({ ...this.creditsCamera! }), sprites: () => [], fog: () => undefined, weatherSprites: () => [], flashLevel: 0 };
   }
 
   /**
@@ -3175,6 +3202,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       camera: () => ({ x: Math.round(cam.worldView.x), y: Math.round(cam.worldView.y) }),
       sprites: () => this.fieldSprites(),
       fog: () => this.fog.gbaLayer(),
+      weatherSprites: () => this.weatherSpriteRenderer.gbaLayer(),
       flashLevel: Overworld_GetFlashLevel(this.state),
     };
   }
