@@ -258,8 +258,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the copyright screen, the
     intro and the title screen. Dev starts (`?start=`, `?map=`) skip all of them and the main menu; dev
     `?skipIntro` (the e2e harness's default) skips the copyright screen, the intro, the title screen and Oak's
-    speech: the main menu with a save, the new game without. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
-    before CONTINUE. SAVE_STATUS_ERROR ("the previous save file will be loaded") can't happen: one
+    speech: the main menu with a save, the new game without. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept). SAVE_STATUS_ERROR ("the previous save file will be loaded") can't happen: one
     slot, no backup; an unreadable slot is SAVE_STATUS_INVALID ("The save file has been deleted...").
   - Copyright screen and intro (menus/intro.ts, intro.c): the GameCube multiboot the copyright screen listens for
     (Pokémon Colosseum's link over the GBA cable: SerialCB_CopyrightScreen, GameCubeMultiBoot_*, sGcmb) isn't
@@ -289,7 +288,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - The help system (ui/helpSystem*.ts): the screens the port doesn't have don't set their contexts or toggle it
     (mail's HELPCONTEXT_*_MAILBOX: the mailbox is always empty; the main menu's MYSTERY GIFT; the link
     and wireless screens' HelpSystem_Enable / _DisableToggleWithRButton: link.c, link_rfu_2.c, union_room_chat.c,
-    trade_scene.c's link trades, the e-Reader; the berry fix program; the quest log's playback). HelpSystem_Enable
+    trade_scene.c's link trades, the e-Reader; the berry fix program). HelpSystem_Enable
     has no quest log check; HelpSystem_IsSinglePlayer is always TRUE (no link play: GAPS_PLAN.md decision 4). The
     title screen sets up its own GameState from the save (LoadGameSave's gSaveBlock1/2) for the help's flags and
     button mode.
@@ -325,9 +324,20 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     with a fresh Overworld scene and GameState; other module-level state isn't reset.
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, cable club monitors) start their scripts and hit the unimplemented-special warnings.
-  - Quest log (world/questLog*.ts; QUEST_LOG_PLAN.md QL1 records, QL2-QL5 to come): CONTINUE doesn't play the
-    scenes back yet (QL2; QL_ResetForContinue puts sCurrentSceneNum where the playback would leave it). Only
-    QL_EVENT_DEPARTED and QL_EVENT_ARRIVED have recorders: SetQuestLogEvent drops the other events (QL3), and the
+  - Quest log (world/questLog*.ts; QUEST_LOG_PLAN.md QL1 records, QL2a plays back, QL2b-QL5 to come): the playback
+    has no screen yet (QL2b): no grey / sepia tint (gGlobalFieldTintMode, ApplyGlobalFieldPaletteTint,
+    QL_SlightlyDarkenSomePals, RestoreScreenAfterPlayback's fade), no top and bottom bars or "Previously on your
+    quest…" header, no description window or event texts, no "saved the game at" line, and the map music plays as
+    usual (gDisableMapMusicChangeOnMapLoad isn't set): `questLogScreen` in world/questLogPlayback.ts has the seams,
+    and their timings (GetQuestLogTextDisplayDuration, the 16 + 32 end frames, the 127-frame wait) already run, the
+    texts' length as 0 for now. In playback, a recorded input that starts a script runs it with the normal message
+    box, which waits for A (the auto-scroll and waitbuttonpress differences and QL_AvoidDisplay: QL5); the fishing
+    rod's and the VS Seeker's gfx changes don't play (QL5), and getting off a mon changes the music. QL_LoadObjects
+    sets the snapshot's position and facing on the objects the field spawned from the scene's flags (not each saved
+    object's other fields; previousCoords are the current ones); a QL_START_WARP scene's player state comes from the
+    warp, not the snapshot's graphics. A warp in playback into a disabled location ends the scene once the field has
+    faded in, not at once. Task_EndQuestLog's gHelpSystemEnabled = TRUE is HelpSystem_Enable (which also lets R toggle
+    the help again). Only QL_EVENT_DEPARTED and QL_EVENT_ARRIVED have recorders: SetQuestLogEvent drops the other events (QL3), and the
     menus, shops, PC and battles don't send theirs yet (QL4). The scene's objects snapshot is the player and the
     current map's objects in the port's order (the C's gObjectEvents slots, offScreen, the sprite anim backups and
     directionSequenceIndex aren't kept: 0); a scene's flags and vars are kept sparse, as the save keeps them,

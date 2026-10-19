@@ -4112,3 +4112,35 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   save's sort, the filters, the departed locations, the save round trip), tests/e2e/questLog.test.ts (3: leave the
   house, walk, save; Daisy's cut; the fan club). Ran field, playerAvatar, saveContinue, hallOfFame, trainerBattle
   and newGame e2e files: all pass, nothing in the field changed.
+
+### W-qlog 2a: the quest log's playback engine (QUEST_LOG_PLAN.md QL2a, batch 12)
+
+- New `world/questLogPlayback.ts` (quest_log.c's playback: TryStartQuestLogPlayback, Task_BeginQuestLogPlayback,
+  QLPlayback_InitOverworldState, QL_CopySaveState / RestoreTrainerRematches, QL_ResetPartyAndPC,
+  QL_RestoreMapLayoutId, QLogCB_Playback with QuestLog_PlayCurrentEvent / HandleShowQuestLogMessage /
+  GetQuestLogTextDisplayDuration, QL_HandleInput, QL_IsTrainerSightDisabled, DoSceneEndTransition /
+  QuestLog_AdvancePlayhead, DoSkipToEndTransition / QuestLog_WaitFadeAndCancelPlayback, QuestLog_StartFinalScene,
+  FieldCB2_FinalScene and the end tasks to Task_EndQuestLog); `world/questLog.ts` gets the action half
+  (ResetActions' and QL_TryRunActions' RUNNING cases, sMovementScripts, QL_UpdateObject, gQuestLogFieldInput,
+  ReadQuestLogScriptFromSav1, SetQuestLogState's playback branch); quest_log_objects.c's template load and
+  QL_TryStopSurfing; quest_log_player.c's QuestLogUpdatePlayerSprite (normal, bike, surf, getting off).
+- OverworldScene: continueSavedGame starts from QL_ResetOnSoftReset (replaces QL1's QL_ResetForContinue stand-in:
+  sCurrentSceneNum now comes from the playback) and TryStartQuestLogPlayback; the scene loads
+  (loadQuestLogScene: LoadMap_QLPlayback's steps around enterMap, hooks in onMapLoaded for the templates and the
+  objects), DoCB1_Overworld_QuestLogPlayback beside DoCB1_Overworld in tickField, QL_UpdateObject for the player
+  and the NPCs made during playback (NpcBrain `questLogUpdate`), the final scene reloading the save slot
+  (`savedGame`) through enterSavedField (CB2_ContinueSavedGame's steps, shared with CONTINUE). The screen (tints,
+  bars, texts, music) is QL2b's: `questLogScreen` seams.
+- Shared bits: ObjectEvent.setHeldMovement replaces a held action while playback runs (ObjectEventSetHeldMovement);
+  ScreenFade takes negative delays as the C does (deltaY += -delay: the skips' FadeScreen(FADE_TO_BLACK, -3));
+  ScriptEngine.init (ScriptContext_Init); trainerSee checks QL_IsTrainerSightDisabled; the test probe's `free()`
+  (so `idle()`) waits for the playback's end; `__test.questLog().playback`.
+- Found on the way: QL1 recorded the steps of the neighbouring maps' NPCs (the port spawns them, the GBA doesn't),
+  which playback, going by local id, then gave to the current map's NPC with that id: only the current map's are
+  recorded now. QL_ResetPartyAndPC's "too many" branch clears the party's last slots (PARTY_SIZE - 1 - i), not the
+  extra mons, as the C does (a two-mon party stays two against a one-mon scene).
+- Tests: tests/unit/questLog.test.ts (21: + playback's action timing and the controls' hold),
+  tests/e2e/questLog.test.ts (5: + two scenes played on CONTINUE with each scene's flags, empty bag and placeholder
+  Rattata, the player and Pallet Town's NPCs ending each scene where they were recorded, the field afterwards
+  equal to the save; A skips a scene, B to the end with the map name and no "saved the game"). Ran saveContinue,
+  titleScreen, field, newGame, hallOfFame, mapMusic, weather, mail, daycare and fameChecker e2e files: all pass.

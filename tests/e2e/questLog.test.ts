@@ -236,7 +236,7 @@ test('CONTINUE plays the saved scenes back, then the field is the saved one', as
         const ql = t.questLog();
         const n = ql.currentSceneNum;
         if (ql.state === PLAYBACK && !f.busy && ql.playback.control.state === 0 && ql.playback.control.endMode === 0 && !start[n]) {
-          start[n] = { flag: t.flag('FLAG_BADGE01_GET'), potions: t.itemCount('POTION'), party: t.party().map((m) => m.species), map: f.map };
+          start[n] = { flag: t.flag('FLAG_BADGE01_GET'), potions: t.itemCount('POTION'), party: t.party().map((m) => m.species ?? ''), map: f.map };
         }
         // (AdvancePlayhead moves on to the next scene with endMode still SCENE, as its map starts loading)
         if (ql.state === PLAYBACK && ql.playback.control.endMode === 2 && !f.busy && !end[n]) {
