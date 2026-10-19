@@ -157,3 +157,129 @@ files only). Docs-only PRs: no tests. Workers kill any headless Chrome they star
 
 Link play (the cable club, the e-Reader room), the unused weathers, the Fame Checker, Teachy TV, mail, the quest
 log.
+
+## Batch 13: dynamic-graphics objects and the rest of the field weathers
+
+Two items the user asked for (and only these; the quest log's QL4b / QL5 move to the next batch). Checked against
+the decomp and master at `ee4c4ec` (2026-10-19).
+
+### What was checked
+
+- **Dynamic-graphics objects** (`OBJ_EVENT_GFX_VAR_0..F`, sprite from `VAR_OBJ_GFX_ID_0..F`,
+  VarGetObjectEventGraphicsId). The maps with such objects: Viridian City (the tutorial old man: three states by
+  VAR_MAP_SCENE_VIRIDIAN_CITY_OLD_MAN), Fuchsia City (the Kabuto / Omanyte by FLAG_GOT_DOME_FOSSIL), Birth Island
+  (Deoxys), the Trainer Tower 1F-8F (trainer_tower.c's SetTrainerTowerNPCGraphics, `VAR_OBJ_GFX_ID_0..3`), and two
+  link maps (the Seven Island house's e-Reader room: SetEReaderTrainerGfxId; the Union Room:
+  union_room_player_avatar.c). battle_tower.c's VarSet is R/S code FRLG never runs. No rival appearance uses them
+  (the rival is OBJ_EVENT_GFX_RIVAL everywhere). Every FRLG script sets the vars in MAP_SCRIPT_ON_TRANSITION (or
+  through a special called there), before the objects spawn; no FRLG script sets one and then `addobject`s in the
+  same run. The port (`OverworldScene.preloadMapSprites`) preloads the map's sprites again after ON_TRANSITION /
+  ON_LOAD with the vars resolved, so these maps work; only Viridian's old man and the Trainer Tower have e2e
+  checks. The trap (a `setvar VAR_OBJ_GFX_ID_*` then `addobject` mid-script logs `[overworld] no sprite loaded`
+  and spawns nothing) is reachable only from a dev script, but the C has no such limit: SpawnObjectEventInternal
+  takes the graphics from ROM at spawn time. The text colour (field_specials.c GetTextColorFromGraphicsId's
+  VarGetObjectEventGraphicsId) also resolves the var.
+- **Field weathers** (field_weather.c 1,147 lines, field_weather_effects.c 2,346, field_weather_util.c 105;
+  `world/weather.ts`, `world/fogHorizontal.ts`, `world/weatherTextures.ts`). Ported: None, Sunny, Shade,
+  FogHorizontal (and Underwater, which shares its row). Not ported, all run as None's callbacks and log once:
+  Clouds (WEATHER_SUNNY_CLOUDS), Rain, Snow, Thunderstorm, Ash, Sandstorm, FogDiagonal, Drought, Downpour (Downpour_*
+  with Thunderstorm_Main / _Finish), Bubbles. No FRLG map or script reaches them (map weathers: NONE, SUNNY, SHADE,
+  FOG_HORIZONTAL; `setweather` only 0 and SHADE). The sprite sheets (`graphics/weather/`: rain, snow0/1, ash,
+  sandstorm, fog_diagonal, cloud, bubble, the palettes) are extracted already. Four weathers draw BLDALPHA-blended
+  sprites with transparent pixels (Clouds, Ash, FogDiagonal, Sandstorm: ST_OAM_OBJ_BLEND), which the horizontal
+  fog's MULTIPLY-then-ADD trick (it needs a sprite layer that covers the screen) can't do. The sounds: the SE3 loops
+  (SE_RAIN, SE_DOWNPOUR, SE_THUNDERSTORM: field_weather.c's SetRainStrengthFromSoundEffect and the effects'
+  PlaySE12 / m4a calls), thunder (UpdateThunderSound: SE_THUNDER / SE_THUNDER2), and PlayRainStoppingSoundEffect
+  (16 C call sites: field_weather.c, field_fadetransition.c, start_menu.c, seagallop.c; the port has comments at
+  OverworldScene, dive.ts, seagallop.ts, weather.ts). `gba/sound.ts` has IsSpecialSEPlaying and the SE3 player.
+  The battle's switch-in weather (ABILITYEFFECT_SWITCH_IN_WEATHER) already reads GetCurrentWeather at the battle's
+  start.
+
+### Workstreams
+
+One PR per unit, merged as it hands back; W-weather's units 2 and 3 start from master after unit 1 merges, in
+parallel.
+
+**W-dyngfx: dynamic-graphics objects (1 unit).** Load a dynamic object's sprite so a spawn in the same script run
+works, as SpawnObjectEventInternal does on the GBA (suggested: a VarSet of a VAR_OBJ_GFX_ID_* starts loading the
+sheet and `addobject` / the spawn path wait for it within the script, so the object appears that frame; or another
+way that gives the same result without making all spawns async). Check every FRLG map above in the port: the old
+man's three states, Fuchsia's Kabuto / Omanyte before and after the Dome Fossil, Birth Island's Deoxys, the Trainer
+Tower floors (singles, doubles, knockout), the text colour of a dynamic object; fix what's wrong. E2e
+`tests/e2e/dynamicGfx.test.ts`: Fuchsia's two states, Birth Island's Deoxys (its graphics id on the map), a dev
+script that sets a VAR_OBJ_GFX_ID_* to a sprite the map doesn't preload and `addobject`s at once (the object out
+with that sheet on the same frame, no warning). Plus `trainerTower.test.ts` and the Viridian old man's e2e file.
+Owns `OverworldScene`'s object spawning and preload (small changes), `script/ScriptEngine.ts`'s `addobject` /
+`setvar` hooks if needed.
+
+**W-weather: the rest of FRLG's weathers (3 units).** Each weather as field_weather_effects.c has it (its
+InitVars / InitAll / Main / Finish, sprite templates, OAM, anims, callbacks, gamma targets and steps), with
+field_weather.c's parts it needs, the sounds, and the palette / gamma behaviour; `PORTED` gains its row.
+Testable through `setweather` + `doweather` (a dev script or a test hook); e2e `tests/e2e/weather.test.ts` grows
+(or a second file, `weatherEffects.test.ts`, if it gets long): the sprites' count and positions over a few frames,
+the gamma / blend values, the SE3 song, the finish (sprites gone, SE stopped).
+
+1. **The weather sprite layer, Rain, Thunderstorm, Downpour, the sounds.** A generic layer for the weathers' sprites
+   (the C's sprite templates with their callbacks run in plain TS beside weather.ts, the host only draws them;
+   positions from gSpriteCoordOffsetX / Y like the fog), including **ST_OAM_OBJ_BLEND for sprites with transparent
+   pixels** (BLDALPHA: min(31, (obj * EVA + bg * EVB) >> 4) where the sprite has a pixel, the background unchanged
+   elsewhere), so units 2 and 3 reuse it; unit 1 owns it and checks it with a unit or e2e test even though rain
+   doesn't blend. Rain_* (the 24 rain sprites, StartRainSpriteFall, the splash), Thunderstorm_* and Downpour_*
+   (the lightning: ApplyWeatherGammaShiftIfIdle_Gradual / ApplyGammaShiftWithBlend, SetThunderCounter,
+   UpdateThunderSound), FadeInScreen_RainShowShade for the rain weathers, field_weather.c's sound half
+   (SetRainStrengthFromSoundEffect, PlayRainStoppingSoundEffect at all 16 C call sites the port has: the start
+   menu, field_fadetransition.c's warps, seagallop.c, the weather change, Dive), the SE3 loops. Remove AUDIO_PLAN.md
+   "Not in this plan"'s rain-SE deferral and the "no field weather yet" comments. E2e: rain (sprites, SE_RAIN on
+   SE3, the shade), thunderstorm (a lightning flash's gamma, SE_THUNDER), downpour, a stop (SE_RAIN_STOP), a wild
+   battle in rain starting with the rain message (optional cross-check).
+2. **Snow, Ash, Sandstorm** (after unit 1 merges). Snow_* (snow0 / snow1 sprites, the flakes' fall and sway),
+   Ash_* (LoadAshSpriteSheet, the blended ash layer), Sandstorm_* (the wave sprites and the swirl sprites,
+   UpdateSandstormWaveIndex / Movement), their blends through unit 1's layer. E2e: each weather's sprites and blend,
+   and its finish.
+3. **Clouds, FogDiagonal, Drought, Bubbles** (after unit 1 merges, beside unit 2). Clouds_* (WEATHER_SUNNY_CLOUDS),
+   FogDiagonal_*, Drought_* with field_weather.c's drought palettes (ApplyDroughtGammaShiftWithBlend,
+   LoadDroughtWeatherPalettes, DroughtStateInit / Run, FadeInScreen_Drought, StartDroughtWeatherBlend), Bubbles_*
+   (WEATHER_UNDERWATER_BUBBLES: its fog sprites plus the bubbles). Remove DEVIATIONS' "run as WEATHER_NONE" note
+   and the log line in weather.ts. E2e: each weather's sprites / palettes and its finish.
+
+Units 2 and 3 each add their weathers in their own new module(s) (e.g. `world/weatherSnow.ts`,
+`world/weatherDrought.ts`) and only touch `PORTED`, the host and the test hooks in shared files; unit 3 owns the
+DEVIATIONS / DEV_NOTES weather entries' final wording (unit 2 adds its lines).
+
+### Shared files
+
+- `scenes/OverworldScene.ts`: W-dyngfx (object spawning, preload), W-weather (the host, the PlayRainStoppingSoundEffect
+  call sites): different methods.
+- `world/weather.ts`, `world/fogHorizontal.ts`, `world/weatherTextures.ts`, the weather host, the weather sprite
+  layer: W-weather unit 1, then units 2 and 3 (small registrations; the merger resolves the `PORTED` line).
+- `dev/testHooks.ts`: both (separate hooks).
+- `tests/e2e/weather.test.ts`: W-weather (units 2 and 3 add their own `describe`s or files).
+
+### Batch 13 workers
+
+| Phase | Workers | Why |
+|---|---|---|
+| 1 | W-dyngfx, W-weather 1 | distinct files; unit 1 builds the sprite layer units 2 and 3 need |
+| 2 | W-weather 2, W-weather 3 | after unit 1 merges; their own modules |
+
+### Batch 13 rules
+
+Workers and merger: docs/WORKFLOW.md sections 3 and 4. **Testing:** workers run typecheck, `npm test`, their own
+e2e files and a few named files covering shared code they touch, never the full e2e suite; each merge runs
+typecheck, unit tests and the PR's own e2e files; the full suite runs once, at the end of the batch, on master with
+everything merged (failures there: rerun the failing files only). Docs-only PRs: no tests. Workers kill any
+headless Chrome they started before handing back.
+
+### Batch 13 decisions
+
+1. **The plan as a section of GAPS_PLAN.md** (coordinator, revisit if you disagree): two small single-player gaps,
+   the same kind of work as batch 11's.
+2. **Four W-weather units became three, two of them parallel** (coordinator, revisit if you disagree): unit 1
+   owns the shared sprite layer (with the BLDALPHA blend for sprites with transparent pixels that Clouds, Ash,
+   FogDiagonal and Sandstorm need), so units 2 and 3 can run side by side after it; the blended weathers are split
+   between them by size.
+3. **WEATHER_SUNNY_CLOUDS is ported with the others** (coordinator, revisit if you disagree): it's the one other
+   sWeatherFuncs row FRLG compiles that no map reaches; the request's list didn't name it, but "the rest of FRLG's
+   weathers" covers it.
+4. **Two workers at a time** (coordinator, revisit if you disagree): there are only four units and units 2-3 depend
+   on unit 1.
