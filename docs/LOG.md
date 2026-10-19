@@ -3544,3 +3544,30 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the shade 3, 2, 1, 0 a frame apart; the weather surviving save + CONTINUE), plus leagueLighting, saveContinue,
   fieldEffects and transitions (19 passed). A screenshot of Viridian Forest shows the shaded map with the tall grass
   sprite matching it.
+
+### W-sevii 3: Six Island, the Dotted Hole and the Sapphire (POSTGAME_PLAN.md batch 11)
+
+- Movement actions (`script/MovementRunner.ts`): `disable_anim` / `restore_anim` (MovementAction_DisableAnimation /
+  _RestoreAnimation: ObjectEvent.inanimate on, then back to the graphics info's), so the Sapphire room's thief
+  slides down from (5, 0) on his standing frame. Off scriptCoverageGaps.ts.
+- pokemon_size_record.c is its own module, `script/pokemonSizeRecord.ts` (moved out of miscSpecials.ts, which keeps
+  the Magikarp specials): sBigMonSizeTable, GetMonSizeHash, GetMonSize, FormatMonSizeRecord (inches),
+  CompareMonSize, GetMonSizeRecordInfo, and the Heracross specials CompareHeracrossSize / GetHeracrossSizeRecordInfo
+  on VAR_HERACROSS_SIZE_RECORD, registered in POSTGAME_SPECIALS. Off scriptCoverageGaps.ts (38 postgame gaps left
+  before W-sevii 2's).
+- Played headless (`tests/e2e/postgameSixIsland.test.ts`, from afterHallOfFame + the Rainbow Pass state): Six
+  Island's Pokémon Center rival scene (MUS_ENCOUNTER_RIVAL, VAR_MAP_SCENE_SIX_ISLAND_POKEMON_CENTER_1F and
+  VAR_MAP_SCENE_FOUR_ISLAND 1, the rival removed, not again); Ruin Valley's scientist in front of the door (until
+  Icefall Cave's FLAG_HIDE_RUIN_VALLEY_SCIENTIST), the door's YES and braille CUT, Cut from the party menu
+  (CutMoveRuinValleyCheck / CutMoveOpenDottedHoleDoor: the open metatile, SE_BANG, the flag; OnLoad keeps it
+  open); the Dotted Hole's 1F (setworldmapflag), its holes floor by floor with each braille (UP, LEFT, RIGHT,
+  DOWN) and a wrong hole back to 1F; the Sapphire room's sixteen wall braille messages; the Sapphire scene watched
+  every tick (the thief's frames through the fall, ShakeScreen's 33 frames of ±3 px vertical pan, SE_FALL /
+  SE_M_STRENGTH x2 / SE_EXIT, the Sapphire removed, FLAG_LEARNED_YES_NAH_CHANSEY, the player looking after him);
+  the Heracross record (the blank chart, no Heracross, a first record and its Nest Ball, a bigger one, a smaller
+  one and the same one, the chart's record). The sweep: all 29 trainers of Pattern Bush, Green Path, Outcast
+  Island, the Water Path and Ruin Valley (the double battles Ava & Geb and Miu & Mia), the 6 item balls and 6
+  hidden items, Pattern Bush's two escape warps, the Water Path house's man. Nothing in them was wrong.
+- Verified: typecheck; unit 615 (tests/unit/pokemonSizeRecord.test.ts: the hash and sizes moved from
+  miscSpecials.test.ts, and the Heracross specials through POSTGAME_SPECIALS); e2e postgameSixIsland.test.ts (4)
+  and sideSpecials.test.ts (the Magikarp record on the moved code).
