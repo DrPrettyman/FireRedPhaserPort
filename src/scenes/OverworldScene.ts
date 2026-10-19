@@ -55,6 +55,7 @@ import { GetMapName } from '../world/regionMap';
 import { YesNoMenu } from '../ui/YesNoMenu';
 import { MonPicBox } from '../ui/MonPicBox';
 import { museumFossilPicGfxSymbols, registerMuseumFossilPic } from '../ui/MuseumFossilPic';
+import { brailleCursorGfxSymbols } from '../script/postgameSpecials';
 import { MoneyBox } from '../ui/MoneyBox';
 import { CoinsBox } from '../ui/CoinsBox';
 import { loadSlotMachineData } from '../menus/slotMachineLogic';
@@ -341,7 +342,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     });
     this.gbaScreen = new FieldGbaScreen(this, DEPTH_FADE + 10);
     setTransitionFieldCamera(() => this.gbaScreen.cameraPixelOffset());
-    await loadGfx([...mapTransitionGfxSymbols, ...fieldListMenuGfxSymbols, ...helpMessageWindowGfxSymbols, ...museumFossilPicGfxSymbols]);
+    await loadGfx([...mapTransitionGfxSymbols, ...fieldListMenuGfxSymbols, ...helpMessageWindowGfxSymbols, ...museumFossilPicGfxSymbols, ...brailleCursorGfxSymbols]);
     setUserFrameTypeSource(() => this.state.optionsWindowFrameType + 1); // the options' FRAME for field windows
     this.flash = new FieldFlash(this);
     this.fonts = new Fonts(this, this.assets.fonts);

@@ -25,6 +25,7 @@ import { EGG_HATCH_SPECIALS } from '../menus/eggHatch';
 import { EASY_CHAT_SPECIALS } from './easyChatSpecials';
 import { FERRY_SPECIALS } from './ferrySpecials';
 import { AUDIO_SPECIALS } from './audioSpecials';
+import { POSTGAME_SPECIALS } from './postgameSpecials';
 
 export interface SpecialEnv {
   state: GameState;
@@ -90,6 +91,7 @@ export const SPECIALS: Record<string, Special> = {
   ...EASY_CHAT_SPECIALS, // easyChatSpecials.ts: easy_chat.c's ShowEasyChatMessage, BufferRandomHobbyOrLifestyleString
   ...FERRY_SPECIALS, // ferrySpecials.ts: the Seagallop ferry scene (menus/seagallop.ts) and the Rainbow Pass menu
   ...AUDIO_SPECIALS, // audioSpecials.ts: PlayTrainerEncounterMusic, Script_FadeOutMapMusic
+  ...POSTGAME_SPECIALS, // postgameSpecials.ts: the postgame's specials (BrailleCursorToggle, ...)
 
   // field_player_avatar.c / bike.c / field_specials.c's player avatar specials
   ForcePlayerOntoBike,

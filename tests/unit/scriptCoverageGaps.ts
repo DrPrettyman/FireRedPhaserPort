@@ -29,9 +29,7 @@ export const KNOWN_GAPS: KnownGap[] = [
   // (none left: the S.S. Anne departure and the league lighting were the last two, batch 2 of SIDE_PLAN.md)
   // ---------------------------------------------------------------- side: optional content before the Hall of Fame (NPCs, trades, the Game Corner, the daycare, the Sevii 1-3 trip).
   // ---------------------------------------------------------------- postgame: after the Hall of Fame (Sevii 4-7, Trainer Tower, the event islands) or the link features postgame areas share.
-  { kind: 'command', name: 'braillemessage', tag: 'postgame', where: "MtEmber_RubyPath_B4F, MtEmber_RubyPath_B5F, SixIsland_DottedHole_B1F, SixIsland_DottedHole_B2F, SixIsland_DottedHole_B3F, ... (8 in all)" },
   { kind: 'command', name: 'doweather', tag: 'postgame', where: "NavelRock_Summit, SevenIsland_TanobyRuins_DilfordChamber, SevenIsland_TanobyRuins_LiptooChamber, SevenIsland_TanobyRuins_MoneanChamber, SevenIsland_TanobyRuins_RixyChamber, ... (8 in all)" },
-  { kind: 'command', name: 'getbraillestringwidth', tag: 'postgame', where: "MtEmber_RubyPath_B5F, SixIsland_DottedHole_SapphireRoom" },
   { kind: 'command', name: 'setstepcallback', tag: 'postgame', where: "FourIsland_IcefallCave_1F" },
   { kind: 'command', name: 'setweather', tag: 'postgame', where: "NavelRock_Summit, SevenIsland_TanobyRuins_DilfordChamber, SevenIsland_TanobyRuins_LiptooChamber, SevenIsland_TanobyRuins_MoneanChamber, SevenIsland_TanobyRuins_RixyChamber, ... (8 in all)" },
   { kind: 'command', name: 'ttower_checkdoubles', tag: 'postgame', where: "TrainerTower_1F, TrainerTower_2F, TrainerTower_3F, TrainerTower_4F, TrainerTower_5F, ... (8 in all)" },
@@ -54,7 +52,6 @@ export const KNOWN_GAPS: KnownGap[] = [
   { kind: 'command', name: 'ttower_shouldexit', tag: 'postgame', where: "TrainerTower_1F, TrainerTower_2F, TrainerTower_3F, TrainerTower_4F, TrainerTower_5F, ... (11 in all)" },
   { kind: 'command', name: 'ttower_startchallenge', tag: 'postgame', where: "TrainerTower_Lobby" },
   { kind: 'command', name: 'warphole', tag: 'postgame', where: "(EventScript_FallDownHole), FourIsland_IcefallCave_1F" },
-  { kind: 'special', name: 'BrailleCursorToggle', tag: 'postgame', where: "MtEmber_RubyPath_B5F, SixIsland_DottedHole_SapphireRoom" },
   { kind: 'special', name: 'CallTrainerTowerFunc', tag: 'postgame', where: "TrainerTower_1F, TrainerTower_2F, TrainerTower_3F, TrainerTower_4F, TrainerTower_5F, ... (10 in all)" },
   { kind: 'special', name: 'CompareHeracrossSize', tag: 'postgame', where: "SixIsland_WaterPath_House1" },
   { kind: 'special', name: 'DoDeoxysTriangleInteraction', tag: 'postgame', where: "BirthIsland_Exterior" },

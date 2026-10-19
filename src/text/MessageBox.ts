@@ -41,7 +41,8 @@ export class MessageBox {
 
   constructor(
     scene: Phaser.Scene,
-    private fonts: Fonts,
+    /** The field's fonts (ScrCmd_getbraillestringwidth's GetStringWidth). */
+    readonly fonts: Fonts,
     private input: Input,
     private charmap: Charmap,
     private state: GameState,
