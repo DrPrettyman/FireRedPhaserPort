@@ -91,6 +91,8 @@ function applyAfterRival(state: GameState, starter: Starter, tables: BattleTable
   state.setVar('VAR_MAP_SCENE_PALLET_TOWN_PLAYERS_HOUSE_2F', 1);
   // PalletTown_OnTransition
   state.setFlag('FLAG_WORLD_MAP_PALLET_TOWN', true);
+  // Leaving the house starts a quest log scene (QL_EVENT_DEPARTED): QL_StartRecordingAction's BackUpMapLayout
+  state.setVar('VAR_QLBAK_MAP_LAYOUT', d.require('LAYOUT_PALLET_TOWN'));
 
   // PalletTown_EventScript_OakTrigger (FLAG_DONT_TRANSITION_MUSIC is set there and cleared in the lab)
   state.setVar('VAR_MAP_SCENE_PALLET_TOWN_OAK', 1);
