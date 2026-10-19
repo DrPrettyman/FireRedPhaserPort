@@ -274,7 +274,7 @@ headless Chrome they started before handing back.
 
 1. **The plan as a section of GAPS_PLAN.md** (coordinator, revisit if you disagree): two small single-player gaps,
    the same kind of work as batch 11's.
-2. **Four W-weather units became three, two of them parallel** (coordinator, revisit if you disagree): unit 1
+2. **W-weather in three units, the last two in parallel** (coordinator, revisit if you disagree): unit 1
    owns the shared sprite layer (with the BLDALPHA blend for sprites with transparent pixels that Clouds, Ash,
    FogDiagonal and Sandstorm need), so units 2 and 3 can run side by side after it; the blended weathers are split
    between them by size.
