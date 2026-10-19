@@ -43,6 +43,8 @@ function enable() {
 }
 
 const sp = (name: string) => t.d(`SPECIES_${name}`);
+const make = (species: string) =>
+  t.pokemon.createMon(sp(species), 30, { personality: 0, otId: 1, otName: 'RED', otGender: 'male', metLocation: 'MAPSEC_PALLET_TOWN' });
 
 test('IsNationalPokedexEnabled wants all three of the magic, VAR_NATIONAL_DEX = 0x6258 and FLAG_SYS_NATIONAL_DEX', () => {
   const s = t.state;
@@ -71,7 +73,7 @@ test('SpeciesToPokedexNum: 0xFFFF past Kanto without the National Dex (the summa
 test('a trade evolution into a non-Kanto species keeps its item without the National Dex (GetEvolutionTargetSpecies)', () => {
   const metalCoat = t.d('ITEM_METAL_COAT');
   const onix = () => {
-    const mon = t.pokemon.createMon(sp('ONIX'), 30, { personality: 0, otId: 1, otName: 'RED' });
+    const mon = make('ONIX');
     mon.heldItem = metalCoat;
     return mon;
   };
@@ -85,11 +87,11 @@ test('a trade evolution into a non-Kanto species keeps its item without the Nati
   expect(GetEvolutionTargetSpecies(mon, t.d('EVO_MODE_TRADE'), 0)).toBe(sp('STEELIX'));
   expect(mon.heldItem).toBe(t.d('ITEM_NONE'));
   // A Kanto target (Kadabra, EVO_TRADE) is never held back
-  expect(GetEvolutionTargetSpecies(t.pokemon.createMon(sp('KADABRA'), 30, { personality: 0, otId: 1, otName: 'RED' }), t.d('EVO_MODE_TRADE'), 0)).toBe(sp('ALAKAZAM'));
+  expect(GetEvolutionTargetSpecies(make('KADABRA'), t.d('EVO_MODE_TRADE'), 0)).toBe(sp('ALAKAZAM'));
 });
 
 test('an evolution stone\'s target past Kanto (Gloom + Sun Stone → Bellossom) is what party_menu.c\'s MonCanEvolve compares', () => {
-  const gloom = t.pokemon.createMon(sp('GLOOM'), 30, { personality: 0, otId: 1, otName: 'RED' });
+  const gloom = make('GLOOM');
   const target = GetEvolutionTargetSpecies(gloom, t.d('EVO_MODE_ITEM_USE'), t.d('ITEM_SUN_STONE'));
   expect(target).toBe(sp('BELLOSSOM'));
   expect(target).toBeGreaterThan(t.d('KANTO_DEX_COUNT'));
