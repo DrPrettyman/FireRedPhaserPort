@@ -12,7 +12,7 @@ import { stringWidth } from '../text/stringWidth';
 import { SCR_MENU_UNSET } from '../ui/MultichoiceMenu';
 import type { YesNoMenu } from '../ui/YesNoMenu';
 import { parseDirection, type Direction } from '../world/direction';
-import type { Defines } from './Defines';
+import { SPECIAL_VARS_END, SPECIAL_VARS_START, VARS_END, VARS_START, type Defines } from './Defines';
 import { MovementRunner, towards, type Instruction } from './MovementRunner';
 import { GetRematchTrainerId, IsTrainerReadyForRematch, ShouldTryRematchBattle, type RematchEnv } from '../world/rematches';
 import type { FieldTask } from '../world/elevator';
@@ -485,11 +485,22 @@ export class ScriptEngine {
     return c ? c[ctx.cmp] : false;
   }
 
+  /**
+   * The `compare` macro's second operand (event.inc, also behind goto_if_eq & co. and `case`): a var
+   * (compare_var_to_var) only in VARS_START..VARS_END or SPECIAL_VARS_START..SPECIAL_VARS_END, else a value
+   * (compare_var_to_value), so Selphy's `goto_if_eq VAR_RESORT_GORGEOUS_REQUESTED_MON, 0xFFFF` compares with 0xFFFF.
+   */
+  private compareArg(token: string): number {
+    const n = this.defines.get(token) ?? 0;
+    const isVar = (n >= VARS_START && n <= VARS_END) || (n >= SPECIAL_VARS_START && n <= SPECIAL_VARS_END);
+    return isVar ? this.state.getVar(n) : n;
+  }
+
   /** goto_if_eq/call_if_eq etc.: `VAR, value, label` (or `label` alone to reuse the last compare). */
   private condBranch(ctx: ScriptContext, a: string[], cond: string, isCall: boolean): void {
     let label: string;
     if (a.length >= 3) {
-      this.compare(ctx, this.state.getVar(a[0]), this.state.value(a[1]));
+      this.compare(ctx, this.state.getVar(a[0]), this.compareArg(a[1]));
       label = a[2];
     } else {
       label = a[0];
@@ -683,7 +694,7 @@ export class ScriptEngine {
     nop() {},
     nop1() {},
     compare(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
-      this.compare(ctx, this.state.getVar(a[0]), this.state.value(a[1]));
+      this.compare(ctx, this.state.getVar(a[0]), this.compareArg(a[1]));
     },
     compare_var_to_value(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
       this.compare(ctx, this.state.getVar(a[0]), this.defines.get(a[1]) ?? 0);
@@ -750,7 +761,7 @@ export class ScriptEngine {
       this.state.setVar('VAR_0x8000', this.state.getVar(a[0]));
     },
     case(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
-      this.compare(ctx, this.state.getVar('VAR_0x8000'), this.state.value(a[0]));
+      this.compare(ctx, this.state.getVar('VAR_0x8000'), this.compareArg(a[0]));
       if (ctx.cmp === Cmp.Equal) this.jump(ctx, a[1]);
     },
     goto_if_defeated(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
