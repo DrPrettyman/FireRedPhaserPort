@@ -245,9 +245,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     slot, no backup; an unreadable slot is SAVE_STATUS_INVALID ("The save file has been deleted...").
   - Copyright screen and intro (menus/intro.ts, intro.c): the GameCube multiboot the copyright screen listens for
     (Pokémon Colosseum's link over the GBA cable: SerialCB_CopyrightScreen, GameCubeMultiBoot_*, sGcmb) isn't
-    ported; no GameCube ever answers, so the screen always fades out after its 140 frames. The intro movie stops
-    after the Game Freak scene: scenes 1-3 (the grass, the forest pan, Gengar and Nidorino's fight; IntroCB_Scene1
-    on) aren't ported yet (W-intro unit 2), so IntroCB_Scene1 goes straight to IntroCB_ExitToTitleScreen.
+    ported; no GameCube ever answers, so the screen always fades out after its 140 frames.
     LoadSpritePalettes(sFightSceneSpritePalettes) reads past the array's end without BUGFIX (no {0} entry); the
     port loads its five palettes only.
   - Title screen (menus/titleScreen.ts): no help system (HELPCONTEXT_TITLE_SCREEN: L/R do nothing). StartTimer1 / SeedRngAndSetTrainerId don't seed the RNG from the time spent on the title

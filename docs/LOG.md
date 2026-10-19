@@ -3795,3 +3795,22 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   screen; audioOutput.test.ts's headless check boots with `intro: true` (only needs the page up). The frame counts
   showed BeginNormalPaletteFade doing the fade's first step itself and the intro task first running the frame
   after CB2_SetUpIntro creates it, as in the C.
+
+### W-intro 2: the intro's scenes 1-3 (batch 11)
+
+- `menus/intro.ts` ports the rest of intro.c: IntroCB_Scene1 (Scene1_Task_AnimateGrass, Scene1_StartGrassScrolling,
+  Scene1_Task_BgZoom), IntroCB_Scene2 (Scene2_Task_PanForest / _PanMons, Scene2_CreateMonSprites /
+  _DestroyMonSprites), IntroCB_Scene3_Entrance and IntroCB_Scene3_Fight with every Scene3_* task and function
+  (the BG scroll, Gengar's bounce, entrance and attack, the swipes, the grass, Nidorino's entrance, cry, recoil and
+  its dust, hops and attack, the zooms) and the sprite callbacks; sBgTemplates_Scene1/2/3, the sprite templates and
+  anims. m4aSongNumStart(MUS_INTRO_FIGHT) and PlayCry_ByMode(SPECIES_NIDORINO, 0x3F, CRY_MODE_DOUBLES) through
+  gba/sound.ts. The movie now ends on IntroCB_ExitToTitleScreen after the fight. No shared files changed: gba/bg.ts
+  already had ChangeBgX / ChangeBgY / GetBgX, and the scenes use no affine BG.
+- Tests: tests/e2e/intro.test.ts's callback order is the whole movie (boot, the title screen's timeout); a new
+  full-movie test checks each scene's frame count against the C, worked out by hand from intro.c (scene 1 47,
+  scene 2 138, scene 3's entrance 60, the fight 501: the fades, Gengar's scroll vs Nidorino's slide, the cry, the
+  attack landing on its 31st frame, the recoil and hops, Gengar's 30-frame bounce), MUS_INTRO_FIGHT on scene 1's
+  17th frame and Nidorino's cry on the fight's 41st, with screenshots of each scene; another skips with A during
+  Gengar's attack (MUS_TITLE takes over from MUS_INTRO_FIGHT). The port matched every hand count on the first run.
+  The full movie adds about 750 frames to each `title: true` boot (well inside the 60 s waits): titleScreen.test.ts,
+  audioOutput.test.ts and audioScenes2.test.ts's title test pass unchanged.

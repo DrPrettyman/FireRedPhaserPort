@@ -849,17 +849,23 @@ this is the next level down. When you add or change a subsystem, update its entr
   with `SetIntroCB(ptr, next)` (state back to 0). A / START / SELECT switch to IntroCB_ExitToTitleScreen (it
   fills the palette black and starts CB2_InitTitleScreen). Ported: IntroCB_Init, the Game Freak scene
   (IntroCB_GF_OpenWindow / _Star / _RevealName / _RevealLogo, GFScene_* and the star / sparkle / logo sprites;
-  "presents" is REVISION 1's, so it isn't shown), LoadFightSceneSpriteGraphics. **Scenes 1-3 (W-intro unit 2)**
-  go in where `IntroCB_Scene1` is a stub: port IntroCB_Scene1 → IntroCB_Scene2 → IntroCB_Scene3_Entrance →
-  _Fight with SetIntroCB, as in the C; the IntroSequenceData fields, the fight scene's tags and
-  LoadFightSceneSpriteGraphics are there, and `introGfxSymbols()` lists (and MainMenuScene preloads) every
-  graphics/intro INCBIN. menu2.c's StartBlendTask / IsBlendTaskActive are `gba/menu2.ts`. `introEnv` (filled by
-  MainMenuScene): `define`, `loadGameSave` / `savedOptionsSound` (the main menu's), `sineTable` (gSineTable, from
-  the battle data's tables, which MainMenuScene loads for it). Sounds through gba/sound.ts as the C plays them
-  (PlaySE(MUS_GAME_FREAK)). Probe `t.intro()` (screen 'copyright' | 'setUp' | 'intro', the callback's name,
+  "presents" is REVISION 1's, so it isn't shown), LoadFightSceneSpriteGraphics, and scenes 1-3: IntroCB_Scene1
+  (the grass and the forest's "zoom": frames stacked on 256x512 text BGs, picked with ChangeBgY), IntroCB_Scene2
+  (the wide shot's pan, then the close-up), IntroCB_Scene3_Entrance / _Fight (Gengar is BG0 scrolled by tasks until
+  it turns into four affine sprites for the zoom; Nidorino is one affine sprite whose callbacks are the cry, the
+  recoil, the hops and the attack; Scene3_Task_GengarAttack reads `sIntro` where the C keeps the pointer in its task
+  data). The GF scene's WIN1 letterbox stays on through all of them. `introGfxSymbols()` lists (and MainMenuScene
+  preloads) every graphics/intro INCBIN. menu2.c's StartBlendTask / IsBlendTaskActive are `gba/menu2.ts`.
+  `introEnv` (filled by MainMenuScene): `define`, `loadGameSave` / `savedOptionsSound` (the main menu's),
+  `sineTable` (gSineTable, from the battle data's tables, which MainMenuScene loads for it; the scenes read it as
+  `Sin(i)`, not battle/trig.ts). Sounds through gba/sound.ts as the C plays them (PlaySE(MUS_GAME_FREAK),
+  m4aSongNumStart(MUS_INTRO_FIGHT), PlayCry_ByMode(SPECIES_NIDORINO, 0x3F, CRY_MODE_DOUBLES)). The whole movie is
+  about 1420 frames (24 s) from the copyright screen to the title screen. Probe `t.intro()` (screen 'copyright' |
+  'setUp' | 'intro', the callback's name,
   state, timer, sprites in use); events `copyrightScreen` (`cb2`: after bootup or after the title screen) and
   `introCB` (`cb`: each SetIntroCB). Tests: tests/e2e/intro.test.ts (harness option `intro: true`: boot like the
-  game and return once the copyright screen is up; it checks each callback's frame count against the C).
+  game and return once the copyright screen is up; it checks each callback's frame count against the C, the
+  music's and the cry's frames, and skips from the GF scene and from scene 3).
 - **Oak's speech (NEW GAME):** `menus/oakSpeech.ts` is oak_speech.c: StartNewGameScene, the controls guide, the
   Pikachu intro, Oak with Nidoran♀ (`CreatePokeballSpriteToReleaseMon` / `CreateTradePokeballSprite`, now in
   battle/gfx.ts's pokeball.c section), BOY / GIRL, the names (the naming screen, or the rival presets), "Let's go!"
