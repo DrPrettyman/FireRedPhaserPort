@@ -666,9 +666,12 @@ function createApi(game: Phaser.Game) {
      * `visible` shows or hides the fog.
      */
     fog: (px?: number, py?: number, visible?: boolean) => overworld()?.testFog(px, py, visible),
-    /** A pixel of the rendered screen ([r, g, b], 240 x 160), read back at the end of the next render. */
+    /**
+     * A pixel of the rendered screen ([r, g, b], 240 x 160), read back at the end of the next render. (Phaser's WebGL
+     * snapshotPixel reads GL row height - y, which is screen row y - 1: hence y + 1.)
+     */
     screenPixel: (x: number, y: number) =>
-      new Promise<number[]>((resolve) => game.renderer.snapshotPixel(x, y, (c) => resolve([(c as Phaser.Display.Color).red, (c as Phaser.Display.Color).green, (c as Phaser.Display.Color).blue]))),
+      new Promise<number[]>((resolve) => game.renderer.snapshotPixel(x, 'gl' in game.renderer ? y + 1 : y, (c) => resolve([(c as Phaser.Display.Color).red, (c as Phaser.Display.Color).green, (c as Phaser.Display.Color).blue]))),
     /**
      * Put the player in an avatar state the way the game does it (SetPlayerAvatarTransitionFlags with
      * PLAYER_AVATAR_FLAG_<state>): 'MACH_BIKE' gets on the bike, 'SURFING' onto a surfing mon, 'ON_FOOT' off.
