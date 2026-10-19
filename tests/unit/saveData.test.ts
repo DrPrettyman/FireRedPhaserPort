@@ -25,7 +25,8 @@ function playedState(): TestGame['state'] {
   s.setDexFlags(1, true, true);
   s.setDexFlags(150, true, false);
   s.nationalDexEnabled = true;
-  s.specialSaveWarpFlags = 1;
+  s.specialSaveWarpFlags = 1 | (1 << 7); // CONTINUE_GAME_WARP | CHAMPION_SAVEWARP
+  s.gcnLinkFlags = 0x803f; // SetUnlockedPokedexFlags + SetPostgameFlags
   s.location = { mapId: 'MAP_VIRIDIAN_CITY', x: 21, y: 9, facing: 'left', avatarFlags: t.d('PLAYER_AVATAR_FLAG_MACH_BIKE') };
   s.continueGameWarp = { mapId: 'MAP_VIRIDIAN_CITY_POKEMON_CENTER_1F', warpId: 255, x: 7, y: 4 };
   s.dynamicWarp = { mapId: 'MAP_CELADON_CITY_DEPARTMENT_STORE_2F', warpId: 2, x: 1, y: 2 };
@@ -121,7 +122,8 @@ describe('save data (save.c / load_save.c)', () => {
       battleStyleSet: true,
       battleSceneOff: true,
       nationalDexEnabled: true,
-      specialSaveWarpFlags: 1,
+      specialSaveWarpFlags: 0x81,
+      gcnLinkFlags: 0x803f,
       location: s.location,
       continueGameWarp: s.continueGameWarp,
       dynamicWarp: s.dynamicWarp,
@@ -172,6 +174,14 @@ describe('save data (save.c / load_save.c)', () => {
     expect(data.flags.every((f) => f < t.d('SPECIAL_FLAGS_START'))).toBe(true);
     const loaded = fromSaveData(data, newGame().state);
     expect(loaded.getVar('VAR_0x8004')).toBe(0);
+  });
+
+  test('a version 8 save (no gcnLinkFlags) loads with none set', () => {
+    const { gcnLinkFlags: _gcn, ...v8 } = { ...toSaveData(playedState()), version: 8 };
+    const loaded = fromSaveData(v8 as ReturnType<typeof toSaveData>, newGame().state);
+    expect(loaded.gcnLinkFlags).toBe(0);
+    expect(loaded.specialSaveWarpFlags).toBe(0x81);
+    expect(loaded.money).toBe(123456);
   });
 
   test('a version 7 save (no Trainer Tower records) loads with the new-game records', () => {

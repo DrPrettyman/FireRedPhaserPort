@@ -3545,6 +3545,65 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   fieldEffects and transitions (19 passed). A screenshot of Viridian Forest shows the shaded map with the tall grass
   sprite matching it.
 
+### W-sevii 3: Six Island, the Dotted Hole and the Sapphire (POSTGAME_PLAN.md batch 11)
+
+- Movement actions (`script/MovementRunner.ts`): `disable_anim` / `restore_anim` (MovementAction_DisableAnimation /
+  _RestoreAnimation: ObjectEvent.inanimate on, then back to the graphics info's), so the Sapphire room's thief
+  slides down from (5, 0) on his standing frame. Off scriptCoverageGaps.ts.
+- pokemon_size_record.c is its own module, `script/pokemonSizeRecord.ts` (moved out of miscSpecials.ts, which keeps
+  the Magikarp specials): sBigMonSizeTable, GetMonSizeHash, GetMonSize, FormatMonSizeRecord (inches),
+  CompareMonSize, GetMonSizeRecordInfo, and the Heracross specials CompareHeracrossSize / GetHeracrossSizeRecordInfo
+  on VAR_HERACROSS_SIZE_RECORD, registered in POSTGAME_SPECIALS. Off scriptCoverageGaps.ts (3 postgame gaps left
+  with W-sevii 2 and W-ttower 2 merged: SampleResortGorgeousMonAndReward, SetPostgameFlags, ShowBattleRecords).
+- Played headless (`tests/e2e/postgameSixIsland.test.ts`, from afterHallOfFame + the Rainbow Pass state): Six
+  Island's Pokémon Center rival scene (MUS_ENCOUNTER_RIVAL, VAR_MAP_SCENE_SIX_ISLAND_POKEMON_CENTER_1F and
+  VAR_MAP_SCENE_FOUR_ISLAND 1, the rival removed, not again); Ruin Valley's scientist in front of the door (until
+  Icefall Cave's FLAG_HIDE_RUIN_VALLEY_SCIENTIST), the door's YES and braille CUT, Cut from the party menu
+  (CutMoveRuinValleyCheck / CutMoveOpenDottedHoleDoor: the open metatile, SE_BANG, the flag; OnLoad keeps it
+  open); the Dotted Hole's 1F (setworldmapflag), its holes floor by floor with each braille (UP, LEFT, RIGHT,
+  DOWN) and a wrong hole back to 1F; the Sapphire room's sixteen wall braille messages; the Sapphire scene watched
+  every tick (the thief's frames through the fall, ShakeScreen's 33 frames of ±3 px vertical pan, SE_FALL /
+  SE_M_STRENGTH x2 / SE_EXIT, the Sapphire removed, FLAG_LEARNED_YES_NAH_CHANSEY, the player looking after him);
+  the Heracross record (the blank chart, no Heracross, a first record and its Nest Ball, a bigger one, a smaller
+  one and the same one, the chart's record). The sweep: all 29 trainers of Pattern Bush, Green Path, Outcast
+  Island, the Water Path and Ruin Valley (the double battles Ava & Geb and Miu & Mia), the 6 item balls and 6
+  hidden items, Pattern Bush's two escape warps, the Water Path house's man. Nothing in them was wrong.
+- Verified: typecheck; unit 625 with master merged (tests/unit/pokemonSizeRecord.test.ts: the hash and sizes moved from
+  miscSpecials.test.ts, and the Heracross specials through POSTGAME_SPECIALS); e2e postgameSixIsland.test.ts (4)
+  and sideSpecials.test.ts (the Magikarp record on the moved code), postgameSixIsland.test.ts again after merging
+  master (4 passed, ~6 min: the sweep's 29 battles are most of it).
+
+### W-ttower 2: the Trainer Tower's battles (POSTGAME_PLAN.md batch 10)
+
+- `world/trainerTower.ts`: unit 1's DoTrainerTowerBattle stand-in replaced by the C's: gBattleTypeFlags TRAINER |
+  TRAINER_TOWER (| DOUBLE on a doubles floor), gTrainerBattleOpponent_A 0, BuildEnemyParty (the mon tables indexed by
+  floors cleared; each floor mon copied before its level is set, the floors being the loaded JSON), GetPartyMaxLevel,
+  CreateBattleTowerMon (pokemon.c: CreateMon with IVs 0, the preset personality and OT id, no Random() call, then
+  moves, PP bonuses, item, nickname, friendship, EVs, ability bit, IVs, CalculateMonStats),
+  BattleSetup_GetBattleTowerBattleTransition (the foes are at the party's top level, so it is always the big Poké
+  Ball), Task_DoTrainerTowerBattle / CB2_EndTrainerTowerBattle (`env.startTowerBattle`: back to the field whatever
+  the outcome, no white-out; PlayMapChosenOrBattleBGM(0)), and the battle's side: InitTrainerTowerBattleStruct /
+  FreeTrainerTowerBattleStruct (sTrainerTowerOpponent; the timer counts on during the battle),
+  GetTrainerTowerOpponentClass / Name / WinText / LoseText (both trainers on a doubles floor), GetTrainerTowerTrainerFrontSpriteId.
+- `src/battle/`: AllocateBattleResources / FreeBattleResources call the tower's struct functions (main.ts);
+  battle/message.ts's trainer class, name, win / lose texts and B_TXT_TRAINER2_LOSE_TEXT / _WIN_TEXT for the tower;
+  controllerOpponent.ts's trainer pic. The other BATTLE_TYPE_TRAINER_TOWER checks the decomp has (getexp, Thief,
+  Trick, the AI's flags and items, the terrain, HandleEndTurn_BattleWon / FinishBattle, CreateNPCTrainerParty) were
+  already ported. `scenes/BattleScene.ts` loads the tower trainer's pic with the battle's graphics.
+- Shared: `host.startScriptedBattle` takes `battleStartTask` (false for the tower's own task: no FldEffPoison wait,
+  no ClearPoisonStepCounter / RestartWildEncounterImmunitySteps), ScriptEngine.ts's ScriptHost and OverworldScene.
+- The test event `trainerTowerBattle` is gone (the battle's own `battleStart` / `battleEnd` report it). Stand-in
+  removed from docs/DEVIATIONS.md.
+- Verified: typecheck; unit 610 passed (tests/unit/trainerTower.test.ts: BuildEnemyParty for each challenge type
+  against the decomp's tables, the data left alone, a Lv50 FERALIGATR's stats against the stat formula by hand, the
+  transition, InitTrainerTowerBattleStruct's class / name / pic / both trainers' texts); e2e
+  tests/e2e/trainerTower.test.ts (a Single floor won: SAILOR ALBERTO, his pic, FERALIGATR and KANGASKHAN at the
+  party's Lv70 with a Lv5 RATTATA along, the lose text after "Player defeated"; the doubles on 1F (TWINS JEN & KIRA)
+  and 2F (CRUSH KIN JO & HALEY: both lose texts in order, sDoubleBattleChallengeMonIdxs[1]); a Knockout floor's three
+  battles; a loss: the win text, no white-out, healed, the receptionist ends the challenge), plus trainerBattle and
+  scriptedBattles. Found on the way: the "Will you change POKéMON?" prompt between a single trainer's two mons eats
+  the mash's A (the test sets the SET battle style).
+
 ### W-sevii 2: Four Island and Icefall Cave (POSTGAME_PLAN.md batch 10)
 
 - `world/fieldTasks.ts` (new): field_tasks.c's per-step callback task. SetUpFieldTasks (a fresh STEP_CB_DUMMY task
@@ -3601,6 +3660,42 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   transitions.test.ts (15 passed with weather), battleAnims "a ghost dodges the ball" (3F). Screenshots of 3F on the
   field and mid-transition show the fog.
 
+### W-sevii 4: Five Island and the Sapphire back to Celio (POSTGAME_PLAN.md batch 11)
+
+- `script/postgameSpecials.ts` (its own block at the end): SampleResortGorgeousMonAndReward (SampleResortGorgeousMon:
+  100 random tries for a seen species, then down from the last try, wrapping past Bulbasaur;
+  SampleResortGorgeousReward: a Luxury Ball 70%, else sResortGorgeousDeluxeRewards), IncrementResortGorgeousStepCounter
+  (called on every step from `OverworldScene.processPlayerFieldInput`, beside IncrementBirthIslandRockStepCount, as
+  ProcessPlayerFieldInput does), SetPostgameFlags (CHAMPION_SAVEWARP, gcnLinkFlags bits 1-3 and 15) and
+  SetUnlockedPokedexFlags (gcnLinkFlags bits 0, 4, 5; was a no-op). Both gap lines are off
+  tests/unit/scriptCoverageGaps.ts.
+- Save version 9: `GameState.gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) in the save; a version-8 save loads with 0.
+  CHAMPION_SAVEWARP lives in the already-saved specialSaveWarpFlags; the C reads it only in union_room.c's
+  IsTryingToTradeAcrossVersionTooSoon (wireless link), so nothing else changes (the continue warp reads only
+  CONTINUE_GAME_WARP).
+- Fixed on the way: the `compare` macro's operand. `goto_if_eq` & co., `compare` and `case` read their value through
+  VarGet semantics (anything from 0x4000 up a var), so Selphy's `goto_if_eq VAR_RESORT_GORGEOUS_REQUESTED_MON, 0xFFFF`
+  compared with an unset var (0) and she was "tired of waiting" at the first visit. event.inc's macro picks
+  compare_var_to_var only for VARS_START..VARS_END and SPECIAL_VARS_START..SPECIAL_VARS_END; ScriptEngine's
+  `compareArg` does the same. A scan of the decomp's scripts finds no other comparison it changes.
+- Nothing else needed fixing: the Meadow's trainers and password door (setmetatile + DrawWholeMapView, SE_PIN), the
+  warehouse's spinners, coord trigger, admins (the arrows for re-entry on the switch and ON_LOAD), Gideon, Celio's
+  network machine scene, InitRoamer, the Lost Cave's Selphy scene and her warp home, Resort Gorgeous's door scene,
+  the butler, the Memorial Pillar, the Cerulean Cave guard's flag and Mewtwo's StartLegendaryBattle ran as they were.
+  (There is no FLAG_LEARNED_GOLDEEN_NEED_LOG: the first password is only text; the door checks
+  FLAG_LEARNED_YES_NAH_CHANSEY alone.)
+- Verified: typecheck; unit 626 passed (tests/unit/fiveIsland.test.ts: the request only ever picks a seen species,
+  the rewards, an open request kept, 249/250 steps, SetPostgameFlags / SetUnlockedPokedexFlags; saveData.test.ts:
+  gcnLinkFlags round-trips, a version-8 save loads); e2e tests/e2e/postgameFiveIsland.test.ts 2 passed (the Meadow's
+  Rocket by sight, the door with one password and then two, the warehouse's grunt, both admins and the arrows,
+  Gideon and the Sapphire, the door still open on the next load, Celio: the machine's metatiles, SE_CLICK / SE_PC_ON,
+  the flags, SetPostgameFlags' bits, the roamer; save + CONTINUE keeps them and ON_LOAD turns the machine on; VAR 7
+  on the next visit; Cerulean City's guard gone and the cave entered; Mewtwo's battle start. The Lost Cave fogged,
+  Selphy's scene and battle, the warp home and her door scene; her request for the only seen mon, asked again
+  without it, 249 steps keep it and the 250th ends it, "tired of waiting" and a new request, the reward with a
+  Pikachu in the party, her goodbye; the Memorial Pillar's Lemonade for TM42), saveContinue.test.ts (6) and
+  eventIslands.test.ts (5: the step hook).
+
 ### W-sevii 5: Seven Island, the Tanoby Ruins, Altering Cave (POSTGAME_PLAN.md batch 10)
 
 - Played headless (`tests/e2e/postgameSevenIsland.test.ts`, 6 tests): Three Island → Seven Island on the Rainbow Pass
@@ -3623,8 +3718,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Everything else ran as it was: the canyon's trainers, items and NPCs, the Chansey Dance, the chambers and Altering
   Cave. Neighbouring maps' objects spawn in the port, so the Sevault Canyon entrance's `clone` of the Swords Dance
   tutor needs nothing.
-- Coverage gaps: the postgame lines left are all owned: CompareHeracrossSize, GetHeracrossSizeRecordInfo,
-  disable_anim, restore_anim (W-sevii 3), SampleResortGorgeousMonAndReward, SetPostgameFlags (W-sevii 4),
-  ShowBattleRecords (W-ttower). One link gap fewer (ValidateEReaderTrainer).
-- Verified: typecheck; unit 622 passed; e2e postgameSevenIsland.test.ts (6 passed, ~7 min: most of it the sweep's
+- Coverage gaps: one postgame line is left after merging master (W-sevii 3 and 4 took theirs): ShowBattleRecords
+  (the Trainer Tower lobby's battle records, W-ttower's). One link gap fewer (ValidateEReaderTrainer).
+- Verified (after merging master): typecheck; unit 629 passed; e2e postgameSevenIsland.test.ts (6 passed, ~7 min: most of it the sweep's
   battles) and wildBattle.test.ts (3 passed: the battle's preload).

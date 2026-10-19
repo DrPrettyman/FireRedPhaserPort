@@ -55,7 +55,7 @@ import { GetMapName } from '../world/regionMap';
 import { YesNoMenu } from '../ui/YesNoMenu';
 import { MonPicBox } from '../ui/MonPicBox';
 import { museumFossilPicGfxSymbols, registerMuseumFossilPic } from '../ui/MuseumFossilPic';
-import { brailleCursorGfxSymbols } from '../script/postgameSpecials';
+import { brailleCursorGfxSymbols, IncrementResortGorgeousStepCounter } from '../script/postgameSpecials';
 import { MoneyBox } from '../ui/MoneyBox';
 import { CoinsBox } from '../ui/CoinsBox';
 import { loadSlotMachineData } from '../menus/slotMachineLogic';
@@ -918,6 +918,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }
     if (this.tryOnFrameScript()) return true;
     if (input.tookStep) RunMassageCooldownStepCounter(this.state);
+    if (input.tookStep) IncrementResortGorgeousStepCounter(this.state);
     if (input.tookStep) IncrementBirthIslandRockStepCount(this.state, this.world.current.data.id);
     if (input.tookStep && this.tryStartStepBasedScript(x, y, tile.behavior)) return true;
     if (input.checkStandardWildEncounter) {
@@ -2458,8 +2459,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * Scripted non-trainer battles (StartOldManTutorialBattle etc.): gEnemyParty is set up by the caller. `song`
    * is CreateBattleStartTask's (0: the battle's default music).
    */
-  startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number, song = 0): TrainerBattleRun {
-    return this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty }, transition, song);
+  startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number, song = 0, battleStartTask = true): TrainerBattleRun {
+    return this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty }, transition, song, battleStartTask);
   }
 
   /** GetBattleTransitionTypeByMap: TRANSITION_TYPE_NORMAL (0), _CAVE (1), _FLASH (2) or _WATER (3). */
@@ -2626,6 +2627,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     setup: Pick<BattleStart, 'battleTypeFlags' | 'trainerBattleOpponent_A' | 'trainerBattleMode' | 'rivalBattleFlags' | 'defeatSpeech' | 'victorySpeech' | 'enemyParty'>,
     transition: number,
     song = 0,
+    battleStartTask = true,
   ): TrainerBattleRun {
     const d = this.defines;
     PlayMapChosenOrBattleBGM(song, setup.battleTypeFlags, bdata.tables.trainers[setup.trainerBattleOpponent_A]?.trainerClass ?? 0);
@@ -2658,8 +2660,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     };
     return {
       done: () => {
-        // Task_BattleStart: the transition waits for FldEffPoison to finish (and here for its graphics)
-        if (phase === 'poison' && !this.poisonEffect && loaded) {
+        // Task_BattleStart: the transition waits for FldEffPoison to finish (and here for its graphics); another
+        // task (Task_DoTrainerTowerBattle) starts it at once
+        if (phase === 'poison' && (!battleStartTask || !this.poisonEffect) && loaded) {
           phase = 'transition';
           testEvent('battleTransition', { transition });
           this.gbaScreen.start(source);
@@ -2671,8 +2674,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
           // Every palette is black now (FadeScreenBlack); the field stays black behind the battle.
           this.gbaScreen.stop();
           this.screenFade.fill(false);
-          this.wild.resetEncounterRateModifiers(); // RestartWildEncounterImmunitySteps
-          this.state.setVar('VAR_POISON_STEP_COUNTER', 0); // ClearPoisonStepCounter
+          if (battleStartTask) {
+            this.wild.resetEncounterRateModifiers(); // RestartWildEncounterImmunitySteps
+            this.state.setVar('VAR_POISON_STEP_COUNTER', 0); // ClearPoisonStepCounter
+          }
           testEvent('battleStart', { flags: start.battleTypeFlags, trainer: start.trainerBattleOpponent_A });
           this.scene.launch('Battle', start);
           this.scene.sleep();

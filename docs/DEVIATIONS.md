@@ -25,8 +25,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     Script_BufferFanClubTrainerName always names the NPC trainer (the rival, LT. SURGE, KOGA), and the link-battle
     fan updates (Special_UpdateTrainerFansAfterLinkBattle) never run.
   - Side specials (script/miscSpecials.ts): Daisy's MUS_HEAL fanfare is the script's; the diploma's
-    FANFARE_OBTAIN_BADGE holds its screen for sFanfares' 340 frames, as on the GBA. No quest log (QuestLog_CutRecording). The Magikarp size record loads pokedex.json for the
-    heights the first time the guru measures (the script waits for it). The diploma returns through the field's
+    FANFARE_OBTAIN_BADGE holds its screen for sFanfares' 340 frames, as on the GBA. No quest log (QuestLog_CutRecording). The size records (script/pokemonSizeRecord.ts: the
+    Magikarp and the Heracross) load pokedex.json for the heights the first time one is measured or read (the script
+    waits for it). The diploma returns through the field's
     plain fade from black rather than FieldCB_WarpExitFadeFromBlack's Task_ExitNonDoor (same look).
   - Fall warps (world/fallWarp.ts): no help context while surfing on Seafoam B4F.
   - Easy Chat (menus/easyChat.ts, menus/easyChatScreen.ts, SIDE_PLAN.md W-easychat): ShowEasyChatScreen: on the GBA the script's `fadescreen FADE_FROM_BLACK` after the special
@@ -44,9 +45,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Script timing: `special EnterHallOfFame` ends its script at the special (script/specials.ts) instead of
     keeping it in its `waitstate` until the screen warps out (as DoSeagallopFerryScene now does), so in theory the
     field could take input in the frame's ticks left after it. Not seen: the field sleeps under the HoF screen.
-  - Trainer Tower (world/trainerTower.ts): DoTrainerTowerBattle is a stand-in until W-ttower unit 2: no battle, it
-    counts as won (VAR_RESULT B_OUTCOME_WON) and the map music comes back, so a challenge can be climbed without
-    fighting. ShowResultsBoard / CloseResultsBoard (`ttower_showresults` / `ttower_closeresults`, which no script
+  - Trainer Tower (world/trainerTower.ts): ShowResultsBoard / CloseResultsBoard (`ttower_showresults` / `ttower_closeresults`, which no script
     uses) validate the record but draw no window. The record times aren't XORed with an encryption key (no key in
     the port). GetFloorAlreadyCleared on the roof with every floor cleared reads a zeroed floor where the C reads
     past the set (heap memory); the roof's result changes nothing. The e-Reader sets are never read (link content).

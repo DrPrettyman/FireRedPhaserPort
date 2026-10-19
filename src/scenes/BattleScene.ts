@@ -43,6 +43,7 @@ import type { Charmap } from '../text/charmap';
 import { Fonts } from '../text/Font';
 import { TEXT_SPEED } from '../text/TextPrinter';
 import { GbaHostScene } from './GbaHostScene';
+import { trainerTowerOpponentPicId } from '../world/trainerTower';
 
 const TEXTURE = 'battle_screen';
 
@@ -112,6 +113,11 @@ function gfxSymbolsFor(data: BattleData, start: BattleStart): string[] {
   if (trainer) {
     add(a.trainerFrontPics[trainer.trainerPic]?.pic);
     add(a.trainerFrontPalettes[trainer.trainerPic]);
+  }
+  if (start.battleTypeFlags & K.BATTLE_TYPE_TRAINER_TOWER) {
+    const pic = trainerTowerOpponentPicId(start.state); // GetTrainerTowerTrainerFrontSpriteId
+    add(a.trainerFrontPics[pic]?.pic);
+    add(a.trainerFrontPalettes[pic]);
   }
   if (start.battleTypeFlags & K.BATTLE_TYPE_GHOST) {
     add('gGhostFrontPic');
