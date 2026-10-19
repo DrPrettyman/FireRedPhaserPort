@@ -17,6 +17,7 @@ import { GetRematchTrainerId, IsTrainerReadyForRematch, ShouldTryRematchBattle, 
 import type { FieldTask } from '../world/elevator';
 import type { ListMenuHost } from '../ui/FieldListMenu';
 import { SetFlashLevel } from '../world/flash';
+import { DoCurrentWeather, SetSavedWeather, SetSavedWeatherFromCurrMapHeader } from '../world/weather';
 import { SPECIALS, StartScriptedWildBattle, type SpecialEnv } from './specials';
 import { PlaySlotMachineFromScript, registerGameCornerFieldEffects } from './gameCornerSpecials';
 import { testEvent } from '../dev/testHooks';
@@ -27,6 +28,7 @@ import { scriptGiveEgg } from '../world/daycare';
 import { FadeInBGM, FadeOutBGMTemporarily, IsBGMPausedOrStopped, IsFanfareTaskInactive, IsSEPlaying, Overworld_ChangeMusicTo, PlayFanfare, PlayNewMapMusic, PlaySE } from '../gba/sound';
 import { IsCryFinished, PlayCry_Script } from '../gba/sound'; // the cries (W-sound 2)
 import { Overworld_ChangeMusicToDefault, Overworld_SetSavedMusic } from '../gba/overworldMusic';
+import { gStringVar4 } from '../menus/common';
 
 export interface ScriptsData {
   code: Instruction[];
@@ -102,8 +104,8 @@ export interface ScriptHost {
   elevatorFloorWindow(floor: number | undefined): void;
   /** CreateTask for a field task that outlives the script command that started it. */
   startFieldTask(task: FieldTask): void;
-  /** SetCameraPanning(0, dy) relative to the standard pan */
-  setCameraPanning(dy: number): void;
+  /** SetCameraPanning(dx, dy) relative to the standard pan (dx: ShakeScreen's horizontal shake) */
+  setCameraPanning(dy: number, dx?: number): void;
   /** CreatePokemartMenu (shop.c): the wait ends when the player leaves the shop menu. */
   openPokemart(items: number[]): Wait;
   /** ShowPokemonStorageSystemPC: the PC's storage menu and box screens; the wait ends when the player leaves it. */
@@ -518,6 +520,7 @@ export class ScriptEngine {
 
   private stringFor(ctx: ScriptContext, token: string): number[] | undefined {
     const label = token === '0x0' || token === '0' ? String(ctx.data[0]) : token;
+    if (label === 'gStringVar4') return [...gStringVar4]; // `msgbox gStringVar4` (the Trainer Tower's speeches)
     const raw = this.strings[label];
     if (raw === undefined) {
       console.warn('[script] missing text', label);
@@ -1048,6 +1051,19 @@ export class ScriptEngine {
     /** ScrCmd_setflashlevel: SetFlashLevel(VarGet(level)) */
     setflashlevel(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       SetFlashLevel(this.state, this.state.value(a[0]));
+    },
+    // ------------------------------------------------ weather (scrcmd.c; world/weather.ts)
+    /** ScrCmd_setweather: SetSavedWeather(VarGet(weather)) */
+    setweather(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      SetSavedWeather(this.state.value(a[0]));
+    },
+    /** ScrCmd_resetweather: SetSavedWeatherFromCurrMapHeader */
+    resetweather(this: ScriptEngine) {
+      SetSavedWeatherFromCurrMapHeader();
+    },
+    /** ScrCmd_doweather: DoCurrentWeather (the change itself runs in the weather task) */
+    doweather() {
+      DoCurrentWeather();
     },
 
     /** ScrCmd_waitstate: block until the task a special started re-enables the script. */

@@ -36,15 +36,20 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     its text like `messageautoscroll` does, as a plain field message (no auto-scroll; the profile's two lines fit one
     box). InitEasyChatPhrases doesn't clear the mail words (mail isn't modelled) and clears additionalPhrases only
     (the C's non-UBFIX loop clears 64 bytes, into the Mauville old man's data that's re-initialized right after).
-  - Seagallop ferry (menus/seagallop.ts, script/ferrySpecials.ts): no PlayRainStoppingSoundEffect (no field
-    weather); no help system (HelpSystem_Disable / Enable) and no quest log (DrawSeagallopDestinationMenu's
+  - Seagallop ferry (menus/seagallop.ts, script/ferrySpecials.ts): no PlayRainStoppingSoundEffect (it only
+    sounds in rain, which isn't ported: POSTGAME_PLAN.md decision 1); no help system (HelpSystem_Disable / Enable) and no quest log (DrawSeagallopDestinationMenu's
     QL_AvoidDisplay). The script that ran DoSeagallopFerryScene stays in its `waitstate` until the scene warps, then
     runs on to its `end` (in C, CB2_LoadMap's ScriptContext_Init drops it). The scene's WarpFadeOutScreen is a plain palette fade to
     black (FadeScreen's white fade is for underwater maps, and no harbor is one).
   - Script timing: `special EnterHallOfFame` ends its script at the special (script/specials.ts) instead of
     keeping it in its `waitstate` until the screen warps out (as DoSeagallopFerryScene now does), so in theory the
     field could take input in the frame's ticks left after it. Not seen: the field sleeps under the HoF screen.
-  - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
+  - Trainer Tower (world/trainerTower.ts): DoTrainerTowerBattle is a stand-in until W-ttower unit 2: no battle, it
+    counts as won (VAR_RESULT B_OUTCOME_WON) and the map music comes back, so a challenge can be climbed without
+    fighting. ShowResultsBoard / CloseResultsBoard (`ttower_showresults` / `ttower_closeresults`, which no script
+    uses) validate the record but draw no window. The record times aren't XORed with an encryption key (no key in
+    the port). GetFloorAlreadyCleared on the roof with every floor cleared reads a zeroed floor where the C reads
+    past the set (heap memory); the roof's result changes nothing. The e-Reader sets are never read (link content).
   - VS Seeker (world/vsSeeker.ts): no quest log event. Task_VsSeeker_0
     takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for
     the Escape Rope). The movement scripts (Wait48, the trainers' emotes and step in place) run as MovementRunners
@@ -158,9 +163,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Wild encounters: GAME_STAT_* counters aren't kept.
   - Scripted wild battles (`dowildbattle`, StartLegendaryBattle): no GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES. `seteventmon` (CreateEnemyEventMon) doesn't set
     MON_DATA_MODERN_FATEFUL_ENCOUNTER (the port keeps no such field; IsBattlerModernFatefulEncounter is always
-    TRUE, so it makes no difference). Navel Rock and Birth Island need the Mystery Gift event tickets, which can't
-    be had, so only a dev start reaches Lugia, Ho-Oh and Deoxys; Navel Rock's `special ShakeScreen` (and the
-    other ShakeScreen users) isn't ported and warns once.
+    TRUE, so it makes no difference).
+  - The event islands (script/eventIslandSpecials.ts, world/deoxysRock.ts): FLDEFF_DESTROY_DEOXYS_ROCK's white flash
+    (BlendPalettes / BeginNormalPaletteFade on PALETTES_BG only) is the field's fade overlay, which whitens the
+    objects and the rock's fragments too for its 16 frames. Its and FLDEFF_MOVE_DEOXYS_ROCK's map num / group
+    arguments are ignored (the object is looked up on the current map; `setfieldeffectargument` can't evaluate
+    `MAP_NUM(...)`). ApplyGlobalFieldPaletteTint (the quest log's tints) is a no-op.
   - `setmaplayoutindex` (World.setCurrentLayout): the swapped layout replaces the current map's chunk after
     ON_TRANSITION rather than being picked before the grid is first built (same result; ON_TRANSITION can't see
     the grid on the GBA either). gSaveBlock1Ptr->mapLayoutId is saved inside the save's `location`
@@ -187,8 +195,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     user, so it lives in surf.ts rather than on the ObjectEvent, and the player's sprite y2 it sets is applied
     to the Phaser sprite directly (ObjectEvent's depth ignores that 1 px). After a battle or field menu the blob
     is made again (the GBA rebuilds every sprite), so its animation restarts.
-  - Dive (world/dive.ts; an R/S leftover no FRLG map reaches): no PlayRainStoppingSoundEffect (no field
-    weather). DiveFieldEffect_ShowMon waits for the banner's graphics to load, as Waterfall's
+  - Dive (world/dive.ts; an R/S leftover no FRLG map reaches): no PlayRainStoppingSoundEffect (rain isn't
+    ported). DiveFieldEffect_ShowMon waits for the banner's graphics to load, as Waterfall's
     does. `setdivewarp` (ScrCmd_setdivewarp) isn't ported (no FRLG script uses it), so sFixedDiveWarp is always the
     dummy warp and a map without a dive/emerge connection never dives. As in the C, that case leaves the player
     locked (DiveFieldEffect_Init's preventStep and _ShowMon's LockPlayerFieldControls are never undone).
@@ -225,7 +233,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     what the port keeps; left out because the port doesn't keep them: the current map's object events and object
     templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail,
     Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, the fame
-    checker, Trainer Tower and minigame records, the enigma berry, mystery gift, link records and
+    checker, minigame records, the enigma berry, mystery gift, link records and
     the region map zoom option. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
   - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the title screen; the
@@ -265,9 +273,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Elevators: UpdateEscapeWarp isn't kept on warps.
   - Field ListMenu (ui/FieldListMenu.ts): the quest log's QL_AvoidDisplay is ignored.
   - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu.
-  - Interaction metatiles whose scripts need unported screens/specials (Trainer Tower clock, cable club
   - Hall of Fame (menus/hallOfFame.ts): no Champion
-    Ribbons (mons have no ribbons; REVISION 0 gives no event tickets either); the help system isn't toggled and the
+    Ribbons (mons have no ribbons; the event tickets come anyway: see "Deliberate QOL changes"); the help system isn't toggled and the
     quest log isn't saved; a failed save carries on (no DoSaveFailedScreen / gGameContinueCallback).
     Other game stats than GAME_STAT_ENTERED_HOF and
     GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted.
@@ -290,8 +297,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     SoftReset (BootScene's `softReset`) restarts the boot flow (the title screen) with a fresh Overworld scene and
     GameState; other module-level state isn't reset, and intro.c's movie isn't ported.
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
-  - Interaction metatiles whose scripts need unported screens/specials (Town Map, Trainer Tower clock, cable club
-    monitors) start their scripts and hit the unimplemented-special warnings.
+  - Interaction metatiles whose scripts need unported screens/specials (Town Map, cable club monitors) start their scripts and hit the unimplemented-special warnings.
   - No-op specials (`NO_OP` in `script/specials.ts`): quest log, help system, fame checker, GameCube link flags,
     CloseLink.
   - Player names are "PLAYER"/"RIVAL" until Oak's intro exists.
@@ -314,7 +320,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (gTextFlags.autoScroll, link / recorded battles) aren't ported.
   - Map music (gba/overworldMusic.ts, overworld.c's music block): the warps load the destination's header before
     their fade starts (WarpFadeOutScreen and TryFadeOutOldMapMusic wait for it; it's cached after SetupWarp, so
-    usually the same frame). The warps' PlayRainStoppingSoundEffect isn't ported (no field weather). DoStairWarp
+    usually the same frame). The warps' PlayRainStoppingSoundEffect isn't ported (rain isn't). DoStairWarp
     runs as DoWarp (no stair walk: its TryFadeOutOldMapMusic and SE_EXIT come at once rather than after the
     player's step and delay). `warpdoor` (unused in FRLG) goes straight to Task_DoorWarp's warp: no door SE or
     animation. The Hall of Fame's DoWarp (SetWarpsToRollCredits, menus/hallOfFame.ts) loads the
@@ -327,7 +333,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     asynchronous load (no GBA frames) doesn't count down. Cable club /
     union room / link-return warps (DoCableClubWarp, ReturnFromLinkRoom, DoUnionRoomWarp) aren't ported (no link
     play).
-  - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical; weather palettes ignored.
+  - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical. In a shaded map the
+    fade in is the weather's (FadeInScreen_RainShowShade: 16 frames, `delay` unused): the palettes are at gamma index
+    3 under the overlay from the first step and the overlay follows its blend coefficient, where the C blends the
+    shifted colours toward the fade colour (ApplyGammaShiftWithBlend).
   - `showmonpic`: the sprite appears when its PNG has loaded.
   - The Pewter Museum's fossil pics (ui/MuseumFossilPic.ts): a Phaser image over a MenuWindow, like `showmonpic`,
     not an OBJ in palette 13 over BG0 (the field isn't on the GBA layer); the graphics and positions are the C's.
@@ -341,7 +350,6 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     scrolled BG shows the same neighbouring rows/columns the GBA's 32x32 tilemaps hold. Object sprites stay
     Phaser's and are copied into an OBJ bitmap layer each frame (behind OAM sprites, priority from their depth
     band); their colours follow palette fades/blends through two probe OBJ palettes, not their real palettes.
-    Weather tints are ignored.
   - HBlank callbacks run before each line is drawn with REG_VCOUNT = that line, and HBlank DMA gives line L
     entry L of its table, so per-line effects are one line earlier than on hardware (consistently so).
   - The barn door wipe's windows are black Phaser rectangles under the screen fade (WININ 0 shows the backdrop,
@@ -358,8 +366,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     garbage tile 0x3014. A door frame doesn't overwrite the last 8 BG tiles for the rest of the map
     (CopyDoorTilesToVram's side effect).
   - Field effect sprites are positioned in world pixels, so UpdateObjectEventSpriteInvisibility's off-screen
-    check and the gCamera map-change fixups in the grass callbacks aren't needed. Reflections ignore weather
-    palette tints (UpdateSpritePaletteWithWeather).
+    check and the gCamera map-change fixups in the grass callbacks aren't needed. A reflection drawn with the
+    object's own sheet (a graphics id without a reflection sheet) takes that sheet's weather shift (GAMMA_ALT), not
+    the reflection palette's (GAMMA_NORMAL).
   - `lock`/`lockall` only wait for the player (and the selected object) to finish their steps; other objects already
     hold still while any script runs. Held movements (trainer approach, camera object) are ObjectEvent moves, so
     their frame order relative to the script and tasks can be off by a frame.
@@ -405,6 +414,23 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     MIN_LETTER_SPACING's argument as a glyph and ignores {FONT}); FRLG's braille strings use none of them.
     BrailleCursorToggle's text cursor is a field image moved by a field task (SpriteCB_TextCursor once a frame), not an
     OAM sprite; the quest log's playback, which skips it, isn't ported.
+  - Field weather (world/weather.ts, W-weather unit 1): only WEATHER_NONE, SUNNY and SHADE are ported.
+    WEATHER_FOG_HORIZONTAL (Pokémon Tower 3F-7F and the Lost Cave's 14 rooms) runs as WEATHER_NONE until
+    W-weather unit 2, and the weathers no FRLG map or script reaches (rain, snow, thunder, ash, sandstorm, diagonal
+    fog, underwater, drought, downpour, bubbles) run as WEATHER_NONE and log once (POSTGAME_PLAN.md decision 1);
+    their saved number is kept. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
+    the field's sprite sheets redrawn in place (world/weatherTextures.ts: `spr_*` GAMMA_ALT, their reflection sheets
+    and the loadfadedpal field effects GAMMA_NORMAL), not to palette RAM: a connected map with another secondary
+    tileset isn't shifted until it's the current map. FadeScreen's fade-out copy of the shifted palettes into the
+    unfaded buffer (CpuFastCopy(gPlttBufferFaded, gPlttBufferUnfaded)) isn't ported: on the GBA a fade out and back
+    in on the same map without a palette reload (a script's `fadescreen` pair) shifts the shaded colours again; here
+    the fade in shifts the colours as loaded. Sweet Scent's and the battle transitions' SetWeatherScreenFadeOut /
+    WeatherProcessingIdle aren't called (Sweet Scent's red blend is an overlay, so the shade stays where the GBA's
+    fade back ends on the unshaded palettes). PreservePaletteInWeather (the field move's mon pic) isn't needed: that
+    pic isn't one of the field's sprites. TranslateWeatherNum's Route 119 / 123 cycles (R/S leftovers) use stage 0
+    (no weatherCycleStage in the save). A dev start (`?map=`) skips CB2_NewGame's fade in from black, as before,
+    but runs its weather half, so the map is shaded from the first frames. A save from before version 7 has no
+    weather: CONTINUE gives WEATHER_NONE until the next map load sets the map's.
 - **Data:** Castform has no front pic (its `front.png` isn't in the decomp; it's built from per-form images).
 
 ## Deliberate QOL changes
@@ -429,6 +455,12 @@ Places where we choose to differ from the GBA on purpose (not placeholders). Kee
     scroll off screen, and a trainer among them can still spot you; here a neighbour's trainers never do.
   - Future: any other per-object logic should likewise check that an object belongs to the current map where the
     GBA would only have current-map objects alive.
+- **The Hall of Fame gives the event tickets** (`GiveEventTickets` in menus/hallOfFame.ts; POSTGAME_PLAN.md decision
+  2). The port follows REVISION 0, where the Mystic and Aurora Tickets (Navel Rock, Birth Island) come only through
+  Mystery Gift (link content). EnterHallOfFame's `#if REVISION >= 0xA` block (FireRed 1.1) gives both, with
+  FLAG_ENABLE_SHIP_NAVEL_ROCK / _BIRTH_ISLAND and FLAG_RECEIVED_MYSTIC_TICKET / _AURORA_TICKET, when a party mon
+  gets its first Champion Ribbon and the bag has no Aurora Ticket. The port has no ribbons, so it gives them on any
+  entry while the bag has no Aurora Ticket; saves past the Hall of Fame get them on their next entry.
 - **A mute key, M** (`input/Input.ts` listenForOutputKeys, `audio/output.ts`; AUDIO_PLAN.md decision 10). The GBA
   has no volume control; M toggles all sound output on and off. It only silences the output: the m4a engine runs
   on, so nothing times differently. The setting is kept in localStorage (`firered-phaser:audio-muted`), not in

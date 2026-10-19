@@ -57,6 +57,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   (before it on a connection) and in `resumeMap` after ON_RESUME / ON_RETURN_TO_FIELD, as the GBA reloads the
   palettes there. The GBA layer's copy of the map (fieldGbaScreen.ts, battle transitions) loads the changed slots
   too (`bgPaletteOverrides`, back to BGR555). The field's fades are an overlay, so they cover a loaded palette too.
+  Each store keeps gPlttBufferUnfaded beside the shown palettes: `loadBgPalette` (LoadPalette) sets both,
+  `loadBgPaletteFaded` only the shown ones (the weather's gamma shift), `bgPaletteUnfaded(pair, slot)` reads it.
 - **League lighting:** `world/leagueLighting.ts` is field_specials.c's DoPokemonLeagueLightingEffect (registered
   with `registerLeagueLighting()`; the rooms' ON_RESUME script), Task_RunPokemonLeagueLightingEffect /
   Task_CancelPokemonLeagueLightingEffect as field tasks, and StopPokemonLeagueLightingEffectTask (the start menu's
@@ -67,6 +69,25 @@ this is the next level down. When you add or change a subsystem, update its entr
   `__test.leagueLighting(colorIndex?)` (the tasks, BG palette 7, a canvas pixel drawn with palette 7). Tests:
   tests/e2e/leagueLighting.test.ts (dev start `?map=PokemonLeague_LoreleisRoom&x=6&y=12` or
   `PokemonLeague_ChampionsRoom&x=6&y=19`).
+- **Field weather:** `world/weather.ts` is field_weather.c / field_weather_util.c and FRLG's weathers of
+  field_weather_effects.c (None, Sunny, Shade; FogHorizontal is W-weather unit 2: add its callbacks to `PORTED`, make
+  `fadesInWithWeatherPalettes` and FadeInScreenWithWeather take it, and its sprites go in a module of their own). The
+  tables come from `public/gen/weather.json` (tools/extract_field.py `extract_weather`: sBasePaletteGammaTypes, the
+  sWeatherFuncs row names, the loadfadedpal field effect palette tags); the gamma tables are built by
+  BuildGammaShiftTables as in the C. The saved weather is `GameState.weather` (gSaveBlock1Ptr->weather, save
+  version 7). OverworldScene hooks: `SetMapHeaderWeather` + SetSavedWeatherFromCurrMapHeader in `onMapLoaded`
+  (before ON_TRANSITION), a warp's `startWeatherOnResumeMap` (StartWeather + ResumePausedWeather, before ON_RESUME;
+  `enterMap` kills the task first: ResetTasks), a connection's ApplyWeatherGammaShiftToBgPals + DoCurrentWeather
+  after its palette reload, `resumeMap` (battles, menus, CONTINUE) the same as a warp, `WeatherTask()` in
+  `tickField` (priority 80). The host (`setUpWeather`) shifts the current map's BG palettes 0-12 through
+  `tilesetVram.loadBgPaletteFaded` and the sprite sheets through `world/weatherTextures.ts` (the sheet's texture
+  source becomes a canvas, redrawn through the table; Phaser's ADD event shifts sheets loaded later). FadeScreen's
+  weather half is `ScreenFade.weather`: a fade in where the weather fades the screen itself (Shade) follows
+  `WeatherFadeInBlend` instead of a palette fade. Commands: `setweather`, `doweather`, `resetweather`. Probe:
+  `__test.weather(slot?, colorIndex?, texture?)` (state, gamma index, BG palette `slot` unfaded / shown, an atlas
+  pixel drawn with it, a sheet pixel now / as loaded). Tests: tests/unit/weather.test.ts (tables, the task),
+  tests/e2e/weather.test.ts (dev starts: `?map=ViridianForest`, `?map=NavelRock_Summit&x=9&y=13`,
+  `?map=SevenIsland_TanobyRuins&x=120&y=11` then up into the Monean Chamber).
 - **Map layouts (`setmaplayoutindex`):** maps carry `layoutId` (gMapHeader.mapLayoutId) and `GameState.mapLayoutId`
   is gSaveBlock1Ptr->mapLayoutId: `onMapLoaded` sets it from the header before ON_TRANSITION (LoadCurrentMapData),
   the script command changes it (SetCurrentMapLayout), and `initMapLayout` then swaps the current chunk's grid,
@@ -76,6 +97,25 @@ this is the next level down. When you add or change a subsystem, update its entr
   script defines. Users: Seafoam Islands B3F/B4F (currents stop once both boulders are down), Three Island's
   Dunsparce Tunnel, Seven Island's house. Tests: tests/e2e/mainPathLeftovers.test.ts (B4F from (7, 6), B3F from
   (12, 8); a dev start never passed Route 20, so both boulders count as down there).
+- **Trainer Tower (trainer_tower.c; POSTGAME_PLAN.md W-ttower):** `world/trainerTower.ts` (no Phaser). Every
+  `ttower_*` macro is expanded by the script extractor into `setvar VAR_0x8004, TRAINER_TOWER_FUNC_*` (+ VAR_0x8005 /
+  0x8006) and `special CallTrainerTowerFunc` (script/trainerTowerSpecials.ts → `CallTrainerTowerFunc(env)`), which
+  sets up sTrainerTowerState (the floor from `state.mapHeaderLayoutId` - LAYOUT_TRAINER_TOWER_1F, the local set
+  gTrainerTowerFloors[towerChallengeId]; the e-Reader path is never taken) and runs the function. Data:
+  `public/gen/trainerTower.json` (tools/extract_trainer_tower.py; `initTrainerTowerData` from Assets.init and the
+  unit tests): the floors by symbol (trainers, Easy Chat speeches, struct BattleTowerPokemon mons), `sets`, and the
+  C tables (layouts as LAYOUT_* names). Save record: `state/trainerTowerRecord.ts` (struct TrainerTower;
+  `state.trainerTower[]`, `state.towerChallengeId`, save version 8; bestTime is kept plain, no encryption key). The
+  timer is gMain.vblankCounter1 (gba/main.ts), counted by VBlankCounter1Update once per tick in OverworldScene.tick
+  and GbaHostScene's loop (like the play time). The speeches go to gStringVar4 (menus/common.ts), which
+  `msgbox gStringVar4` prints; TT_ConvertEasyChatMessageToString measures with the field's FONT_NORMAL
+  (`setTrainerTowerStringWidth`, set by OverworldScene). For unit 2 (the battles): DoTrainerTowerBattle is a stand-in
+  (`trainerTowerBattle` test event, VAR_RESULT B_OUTCOME_WON); InitTrainerTowerBattleStruct / BuildEnemyParty /
+  GetTrainerTowerOpponent* aren't ported yet; the floors in sTrainerTowerState are shared with the data, so
+  BuildEnemyParty must copy a mon before setting its level. Tests: tests/unit/trainerTower.test.ts,
+  tests/e2e/trainerTower.test.ts (`?start=after-rival&map=TrainerTower_Lobby&x=9&y=9`, up onto the entry trigger,
+  YES, the challenge type; the stairs at (9, 2); 1F's singles trigger (10, 13), doubles (9, 12)). Probe:
+  `t.state.trainerTower[t.state.towerChallengeId]`.
 - **Silph Co. card key doors** (data/scripts/silphco_doors.inc) need nothing of their own: ON_LOAD closes them with
   `setmetatile`, the bg events open them (FLAG_HIDE_SILPH_CO_5F_CARD_KEY, `special SetHiddenItemFlag`). Test spot:
   `?map=SilphCo_5F&x=9&y=9`, face left (mark the floor's trainers beaten first).
@@ -558,6 +598,25 @@ this is the next level down. When you add or change a subsystem, update its entr
   for new ferry tests: `tests/e2e/seagallopHelpers.ts` (`warp`, `rideFerry` / `checkRide`, `sail` (checks the
   HI-SPEED number), `waitForMenu`, `talkToHarborSailor`, `harborState`). Quick look: `?map=VermilionCity&x=23&y=31` with
   VAR_MAP_SCENE_VERMILION_CITY 3 and VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F >= 1, walk down onto the ticket check.
+- **Event islands (Navel Rock, Birth Island) and ShakeScreen:** the tickets come from the Hall of Fame
+  (`GiveEventTickets` in `menus/hallOfFame.ts`, EnterHallOfFame's REVISION 0xA block; a QOL change, see
+  DEVIATIONS). `script/eventIslandSpecials.ts` (EVENT_ISLAND_SPECIALS, spread into SPECIALS) has field_specials.c's
+  ShakeScreen, LoopWingFlapSound, DoDeoxysTriangleInteraction / MoveDeoxysObject, SetDeoxysTrianglePalette and
+  IncrementBirthIslandRockStepCount (called from OverworldScene's tookStep, beside RunMassageCooldownStepCounter).
+  **ShakeScreen** is for any script: VAR_0x8004 / 0x8005 the vertical / horizontal pan, 0x8006 the flips, 0x8007 the
+  frames between them; it runs as a field task (`host.startFieldTask`) on `host.setCameraPanning(dy, dx)`, the same
+  pan the elevator (AnimateElevator), the fall warp and the Deoxys rock use (OverworldScene.setCameraPanning: the
+  Phaser camera's follow offset; `field().avatar.cameraPanX` / `cameraPanY` are the probes). `world/deoxysRock.ts`
+  has the triangle's palette (LoadDeoxysObjectPal: sDeoxysObjectPals, extracted by extract_gfx.py's
+  graphics/field_specials/ prefix, over gObjectEventPal_Meteorite, redrawn into the `deoxys_rock` texture that the
+  rock object switches to) and the natives of FLDEFF_MOVE_DEOXYS_ROCK (ObjectEvent.shiftObjectEventCoords +
+  setSpriteOffset for the slide) and FLDEFF_DESTROY_DEOXYS_ROCK (the shake, the flash, the fragments at screen
+  coordinates); host `setDeoxysRockHost` from OverworldScene. Events: `deoxysRockPalette` (num), `deoxysRockMoved`,
+  `deoxysRockFragments` (their first frame), `deoxysRockDestroyed`; probe `destroyDeoxysRockProbe()` in the module.
+  Test: `tests/e2e/eventIslands.test.ts` (the tickets, Vermilion's ticket menu to both islands, Lugia's shakes,
+  Ho-Oh's wing flaps, the triangle's ten corners with a failed one, the rock and Deoxys). Quick looks:
+  `?map=NavelRock_Base&x=10&y=16` (face up), `?map=NavelRock_Summit&x=9&y=13` (step up),
+  `?map=BirthIsland_Exterior&x=15&y=13` (face up; the corners and where to stand are in the test's TRIANGLE).
 - **TM case:** `menus/tmCase.ts` is tm_case.c. `InitTMCase(type, exitCallback, allowSelectClose)` runs on whichever
   GBA host has the bag (FieldMenuScene); `menuGfxSymbols` preloads `TM_CASE_GFX`. Ways in: the bag's KEY ITEMS → TM
   CASE → OPEN (`FieldUseFunc_TmCase` in menus/itemUse.ts → TMCASE_FIELD, back to CB2_BagMenuFromStartMenu), the
@@ -1636,7 +1695,7 @@ or extend them:
   saved anyway since the Safari start menu has no SAVE, and the roamer's location). Other optional warps the save
   keeps: `continueGameWarp` + `specialSaveWarpFlags` (CONTINUE_GAME_WARP), `escapeWarp`. Game stats
   (`state.gameStats`, Get/Set/IncrementGameStat; only GAME_STAT_ENTERED_HOF and _FIRST_HOF_PLAY_TIME are counted so
-  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6. The Hall of Fame records live apart from the save, like their own flash
+  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8. The Hall of Fame records live apart from the save, like their own flash
   sectors: `state/hallOfFame.ts` (key `HOF_STORAGE_KEY`, versioned), read into `gHofBuffer` (gDecompressionBuffer)
   by LoadHallOfFameSave, written by TrySavingData(SAVE_HALL_OF_FAME) (which also counts GAME_STAT_ENTERED_HOF) and
   erased by SAVE_OVERWRITE_DIFFERENT_FILE.

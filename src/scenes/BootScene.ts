@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { DisableVBlankCounter1 } from '../gba/main';
 import { Assets } from '../data/assets';
 import { loadAudioData } from '../audio/audioData';
 import { AgbMainSoundInit } from '../audio/frame';
@@ -67,6 +68,7 @@ export class BootScene extends Phaser.Scene {
  */
 export function softReset(from: Phaser.Scene): void {
   const game = from.game;
+  DisableVBlankCounter1(); // SoftReset's InitMainCallbacks clears gMain (the Trainer Tower's timer)
   for (const s of game.scene.getScenes(false)) {
     if (s.scene.key === 'Boot') continue;
     if (s === from || s.scene.isActive() || s.scene.isSleeping() || s.scene.isPaused() || s.scene.isVisible()) s.scene.stop();
