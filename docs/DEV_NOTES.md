@@ -923,7 +923,7 @@ this is the next level down. When you add or change a subsystem, update its entr
   4F from (3, 11) facing down, given from the bag with HI AWESOME typed, read and taken; the party menu's GIVE
   cancelled and written, Bead Mail's icon, TAKE → YES to the PC slots; CHECK; a held mail through SAVE and
   CONTINUE; the mailbox at the Viridian Pokémon Center's PC from (11, 2): empty, READ, MOVE TO BAG with the bag full
-  and not, GIVE; a mon holding mail through the Route 5 daycare; DONTAE's Fab Mail after the trade in
+  and not, GIVE, ten mails scrolled; a mon holding mail through the Route 5 daycare; DONTAE's Fab Mail after the trade in
   CeruleanCity_House3 from (2, 3)). tests/e2e/easyChatHelpers.ts holds the Easy Chat screen's helpers (step,
   typeByGroup, typeByKeyboard) both e2e files use.
 - **Party selection from scripts, tutors, the move deleter:** `menus/partyMenuSpecials.ts` is

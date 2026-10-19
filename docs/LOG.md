@@ -4058,5 +4058,6 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Tests: tests/unit/mail.test.ts (+3: CountPCMail / PCMailCompaction, SELECTED_MAIL, the version 11 upgrade),
   daycare.test.ts (+5: the mail into the daycare and back, another item kept, ShiftDaycareSlots, DaycareMonReceivedMail,
   the save), inGameTrades.test.ts (+2: the trade mail message, GetInGameTradeMail and TradeMons); tests/e2e/mail.test.ts
-  (+3: the mailbox empty / READ / MOVE TO BAG with the bag full and not / GIVE; a mon with mail through the Route 5
-  daycare and read after; DONTAE's Fab Mail read after the trade). mail, daycare, inGameTrades and pcStorage e2e pass.
+  (+4: the mailbox empty / READ / MOVE TO BAG with the bag full and not / GIVE; ten mails scrolled to the last and
+  read; a mon with mail through the Route 5 daycare and read after; DONTAE's Fab Mail read after the trade), passed
+  three times in a row; daycare, inGameTrades and pcStorage e2e pass.

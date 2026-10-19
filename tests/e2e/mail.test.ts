@@ -487,3 +487,31 @@ test("DONTAE's Jynx comes with its Fab Mail (GetInGameTradeMail), which reads", 
   await game.press('A');
   await waitForTask(game, 'Task_HandleSelectionMenuInput', 'the action menu after reading');
 });
+
+test('a full mailbox (10 mails) scrolls: the tenth is READ from the bottom of the list', async () => {
+  const game = await session.start({ ...PC, party: PARTY });
+  const words = await wordIds(game, ['EC_WORD_HI', 'EC_WORD_AWESOME']);
+  for (let i = 0; i < 10; i++) await putMail(game, 6 + i, 'ORANGE_MAIL', i === 9 ? [words[1], words[0]] : [words[0]]);
+  await openPlayerPc(game);
+  await waitForMailbox(game, 'topMenu');
+  await game.press('DOWN');
+  await game.press('A');
+  let box = await waitForMailbox(game, 'mailbox');
+  expect(box).toMatchObject({ count: 10, pageItems: 8 });
+  // Nine rows down: the cursor to row 4, the list scrolls to 3 (11 items, 8 shown), then the cursor to row 6.
+  for (let i = 0; i < 9; i++) {
+    await game.press('DOWN');
+    await game.eval((t) => t.waitFrames(2));
+  }
+  box = (await game.eval((t) => t.mailbox()))!;
+  expect(box).toMatchObject({ cursorPos: 3, itemsAbove: 6 });
+  await game.screenshot('mailbox-scrolled');
+  await game.press('A');
+  await waitForMailbox(game, 'mailSubmenu');
+  await game.press('A'); // READ
+  const mail = await waitForMail(game);
+  expect(mail.lines[0]).toBe('AWESOME HI');
+  await game.press('A');
+  box = await waitForMailbox(game, 'mailbox');
+  expect(box).toMatchObject({ cursorPos: 3, itemsAbove: 6 }); // ListMenuInit back at the same scroll and row
+});
