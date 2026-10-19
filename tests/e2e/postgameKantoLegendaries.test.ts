@@ -145,14 +145,25 @@ test('Ho-Oh caught at the summit; gone on the next visit', async () => {
 
 test('running from Ho-Oh: it flies away, and is back on the next visit', async () => {
   const game = await startAt(HO_OH, [9, 13]);
+  expect(await game.eval((t) => t.weather()!.currWeather)).toBe(await game.eval((t) => t.define('WEATHER_SHADE')));
   const since = await meet(game, HO_OH);
+  // Back on the field, before EventScript_MonFlewAway's fade: Ho-Oh where Movement_HoOhApproach left it (the
+  // object events outlive the battle), and the weather the script's `setweather 0` / `doweather` left (ResumeMap's
+  // weather comes from the save block's)
+  const back = game.watch((t) => {
+    const f = t.field();
+    const h = t.objects().find((o) => o.graphicsId === 'OBJ_EVENT_GFX_HO_OH');
+    return f && h && t.events().some((e) => e.type === 'battleEnd') && { at: [h.x, h.y], weather: t.weather()!.currWeather, saved: t.weather()!.savedWeather };
+  }, { what: 'the field back with Ho-Oh', maxFrames: 60000 });
   await runFromBattle(game);
   expect(await outcomeSince(game, since)).toBe('B_OUTCOME_RAN');
+  expect(await back).toEqual({ at: [9, 11], weather: 0, saved: 0 });
   expect(await finishScript(game)).toContain('The HO-OH flew away!');
   expect(await objectsWith(game, HO_OH.gfx)).toEqual([]);
   expect(await game.eval((t) => [t.flag('FLAG_HO_OH_FLEW_AWAY'), t.flag('FLAG_FOUGHT_HO_OH')])).toEqual([false, false]);
   await warp(game, HO_OH.mapId, 9, 13);
   expect(await objectsWith(game, HO_OH.gfx)).toEqual([HO_OH.at]);
+  expect(await game.eval((t) => t.weather()!.currWeather)).toBe(await game.eval((t) => t.define('WEATHER_SHADE')));
 }, 300_000);
 
 test('Deoxys caught on Birth Island: the triangle\'s last touch, the battle, gone with its rock on the next visit', async () => {
