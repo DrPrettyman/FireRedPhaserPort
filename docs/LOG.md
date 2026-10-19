@@ -3544,3 +3544,29 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the shade 3, 2, 1, 0 a frame apart; the weather surviving save + CONTINUE), plus leagueLighting, saveContinue,
   fieldEffects and transitions (19 passed). A screenshot of Viridian Forest shows the shaded map with the tall grass
   sprite matching it.
+
+### W-sevii 2: Four Island and Icefall Cave (POSTGAME_PLAN.md batch 10)
+
+- `world/fieldTasks.ts` (new): field_tasks.c's per-step callback task. SetUpFieldTasks (a fresh STEP_CB_DUMMY task
+  where ResumeMap makes one: OverworldScene's `onMapLoaded` on a warp before ON_RESUME, `resumeMap()`),
+  ActivatePerStepCallback, Task_RunPerStepCallback (once a frame from `tickField`, beside the ambient cries),
+  sPerStepCallbacks with IcefallCaveIcePerStepCallback (thin ice cracks 5 frames after the step onto it, cracked ice
+  breaks and sets VAR_TEMP_1; SE_ICE_CRACK / SE_ICE_BREAK), MarkIcePuzzleCoordVisited / sIcefallCaveIceCoords
+  (FLAG_TEMP_1-9) and SetIcefallCaveCrackedIceMetatiles. The ash grass and cracked floor callbacks (R/S leftovers)
+  log once.
+- Script commands `setstepcallback` and `warphole` (SetWarpDestination to the player's spot on the named map, then
+  `special DoFallWarp` and ResetInitialPlayerAvatarState; MAP_UNDEFINED's fixed hole warp logs).
+- `script/postgameSpecials.ts`: SetIcefallCaveCrackedIceMetatiles, UpdateLoreleiDollCollection (a doll every 25
+  Hall of Fame entries), StickerManGetBragFlags. All five are off tests/unit/scriptCoverageGaps.ts.
+- tests/e2e/postgameHelpers.ts: `afterHallOfFame` also counts GAME_STAT_ENTERED_HOF 1 (the Hall of Fame's save);
+  `rainbowPassState` (where postgame.test.ts ends) and `talk` (moved from postgame.test.ts).
+- Nothing else needed fixing on the way: the rival scene, the sticker man's multichoice and fanfare, the back room's
+  scene (its trainerbattle_no_intro, Lapras's cry, the Rockets' exit) and the Seagallop to Four Island ran as they
+  were.
+- Verified: typecheck; unit (tests/unit/fieldTasks.test.ts: the ice's frame timing and flags, the cracked-ice
+  special, the doll thresholds, the brag flags); e2e tests/e2e/postgameFourIsland.test.ts (the ferry from Three
+  Island, the rival scene, the sticker man's HALL OF FAME brag, Icefall Cave 1F's ice cracking on the first step and
+  breaking on the second with their SEs, a save + CONTINUE keeping the cracked ice, the fall to B1F at the same spot,
+  the ice whole again on the next visit, the back room's scene to its end and Lorelei hidden on the next visit,
+  Lorelei's Meowth doll at 25 entries and her text), plus postgame.test.ts (the helper) and sideSpecials.test.ts
+  (the fall warps).

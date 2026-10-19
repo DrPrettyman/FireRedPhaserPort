@@ -260,8 +260,24 @@ this is the next level down. When you add or change a subsystem, update its entr
   module in the page). Tests: tests/unit/braille.test.ts, tests/e2e/postgame.test.ts (Mt. Ember's Ruby Path B4F
   from (4, 8) and B5F from (7, 3), facing north). Quick look: `?map=MtEmber_RubyPath_B5F&x=7&y=3`, face up, A.
   Postgame e2e helpers: `tests/e2e/postgameHelpers.ts` (`afterHallOfFame` for the story state after the Hall of
-  Fame and the Sevii 1-3 trip, `fillPokedex(n)`, `scriptsSince`, `battlesSince`); set OPTIONS' battle style to SET
+  Fame and the Sevii 1-3 trip, `fillPokedex(n)`, `scriptsSince`, `battlesSince`, `rainbowPassState` for the state
+  postgame.test.ts ends in, `talk(x, y, dir)`); set OPTIONS' battle style to SET
   (`state.battleStyleSet`) when mashing trainer battles with two or more in the party.
+  Four Island (unit 2): UpdateLoreleiDollCollection and StickerManGetBragFlags read the game stats
+  (GAME_STAT_ENTERED_HOF etc.: `state.setGameStat` in a test); `warphole` (ScriptEngine) sets the warp destination to
+  the player's spot on the named map and calls `special DoFallWarp` (world/fallWarp.ts). Tests:
+  tests/unit/fieldTasks.test.ts, tests/e2e/postgameFourIsland.test.ts. Quick look: `?map=FourIsland_IcefallCave_1F&x=8&y=15`,
+  walk up twice.
+- **Step callbacks (field_tasks.c):** `world/fieldTasks.ts` (no Phaser). Task_RunPerStepCallback runs once a frame
+  from `OverworldScene.tickField` (beside Task_RunTimeBasedEvents' ambient cries, not while a map loads) with a
+  `PerStepCallbackHost` (map-local coords: PlayerGetDestCoords, the behavior at a cell, MapGridSetMetatileIdAt +
+  draw). `SetUpFieldTasks()` gives a fresh STEP_CB_DUMMY task where ResumeMap does (a warp's `onMapLoaded` before
+  ON_RESUME, `resumeMap()` after a battle / menu / CONTINUE); a connection keeps it. `setstepcallback` is
+  ActivatePerStepCallback. STEP_CB_ICE (Icefall Cave 1F's ON_RESUME) is IcefallCaveIcePerStepCallback: thin ice the
+  player steps onto cracks 5 frames later (SE_ICE_CRACK, FLAG_TEMP_1-9 for sIcefallCaveIceCoords), cracked ice breaks
+  (SE_ICE_BREAK, VAR_TEMP_1 1 for the map's FallDownHole); ON_LOAD's SetIcefallCaveCrackedIceMetatiles
+  (script/postgameSpecials.ts) re-cracks from the temp flags (a CONTINUE keeps them, a warp clears them). Test events
+  `iceCracked` / `iceBroken` (x, y); probe `perStepCallbackProbe()` (import the module in the page).
 - **Daycare:** `world/daycare.ts` is daycare.c except the hatching scene: `GameState.route5DayCareMon` (struct
   DaycareMon: a BoxPokemon or null, u32 steps; no mail) and `GameState.daycare` (struct DayCare, the Four Island
   daycare: two DaycareMons, the u16 offspringPersonality, the u8 egg-cycle stepCounter), both saved (SAVE_VERSION
