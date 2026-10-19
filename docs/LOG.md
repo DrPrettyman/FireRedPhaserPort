@@ -3399,3 +3399,13 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   passed), on master after #110 (436 in 69 files, all passed, 26 min) and at the end on master 1bde692:
   typecheck clean, unit 583 in 43 files, e2e 440 in 70 files, all passed, 22 min. The workers' own full runs are
   in their entries.
+
+### Workflow: the full e2e suite runs once per batch
+
+- The user asked to stop running the e2e suite for every small change: audio batch D's workers ran 60-110 minutes,
+  much of it running or queueing for full suites (~20 min each) under load.
+- CLAUDE.md, docs/WORKFLOW.md (worker prompt, worker rules, merger) and the get-on skill now say: workers run
+  typecheck, unit tests and their own named e2e files, never the full suite; each merge runs typecheck, unit tests
+  and the PR's own e2e files; the full suite runs exactly once per batch, at the end on master, and failures there
+  are rerun file by file. Docs-only changes run nothing.
+- Verified: docs only.

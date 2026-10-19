@@ -98,7 +98,8 @@ free port, so parallel runs don't clash.
 > workers running now: *(one line each)*; avoid their areas.
 >
 > Tests: typecheck, `npm test`, your own e2e file `tests/e2e/<name>.test.ts` covering *(scenarios)*, plus
-> *(the e2e files your shared changes touch)*.
+> *(the named e2e files your shared changes touch, at most a handful)*. Never the full e2e suite: the merger runs
+> it once at the end of the batch.
 >
 > When your unit is done: push, open the PR with `gh pr create --draft` (or update it), summary, shared files
 > touched, what's not done. If you get a "Checkpoint" message, follow it. Your final message: the PR URL, the
@@ -111,10 +112,10 @@ free port, so parallel runs don't clash.
   extractor.
 - **Only change what you own.** Keep shared changes small and list them in the PR. Don't build a shared building
   block another workstream owns; leave a stub or a TODO and say so in the PR.
-- **Tests:** typecheck, `npm test`, your own e2e file, and the e2e files for any shared code you change. Don't run
-  the full e2e suite while other workers are running theirs (it takes ~20 minutes, and four copies at once overload
-  the machine); the merger runs it. Run it yourself only if the plan says so (e.g. a refactor everything goes
-  through).
+- **Tests:** typecheck, `npm test`, your own e2e file, and the few named e2e files that cover shared code you
+  change. **Never run the full e2e suite** (~20 minutes; workers running it is what made batches slow): the merger
+  runs it once at the end of the batch, and fixes or hands back what it finds. Not even for a change that lengthens
+  waits: pick the e2e files whose scenarios go through it (grep tests/e2e for the function or script command).
 - **A test that fails and then passes on a rerun has a race. Fix it, or name it in the PR as unfixed.** Never
   write it off as "parallel load": load only exposes races that are already there. tests/README.md ("Writing a new
   scenario") lists the usual causes.
@@ -139,12 +140,11 @@ free port, so parallel runs don't clash.
 Follow CLAUDE.md's "Merging PRs" (smallest first, merge `origin/master` in, tests, push, squash, clean up), for
 the PRs whose workstream is finished (not drafts). On top of that:
 
-- **Which tests to run per merge is your call.** Typecheck and unit tests always. The full e2e suite (~20
-  minutes) when the PR, or what merging master brought in, touches code many scenarios go through: the engine,
-  scenes, the script engine, field movement, battle, save format, `tools/`. For a PR that adds something
-  self-contained (a screen, a special) with its own e2e file, run that file plus the e2e files for any shared code
-  it touches. Always run the full suite once at the end, on master with everything merged, before the STATUS PR.
-  Say in the LOG entry which runs you did.
+- **Tests per merge: typecheck, unit tests and the PR's own e2e files.** Not the full e2e suite, even when the
+  PR touches shared code: pick the named e2e files that cover what it touches. Docs-only PRs: no tests.
+- **The full e2e suite runs once per batch,** at the end, on master with everything merged, before the STATUS PR,
+  and only if the batch changed code. If something fails there, fix it and rerun only the failing files, not the
+  suite. Say in the LOG entry which runs you did.
 - **Cleaning up a merged PR.** Right after each `gh pr merge` (code PRs and docs-only ones alike):
 
   ```sh
@@ -178,7 +178,7 @@ the PRs whose workstream is finished (not drafts). On top of that:
 
 - **The full e2e suite takes ~20 minutes,** longer than a foreground shell command may run. Run it in the
   background with its output to a file, and read the failures from the file.
-- **A test that fails in the merge run:** rerun its file alone. If it passes, it's a race: find it and fix it (in the
+- **A test that fails in a merge or end-of-batch run:** rerun its file alone. If it passes, it's a race: find it and fix it (in the
   PR branch, with a commit saying what it was) rather than rerunning the suite until it's green. Add the cause to
   tests/README.md if it's a new kind.
 - **`gh pr merge` right after a push** can report a conflict while GitHub is still computing mergeability. Wait for
