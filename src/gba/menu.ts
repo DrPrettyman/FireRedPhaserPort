@@ -514,7 +514,7 @@ let sYesNo: { yesFunc: TaskFunc; noFunc: TaskFunc } | null = null;
 let sMessageNextTask: TaskFunc | null = null;
 let sMessageWindowId = 0;
 
-export function DisplayMessageAndContinueTask(taskId: number, windowId: number, tileNum: number, paletteNum: number, fontId: number, textSpeed: number, string: number[], taskFunc: TaskFunc): void {
+export function DisplayMessageAndContinueTask(taskId: number, windowId: number, tileNum: number, paletteNum: number, fontId: number, textSpeed: number, string: number[], taskFunc: TaskFunc | null): void {
   sMessageWindowId = windowId;
   DrawDialogFrameWithCustomTileAndPalette(windowId, true, tileNum, paletteNum);
   const str = menuEnv.expandPlaceholders(string);

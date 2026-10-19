@@ -3,8 +3,9 @@
 // case, and what A does for each way in: from the bag (TMCASE_FIELD: USE / GIVE / EXIT), the party menu's GIVE
 // (TMCASE_GIVE_PARTY), the PC box's GIVE (TMCASE_GIVE_PC), the Poké Mart's SELL (TMCASE_SELL: how many, YES/NO),
 // and back from teaching a move (TMCASE_REOPENING). USE hands over to the party menu (ItemUseCB_TMHM), which comes
-// back here through CB2_ReturnToTMCaseMenu. Not ported: the Pokédude's Teachy TV demo (TMCASE_POKEDUDE), the Union
-// Room's GIVE / EXIT menu (no link play), the quest log (RecordItemTransaction) and SEs.
+// back here through CB2_ReturnToTMCaseMenu. The Pokédude's Teachy TV demo (TMCASE_POKEDUDE, Pokedude_InitTMCase: his
+// four TMs over the player's TM case and key items, scrolled by Task_Pokedude_Run, then back to Teachy TV). Not
+// ported: the Union Room's GIVE / EXIT menu (no link play), the quest log (RecordItemTransaction) and SEs.
 
 import { K } from '../battle/constants';
 import { gBattleMoves, state } from '../battle/env';
@@ -26,7 +27,7 @@ import {
   type ListMenu,
   type ListMenuItem,
 } from '../gba/listMenu';
-import { A_BUTTON, B_BUTTON, JOY_NEW, SELECT_BUTTON, SetMainCallback2, SetVBlankCallback, gMain, type MainCallback } from '../gba/main';
+import { A_BUTTON, B_BUTTON, DPAD_DOWN, DPAD_UP, JOY_NEW, SELECT_BUTTON, SetMainCallback2, SetVBlankCallback, gMain, type MainCallback } from '../gba/main';
 import {
   AddItemMenuActionTextPrinters,
   AdjustQuantityAccordingToDPadInput,
@@ -50,7 +51,7 @@ import {
   SetVBlankHBlankCallbacksToNull,
   type MenuAction,
 } from '../gba/menu';
-import { BeginNormalPaletteFade, BG_PLTT_ID, BlendPalettes, gPaletteFade, LoadPalette, OBJ_PLTT_OFFSET, PLTT_ID, PLTT_SIZE_4BPP, ResetPaletteFade, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
+import { BeginNormalPaletteFade, BG_PLTT_ID, BlendPalettes, gPaletteFade, gPlttBufferFaded, gPlttBufferUnfaded, LoadPalette, OBJ_PLTT_OFFSET, PLTT_ID, PLTT_SIZE_4BPP, ResetPaletteFade, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
 import { ScanlineEffect_Stop } from '../gba/scanline';
 import { PlaySE } from '../gba/sound';
 import {
@@ -92,13 +93,16 @@ import {
   GetFontAttribute,
   GetStringWidth,
   InitWindows,
+  IsTextPrinterActive,
   PutWindowTilemap,
   RemoveWindow,
+  RunTextPrinters,
   TEXT_SKIP_DRAW,
   type WindowTemplate,
 } from '../gba/window';
 import type { ItemSlot } from '../state/Bag';
 import {
+  AddBagItem,
   BagGetItemIdByPocketPosition,
   BagGetQuantityByPocketPosition,
   BagPocketCompaction,
@@ -121,12 +125,13 @@ import {
   strBody,
   text,
 } from './common';
-import { GetDialogBoxFontId } from './itemMenu';
+import { CB2_SetUpReshowBattleScreenAfterMenu, GetDialogBoxFontId } from './itemMenu';
 import { SpecialVar } from './itemMenuState';
 import { AddScrollIndicatorArrowPairParameterized, RemoveScrollIndicatorArrowPair } from './menuIndicators';
 import { PrintMoneyAmount, PrintMoneyAmountInMoneyBox, PrintMoneyAmountInMoneyBoxWithBorder } from './money';
 import { CB2_ChooseMonToGiveItem, CB2_GiveHoldItem, CB2_ShowPartyMenuForItemUse, ItemIdToBattleMoveId, ItemUseCB_TMHM, setItemUseCB } from './partyMenu';
 import { CB2_ReturnToPokeStorage } from './pokemonStorage';
+import { CB2_ReturnToTeachyTV, SetTeachyTvControllerModeToResume } from './teachyTv';
 
 // Values for InitTMCase's `type` (include/tm_case.h)
 export const TMCASE_FIELD = 0;
@@ -422,8 +427,7 @@ function DoSetUpTMCaseUI(): boolean {
       gMain.state++;
       break;
     case 14: {
-      // TMCASE_POKEDUDE (Task_Pokedude_Start) isn't ported
-      const taskId = CreateTask(Task_HandleListInput, 0);
+      const taskId = sTMCaseStaticResources.menuType === TMCASE_POKEDUDE ? CreateTask(Task_Pokedude_Start, 0) : CreateTask(Task_HandleListInput, 0);
       sMainTaskId = taskId;
       gTasks[taskId].data[tListTaskId] = ListMenuInit(gMultiuseListMenuTemplate, sTMCaseStaticResources.scrollOffset, sTMCaseStaticResources.selectedRow);
       gMain.state++;
@@ -1016,6 +1020,157 @@ function Task_AfterSale_ReturnToList(taskId: number): void {
   }
 }
 
+// Save the player's bag state while the Pokédude's TM case is shown
+let sPokedudeBagBackup: { bagPocket_TMHM: ItemSlot[]; bagPocket_KeyItems: ItemSlot[]; selectedRow: number; scrollOffset: number } | null = null;
+
+const copySlots = (slots: ItemSlot[]): ItemSlot[] => slots.map((s) => ({ ...s }));
+const restoreSlots = (into: ItemSlot[], from: ItemSlot[]): void => from.forEach((s, i) => Object.assign(into[i], s));
+/** ClearItemSlots */
+const ClearItemSlots = (slots: ItemSlot[]): void => slots.forEach((s) => Object.assign(s, { itemId: K.ITEM_NONE, quantity: 0 }));
+
+/**
+ * Pokedude_InitTMCase: the bag's exit from Teachy TV's TMS demo (Task_Bag_TeachyTvTMs). The player's TM case and
+ * key items are put aside for the Pokédude's four TMs, restored at the demo's end (Task_Pokedude_Run).
+ */
+export function Pokedude_InitTMCase(): void {
+  const tmhm = tmCasePocket();
+  const keyItems = bagPocket(K.POCKET_KEY_ITEMS - 1);
+  sPokedudeBagBackup = {
+    bagPocket_TMHM: copySlots(tmhm),
+    bagPocket_KeyItems: copySlots(keyItems),
+    selectedRow: sTMCaseStaticResources.selectedRow,
+    scrollOffset: sTMCaseStaticResources.scrollOffset,
+  };
+  ClearItemSlots(tmhm);
+  ClearItemSlots(keyItems);
+  ResetTMCaseCursorPos();
+  AddBagItem(K.ITEM_TM01, 1);
+  AddBagItem(K.ITEM_TM03, 1);
+  AddBagItem(K.ITEM_TM09, 1);
+  AddBagItem(K.ITEM_TM35, 1);
+  InitTMCase(TMCASE_POKEDUDE, CB2_ReturnToTeachyTV, false);
+}
+
+const tPokedudeState = 8; // Re-used
+const tPokedudeTimer = 9;
+const POKEDUDE_INPUT_DELAY = 101;
+
+function Task_Pokedude_Start(taskId: number): void {
+  const data = gTasks[taskId].data;
+  if (!gPaletteFade.active) {
+    data[tPokedudeState] = 0;
+    data[tPokedudeTimer] = 0;
+    gTasks[taskId].func = Task_Pokedude_Run;
+  }
+}
+
+/**
+ * Task_Pokedude_Run: down three and up three, the TM types text, down three and up three again, the description
+ * text, then back to Teachy TV. B quits at any step before the end (SetTeachyTvControllerModeToResume).
+ */
+function Task_Pokedude_Run(taskId: number): void {
+  const data = gTasks[taskId].data;
+  if (JOY_NEW(B_BUTTON)) {
+    if (data[tPokedudeState] < 21) {
+      data[tPokedudeState] = 21;
+      SetTeachyTvControllerModeToResume();
+    }
+  }
+  switch (data[tPokedudeState]) {
+    case 0:
+      BeginNormalPaletteFade(0xffff8405, 4, 0, 6, 0);
+      SetDescriptionWindowShade(1);
+      data[tPokedudeState]++;
+      break;
+    case 1:
+    case 11:
+      if (!gPaletteFade.active) {
+        if (++data[tPokedudeTimer] > POKEDUDE_INPUT_DELAY) {
+          data[tPokedudeTimer] = 0;
+          data[tPokedudeState]++;
+        }
+      }
+      break;
+    case 2:
+    case 3:
+    case 4:
+    case 12:
+    case 13:
+    case 14:
+    case 5:
+    case 6:
+    case 7:
+    case 15:
+    case 16:
+    case 17: {
+      const st = data[tPokedudeState];
+      if (data[tPokedudeTimer] === 0) {
+        gMain.newKeys = 0;
+        gMain.newAndRepeatedKeys = (st >= 2 && st <= 4) || (st >= 12 && st <= 14) ? DPAD_DOWN : DPAD_UP;
+        ListMenu_ProcessInput(data[tListTaskId]);
+      }
+      if (++data[tPokedudeTimer] > POKEDUDE_INPUT_DELAY) {
+        data[tPokedudeTimer] = 0;
+        data[tPokedudeState]++;
+      }
+      break;
+    }
+    case 8:
+      SetDescriptionWindowShade(1);
+      PrintMessageWithFollowupTask(taskId, K.FONT_MALE, text('gPokedudeText_TMTypes'), null);
+      gTasks[taskId].func = Task_Pokedude_Run;
+      data[tPokedudeState]++;
+      break;
+    case 9:
+    case 19:
+      RunTextPrinters();
+      if (!IsTextPrinterActive(WIN_MESSAGE)) data[tPokedudeState]++;
+      break;
+    case 10:
+      if (JOY_NEW(A_BUTTON | B_BUTTON)) {
+        SetDescriptionWindowShade(0);
+        BeginNormalPaletteFade(0x00000400, 0, 6, 0, 0);
+        ClearDialogWindowAndFrameToTransparent(WIN_MESSAGE, false);
+        ScheduleBgCopyTilemapToVram(1);
+        data[tPokedudeState]++;
+      }
+      break;
+    case 18:
+      SetDescriptionWindowShade(1);
+      PrintMessageWithFollowupTask(taskId, K.FONT_MALE, text('gPokedudeText_ReadTMDescription'), null);
+      gTasks[taskId].func = Task_Pokedude_Run; // this function
+      data[tPokedudeState]++;
+      break;
+    case 20:
+      if (JOY_NEW(A_BUTTON | B_BUTTON)) data[tPokedudeState]++;
+      break;
+    case 21:
+      if (!gPaletteFade.active) {
+        // Restore the player's bag
+        const b = sPokedudeBagBackup!;
+        restoreSlots(tmCasePocket(), b.bagPocket_TMHM);
+        restoreSlots(bagPocket(K.POCKET_KEY_ITEMS - 1), b.bagPocket_KeyItems);
+        DestroyListMenuTask(data[tListTaskId]);
+        sTMCaseStaticResources.selectedRow = b.selectedRow;
+        sTMCaseStaticResources.scrollOffset = b.scrollOffset;
+        sPokedudeBagBackup = null;
+        gPlttBufferUnfaded.set(gPlttBufferFaded);
+        CB2_SetUpReshowBattleScreenAfterMenu();
+        BeginNormalPaletteFade(0xffffffff, -2, 0, 16, 0);
+        data[tPokedudeState]++;
+      }
+      break;
+    default:
+      if (!gPaletteFade.active) {
+        SetMainCallback2(sTMCaseStaticResources.exitCallback);
+        RemoveScrollArrows();
+        DestroyTMCaseBuffers();
+        DestroyTask(taskId);
+      }
+      break;
+  }
+}
+
 function InitWindowTemplatesAndPals(): void {
   InitWindows(sWindowTemplates);
   DeactivateAllTextPrinters();
@@ -1048,7 +1203,7 @@ function TMCase_SetWindowBorder2(windowId: number): void {
   DrawStdFrameWithCustomTileAndPalette(windowId, false, 0x78, 13);
 }
 
-function PrintMessageWithFollowupTask(taskId: number, fontId: number, str: number[], func: TaskFunc): void {
+function PrintMessageWithFollowupTask(taskId: number, fontId: number, str: number[], func: TaskFunc | null): void {
   DisplayMessageAndContinueTask(taskId, WIN_MESSAGE, 0x64, 0x0b, fontId, GetTextSpeedSetting(), str, func);
   ScheduleBgCopyTilemapToVram(1);
 }
@@ -1140,6 +1295,9 @@ function TintDiscpriteByType(type: number): void {
   const palOffset = PLTT_ID(IndexOfSpritePaletteTag(TAG_DISC));
   const start = sTMSpritePaletteOffsetByType(type);
   LoadPalette(sTMSpritePaletteBuffer!.subarray(start, start + 16), OBJ_PLTT_OFFSET + palOffset, PLTT_SIZE_4BPP);
+  // The C's 1 << (16 + palOffset): palOffset is a colour offset (slot * 16), so only OBJ slot 0 gets a bit; the ARM
+  // shifts anything from 32 up to 0 (JS would wrap the shift count).
+  if (sTMCaseStaticResources.menuType === TMCASE_POKEDUDE) BlendPalettes(16 + palOffset < 32 ? (1 << (16 + palOffset)) >>> 0 : 0, 4, RGB_BLACK);
 }
 
 /** SetDiscSpritePosition: discs further down the case (HMs first, then TM01...) sit lower and further left. */
@@ -1242,7 +1400,7 @@ export function SortPocketAndPlaceHMsFirst(slots: ItemSlot[]): void {
 }
 
 /** The TM case while it's open (test probe): its TMCASE_* type, task, list position and the pocket's items. */
-export function tmCaseProbe(): { menuType: number; task: string; fading: boolean; scroll: number; row: number; numTMs: number; items: number[]; selectClose: boolean } | undefined {
+export function tmCaseProbe(): { menuType: number; task: string; fading: boolean; scroll: number; row: number; numTMs: number; items: number[]; selectClose: boolean; pokedudeState: number } | undefined {
   if (!sTMCaseDynamicResources) return undefined;
   const t = gTasks[sMainTaskId];
   return {
@@ -1256,5 +1414,6 @@ export function tmCaseProbe(): { menuType: number; task: string; fading: boolean
       .slice(0, sTMCaseDynamicResources.numTMs)
       .map((s) => s.itemId),
     selectClose: sTMCaseStaticResources.allowSelectClose,
+    pokedudeState: t.isActive && t.func === Task_Pokedude_Run ? t.data[tPokedudeState] : -1,
   };
 }

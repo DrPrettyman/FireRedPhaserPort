@@ -7,9 +7,9 @@
 // the field. Both are in menus/itemUse.ts (FieldUseFunc_TeachyTv).
 //
 // The four battle options run the Pokédude's battle (TeachyTvPrepBattle: battle/controllerPokedude.ts, on this
-// screen's host, then back here through TeachyTvRestorePlayerPartyCallback). Not ported (FIELD_ITEMS_PLAN.md W-teachy
-// unit 3): the field demos, the scripted bag and TM case of TTVSCR_REGISTER / _TMS. They go through the seam at the
-// bottom of this file (PokedudeDemoNotPorted), which logs and comes back as from the demo's end.
+// screen's host, then back here through TeachyTvRestorePlayerPartyCallback). The two field options run the Pokédude's
+// scripted bag (menus/itemMenu.ts InitPokedudeBag: Task_Bag_TeachyTvRegister / _TMs) and, for TMS, his TM case
+// (menus/tmCase.ts Pokedude_InitTMCase), then come back through CB2_ReturnToTeachyTV.
 
 import { K } from '../battle/constants';
 import { g, ResetBattleGlobals, state } from '../battle/env';
@@ -129,7 +129,7 @@ import { ClearWindowTilemap, COPYWIN_GFX, CopyWindowToVram, DeactivateAllTextPri
 import { SetHelpContextDontCheckBattle } from '../ui/helpSystemContext';
 import { random } from '../util/random';
 import { CheckBagHasItem, text } from './common';
-import { CB2_BagMenuFromStartMenu } from './itemMenu';
+import { CB2_BagMenuFromStartMenu, InitPokedudeBag } from './itemMenu';
 import { AddScrollIndicatorArrowPair, RemoveScrollIndicatorArrowPair, SCROLL_ARROW_DOWN, SCROLL_ARROW_UP, type ScrollArrowsTemplate } from './menuIndicators';
 import { CreateObjectGraphicsSprite, objectEventGfxSymbols, setObjectEventGraphicsInfo } from './objectEventGraphics';
 
@@ -1212,27 +1212,6 @@ function TeachyTvLoadMapPalette(mStruct: TeachyTvLayout, palIndexArray: Uint8Arr
     const pals = gfx16(palIndexArray[i] >= NUM_PALS_IN_PRIMARY ? mStruct.secondaryTileset.palettes : mStruct.primaryTileset.palettes);
     LoadPalette(pals.subarray(palIndexArray[i] * 16, palIndexArray[i] * 16 + 16), BG_PLTT_ID(15 - i), PLTT_SIZE_4BPP);
   }
-}
-
-// ------------------------------------------------------------------ the seam for unit 3
-
-/**
- * The field demos aren't ported yet (FIELD_ITEMS_PLAN.md W-teachy unit 3: TTVSCR_REGISTER / _TMS, the field half of
- * item_menu.c's InitPokedudeBag and tm_case.c's Pokedude_InitTMCase). Until they are, such a demo logs and is skipped:
- * the screen comes back through `exit` as from the demo's end, and the option's script goes on with its closing text
- * (CB2_ReturnToTeachyTV in mode 2, sWhereToReturnToFromBattle).
- */
-function PokedudeDemoNotPorted(demo: string, exit: MainCallback): void {
-  console.warn(`[teachy_tv] ${demo} is not implemented`);
-  SetMainCallback2(exit);
-}
-
-/**
- * item_menu.c's InitPokedudeBag for TTVSCR_REGISTER / _TMS: menus/itemMenu.ts has it (the battle demos use it), but
- * not those locations' scripted tasks (unit 3), so until then they're skipped.
- */
-function InitPokedudeBag(location: number): void {
-  PokedudeDemoNotPorted(`the Pokédude's bag (InitPokedudeBag(${location}))`, CB2_ReturnToTeachyTV);
 }
 
 // ------------------------------------------------------------------ test probe

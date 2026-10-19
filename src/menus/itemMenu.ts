@@ -60,6 +60,7 @@ import {
   MENU_NOTHING_CHOSEN,
   MENU_R_PRESSED,
   Menu_InitCursor,
+  Menu_MoveCursorNoWrapAround,
   Menu_ProcessInputNoWrapAround,
   MenuHelpers_IsLinkActive,
   ResetAllBgsCoordinatesAndBgCntRegs,
@@ -162,7 +163,7 @@ import { CB2_ReturnToTeachyTV, SetTeachyTvControllerModeToResume } from './teach
 import { FreeRestoreBattleData } from '../battle/battleCallbacks';
 import { LoadPlayerParty } from '../battle/controllerPokedude';
 import { CB2_ReturnToPokeStorage } from './pokemonStorage';
-import { InitTMCase, TMCASE_GIVE_PARTY, TMCASE_GIVE_PC, TMCASE_SELL } from './tmCase';
+import { InitTMCase, Pokedude_InitTMCase, TMCASE_GIVE_PARTY, TMCASE_GIVE_PC, TMCASE_SELL } from './tmCase';
 import { BERRYPOUCH_FROMMARTSELL, BERRYPOUCH_FROMPARTYGIVE, BERRYPOUCH_FROMPOKEMONSTORAGEPC, InitBerryPouch } from './berryPouch';
 import { SetHelpContext } from '../ui/helpSystemContext';
 
@@ -536,10 +537,9 @@ function CreateBagInputHandlerTask(location: number): number {
     case K.ITEMMENULOCATION_TTVSCR_CATCHING:
       return CreateTask(Task_Bag_TeachyTvCatching, 0);
     case K.ITEMMENULOCATION_TTVSCR_REGISTER:
+      return CreateTask(Task_Bag_TeachyTvRegister, 0);
     case K.ITEMMENULOCATION_TTVSCR_TMS:
-      // Task_Bag_TeachyTvRegister / Task_Bag_TeachyTvTMs: FIELD_ITEMS_PLAN.md W-teachy unit 3
-      console.warn('[bag] Teachy TV bags are not implemented');
-      return CreateTask(Task_BagMenu_HandleInput, 0);
+      return CreateTask(Task_Bag_TeachyTvTMs, 0);
     default:
       return CreateTask(Task_BagMenu_HandleInput, 0);
   }
@@ -1815,6 +1815,95 @@ function Task_Bag_TeachyTvStatus(taskId: number): void {
         RestorePlayerBag();
         setItemUseCB(ItemUseCB_MedicineStep);
         ItemMenu_SetExitCallback(Pokedude_ChooseMonForInBattleItem);
+        gTasks[taskId].func = Task_Pokedude_FadeFromBag;
+        return;
+    }
+    data[8]++;
+  }
+}
+
+/**
+ * Task_Bag_TeachyTvRegister: KEY ITEMS, TEACHY TV → REGISTER (gSaveBlock1Ptr->registeredItem, the list redrawn with
+ * its mark), down twice, then the bag closes (back to Teachy TV, CB2_ReturnToTeachyTV).
+ */
+function Task_Bag_TeachyTvRegister(taskId: number): void {
+  const data = gTasks[taskId].data;
+  if (!gPaletteFade.active && Task_BButtonInterruptTeachyTv(taskId) !== true) {
+    switch (data[8]) {
+      case 102:
+        PlaySE(K.SE_BAG_POCKET);
+        SwitchPockets(taskId, 1, false);
+        break;
+      case 204:
+        PlaySE(K.SE_SELECT);
+        bag_menu_print_cursor_(data[0], 2);
+        Bag_FillMessageBoxWithPalette(1);
+        SpecialVar.ItemId = K.ITEM_TEACHY_TV;
+        OpenContextMenu(taskId);
+        break;
+      case 306:
+        PlaySE(K.SE_SELECT);
+        Menu_MoveCursorNoWrapAround(1);
+        break;
+      case 408:
+        PlaySE(K.SE_SELECT);
+        state.registeredItem = SpecialVar.ItemId;
+        HideBagWindow(10);
+        HideBagWindow(6);
+        PutWindowTilemap(0);
+        PutWindowTilemap(1);
+        destroyBagList(data[0]);
+        Bag_BuildListMenuTemplate(gBagMenuState.pocket);
+        data[0] = initBagList();
+        Bag_FillMessageBoxWithPalette(0);
+        bag_menu_print_cursor_(data[0], 1);
+        CopyWindowToVram(0, COPYWIN_MAP);
+        break;
+      case 510:
+      case 612:
+        pressListDpad(data[0], DPAD_DOWN);
+        break;
+      case 714:
+        PlaySE(K.SE_SELECT);
+        DestroyListMenuTask(data[0]);
+        RestorePlayerBag();
+        Bag_BeginCloseWin0Animation();
+        gTasks[taskId].func = Task_Pokedude_FadeFromBag;
+        return;
+    }
+    data[8]++;
+  }
+}
+
+/** Task_Bag_TeachyTvTMs: KEY ITEMS, down to the TM CASE → USE; the bag closes into the Pokédude's TM case. */
+function Task_Bag_TeachyTvTMs(taskId: number): void {
+  const data = gTasks[taskId].data;
+  if (!gPaletteFade.active && Task_BButtonInterruptTeachyTv(taskId) !== true) {
+    switch (data[8]) {
+      case 102:
+        PlaySE(K.SE_BAG_POCKET);
+        SwitchPockets(taskId, 1, false);
+        break;
+      case 204:
+        pressListDpad(data[0], DPAD_DOWN);
+        break;
+      case 306:
+        PlaySE(K.SE_SELECT);
+        bag_menu_print_cursor_(data[0], 2);
+        Bag_FillMessageBoxWithPalette(1);
+        SpecialVar.ItemId = K.ITEM_TM_CASE;
+        OpenContextMenu(taskId);
+        break;
+      case 408:
+        PlaySE(K.SE_SELECT);
+        HideBagWindow(10);
+        HideBagWindow(6);
+        PutWindowTilemap(0);
+        PutWindowTilemap(1);
+        CopyWindowToVram(0, COPYWIN_MAP);
+        DestroyListMenuTask(data[0]);
+        RestorePlayerBag();
+        disp().exitCB = Pokedude_InitTMCase;
         gTasks[taskId].func = Task_Pokedude_FadeFromBag;
         return;
     }

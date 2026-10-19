@@ -4,8 +4,8 @@
 // the task and its TTVcmd step, the text printed last, the Pokédude's sprite, the grass sprites. The four battle
 // options run the Pokédude's battle (battle_controller_pokedude.c, battle/controllerPokedude.ts: `__test.battle()`'s
 // `pokedude` is its probe, the voiceover printed last); B quits it from the battle, his bag or his party menu. The
-// field demos (TMs, REGISTER: W-teachy unit 3) are skipped (PokedudeDemoNotPorted), and the screen comes back as from
-// the demo's end, to the option's closing text.
+// two field options run his scripted bag (Task_Bag_TeachyTvRegister / _TMs) and, for TMs, his TM case
+// (TMCASE_POKEDUDE, `__test.tmCase()`'s `pokedudeState`), then come back to the option's closing text.
 
 import { expect, test } from 'vitest';
 import { useGame, type Game, type StartOptions } from './harness';
@@ -94,6 +94,15 @@ interface Seen {
   transitions: number[];
   battleFlags: number[];
   outcomes: number[];
+  /** the GBA screens (main callbacks) gone through */
+  screens: string[];
+  /** the registered item's values seen */
+  registered: number[];
+  /** the Pokédude's TM case: its items, and the furthest step of Task_Pokedude_Run */
+  tmItems: number[];
+  tmState: number;
+  /** the bag's scripted tasks seen */
+  bagTasks: string[];
 }
 
 /**
@@ -106,7 +115,7 @@ async function runOption(game: Game, what: string): Promise<Seen> {
   const mark = await game.mark();
   const audioMark = await game.eval((t) => t.audioEvents().at(-1)?.seq ?? 0);
   await game.eval(() => {
-    (window as any).__ttvSeen = { texts: [], cmds: [], tasks: [], modes: [], grass: 0, voiceovers: [] };
+    (window as any).__ttvSeen = { texts: [], cmds: [], tasks: [], modes: [], grass: 0, voiceovers: [], screens: [], registered: [], tmItems: [], tmState: -1, bagTasks: [] };
   });
   const seen = await game.mashUntil(
     (t) => {
@@ -114,6 +123,14 @@ async function runOption(game: Game, what: string): Promise<Seen> {
       const push = (list: unknown[], v: unknown) => v !== undefined && list.at(-1) !== v && list.push(v);
       const pd = t.battle()?.pokedude;
       if (pd?.textActive) push(r.voiceovers, pd.text);
+      push(r.screens, t.gbaScreen());
+      push(r.registered, t.state!.registeredItem);
+      for (const task of t.gbaTasks()) if (/^Task_Bag_TeachyTv/.test(task) && !r.bagTasks.includes(task)) r.bagTasks.push(task);
+      const tm = t.tmCase();
+      if (tm?.menuType === 4) {
+        if (tm.numTMs) r.tmItems = tm.items;
+        r.tmState = Math.max(r.tmState, tm.pokedudeState);
+      }
       const p = t.teachyTv();
       if (p) {
         if (p.textActive) push(r.texts, p.text);
@@ -195,7 +212,8 @@ async function partyAndBag(game: Game) {
 
 test("each option's sequence: the title, the Pokédude's hello and intro, the demo (his battle), his closing words, back to the list", async () => {
   const game = await session.start(PALLET);
-  await setUp(game, ['ITEM_TEACHY_TV', 'ITEM_TM_CASE']);
+  // The player's own TM and registered item, which the field demos put aside for the Pokédude's
+  await setUp(game, ['ITEM_TEACHY_TV', 'ITEM_TM_CASE', 'ITEM_BICYCLE', 'ITEM_TM05'], 'ITEM_BICYCLE');
   const before = await partyAndBag(game);
   await openFromBag(game);
   // With the TM case: six options and CANCEL, six shown, the scroll arrows.
@@ -233,6 +251,22 @@ test("each option's sequence: the title, the Pokédude's hello and intro, the de
       expect(seen.bgm.indexOf('MUS_FOLLOW_ME', 1), name).toBeGreaterThan(seen.bgm.indexOf('MUS_VS_WILD'));
     } else {
       expect(seen.battleFlags, name).toEqual([]);
+      // His bag (InitPokedudeBag), scripted by the option's task, back to Teachy TV; for TMs through his TM case.
+      const tms = option === 4;
+      expect(seen.bagTasks, name).toEqual([tms ? 'Task_Bag_TeachyTvTMs' : 'Task_Bag_TeachyTvRegister']);
+      const screens = seen.screens.filter((s) => /Bag|TMCase|Idle|TeachyTv/.test(s));
+      expect(screens.includes('CB2_BagMenuRun'), name).toBe(true);
+      expect(screens.at(-1), name).toBe('TeachyTvMainCallback');
+      if (tms) {
+        // Pokedude_InitTMCase: TM01, TM03, TM09, TM35; Task_Pokedude_Run to its last step (21: the fade out)
+        expect(seen.tmItems, name).toEqual(await game.eval((t) => ['ITEM_TM01', 'ITEM_TM03', 'ITEM_TM09', 'ITEM_TM35'].map((i) => t.define(i))));
+        expect(seen.tmState, name).toBeGreaterThanOrEqual(21);
+        expect(seen.registered, name).toEqual([before.registered, 0, before.registered]);
+      } else {
+        // REGISTER: his bag's TEACHY TV registered (none before: BackUpPlayerBag clears it), the player's back after
+        expect(seen.tmState, name).toBe(-1);
+        expect(seen.registered, name).toEqual([before.registered, 0, await game.eval((t) => t.define('ITEM_TEACHY_TV')), before.registered]);
+      }
     }
     // MUS_FOLLOW_ME with the title (and after the battle), MUS_TEACHY_TV_MENU back at the list
     expect(seen.bgm[0], name).toBe('MUS_FOLLOW_ME');
@@ -319,6 +353,38 @@ test("B quits the Pokédude's demo from his battle, his bag and his party menu, 
   const seen = await runOption(game, "the matchups demo after the quits");
   expect(seen.voiceovers).toEqual(DEMOS[2].voiceovers.map((v) => `Pokedude_Text_${v}`));
   expect(await partyAndBag(game)).toEqual(before);
+}, 600_000);
+
+test("B quits the field demos from his bag and his TM case, back to the list with the player's bag as it was", async () => {
+  const game = await session.start(PALLET);
+  await setUp(game, ['ITEM_TEACHY_TV', 'ITEM_TM_CASE', 'ITEM_BICYCLE', 'ITEM_TM05'], 'ITEM_BICYCLE');
+  const before = await partyAndBag(game);
+  await openFromBag(game);
+  for (let i = 0; i < 4; i++) await game.press('DOWN');
+  const quits: { option: number; what: string; at: (t: any) => boolean }[] = [
+    // Task_BButtonInterruptTeachyTv: RestorePlayerBag, CB2_ReturnToTeachyTV in mode 1
+    { option: 4, what: 'his bag (TMs)', at: (t) => t.gbaTasks().includes('Task_Bag_TeachyTvTMs') && !t.paletteFadeActive() },
+    // Task_Pokedude_Run: state 21 (his TMs and the key items given back), SetTeachyTvControllerModeToResume
+    { option: 4, what: 'his TM case', at: (t) => (t.tmCase()?.pokedudeState ?? -1) >= 5 },
+    // after REGISTER: RestorePlayerBag gives the player's registered item back too
+    { option: 5, what: 'his bag (REGISTER)', at: (t) => t.gbaTasks().includes('Task_Bag_TeachyTvRegister') && t.state!.registeredItem === t.define('ITEM_TEACHY_TV') },
+  ];
+  for (const { option, what, at } of quits) {
+    if (option === 5) await game.press('DOWN');
+    expect(await game.eval((t, o) => t.until(() => t.teachyTv()!.scrollOffset + t.teachyTv()!.selectedRow === o, 600), option), what).toBe(true);
+    await game.mashUntil(at, { what, timeout: 300_000, maxFrames: 40000 });
+    await game.screenshot(`teachyTv-field-${what}`);
+    const r = await game.eval(async (t) => {
+      const done = t.until(() => !!t.teachyTv()?.listReady, 20000);
+      void t.press('B');
+      return { ok: await done, list: t.teachyTv() };
+    });
+    expect(r.ok, what).toBe(true);
+    expect(r.list, what).toMatchObject({ mode: 0, whichScript: option, task: 'TeachyTvOptionListController' });
+    expect(r.list!.scrollOffset + r.list!.selectedRow, what).toBe(option);
+    expect(await game.eval((t) => t.audioEvents().filter((e) => e.type === 'bgm').at(-1)?.name), what).toBe('MUS_TEACHY_TV_MENU');
+    expect(await partyAndBag(game), what).toEqual(before);
+  }
 }, 600_000);
 
 /**
