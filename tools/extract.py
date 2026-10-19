@@ -761,10 +761,19 @@ def asm_condition(cond, known):
         v = eval_const_expr(x, known)
         return x if v is None else v
 
-    m = re.fullmatch(r"(.+?)\s*(==|!=)\s*(.+)", cond.strip())
+    # `A && B` / `A || B` (ttower_getspeech: `\trainer >= VARS_START && \trainer != 0xFF`)
+    if "||" in cond:
+        return any(asm_condition(c, known) for c in cond.split("||"))
+    if "&&" in cond:
+        return all(asm_condition(c, known) for c in cond.split("&&"))
+    m = re.fullmatch(r"(.+?)\s*(==|!=|>=|<=|>|<)\s*(.+)", cond.strip())
     if m:
-        eq = value(m.group(1)) == value(m.group(3))
-        return eq if m.group(2) == "==" else not eq
+        a, op, b = value(m.group(1)), m.group(2), value(m.group(3))
+        if op in ("==", "!="):
+            return (a == b) == (op == "==")
+        if not (isinstance(a, int) and isinstance(b, int)):
+            raise ValueError(f"non-constant comparison in .if {cond}")
+        return {">=": a >= b, "<=": a <= b, ">": a > b, "<": a < b}[op]
     v = value(cond)
     return v != 0 if isinstance(v, int) else True
 
@@ -932,6 +941,12 @@ def extract_scripts(decomp, out):
         if name in EXPAND_EVENT_MACROS:
             lines = [strip_comment(l).strip() for l in body.splitlines()]
             macros[name] = (macro_params(header), [l for l in lines if l])
+    # asm/macros/trainer_tower.inc: every ttower_* is `setvar VAR_0x8004, TRAINER_TOWER_FUNC_*` (+ args) and
+    # `special CallTrainerTowerFunc` (world/trainerTower.ts), expanded as the assembler would.
+    tt_inc = (decomp / "asm/macros/trainer_tower.inc").read_text()
+    for name, header, body in re.findall(r"^\s*\.macro\s+(\w+)([^\n]*)\n(.*?)^\s*\.endm", tt_inc, re.M | re.S):
+        lines = [strip_comment(l).strip() for l in body.splitlines()]
+        macros[name] = (macro_params(header), [l for l in lines if l])
 
     # Numeric constants scripts compare against (TRUE, MALE, DIR_*, MSGBOX_*, ITEM_*, ...), plus the
     # assembler symbols the event macros' .if conditions use (e.g. `NO_MUSIC = FALSE`).
@@ -1506,6 +1521,10 @@ def main():
     from extract_easy_chat import extract_easy_chat
 
     extract_easy_chat(decomp, out)
+    print("trainer tower")
+    from extract_trainer_tower import extract_trainer_tower
+
+    extract_trainer_tower(decomp, out)
     print("gfx")
     from extract_gfx import extract_gfx
     extract_gfx(decomp, out)
