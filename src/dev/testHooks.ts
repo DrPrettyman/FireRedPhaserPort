@@ -33,6 +33,7 @@ import { tmCaseProbe } from '../menus/tmCase';
 import { eggHatchProbe } from '../menus/eggHatch';
 import { moveRelearnerProbe } from '../menus/learnMove';
 import { berryPouchProbe } from '../menus/berryPouch';
+import { fameCheckerProbe } from '../menus/fameChecker';
 import { hallOfFameProbe } from '../menus/hallOfFame';
 import { creditsProbe, creditsSkipToClosing } from '../menus/credits';
 import { pokedexAreaProbe } from '../menus/pokedexArea';
@@ -798,6 +799,8 @@ function createApi(game: Phaser.Game) {
     moveRelearner: () => (gMain.callback2?.name === 'CB2_MoveRelearner' ? moveRelearnerProbe() : undefined),
     /** The berry pouch while it's open (menus/berryPouch.ts): BERRYPOUCH_* type, task, scroll/row and the pocket's berries in list order. */
     berryPouch: () => (gMain.callback2?.name === 'CB2_BerryPouchIdle' ? berryPouchProbe() : undefined),
+    /** The Fame Checker while it's up (menus/fameChecker.ts): its task, the list, the icons, the pic, the message. */
+    fameChecker: () => fameCheckerProbe(),
     /** The map name popup while Task_MapNamePopup runs: its text, decoded, and how many px of it are on screen. */
     mapNamePopup: () => {
       const f = field();

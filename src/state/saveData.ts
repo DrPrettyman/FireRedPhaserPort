@@ -15,14 +15,15 @@ import type { PlayTime } from './playTime';
 import type { BoxPokemon } from './PokemonStorage';
 import type { DaycareMon } from '../world/daycare';
 import type { TrainerTowerRecord } from './trainerTowerRecord';
+import type { FameCheckerSaveData } from './fameChecker';
 
 /**
  * Bump when SaveData changes shape; fromSaveData refuses other versions. Older versions that only lack fields
  * are brought up to date by `upgradeSave` (version 1 had no gameStats, version 2 no options.sound, version 3 had
  * daycareStepCounter instead of daycare and no route5DayCareMon, version 4 no easyChat, version 5 no savedMusic,
- * version 6 no weather, version 7 no trainerTower, version 8 no gcnLinkFlags).
+ * version 6 no weather, version 7 no trainerTower, version 8 no gcnLinkFlags, version 9 no fameChecker).
  */
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 
 /** The localStorage key of the one save slot. */
 export const SAVE_STORAGE_KEY = 'firered-phaser:save';
@@ -149,6 +150,11 @@ export interface SaveData {
    * since version 8. Absent in an older save: the new-game records (ResetTrainerTowerResults) stay.
    */
   trainerTower?: { challengeId: number; records: TrainerTowerRecord[] };
+  /**
+   * gSaveBlock1Ptr->fameChecker[NUM_FAMECHECKER_PERSONS] (state/fameChecker.ts); since version 10. Absent in an
+   * older save: the new-game state (ResetFameChecker) stays.
+   */
+  fameChecker?: FameCheckerSaveData[];
 
   // ---- gPokemonStoragePtr
   storage: {
@@ -264,6 +270,7 @@ export function toSaveData(state: GameState): SaveData {
       additionalPhrases: [...state.additionalPhrases],
     },
     trainerTower: { challengeId: state.towerChallengeId, records: state.trainerTower.map((r) => ({ ...r })) },
+    fameChecker: state.fameChecker.map((p) => ({ ...p })),
     storage: {
       currentBox: st.currentBox,
       boxes: st.boxes.map((box) => box.map((mon) => mon && boxMonSave(mon))),
@@ -342,6 +349,7 @@ export function fromSaveData(data: SaveData, state: GameState): GameState {
     state.towerChallengeId = data.trainerTower.challengeId;
     state.trainerTower.forEach((r, i) => Object.assign(r, data.trainerTower!.records[i]));
   }
+  if (data.fameChecker) state.fameChecker.forEach((p, i) => Object.assign(p, data.fameChecker![i]));
 
   const st = state.storage;
   st.currentBox = data.storage.currentBox;
@@ -372,6 +380,8 @@ export function upgradeSave(data: SaveData): SaveData {
   if (data?.version === 7) data = { ...data, version: 8 };
   // No gcnLinkFlags: 0 (their specials weren't ported yet; only the GameCube link reads them).
   if (data?.version === 8) data = { ...data, version: 9, gcnLinkFlags: 0 };
+  // No Fame Checker (its specials were no-ops): fromSaveData keeps the new-game state (ResetFameChecker).
+  if (data?.version === 9) data = { ...data, version: 10 };
   return data;
 }
 
