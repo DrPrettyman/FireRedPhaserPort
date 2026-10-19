@@ -14,8 +14,8 @@ export const EASY_CHAT_SPECIALS: Record<string, Special> = {
    * `waitstate`: on the GBA the script stops running when the screen takes over, and its next command (`fadescreen
    * FADE_FROM_BLACK`) has already started and finished out of sight by the time the field is back, where
    * FieldCB_ContinueScript fades it in. Here the script waits at the special until the field is back (still
-   * black), and that `fadescreen` does the fade in instead (as SelectMoveDeleterMove). The mail type (VAR_0x8005's
-   * mail) isn't modelled: nothing happens.
+   * black), and that `fadescreen` does the fade in instead (as SelectMoveDeleterMove). The mail type edits
+   * VAR_0x8005's mail slot (no script uses it).
    */
   ShowEasyChatScreen({ state, host, stopScript }) {
     if (!easyChatWordsForType(state, state.getVar('VAR_0x8004'))) return; // ShowEasyChatScreen's default: return

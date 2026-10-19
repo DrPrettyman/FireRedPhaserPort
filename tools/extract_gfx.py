@@ -77,6 +77,7 @@ GFX_PREFIXES = (
     "graphics/easy_chat/",  # easy_chat_3.c, the Easy Chat screen (W-easychat)
     "graphics/field_specials/",  # field_specials.c's sDeoxysObjectPals, Birth Island's triangle (W-events)
     "graphics/battle_records/",  # battle_records.c, the Trainer Tower's TIME BOARD and the link records (W-ttower)
+    "graphics/mail/",  # mail.c, the mail screen (W-mail)
     "data/tilesets/",
 )
 

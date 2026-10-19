@@ -113,7 +113,8 @@ import { FLAG_GET_CAUGHT, GetKantoPokedexCount, GetNationalPokedexCount, HasAllK
 import { menusData } from './data';
 import { CopyEasyChatWord } from './easyChat';
 import { CreateTrainerCardTrainerPicSprite, PlayerGenderToFrontTrainerPicId } from './picSprites';
-import { GetIconSpecies, GetMonIconTiles, monIconSymbol } from './pokemonIcon';
+import { GetMonIconTiles, monIconSymbol } from './pokemonIcon';
+import { MailSpeciesToIconSpecies as mailSpeciesToIconSpecies } from '../world/mail';
 import { SetHelpContext } from '../ui/helpSystemContext';
 
 // include/constants/trainer_card.h
@@ -362,19 +363,9 @@ export function trainerCardGfxSymbols(gender: number): string[] {
   ];
 }
 
-// mail_data.c / pokemon_icon.c
-const UNOWN_OFFSET = 30000;
-const NUM_UNOWN_FORMS = 28;
-
-/** MailSpeciesToIconSpecies: a mail species (SpeciesToMailSpecies: Unown as UNOWN_OFFSET + its letter) to an icon species. */
+/** MailSpeciesToIconSpecies (world/mail.ts) with the state's defines. */
 function MailSpeciesToIconSpecies(species: number): number {
-  if (species >= UNOWN_OFFSET && species < UNOWN_OFFSET + NUM_UNOWN_FORMS) {
-    // MailSpeciesToSpecies → SPECIES_UNOWN with the letter
-    const letter = species - UNOWN_OFFSET;
-    return letter === 0 ? K.SPECIES_UNOWN : letter + (K.SPECIES_UNOWN_B - 1);
-  }
-  if (species > K.SPECIES_UNOWN_B - 1) species = K.SPECIES_NONE;
-  return GetIconSpecies(species, 0);
+  return mailSpeciesToIconSpecies(state.defines, species);
 }
 
 /** GetMonIconPaletteIndexFromSpecies */

@@ -9,6 +9,7 @@ import { Bag, type ItemSlot } from './Bag';
 import type { PlayTime } from './playTime';
 import { NewGameInitPCItems } from './pcItems';
 import { InitEasyChatPhrases, InitQuestionnaireWords } from '../menus/easyChatData';
+import { ClearMailData, type Mail } from '../world/mail';
 import { boxMonFromMon, boxMonRestorePP, PokemonStorage } from './PokemonStorage';
 import { newTrainerTowerRecord, ResetTrainerTowerResults, type TrainerTowerRecord } from './trainerTowerRecord';
 
@@ -103,6 +104,11 @@ export class GameState {
   easyChatBattleLost: number[] = [];
   questionnaireWords: number[] = [];
   additionalPhrases: number[] = [];
+  /**
+   * gSaveBlock1Ptr->mail[MAIL_COUNT] (world/mail.ts): PARTY_SIZE slots for the party's held mail (a mon's `mail`
+   * is its slot), then the PC mailbox's. Cleared by ClearMailData in the constructor (NewGameInitData).
+   */
+  mail: Mail[] = [];
 
   /** GetGameStat (overworld.c): 0 for ids from NUM_USED_GAME_STATS on. */
   getGameStat(statId: number): number {
@@ -216,6 +222,7 @@ export class GameState {
     );
     this.pcItems = Array.from({ length: defines.require('PC_ITEMS_COUNT') }, () => ({ itemId: defines.require('ITEM_NONE'), quantity: 0 }));
     NewGameInitPCItems(this.pcItems, defines.require('ITEM_NONE'), defines.require('ITEM_POTION'));
+    ClearMailData(this); // NewGameInitData
     InitEasyChatPhrases(this); // NewGameInitData
     InitQuestionnaireWords(this); // ClearMysteryGift
     this.trainerTower = Array.from({ length: defines.require('NUM_TOWER_CHALLENGE_TYPES') }, newTrainerTowerRecord);
