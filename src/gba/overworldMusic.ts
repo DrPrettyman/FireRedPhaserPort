@@ -45,6 +45,11 @@ export function setOverworldMusicHost(h: OverworldMusicHost | undefined): void {
   host = h;
 }
 
+/** Whether a field host is set: battle-test.html has none, so there's no map music to go back to there. */
+export function hasOverworldMusicHost(): boolean {
+  return host !== undefined;
+}
+
 function musicHost(): OverworldMusicHost {
   if (!host) throw new Error('[map music] no field host');
   return host;

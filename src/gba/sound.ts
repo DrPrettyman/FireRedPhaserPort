@@ -19,6 +19,7 @@ import {
   gPokemonCrySongs,
   gSongTable,
   IsPokemonCryPlaying,
+  m4aMPlayAllStop as m4aMPlayAllStopEngine,
   m4aMPlayContinue,
   m4aMPlayFadeIn,
   m4aMPlayFadeOut,
@@ -122,6 +123,13 @@ export function m4aSongNumStart(songNum: number): void {
 function stopPlayer(info: MusicPlayerInfo): void {
   m4aMPlayStop(info);
   playerEvent('stop', info);
+}
+
+/** m4aMPlayAllStop (m4a.c:175): pauses every music player and the cry players (the evolution scene); each player
+ *  with a live track is reported as a 'stop'. */
+export function m4aMPlayAllStop(): void {
+  m4aMPlayAllStopEngine();
+  for (const info of [...gMPlayTable.map((m) => m.info), ...gPokemonCryMusicPlayers]) if (info.status & MUSICPLAYER_STATUS_TRACK) playerEvent('stop', info);
 }
 
 /** m4aMPlayContinue on a player, reported as 'continue'. */
