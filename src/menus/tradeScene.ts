@@ -123,6 +123,7 @@ import type { Pokemon } from '../pokemon/Pokemon';
 import { BufferInGameTradeMonName, inGameTrade, TradeMons } from '../script/tradeSpecials';
 import { EOS, ExpandToStringVar4, GetMonNickname, gStringVar1, gStringVar2, gStringVar3, speciesOrEgg, text } from './common';
 import { CB2_ReturnToField } from './fieldCallbacks';
+import { HelpSystem_Enable } from '../ui/helpSystemContext';
 
 /** What the scene loads besides the battle textbox (preloaded with the menus) and the two mon pics. */
 export const TRADE_SCENE_GFX = [
@@ -1243,6 +1244,7 @@ function DoTradeAnim_Wireless(): boolean {
         sTradeAnim = null;
         SetMainCallback2(CB2_ReturnToField);
         BufferInGameTradeMonName(state);
+        HelpSystem_Enable();
       }
       break;
   }

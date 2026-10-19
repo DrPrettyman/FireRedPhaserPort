@@ -9,6 +9,7 @@ import { CB2_InitInGameTrade, tradeSceneGfxSymbols } from '../menus/tradeScene';
 import type { Pokemon } from '../pokemon/Pokemon';
 import type { GameState } from '../state/GameState';
 import type { Special } from './specials';
+import { HelpSystem_Disable } from '../ui/helpSystemContext';
 
 /** struct InGameTrade (trade_scene.c), as trades.json has it. Names are raw decomp strings ending in `$`. */
 export interface InGameTrade {
@@ -157,6 +158,7 @@ export const TRADE_SPECIALS: Record<string, Special> = {
    */
   DoInGameTradeScene({ state, host, setWaitState }) {
     const fadeOut = host.fadeScreen(state.defines.require('FADE_TO_BLACK'));
+    HelpSystem_Disable();
     const playerMon = state.party[state.getVar('VAR_0x8005')];
     let loaded = false;
     void loadGfx(tradeSceneGfxSymbols(playerMon, state.enemyParty[0])).then(() => (loaded = true));

@@ -28,8 +28,9 @@ export interface HelpSystemListMenu {
   state: number;
 }
 
-/** gHelpSystemEnabled (help_system_util.c): HelpSystem_Enable / HelpSystem_Disable. */
-export let gHelpSystemEnabled = true;
+/** gHelpSystemEnabled (help_system_util.c): HelpSystem_Enable / HelpSystem_Disable. FALSE at boot (main.c); the title
+ * screen (or BootScene, for the dev starts that skip it) enables it. */
+export let gHelpSystemEnabled = false;
 /** gHelpSystemToggleWithRButtonDisabled (help_system_util.c) */
 export let gHelpSystemToggleWithRButtonDisabled = false;
 

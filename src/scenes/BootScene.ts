@@ -5,6 +5,7 @@ import { loadAudioData } from '../audio/audioData';
 import { AgbMainSoundInit } from '../audio/frame';
 import { presetFromUrl, presetStart } from '../dev/startPresets';
 import { gSave, LoadGameSave, SAVE_STATUS_EMPTY } from '../state/save';
+import { HelpSystem_Disable, HelpSystem_Enable, ResetHelpSystemState } from '../ui/helpSystemContext';
 import type { MainMenuStart } from './MainMenuScene';
 import type { OverworldStart } from './OverworldScene';
 
@@ -45,7 +46,9 @@ export class BootScene extends Phaser.Scene {
     }
     AgbMainSoundInit(); // m4aSoundInit + InitMapMusic, before the first frame (also on a soft reset)
     LoadGameSave(); // sets gSaveFileStatus, which the save dialog checks too (the title screen loads it again)
+    HelpSystem_Disable(); // AgbMain: gHelpSystemEnabled = FALSE until the title screen's HelpSystem_Enable
     const dev = data?.softReset ? undefined : startFromUrl();
+    if (dev || skipIntro()) HelpSystem_Enable(); // the dev starts skip the title screen
     if (dev) {
       this.scene.start('Overworld', dev);
     } else if (skipIntro()) {
@@ -70,6 +73,7 @@ export class BootScene extends Phaser.Scene {
 export function softReset(from: Phaser.Scene): void {
   const game = from.game;
   DisableVBlankCounter1(); // SoftReset's InitMainCallbacks clears gMain (the Trainer Tower's timer)
+  ResetHelpSystemState(); // SoftReset's RAM clear: the help's welcome page again, HELPCONTEXT_NONE
   for (const s of game.scene.getScenes(false)) {
     if (s.scene.key === 'Boot') continue;
     if (s === from || s.scene.isActive() || s.scene.isSleeping() || s.scene.isPaused() || s.scene.isVisible()) s.scene.stop();
