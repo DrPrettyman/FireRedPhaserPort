@@ -35,6 +35,7 @@ import { moveRelearnerProbe } from '../menus/learnMove';
 import { berryPouchProbe } from '../menus/berryPouch';
 import { fameCheckerProbe } from '../menus/fameChecker';
 import { teachyTvProbe } from '../menus/teachyTv';
+import { pokedudeProbe } from '../battle/controllerPokedude';
 import { hallOfFameProbe } from '../menus/hallOfFame';
 import { creditsProbe, creditsSkipToClosing } from '../menus/credits';
 import { pokedexAreaProbe } from '../menus/pokedexArea';
@@ -830,7 +831,8 @@ function createApi(game: Phaser.Game) {
     },
     /** The live battle (battle globals), or undefined outside one. */
     battle: () => {
-      if (!game.scene.isActive('Battle') || !g) return undefined;
+      // (Teachy TV's Pokédude battles run on the FieldMenu scene: gMain.inBattle)
+      if (!(game.scene.isActive('Battle') || gMain.inBattle) || !g) return undefined;
       const mons = Array.from({ length: g.battlersCount }, (_, i) => {
         const m = g.battleMons[i];
         const partyMon = (getBattlerSide(i) ? g.enemyParty : g.playerParty)[g.battlerPartyIndexes[i]];
@@ -851,7 +853,7 @@ function createApi(game: Phaser.Game) {
       const controller = g.battlerControllerFuncs[0]?.name;
       // The battle message as last expanded (gDisplayedStringBattle), decoded.
       const message = decode(g.displayedStringBattle);
-      return { typeFlags: g.battleTypeFlags, trainer: g.trainerBattleOpponent_A, mons, outcome: g.battleOutcome, controller, message };
+      return { typeFlags: g.battleTypeFlags, trainer: g.trainerBattleOpponent_A, mons, outcome: g.battleOutcome, controller, message, pokedude: pokedudeProbe() };
     },
     /** The GBA layer's sprites in use (battle and GBA-hosted menus): template tags, position, visibility. */
     gbaSprites: () =>

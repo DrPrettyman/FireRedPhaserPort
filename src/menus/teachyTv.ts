@@ -1024,6 +1024,9 @@ function TeachyTvPreBattleAnimAndSetBattleCallback(taskId: number): void {
       break;
     case 1:
       if (IsBattleTransitionDone()) {
+        // The transition's VBlank callback stays until CB2_InitBattle clears it; on the GBA its one more run reads
+        // the freed sTransitionData harmlessly, here it would throw.
+        SetVBlankCallback(null);
         SetMainCallback2(CB2_InitPokedudeBattle);
         DestroyTask(taskId);
       }
@@ -1052,6 +1055,7 @@ function CB2_InitPokedudeBattle(): void {
 /** ReturnFromBattleToOverworld's end, on this host: gMain.inBattle off, gMain.savedCallback. */
 function ReturnFromPokedudeBattle(outcome: number): void {
   testEvent('battleEnd', { outcome });
+  state.battleOutcome = outcome; // gBattleOutcome, as the field keeps it
   gMain.inBattle = false;
   SetMainCallback1(null); // gMain.callback1 = gPreBattleCallback1
   SetMainCallback2(gMain.savedCallback);

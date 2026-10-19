@@ -1,9 +1,11 @@
 // Teachy TV (teachy_tv.c, menus/teachyTv.ts): the Viridian old man gives it after his catching tutorial; it opens
 // from the bag (FieldUseFunc_TeachyTv → InitTeachyTvFromBag, back to the bag) and with SELECT
 // (Task_InitTeachyTvFromField, back to the field). `__test.teachyTv()` is the probe: the mode, option, scroll/row,
-// the task and its TTVcmd step, the text printed last, the Pokédude's sprite, the grass sprites. The Pokédude's
-// demos (battles, bag, TM case) aren't ported yet (W-teachy units 2-3): they're skipped (PokedudeDemoNotPorted),
-// and the screen comes back as from the demo's end, to the option's closing text.
+// the task and its TTVcmd step, the text printed last, the Pokédude's sprite, the grass sprites. The four battle
+// options run the Pokédude's battle (battle_controller_pokedude.c, battle/controllerPokedude.ts: `__test.battle()`'s
+// `pokedude` is its probe, the voiceover printed last); B quits it from the battle, his bag or his party menu. The
+// field demos (TMs, REGISTER: W-teachy unit 3) are skipped (PokedudeDemoNotPorted), and the screen comes back as from
+// the demo's end, to the option's closing text.
 
 import { expect, test } from 'vitest';
 import { useGame, type Game, type StartOptions } from './harness';
@@ -87,24 +89,33 @@ interface Seen {
   modes: number[];
   grass: number;
   bgm: string[];
+  /** the Pokédude's voiceovers in his battle (Pokedude_Text_*) */
+  voiceovers: string[];
+  transitions: number[];
+  battleFlags: number[];
+  outcomes: number[];
 }
 
 /**
  * Press A from the list (choosing the option under the cursor) through the option's sequence until the list is
  * back; what it went through is recorded in the page every tick: the texts printed, the TTVcmds, the tasks, the
- * modes (2 after the demo), the most grass sprites up at once.
+ * modes (2 after the demo), the most grass sprites up at once, the battle's voiceovers; then the music and the
+ * battle events.
  */
 async function runOption(game: Game, what: string): Promise<Seen> {
-  const mark = await game.eval((t) => t.audioEvents().at(-1)?.seq ?? 0);
+  const mark = await game.mark();
+  const audioMark = await game.eval((t) => t.audioEvents().at(-1)?.seq ?? 0);
   await game.eval(() => {
-    (window as any).__ttvSeen = { texts: [], cmds: [], tasks: [], modes: [], grass: 0, bgm: [] };
+    (window as any).__ttvSeen = { texts: [], cmds: [], tasks: [], modes: [], grass: 0, voiceovers: [] };
   });
   const seen = await game.mashUntil(
     (t) => {
       const r = (window as any).__ttvSeen;
+      const push = (list: unknown[], v: unknown) => v !== undefined && list.at(-1) !== v && list.push(v);
+      const pd = t.battle()?.pokedude;
+      if (pd?.textActive) push(r.voiceovers, pd.text);
       const p = t.teachyTv();
       if (p) {
-        const push = (list: unknown[], v: unknown) => v !== undefined && list.at(-1) !== v && list.push(v);
         if (p.textActive) push(r.texts, p.text);
         push(r.cmds, p.cmd);
         push(r.tasks, p.task);
@@ -113,10 +124,16 @@ async function runOption(game: Game, what: string): Promise<Seen> {
       }
       return r.texts.length >= 3 && p?.listReady && r;
     },
-    { what, timeout: 180_000 },
+    { what, timeout: 400_000, maxFrames: 60000 },
   );
-  seen.bgm = await game.eval((t, m) => t.audioEvents(m).filter((e) => e.type === 'bgm').map((e) => e.name), mark);
-  return seen as Seen;
+  const events = await game.events(mark);
+  return {
+    ...(seen as Seen),
+    bgm: await game.eval((t, m) => t.audioEvents(m).filter((e) => e.type === 'bgm').map((e) => e.name), audioMark),
+    transitions: events.filter((e) => e.type === 'battleTransition').map((e) => e.transition as number),
+    battleFlags: events.filter((e) => e.type === 'battleStart').map((e) => e.flags as number),
+    outcomes: events.filter((e) => e.type === 'battleEnd').map((e) => e.outcome as number),
+  };
 }
 
 const BATTLE_CMDS = [
@@ -143,9 +160,43 @@ const CLOSING_CMDS = [
   'TTVcmd_End',
 ];
 
-test("each option's sequence: the title, the Pokédude's hello and intro, the (skipped) demo, his closing words, back to the list", async () => {
+/** Each battle option's voiceovers (sPokedudeTexts_*: a header without a callback prints nothing), and its outcome. */
+const DEMOS: { voiceovers: string[]; outcome: string; transition: string }[] = [
+  {
+    voiceovers: ['SpeedierBattlerGoesFirst', 'MyRattataFasterThanPidgey', 'BattlersTakeTurnsAttacking', 'MyRattataWonGetsEXP'],
+    outcome: 'B_OUTCOME_WON',
+    transition: 'B_TRANSITION_WHITE_BARS_FADE',
+  },
+  { voiceovers: ['UhOhRattataPoisoned', 'HealStatusRightAway', 'UsingItemTakesTurn', 'YayWeManagedToWin'], outcome: 'B_OUTCOME_WON', transition: 'B_TRANSITION_SLICE' },
+  {
+    voiceovers: [
+      'WaterNotVeryEffectiveAgainstGrass',
+      'GrassEffectiveAgainstWater',
+      'LetsTryShiftingMons',
+      'ShiftingUsesTurn',
+      'ButterfreeDoubleResistsGrass',
+      'ButterfreeGoodAgainstOddish',
+      'YeahWeWon',
+    ],
+    outcome: 'B_OUTCOME_WON',
+    transition: 'B_TRANSITION_SLICE',
+  },
+  {
+    voiceovers: ['WeakenMonBeforeCatching', 'BestIfTargetStatused', 'CantDoubleUpOnStatus', 'LetMeThrowBall', 'PickBestKindOfBall'],
+    outcome: 'B_OUTCOME_CAUGHT',
+    transition: 'B_TRANSITION_SLICE',
+  },
+];
+
+/** The party and the bag's slots, which the Pokédude's demos borrow (SavePlayerParty, BackUpPlayerBag) and give back. */
+async function partyAndBag(game: Game) {
+  return game.eval((t) => ({ party: t.party(), bag: t.state!.bag.pockets.map((p) => p.filter((s) => s.itemId).map((s) => ({ ...s }))), registered: t.state!.registeredItem }));
+}
+
+test("each option's sequence: the title, the Pokédude's hello and intro, the demo (his battle), his closing words, back to the list", async () => {
   const game = await session.start(PALLET);
   await setUp(game, ['ITEM_TEACHY_TV', 'ITEM_TM_CASE']);
+  const before = await partyAndBag(game);
   await openFromBag(game);
   // With the TM case: six options and CANCEL, six shown, the scroll arrows.
   expect(await game.eval((t) => t.teachyTv())).toMatchObject({ listItems: 7, arrows: true });
@@ -170,6 +221,19 @@ test("each option's sequence: the title, the Pokédude's hello and intro, the (s
     // The Pokédude walks into the tall grass in the battle options only.
     if (battle) expect(seen.grass, name).toBeGreaterThan(0);
     else expect(seen.grass, name).toBe(0);
+    if (battle) {
+      // The Pokédude's battle: his transition, BATTLE_TYPE_POKEDUDE, his voiceovers in order, the outcome.
+      const demo = DEMOS[option];
+      expect(seen.transitions, name).toEqual([await game.eval((t, n) => t.define(n), demo.transition)]);
+      expect(seen.battleFlags, name).toEqual([await game.eval((t) => t.define('BATTLE_TYPE_POKEDUDE'))]);
+      expect(seen.voiceovers, name).toEqual(demo.voiceovers.map((v) => `Pokedude_Text_${v}`));
+      expect(seen.outcomes, name).toEqual([await game.eval((t, n) => t.define(n), demo.outcome)]);
+      // the battle's music (PlayMapChosenOrBattleBGM(MUS_DUMMY): a wild battle's), then MUS_FOLLOW_ME again
+      expect(seen.bgm, name).toContain('MUS_VS_WILD');
+      expect(seen.bgm.indexOf('MUS_FOLLOW_ME', 1), name).toBeGreaterThan(seen.bgm.indexOf('MUS_VS_WILD'));
+    } else {
+      expect(seen.battleFlags, name).toEqual([]);
+    }
     // MUS_FOLLOW_ME with the title (and after the battle), MUS_TEACHY_TV_MENU back at the list
     expect(seen.bgm[0], name).toBe('MUS_FOLLOW_ME');
     expect(seen.bgm.at(-1), name).toBe('MUS_TEACHY_TV_MENU');
@@ -184,7 +248,9 @@ test("each option's sequence: the title, the Pokédude's hello and intro, the (s
   await game.waitFor((t) => t.teachyTv()?.scrollOffset === 1 && t.teachyTv()?.selectedRow === 5, { what: 'the list scrolled to CANCEL' });
   await game.press('A');
   await waitForBagList(game, 'back to the bag');
-});
+  // The player's party and bag as they were (LoadPlayerParty, RestorePlayerBag).
+  expect(await partyAndBag(game)).toEqual(before);
+}, 900_000);
 
 test('B during a sequence stops it: the noise, then the list again on the same option', async () => {
   const game = await session.start(PALLET);
@@ -258,3 +324,4 @@ test('SELECT with Teachy TV registered opens it from the field; SELECT and CANCE
   await game.waitIdle();
   expect(await game.eval((t) => t.field()!.x)).toBe(x - 1);
 });
+

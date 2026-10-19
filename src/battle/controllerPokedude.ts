@@ -894,11 +894,22 @@ const sInputScripts_ChooseMove: PokedudeInputScript[] = [
 ];
 const sInputScripts_ChooseMove_Start = [0, 2, 6, 10];
 
-/** The input script entry `idx` of the option's table, read past its end into the next one as the C does. */
+/**
+ * The input script entry `idx` of the option's table, read past its end into the next one as the C does. Past the
+ * last table (sInputScripts_ChooseAction_Catching's third action checks its next entry for the restart marker) the
+ * ROM has the pointer table sInputScripts_ChooseAction, whose bytes aren't modelled: they aren't 4 there.
+ */
 function inputScript(table: PokedudeInputScript[], start: number[], idx: number): PokedudeInputScript {
   const entry = table[start[sim()[pdScriptNum]] + idx];
-  if (!entry) throw new Error(`[pokedude] input script ${sim()[pdScriptNum]} read past the ROM's tables (${idx})`);
-  return entry;
+  if (entry) return entry;
+  console.warn(`[pokedude] input script ${sim()[pdScriptNum]} read past the ROM's tables (${idx})`);
+  return S([0xff, 0xff], [0, 0]);
+}
+
+/** Whether the entry after the one just used restarts the script (cursorPos 4 / 255). */
+function inputScriptRestarts(table: PokedudeInputScript[], start: number[], idx: number, marker: number): boolean {
+  const entry = table[start[sim()[pdScriptNum]] + idx];
+  return entry !== undefined && entry.cursorPos[ab()] === marker;
 }
 
 /** struct PokedudeTextScriptHeader */
@@ -1042,7 +1053,7 @@ function PokedudeSimulateInputChooseAction(): void {
     }
     PokedudeBufferExecCompleted();
     st.action_idx = u8(st.action_idx + 1);
-    if (inputScript(sInputScripts_ChooseAction, sInputScripts_ChooseAction_Start, st.action_idx).cursorPos[a] === 4) st.action_idx = 0;
+    if (inputScriptRestarts(sInputScripts_ChooseAction, sInputScripts_ChooseAction_Start, st.action_idx, 4)) st.action_idx = 0;
   } else {
     if (g.actionSelectionCursor[a] !== script.cursorPos[a] && Math.trunc(script.delay[a] / 2) === st.timer) {
       PlaySE(K.SE_SELECT);
@@ -1064,7 +1075,7 @@ function PokedudeSimulateInputChooseMove(): void {
     emitTwoReturnValues(K.BUFFER_B, K.B_ACTION_EXEC_SCRIPT, script.cursorPos[a] | ((a ^ K.BIT_SIDE) << 8));
     PokedudeBufferExecCompleted();
     st.move_idx = u8(st.move_idx + 1);
-    if (inputScript(sInputScripts_ChooseMove, sInputScripts_ChooseMove_Start, st.move_idx).cursorPos[a] === 255) st.move_idx = 0;
+    if (inputScriptRestarts(sInputScripts_ChooseMove, sInputScripts_ChooseMove_Start, st.move_idx, 255)) st.move_idx = 0;
   } else {
     if (script.cursorPos[a] !== g.moveSelectionCursor[a] && Math.trunc(script.delay[a] / 2) === st.timer) {
       PlaySE(K.SE_SELECT);
@@ -1106,7 +1117,11 @@ function GetPokedudeText(): number[] {
   return encodeBattleText(texts[sim()[pdMessageNo] - 1]);
 }
 
+/** For the probe: the voiceover text printed last. */
+let sLastText: string | undefined;
+
 function pokedudeSays(): void {
+  sLastText = (sPokedudeTexts[sim()[pdScriptNum]] ?? sPokedudeTexts[0])[sim()[pdMessageNo] - 1];
   battleStringExpandPlaceholdersToDisplayedString(GetPokedudeText());
   BattlePutTextOnWindow(g.displayedStringBattle, K.B_WIN_OAK_OLD_MAN);
 }
@@ -1260,6 +1275,9 @@ export function pokedudeProbe() {
     scriptNum: sim()[pdScriptNum],
     messageNo: sim()[pdMessageNo],
     states: gPokedudeBattlerStates.slice(0, 2).map((s) => (s ? { ...s } : null)),
+    /** the voiceover's text (Pokedude_Text_*) printed last, and whether its printer runs */
+    text: sLastText,
+    textActive: IsTextPrinterActive(K.B_WIN_OAK_OLD_MAN),
   };
 }
 
