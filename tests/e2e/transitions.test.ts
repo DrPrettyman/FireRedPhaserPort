@@ -60,7 +60,8 @@ test('every battle transition plays over the field and ends on a black screen', 
     expect(end.black, name).toBe(1);
     await game.waitForEvent('battleStart', { since: mark });
   }
-});
+  // 17 page loads: at load ~100 they took over the default 120 s (batch 9); the per-transition waits are the bound.
+}, 600_000);
 
 test('leaving a house, the barn doors open while the field fades in', async () => {
   const game = await session.start({ start: 'after-rival', map: 'PalletTown_PlayersHouse_1F', x: 4, y: 8 });
