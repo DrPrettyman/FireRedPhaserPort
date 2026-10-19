@@ -122,6 +122,11 @@ A test fails if the page throws or logs `console.error`. When a test fails, the 
 11. Talking to a wandering NPC: being next to it and facing it isn't enough, it can step away before the A press
    lands, and A then talks to nobody. Press A for a few frames until a script starts (`t.mash(t => t.field()?.script,
    'A', 12)`) and walk up again if none did (ssAnne.test.ts's `talkTo`, batch 11).
+12. CONTINUE plays the quest log's recorded scenes before the saved field, and `idle()` is false while it does. A
+   scene can replay a script with a message (postgameFourIsland's rival, whose ON_FRAME scene the scene's restored
+   vars bring back), which waits for A or B in playback until QUEST_LOG_PLAN.md QL5 ports the auto-scroll, so
+   `waitIdle()` times out. When the test is about the saved field, skip the recap as a player can: mash B until
+   `!t.field()?.questLogPlayback && t.idle()` (postgameFourIsland's `saveAndContinue`, batch 12).
 
 Runs are close to deterministic, not exactly: the RNG is seeded, but the number of logic ticks between
 two harness calls depends on wall-clock time. Write scenarios that hold whatever the dice say.

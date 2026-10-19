@@ -60,6 +60,10 @@ async function saveAndContinue(game: Game) {
   await game.waitFor((t) => t.mainMenu() && !t.mainMenu()!.fading && t.mainMenu(), { what: 'the main menu' });
   await game.press('A');
   await game.waitForEvent('ready', { timeout: 60_000 });
+  // CONTINUE plays the quest log's scenes first. One of them replays the rival's ON_FRAME scene on Four Island (the
+  // scene's VAR_MAP_SCENE_FOUR_ISLAND is 0 again), whose msgbox waits for A in the port's playback (the C's
+  // auto-scrolling text and WaitForAorBPress' 120-frame timeout are QUEST_LOG_PLAN.md QL5): B skips to the end.
+  await game.mashUntil((t) => !t.field()?.questLogPlayback && t.idle(), { button: 'B', what: 'the quest log skipped to the end', timeout: 60_000 });
   await game.waitIdle();
 }
 
