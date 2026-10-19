@@ -16,7 +16,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     GetInGameTradeMail / gLinkPartnerMail / MON_DATA_MAIL). The trade scene (menus/tradeScene.ts) skips
     CheckPartnersMonForRibbons (no ribbons; no in-game trade mon has any) and TradeEvolutionScene (no FRLG
     in-game trade evolves). Only the in-game (wireless) path is ported: DoTradeAnim_Cable is a link trade's, and so
-    are CB2_SaveAndEndTrade's FadeOutBGM / IsBGMStopped wait. No PSG parts until W-m4a 4.
+    are CB2_SaveAndEndTrade's FadeOutBGM / IsBGMStopped wait.
   - Lt. Surge's trash cans, Bill's cell separator: silent (SE_PIN, SE_UNLOCK, SE_BALL, SE_WARP_IN).
   - The Elite Four and Champion rooms' lighting (world/leagueLighting.ts): Task_CancelPokemonLeagueLightingEffect's
     BlendPalettes(palette 7 → black) while a fade runs does nothing (the field's fade is an overlay over everything,
@@ -89,10 +89,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     output's DC blocking. When the output starts mid-song (the first key press) or misses frames (a hidden tab),
     channels started before stay silent until their next restart (CgbSound restarts on every volume change, so it
     is usually a few frames).
-  - Evolution scene: EVOSTATE_RESTORE_SCREEN's `if (IsSEPlaying())` after SE_EXP goes
-    on unchecked (W-sound 7); the cries, the intro jingle (MUS_EVOLUTION_INTRO) and the other IsSEPlaying waits
-    hold the scene as on the GBA. The help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
-  - Evolution scene: no PSG parts until W-m4a 4. On battle-test.html (no field) EVOSTATE_END's
+  - Evolution scene: on battle-test.html (no field) EVOSTATE_END's
     Overworld_PlaySpecialMapMusic is skipped: the BGM stays stopped. The help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
     from the field uses fresh battle globals, so the backdrop follows the map's battle scene (gyms etc.) but not the
     last battle's type flags, which the GBA keeps (e.g. a Rare Candy right after a gym leader would draw the
