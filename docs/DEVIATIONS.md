@@ -109,6 +109,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Move deleter (SelectMoveDeleterMove): on the GBA the script's `fadescreen FADE_FROM_BLACK` after the special
     runs (unseen) before the summary screen takes over, and FieldCB_ContinueScriptHandleMusic fades the field in
     afterwards. Here the script waits at the special and that `fadescreen` does the fade in (same on screen).
+  - Party menu: Union Room and minigames are not ported (the Pokédude's battle tasks are); the PC mailbox's GIVE
+    (PARTY_ACTION_GIVE_MAILBOX_MAIL) waits for W-mail unit 2. No
   - Party menu: Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
     field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
   - Move relearner (menus/learnMove.ts): the MUS_LEVEL_UP fanfare after a move is learned holds the screen as on
@@ -145,13 +147,21 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     the fade instead of in the same frame.
   - TM case (menus/tmCase.ts): no quest log (RecordItemTransaction). Not ported:
     the Pokédude's Teachy TV demo (TMCASE_POKEDUDE) and the Union Room's GIVE / EXIT menu (no link play).
-  - Teachy TV (menus/teachyTv.ts): the Pokédude's demos aren't ported (FIELD_ITEMS_PLAN.md W-teachy units 2-3):
-    the four battle options' battle (TeachyTvPrepBattle's SavePlayerParty / InitPokedudePartyAndOpponent /
-    PlayMapChosenOrBattleBGM, the battle transition, CB2_InitBattle and battle_controller_pokedude.c) and TMS /
-    REGISTER's scripted bag and TM case (InitPokedudeBag). Each goes through PokedudeDemoNotPorted, which logs and
-    comes back as from the demo's end (CB2_ReturnToTeachyTV in mode 2: the option's closing text, the walk off,
-    THE END, the list); the battle's transition is a plain fade to black meanwhile and its outcome reads as a win.
-    No quest log event (ItemUse_SetQuestLogEvent).
+  - Teachy TV (menus/teachyTv.ts): the field demos aren't ported (FIELD_ITEMS_PLAN.md W-teachy unit 3): TMS /
+    REGISTER's scripted bag and TM case (the bag's Task_Bag_TeachyTvRegister / _TMs, tm_case.c's TMCASE_POKEDUDE).
+    They go through PokedudeDemoNotPorted, which logs and comes back as from the demo's end (CB2_ReturnToTeachyTV in
+    mode 2: the option's closing text, the walk off, THE END, the list). No quest log event
+    (ItemUse_SetQuestLogEvent).
+  - The Pokédude's battles (battle/controllerPokedude.ts): they run on FieldMenuScene's GBA host (the screen Teachy TV
+    is on), not BattleScene: CB2_InitPokedudeBattle sets what BattleScene.create would (a fresh BattleGlobals, no
+    trainer, the BattleUi, ReturnFromBattleToOverworld's SetMainCallback2(gMain.savedCallback)), and FieldMenuScene
+    preloads every demo's graphics with Teachy TV's. After the transition its VBlank callback is cleared a frame
+    before CB2_InitBattle would (on the GBA its last run reads the freed sTransitionData harmlessly). The C reads
+    sInputScripts_ChooseAction_Status / _Matchups / _Catching and sPokedudeTextScripts_* past their ends into the
+    next table: the tables are laid out in the ROM's order, so that reads the same; past the last one (the ROM's
+    pointer tables) the read is a dummy that isn't the restart marker (Catching's third action checks it) and
+    no voiceover. SavePlayerParty / LoadPlayerParty keep the party aside (GameState's party is both gPlayerParty
+    and the save block's copy).
   - Berry pouch (menus/berryPouch.ts): no quest log
     (RecordItemTransaction). Not ported: Berry Crush (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room context
     menus (GIVE / EXIT, EXIT) and IsHoldingItemAllowed's Enigma Berry check there (always TRUE: neither can be

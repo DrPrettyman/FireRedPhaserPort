@@ -37,6 +37,7 @@ import {
 } from './controllers';
 import { setControllerToOakOrOldMan } from './controllerOakOldMan';
 import { setControllerToOpponent } from './controllerOpponent';
+import { AllocPokedudeBattlerStates, SetControllerToPokedude } from './controllerPokedude';
 import { SetControllerToSafari } from './controllerSafari';
 import { battleControllerDummy, setControllerToPlayer } from './controllerPlayer';
 import { bdata, g, gBattleMoves, gSpeciesInfo, itemHoldEffect, itemHoldEffectParam, mem, pokemon, state } from './env';
@@ -98,6 +99,7 @@ function battlerBusy(battler: number): boolean {
 /** AllocateBattleResources (battle_util2.c): fresh zeroed structs. */
 export function allocateBattleResources(): void {
   if (g.battleTypeFlags & K.BATTLE_TYPE_TRAINER_TOWER) InitTrainerTowerBattleStruct(state);
+  if (g.battleTypeFlags & K.BATTLE_TYPE_POKEDUDE) AllocPokedudeBattlerStates();
   g.battleStruct = new BattleStruct();
   g.battleResources = new BattleResources();
   gBattleAnimBgTileBuffer.fill(0);
@@ -126,7 +128,14 @@ export function setUpBattleVars(): void {
 export function initBattleControllers(): void {
   const f = g.battleTypeFlags;
   g.battleMainFunc = beginBattleIntro;
-  if (!(f & K.BATTLE_TYPE_DOUBLE)) {
+  if (f & K.BATTLE_TYPE_POKEDUDE) {
+    // Teachy TV: the Pokédude's controller on every battler
+    g.battlersCount = f & K.BATTLE_TYPE_DOUBLE ? K.MAX_BATTLERS_COUNT : 2;
+    for (let i = 0; i < g.battlersCount; i++) {
+      g.battlerControllerFuncs[i] = SetControllerToPokedude;
+      g.battlerPositions[i] = [K.B_POSITION_PLAYER_LEFT, K.B_POSITION_OPPONENT_LEFT, K.B_POSITION_PLAYER_RIGHT, K.B_POSITION_OPPONENT_RIGHT][i];
+    }
+  } else if (!(f & K.BATTLE_TYPE_DOUBLE)) {
     if (f & K.BATTLE_TYPE_SAFARI) g.battlerControllerFuncs[0] = SetControllerToSafari;
     else if (f & (K.BATTLE_TYPE_OLD_MAN_TUTORIAL | K.BATTLE_TYPE_FIRST_BATTLE)) g.battlerControllerFuncs[0] = setControllerToOakOrOldMan;
     else g.battlerControllerFuncs[0] = setControllerToPlayer;

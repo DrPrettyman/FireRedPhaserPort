@@ -51,7 +51,8 @@ import type { GameState } from '../state/GameState';
 import type { Charmap } from '../text/charmap';
 import { Fonts } from '../text/Font';
 import { TEXT_SPEED } from '../text/TextPrinter';
-import { sharedBattleData } from './BattleScene';
+import { pokedudeBattleGfxSymbols, sharedBattleData } from './BattleScene';
+import { pokedudeBattleMons } from '../battle/controllerPokedude';
 import { GbaHostScene } from './GbaHostScene';
 
 const TEXTURE = 'field_menu_screen';
@@ -146,7 +147,11 @@ export class FieldMenuScene extends GbaHostScene {
     if (start.menu === 'options') await loadGfx(optionMenuGfxSymbols());
     if (start.menu === 'itemFromField') await loadGfx(start.itemScreen!.gfxSymbols);
     // Teachy TV from the bag or with SELECT: Route 1's layout and tilesets, its graphics, the Pokédude.
-    if ((start.menu === 'bag' || start.menu === 'itemFromField') && start.state.bag.has(K.ITEM_TEACHY_TV, 1)) await prepareTeachyTv(assets);
+    // The Pokédude's battles run on this host too (TeachyTvPrepBattle): their graphics as BattleScene loads them.
+    if ((start.menu === 'bag' || start.menu === 'itemFromField') && start.state.bag.has(K.ITEM_TEACHY_TV, 1)) {
+      await prepareTeachyTv(assets);
+      await loadGfx(pokedudeBattleGfxSymbols(data, start.pokemon, pokedudeBattleMons()));
+    }
     // The trainer card (StartMenuPlayerCallback): its graphics and the player's pic.
     if (start.menu === 'trainerCard') await loadGfx(trainerCardGfxSymbols(start.state.playerGender === 'female' ? K.FEMALE : K.MALE));
     // The item PC's list (WITHDRAW ITEM) draws the PC's items' icons.
