@@ -1,4 +1,4 @@
-// The engine's tables from src/m4a_tables.c. W-m4a 4 adds gCgbFreqTable, gNoiseTable and gCgb3Vol here.
+// The engine's tables from src/m4a_tables.c.
 
 import {
   CRY_SONG_CONT,
@@ -47,6 +47,30 @@ export const gScaleTable: readonly number[] = [
 export const gFreqTable: readonly number[] = [
   2147483648, 2275179671, 2410468894, 2553802834, 2705659852, 2866546760, 3037000500, 3217589947, 3408917802,
   3611622603, 3826380858, 4053909305,
+];
+
+/** gCgbScaleTable (m4a_tables.c:118): per key from 36 (0-131), gCgbFreqTable's index in the low nibble and a right
+ *  shift in the high one (MidiKeyToCgbFreq). */
+export const gCgbScaleTable: readonly number[] = Array.from({ length: 132 }, (_, i) => ((i / 12) | 0) * 0x10 + (i % 12));
+
+/** gCgbFreqTable (m4a_tables.c:133): the squares' / wave's register frequency − 2048 for the twelve semitones of the
+ *  lowest octave (2048 − 131072 / Hz). */
+export const gCgbFreqTable: readonly number[] = [
+  -2004, -1891, -1785, -1685, -1591, -1501, -1417, -1337, -1262, -1192, -1125, -1062,
+];
+
+/** gNoiseTable (m4a_tables.c:149): NR43's shift clock (high nibble) and divide ratio (low 3 bits) per key from 21. */
+export const gNoiseTable: readonly number[] = [
+  0xd7, 0xd6, 0xd5, 0xd4, 0xc7, 0xc6, 0xc5, 0xc4, 0xb7, 0xb6, 0xb5, 0xb4, 0xa7, 0xa6, 0xa5, 0xa4, 0x97, 0x96, 0x95,
+  0x94, 0x87, 0x86, 0x85, 0x84, 0x77, 0x76, 0x75, 0x74, 0x67, 0x66, 0x65, 0x64, 0x57, 0x56, 0x55, 0x54, 0x47, 0x46,
+  0x45, 0x44, 0x37, 0x36, 0x35, 0x34, 0x27, 0x26, 0x25, 0x24, 0x17, 0x16, 0x15, 0x14, 0x07, 0x06, 0x05, 0x04, 0x03,
+  0x02, 0x01, 0x00,
+];
+
+/** gCgb3Vol (m4a_tables.c:168): NR32 (the wave channel's volume: 0x20 100%, 0x40 50%, 0x60 25%, 0x80 75%, 0 off)
+ *  for an envelope volume of 0-15. */
+export const gCgb3Vol: readonly number[] = [
+  0x00, 0x00, 0x60, 0x60, 0x60, 0x60, 0x40, 0x40, 0x40, 0x40, 0x80, 0x80, 0x80, 0x80, 0x20, 0x20,
 ];
 
 // sound/MPlayDef.s

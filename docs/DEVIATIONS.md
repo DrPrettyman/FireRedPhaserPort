@@ -15,8 +15,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     have no contest stats), and DONTAE's Jynx holds its Fab Mail without the message (mail isn't modelled:
     GetInGameTradeMail / gLinkPartnerMail / MON_DATA_MAIL). The trade scene (menus/tradeScene.ts) skips
     CheckPartnersMonForRibbons (no ribbons; no in-game trade mon has any) and TradeEvolutionScene (no FRLG
-    in-game trade evolves), and is silent (no MUS_EVOLUTION / MUS_EVOLVED, cries or SEs). Only the in-game
-    (wireless) path is ported: DoTradeAnim_Cable is a link trade's.
+    in-game trade evolves). Only the in-game (wireless) path is ported: DoTradeAnim_Cable is a link trade's, and so
+    are CB2_SaveAndEndTrade's FadeOutBGM / IsBGMStopped wait.
   - Lt. Surge's trash cans, Bill's cell separator: silent (SE_PIN, SE_UNLOCK, SE_BALL, SE_WARP_IN).
   - The Elite Four and Champion rooms' lighting (world/leagueLighting.ts): Task_CancelPokemonLeagueLightingEffect's
     BlendPalettes(palette 7 → black) while a fade runs does nothing (the field's fade is an overlay over everything,
@@ -25,8 +25,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Trainer Fan Club (script/miscSpecials.ts, trainer_fan_club.c): there are no link battle records, so
     Script_BufferFanClubTrainerName always names the NPC trainer (the rival, LT. SURGE, KOGA), and the link-battle
     fan updates (Special_UpdateTrainerFansAfterLinkBattle) never run.
-  - Side specials (script/miscSpecials.ts): no PSG parts until W-m4a 4 (Daisy's MUS_HEAL fanfare is the script's; the
-    diploma's FANFARE_OBTAIN_BADGE holds its screen for sFanfares' 340 frames); no quest log (QuestLog_CutRecording). The Magikarp size record loads pokedex.json for the
+  - Side specials (script/miscSpecials.ts): Daisy's MUS_HEAL fanfare is the script's; the diploma's
+    FANFARE_OBTAIN_BADGE holds its screen for sFanfares' 340 frames, as on the GBA. No quest log (QuestLog_CutRecording). The Magikarp size record loads pokedex.json for the
     heights the first time the guru measures (the script waits for it). The diploma returns through the field's
     plain fade from black rather than FieldCB_WarpExitFadeFromBlack's Task_ExitNonDoor (same look).
   - Fall warps (world/fallWarp.ts): no help context while surfing on Seafoam B4F.
@@ -80,9 +80,21 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     nudges its playback rate by up to ±0.5% to keep its 3-4 frame buffer filled (the page's frame loop and the
     audio clock drift apart); an underrun plays silence, a stall drops the oldest frames. The analog filtering
     after the GBA's DAC isn't modelled (sample-and-hold straight to the speakers, AUDIO_PLAN.md decision 8).
-  - Evolution scene: no PSG parts until W-m4a 4; EVOSTATE_RESTORE_SCREEN's `if (IsSEPlaying())` after SE_EXP goes
-    on unchecked (W-sound 7); the cries, the intro jingle (MUS_EVOLUTION_INTRO) and the other IsSEPlaying waits
-    hold the scene as on the GBA. The help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
+  - The PSG synth (audio/psgSynth.ts, outputCore.ts's SoundCircuit): the sound circuit makes 896 samples per frame
+    (4 per FIFO sample: 53,760 Hz, 53,516 Hz at the GBA's speed), each the PSG's average over its 313.5 cycles (a
+    box filter), where the GBA's DAC point-samples the PSG at 65,536 Hz (SOUNDBIAS's 8-bit resolution); the
+    8-bit rounding of the sum is kept. The frame sequencer's steps (512 Hz) land on those sample boundaries (within
+    19 µs). A frame's register writes all apply at its start, in order (CgbSound writes them in VBlank's first
+    lines; the game logic's CgbOscOff came a little earlier in the frame); the FIFO samples are held back a frame
+    so the PSG leads them as on the GBA. Where GBATEK and Pan Docs leave the GBA open, it follows mGBA's GBA mode
+    (unsigned PSG levels, so a sounding channel adds DC; positions kept across restarts; the wave RAM rotating as it
+    plays), except that a stopped channel outputs 0 (mGBA holds its last level). Not modelled: obscure DMG quirks
+    (the envelope's "zombie" writes, the length counter's and sweep's rarer edge cases beyond mGBA's), the analog
+    output's DC blocking. When the output starts mid-song (the first key press) or misses frames (a hidden tab),
+    channels started before stay silent until their next restart (CgbSound restarts on every volume change, so it
+    is usually a few frames).
+  - Evolution scene: on battle-test.html (no field) EVOSTATE_END's
+    Overworld_PlaySpecialMapMusic is skipped: the BGM stays stopped. The help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
     from the field uses fresh battle globals, so the backdrop follows the map's battle scene (gyms etc.) but not the
     last battle's type flags, which the GBA keeps (e.g. a Rare Candy right after a gym leader would draw the
     Leader terrain there). Mons have no language, markings, ribbons or mail, so EvolutionRenameMon always treats
@@ -94,8 +106,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     afterwards. Here the script waits at the special and that `fadescreen` does the fade in (same on screen).
   - Party menu: mail, Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
     field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
-  - Move relearner (menus/learnMove.ts): SE_SELECT (all PSG) is silent until W-m4a 4 (the MUS_LEVEL_UP fanfare after a move
-    is learned, which holds the screen as on the GBA). The C's scroll arrows are kept as they
+  - Move relearner (menus/learnMove.ts): the MUS_LEVEL_UP fanfare after a move is learned holds the screen as on
+    the GBA. The C's scroll arrows are kept as they
     are: scrollPositionMaybe never changes, so with more than six entries the down arrow always shows and the up
     arrow never does.
   - Region map / Fly (menus/regionMap.ts, world/fly.ts): the bird of Fly always uses the extracted bird sheet's own palette (Red's), where the GBA draws it in OBJ
@@ -179,9 +191,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
     GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
-  - Egg hatching (menus/eggHatch.ts): no PSG parts until W-m4a 4 (SE_BALL / SE_EGG_HATCH, MUS_EVOLUTION, the
-    MUS_EVOLVED fanfare, which holds "X hatched from the EGG!" for sFanfares' 220 frames as on the GBA, and the cry,
-    which holds the scene as on the GBA). The C
+  - Egg hatching (menus/eggHatch.ts): the MUS_EVOLVED fanfare holds "X hatched from the EGG!" for sFanfares' 220
+    frames and the cry holds the scene, as on the GBA. The C
     loads five palettes from gTradeGba2_Pal, two of them past the file's end (ROM that follows); the port loads
     the file's three (the shadow tilemap uses none of the other two). BG palette 15 (the YES/NO's text) is loaded
     with the field's message box palette, which the GBA field leaves there. The mon sprite buffers are freed on
@@ -309,17 +320,17 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     animation. The Hall of Fame's SetWarpsToRollCredits sets gDisableMapMusicChangeOnMapLoad but its DoWarp leaves the
     screen without TryFadeOutOldMapMusic and the BGMusicStopped wait (the field loads Indigo Plateau at once; with
     MUSIC_DISABLE_KEEP the music stays anyway). Of the screens that come back through FieldCB_ContinueScriptHandleMusic,
-    only the naming screen calls Overworld_PlaySpecialMapMusic: `runScreenFromScript`'s (party menu specials) and
-    the ones that set their own music (trades, the daycare, the move relearner, the slot machine: batch D) don't
-    yet. The ambient cries (ChooseAmbientCrySpecies, UpdateAmbientCry, PlayAmbientCry) aren't ported. Cable club /
+    SelectMoveDeleterMove's field callback (menus/partyMenuSpecials.ts) plays no Overworld_PlaySpecialMapMusic (the
+    deleter never changes the map music, so nothing is missed). The ambient cries (ChooseAmbientCrySpecies,
+    UpdateAmbientCry, PlayAmbientCry) aren't ported. Cable club /
     union room / link-return warps (DoCableClubWarp, ReturnFromLinkRoom, DoUnionRoomWarp) aren't ported (no link
     play).
   - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical; weather palettes ignored.
   - `showmonpic`: the sprite appears when its PNG has loaded.
   - The Pewter Museum's fossil pics (ui/MuseumFossilPic.ts): a Phaser image over a MenuWindow, like `showmonpic`,
     not an OBJ in palette 13 over BG0 (the field isn't on the GBA layer); the graphics and positions are the C's.
-  - Prof. Oak's Pokédex rating: the MUS_DEX_RATING / MUS_EVOLVED fanfares play without their PSG parts until W-m4a 4 (`waitfanfare`
-    holds the script for their sFanfares counts); BackupHelpContext / RestoreHelpContext are no-ops (no help system).
+  - Prof. Oak's Pokédex rating: `waitfanfare` holds the script for MUS_DEX_RATING / MUS_EVOLVED's sFanfares counts,
+    as on the GBA; BackupHelpContext / RestoreHelpContext are no-ops (no help system).
   - Text colour is reset to NPC_TEXT_COLOR_DEFAULT when a script starts, not in ProcessPlayerFieldInput.
   - The RNG (`random.c` formula) is seeded from `Math.random` (or `?seed=` in dev); the trainer id is rolled when the game state is created instead of in Oak's intro.
   - A mon's met location is the MAPSEC_* name, not the numeric id.
@@ -370,20 +381,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     loaded last, so it only differs with two Castforms of different shininess on the field.
   - Slot machine: in `menus/slotMachineLogic.ts` the state's machineBias, biasCooldown and reelStopOrder start at 0;
     PlaySlotMachine Allocs the state without zeroing it, so on the GBA they start as whatever the heap held. The
-    screen (`menus/slotMachine.ts`) has no PSG parts until W-m4a 4 (its payout waits for MUS_SLOTS_WIN / MUS_SLOTS_JACKPOT's
-    sFanfares counts, as on the GBA). HBlankCB_SlotMachine's
+    screen's payout (`menus/slotMachine.ts`) waits for MUS_SLOTS_WIN / MUS_SLOTS_JACKPOT's sFanfares counts, as on
+    the GBA. HBlankCB_SlotMachine's
     per-line squash and darkening of the reels apply to the line REG_VCOUNT names (the PPU calls it before drawing
     that line); the GBA's HBlank interrupt for line L sets them for line L + 1, a one-line shift. After
     MainTask_ExitSlots frees the screen, the C's Task_SpinReels still runs that frame through the NULL gfx manager;
     the port skips it. No quest log entry (SetQLPlayedTheSlots) and no GAME_STAT_SLOT_JACKPOTS.
   - The Game Corner's photo printer flash (FldEff_PhotoFlash) is the field's FADE_FROM_WHITE (16 → 0 in steps of 2)
     where the C fades from 15 to 0 in steps of 3, a few frames longer.
-  - The m4a engine (src/audio/, AUDIO_PLAN.md): the CGB (PSG) channels are silent and a placeholder until W-m4a 4
-    (`m4aCgb.ts`), so songs and SEs play only their DirectSound parts (SE_SELECT, SE_DOOR, SE_EXIT, SE_PC_ON and
-    other square / noise SEs are silent; MUS_TITLE and MUS_PALLET lack their square and wave parts): a note on a square / wave / noise voice claims its channel as ply_note does, but the channel
-    goes off as soon as it is released (CgbSound's release envelope, pseudo echo and the hardware length counter
-    aren't run) and MidiKeyToCgbFreq returns 0. Only claims between CGB notes can differ (a released note frees its
-    channel a few frames early); no wait depends on them. A note on a keysplit entry that voicegroups.json has as
+  - The m4a engine (src/audio/, AUDIO_PLAN.md): a note on a keysplit entry that voicegroups.json has as
     null (a ROM pointer byte, outside the table's key range) is dropped, where the GBA would play the subgroup voice
     that byte names; no FRLG song plays one (tests/unit/m4aChannels.test.ts).
   - The m4a mixer (audio/m4aMixer.ts, W-m4a 3): mixes as m4a_1.s's SoundMainRAM does, byte for byte, with two

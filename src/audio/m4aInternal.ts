@@ -201,7 +201,8 @@ export interface SoundChannel {
 }
 
 /** struct CgbChannel: the four PSG channels (gCgbChans: square 1, square 2, wave, noise). The fields after the
- *  shared ones are CgbSound's (W-m4a 4); `wav` is the C's wavePointer. */
+ *  shared ones are CgbSound's (m4aCgb.ts); `wav` is the C's wavePointer (the duty, the wave's 16 bytes or the noise's
+ *  width), `length` the voice's length byte (in FRLG's voices, the pan byte: music_voice.inc). */
 export interface CgbChannel extends SoundChannel {
   envelopeGoal: number;
   envelopeCounter: number;
@@ -328,8 +329,6 @@ export interface SoundInfo {
   /** gCgbChans, set by MPlayExtender (null before: ply_note then drops CGB notes, as the C does). */
   cgbChans: CgbChannel[] | null;
   chans: SoundChannel[];
-  /** The PSG registers ply_port writes (REG_SOUND1CNT_L + offset): W-m4a 4 reads them. */
-  soundRegs: Uint8Array;
   /** s8 pcmBuffer[PCM_DMA_BUF_SIZE * 2]: FIFO A's ring of pcmDmaPeriod 224-sample slots, then FIFO B's. */
   pcmBuffer: Int8Array;
 }

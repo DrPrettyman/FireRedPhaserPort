@@ -279,7 +279,7 @@ describe.skipIf(!haveGenAudio())('the extracted songs, rendered headless', () =>
     }
   });
 
-  test('SE_SELECT is all PSG (square 1): silent until W-m4a 4', () => {
+  test('SE_SELECT is all PSG (square 1): nothing in the FIFOs', () => {
     const r = render(30, (f) => f === 0 && m4aSongNumStart(id('SE_SELECT')));
     expect(peak(r)).toBe(0);
   });
