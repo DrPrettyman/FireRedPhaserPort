@@ -11,7 +11,7 @@ import { setBattleTextSpeed } from '../battle/battleWindow';
 import { K } from '../battle/constants';
 import { loadBattleData, type BattleData } from '../battle/data';
 import { g, bdata, initBattleEnv, setTextStrings } from '../battle/env';
-import { battleSpriteGfxSymbols } from '../battle/gfx';
+import { battleSpriteGfxSymbols, GET_UNOWN_LETTER } from '../battle/gfx';
 import { initBattleMessages } from '../battle/message';
 import { loadGfx } from '../gba/gfx';
 import {
@@ -93,16 +93,20 @@ function gfxSymbolsFor(data: BattleData, start: BattleStart): string[] {
   const add = (s: string | null | undefined) => {
     if (s) syms.add(s);
   };
-  const addMon = (species: number) => {
+  const addMon = (species: number, personality = 0) => {
     add(a.monFrontPics[species]);
     add(a.monBackPics[species]);
     add(a.monPalettes[species]);
     add(a.monShinyPalettes[species]);
+    // LoadSpecialPokePic: Unown letter forms live after NUM_SPECIES in the pic tables (monPicSymbol)
+    if (species === K.SPECIES_UNOWN && GET_UNOWN_LETTER(personality)) {
+      add(a.monFrontPics[K.NUM_SPECIES + GET_UNOWN_LETTER(personality)]);
+      add(a.monBackPics[K.NUM_SPECIES + GET_UNOWN_LETTER(personality)]);
+    }
   };
   addMon(0);
-  // Unown letter forms live after NUM_SPECIES in the pic tables
-  for (const mon of start.state.party) addMon(mon.species);
-  for (const mon of start.enemyParty ?? []) addMon(mon.species);
+  for (const mon of start.state.party) addMon(mon.species, mon.personality);
+  for (const mon of start.enemyParty ?? []) addMon(mon.species, mon.personality);
   const trainer = data.tables.trainers[start.trainerBattleOpponent_A];
   for (const m of trainer?.party ?? []) addMon(m.species);
   if (trainer) {
