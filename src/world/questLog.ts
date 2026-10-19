@@ -5,25 +5,35 @@
 // encoding into the scene's command stream (TryRecordActionSequence, the codecs in questLogEvents.ts), and the
 // ways a scene ends (QLogCB_Recording, QL_FinishRecordingScene, QuestLog_CutRecording, SaveQuestLogData).
 //
-// The playback half (TryStartQuestLogPlayback, QLPlayback_InitOverworldState, QL_TryRunActions's RUNNING case,
-// QL_UpdateObject, the windows and tints) is QUEST_LOG_PLAN.md's QL2. No Phaser here: the field hands over what the
-// C reads from gObjectEvents / gSaveBlock1Ptr through `setQuestLogHost` (OverworldScene.create).
+// Playback's action half is here too (ResetActions' and QL_TryRunActions' RUNNING cases, sMovementScripts,
+// QL_UpdateObject, gQuestLogFieldInput, ReadQuestLogScriptFromSav1); its flow (TryStartQuestLogPlayback, the scene
+// loads, QLogCB_Playback, the skips, the final scene) is questLogPlayback.ts. No Phaser here: the field hands over
+// what the C reads from gObjectEvents / gSaveBlock1Ptr through `setQuestLogHost` (OverworldScene.create).
 
 import { constant, K } from '../battle/constants';
 import type { ObjectEventData } from '../data/types';
 import type { ObjectEvent } from '../entities/ObjectEvent';
 import type { GameState } from '../state/GameState';
 import type { Direction } from './direction';
+import { QuestLogUpdatePlayerSprite } from './playerAvatar';
 import { QL_RecordObjects, emptyQuestLogObjectEvent, type QuestLogObjectEvent } from './questLogObjects';
 import {
+  QL_CMD_EVENT_MASK,
+  QL_LoadAction_Input,
+  QL_LoadAction_MovementOrGfxChange,
+  QL_LoadAction_SceneEnd,
+  QL_LoadAction_Wait,
   QL_RecordAction_Input,
   QL_RecordAction_MovementOrGfxChange,
   QL_RecordAction_SceneEnd,
   QL_RecordWait,
   QL_ResetEventStates,
   QL_ResetRepeatEventTracker,
+  QL_SkipCommand,
+  QL_UpdateLastDepartedLocation,
   ResetDeferredLinkEvent,
 } from './questLogEvents';
+import { QL_PLAYER_GFX_NONE } from './questLogPlayer';
 
 // ------------------------------------------------------------------ constants
 
@@ -241,8 +251,10 @@ export const gQL = {
   curActionIdx: 0,
 };
 
-/** sQuestLogCB: QLogCB_Recording (or QL2's QLogCB_Playback), run from CB1_Overworld by RunQuestLogCB */
+/** sQuestLogCB: QLogCB_Recording, QLogCB_Playback or a playback step (questLogPlayback.ts), run from CB1_Overworld by RunQuestLogCB */
 let sQuestLogCB: (() => void) | null = null;
+/** QLogCB_Playback (questLogPlayback.ts registers it: SetQuestLogState's other branch) */
+let sQLogCBPlayback: (() => void) | null = null;
 /** sRecordSequenceStartIdx */
 let sRecordSequenceStartIdx = 0;
 /** sQuestLogActionRecordBuffer */
@@ -254,6 +266,12 @@ let sMaxActionsInScene = 0;
 let sNextActionDelay = 0;
 /** sLastQuestLogCursor: the player's last recorded step */
 let sLastQuestLogCursor = 0;
+/** sMovementScripts[OBJECT_EVENT_TEMPLATES_COUNT][2]: per local id (0: the player) the movement action and the player's gfx change to play next */
+const sMovementScripts: [number, number][] = Array.from({ length: OBJECT_EVENT_TEMPLATES_COUNT }, () => [0, 0] as [number, number]);
+/** sEventData[32]: the scene's events (playback), as pointers into its script */
+const sEventData: (ScriptPtr | null)[] = new Array<ScriptPtr | null>(32).fill(null);
+/** gQuestLogFieldInput: the recorded field input DoCB1_Overworld_QuestLogPlayback hands to ProcessPlayerFieldInput (*(u32 *)) */
+let gQuestLogFieldInput = 0;
 
 /** The current scenes (gSaveBlock1Ptr->questLog). */
 function scenes(): QuestLogScene[] {
@@ -280,6 +298,7 @@ export function questLogDebugState() {
     recordingPointer: gQL.recordingPointer && { ...gQL.recordingPointer },
     nextActionDelay: sNextActionDelay,
     recording: sQuestLogCB === QLogCB_Recording,
+    playbackCB: sQuestLogCB === null ? null : sQuestLogCB === QLogCB_Recording ? 'recording' : (sQuestLogCB.name || 'playback'),
   };
 }
 
@@ -304,25 +323,24 @@ export function ResetQuestLog(state: GameState): void {
 }
 
 /**
- * CONTINUE without a playback (QL2 brings TryStartQuestLogPlayback): the module state as a soft reset leaves it
- * (EWRAM cleared, gQuestLogPlaybackState STOPPED), with sCurrentSceneNum where QuestLog_AdvancePlayhead would leave
- * it after playing the saved scenes (SortQuestLogInSav1 put them first, oldest first): the next free slot, or the
- * oldest when all four are used (QL_StartRecordingAction wraps 4 to 0).
+ * The module state as a soft reset leaves it (main.c's DoSoftReset clears EWRAM: gQuestLogState 0, sQuestLogCB
+ * NULL, sCurrentSceneNum 0, gQuestLogPlaybackState STOPPED), for CONTINUE: TryStartQuestLogPlayback then plays the
+ * saved scenes from there, and QuestLog_AdvancePlayhead leaves sCurrentSceneNum after the last one.
  */
-export function QL_ResetForContinue(state: GameState): void {
+export function QL_ResetOnSoftReset(): void {
   gQL.state = 0;
   gQL.playbackState = K.QL_PLAYBACK_STATE_STOPPED;
+  gQL.currentSceneNum = 0;
   sQuestLogCB = null;
   gQL.recordingPointer = null;
   gQL.defeatedWildMonRecord = null;
   sCurSceneActions = null;
   sMaxActionsInScene = 0;
   gQL.curActionIdx = 0;
+  gQuestLogFieldInput = 0;
+  sEventData.fill(null);
   QL_ResetEventStates();
   ResetDeferredLinkEvent();
-  let n = 0;
-  while (n < QUEST_LOG_SCENE_COUNT && state.questLog[n].startType !== 0) n++;
-  gQL.currentSceneNum = n;
 }
 
 /** ClearSavedScene */
@@ -351,11 +369,21 @@ export function QL_IsRoomToSaveEvent(cursor: ScriptPtr | null, size: number): bo
 }
 export const QL_IsRoomToSaveAction = QL_IsRoomToSaveEvent;
 
-/** SetQuestLogState (only RECORDING here: QL2 adds QLogCB_Playback) */
-function SetQuestLogState(state: number): void {
+/** SetQuestLogState */
+export function SetQuestLogState(state: number): void {
   gQL.state = state;
   if (state === K.QL_STATE_RECORDING) sQuestLogCB = QLogCB_Recording;
-  else sQuestLogCB = null; // QLogCB_Playback: QL2
+  else sQuestLogCB = sQLogCBPlayback;
+}
+
+/** questLogPlayback.ts hands over QLogCB_Playback. */
+export function registerQLogCBPlayback(cb: () => void): void {
+  sQLogCBPlayback = cb;
+}
+
+/** sQuestLogCB = cb (the playback's steps: QuestLog_AdvancePlayhead, QuestLog_WaitFadeAndCancelPlayback, NULL) */
+export function setQuestLogCB(cb: (() => void) | null): void {
+  sQuestLogCB = cb;
 }
 
 /** QLogCB_Recording: encode this frame's actions; when the stream or the buffer is full, end the scene. */
@@ -754,13 +782,33 @@ export const QL_ESCALATOR_OUT = 1;
 export const QL_ESCALATOR_IN = 2;
 
 /**
- * ResetActions's RECORDING case: the buffer emptied (SCENE_END, duration 0xFFFF), then a face in the player's
- * direction and an empty input as the scene's first two actions. (The RUNNING case is QL2's.)
+ * ResetActions: RUNNING (playback: the scene's actions from the top, the first movement queued for the player, the
+ * field input cleared) or RECORDING (the buffer emptied: SCENE_END, duration 0xFFFF, then a face in the player's
+ * direction and an empty input as the scene's first two actions). Anything else stops.
  */
 function ResetActions(kind: number, actions: QuestLogAction[]): void {
-  if (kind !== K.QL_PLAYBACK_STATE_RECORDING) {
-    gQL.playbackState = K.QL_PLAYBACK_STATE_STOPPED;
-    return;
+  switch (kind) {
+    default:
+      gQL.playbackState = K.QL_PLAYBACK_STATE_STOPPED;
+      return;
+    case K.QL_PLAYBACK_STATE_RUNNING: {
+      sCurSceneActions = actions;
+      sMaxActionsInScene = actions.length;
+      for (const m of sMovementScripts) {
+        m[0] |= K.MOVEMENT_ACTION_NONE;
+        m[1] |= QL_PLAYER_GFX_NONE;
+      }
+      gQL.curActionIdx = 0;
+      sLastQuestLogCursor = 0;
+      gQuestLogFieldInput = 0;
+      sNextActionDelay = sCurSceneActions[gQL.curActionIdx].duration;
+      sMovementScripts[0][0] = sCurSceneActions[gQL.curActionIdx].data[3]; // data.a.movementActionId
+      sMovementScripts[0][1] = QL_PLAYER_GFX_NONE;
+      gQL.playbackState = K.QL_PLAYBACK_STATE_RUNNING;
+      return;
+    }
+    case K.QL_PLAYBACK_STATE_RECORDING:
+      break;
   }
   sCurSceneActions = actions;
   sMaxActionsInScene = actions.length;
@@ -789,11 +837,53 @@ function ResetActions(kind: number, actions: QuestLogAction[]): void {
 }
 
 /**
- * QL_TryRunActions (DoCB1_Overworld, first): while recording, count the frames the controls are free (each
- * action's duration) and stop when the buffer is full. The RUNNING case (playback) is QL2's.
+ * QL_TryRunActions (DoCB1_Overworld / DoCB1_Overworld_QuestLogPlayback, first). RUNNING: while the controls are
+ * free, count down to the next action, then hand out every action due now (a movement or gfx change into
+ * sMovementScripts for QL_UpdateObject, an input into gQuestLogFieldInput; SCENE_END stops, EMPTY pauses as
+ * ACTION_END). RECORDING: count the frames the controls are free (each action's duration) and stop when the buffer
+ * is full.
  */
 export function QL_TryRunActions(): void {
   switch (gQL.playbackState) {
+    case K.QL_PLAYBACK_STATE_RUNNING:
+      if (!RecordHeadAtEndOfEntryOrScriptContext2Enabled()) {
+        if (sNextActionDelay !== 0) {
+          sNextActionDelay--;
+        } else {
+          const actions = sCurSceneActions!;
+          do {
+            const a = actions[gQL.curActionIdx];
+            switch (a.type) {
+              case K.QL_ACTION_MOVEMENT:
+                if (a.data[0] < OBJECT_EVENT_TEMPLATES_COUNT) sMovementScripts[a.data[0]][0] = a.data[3]; // data.a.localId / movementActionId
+                break;
+              case K.QL_ACTION_GFX_CHANGE:
+                if (a.data[0] < OBJECT_EVENT_TEMPLATES_COUNT) sMovementScripts[a.data[0]][1] = a.data[3]; // data.b.localId / gfxState
+                break;
+              case K.QL_ACTION_INPUT:
+                gQuestLogFieldInput = ((a.data[3] << 24) | (a.data[2] << 16) | (a.data[1] << 8) | a.data[0]) >>> 0;
+                break;
+              case K.QL_ACTION_EMPTY:
+                gQL.playbackState = K.QL_PLAYBACK_STATE_ACTION_END;
+                break;
+              case K.QL_ACTION_WAIT:
+                break; // the wait is the action's duration (sNextActionDelay)
+              case K.QL_ACTION_SCENE_END:
+                gQL.playbackState = K.QL_PLAYBACK_STATE_STOPPED;
+                break;
+            }
+            if (gQL.playbackState === K.QL_PLAYBACK_STATE_STOPPED) break;
+            if (++gQL.curActionIdx >= sMaxActionsInScene) {
+              gQL.playbackState = K.QL_PLAYBACK_STATE_STOPPED;
+              break;
+            }
+            sNextActionDelay = actions[gQL.curActionIdx].duration;
+          } while (gQL.playbackState !== K.QL_PLAYBACK_STATE_ACTION_END && (sNextActionDelay === 0 || sNextActionDelay === 0xffff));
+        }
+      } else if (gQL.curActionIdx >= sMaxActionsInScene) {
+        gQL.playbackState = K.QL_PLAYBACK_STATE_STOPPED;
+      }
+      break;
     case K.QL_PLAYBACK_STATE_RECORDING:
       if (host().fieldControlsLocked() !== true) {
         sNextActionDelay++;
@@ -801,7 +891,90 @@ export function QL_TryRunActions(): void {
       }
       break;
     default:
-      break; // STOPPED, ACTION_END, RECORDING_NO_DELAY; RUNNING: QL2
+      break; // STOPPED, ACTION_END, RECORDING_NO_DELAY
+  }
+}
+
+// ------------------------------------------------------------------ playback's actions
+
+/**
+ * ReadQuestLogScriptFromSav1: decode a scene's script into the action buffer (inputs, movements, gfx changes,
+ * waits, the end) and sEventData (the other events, as pointers; the first one sets sLastDepartedLocation).
+ */
+export function ReadQuestLogScriptFromSav1(sceneNum: number, actions: QuestLogAction[] = sQuestLogActionRecordBuffer): void {
+  for (let i = 0; i < sEventData.length; i++) actions[i] = emptyQuestLogAction(); // memset(actions, 0, ...)
+  sEventData.fill(null);
+  let script: ScriptPtr | null = { scene: sceneNum, pos: 0 };
+  let actionNum = 0;
+  let eventNum = 0;
+  for (let i = 0; i < sEventData.length; i++) {
+    switch (scenes()[sceneNum].script[script.pos] & QL_CMD_EVENT_MASK) {
+      case K.QL_EVENT_INPUT:
+        script = QL_LoadAction_Input(script, actions[actionNum++]);
+        break;
+      case K.QL_EVENT_GFX_CHANGE:
+      case K.QL_EVENT_MOVEMENT:
+        script = QL_LoadAction_MovementOrGfxChange(script, actions[actionNum++]);
+        break;
+      case K.QL_EVENT_SCENE_END:
+        script = QL_LoadAction_SceneEnd(script, actions[actionNum++]);
+        break;
+      case K.QL_EVENT_WAIT:
+        script = QL_LoadAction_Wait(script, actions[actionNum++]);
+        break;
+      default: {
+        // a normal event
+        const prev = { ptr: sEventData[eventNum] };
+        script = QL_SkipCommand(script, prev);
+        sEventData[eventNum] = prev.ptr;
+        if (eventNum === 0 && sEventData[0]) QL_UpdateLastDepartedLocation(sEventData[0]);
+        eventNum++;
+        break;
+      }
+    }
+    if (script === null) break;
+  }
+}
+
+/** sEventData[i] (QLogCB_Playback, QuestLog_PlayCurrentEvent) */
+export function questLogEventData(i: number): ScriptPtr | null {
+  return i < sEventData.length ? sEventData[i] : null;
+}
+export const QUEST_LOG_EVENT_DATA_COUNT = 32;
+
+/** QL_InitSceneObjectsAndActions' first half: the scene's script read, the repeat tracker reset, ResetActions(RUNNING). */
+export function QL_InitSceneActions(): void {
+  ReadQuestLogScriptFromSav1(gQL.currentSceneNum, sQuestLogActionRecordBuffer);
+  QL_ResetRepeatEventTracker();
+  ResetActions(K.QL_PLAYBACK_STATE_RUNNING, sQuestLogActionRecordBuffer);
+}
+
+/** gQuestLogFieldInput, decoded (DoCB1_Overworld_QuestLogPlayback copies it, then FieldClearPlayerInput clears it). */
+export function questLogFieldInput(): Required<QuestLogFieldInput> {
+  return fieldInputFromU32(gQuestLogFieldInput);
+}
+
+/** FieldClearPlayerInput(&gQuestLogFieldInput) */
+export function clearQuestLogFieldInput(): void {
+  gQuestLogFieldInput = 0;
+}
+
+/**
+ * QL_UpdateObject: an object's sprite callback while playback runs (CopyObjectGraphicsInfoToSpriteTemplate gives it
+ * to the objects created then): the movement action queued for its local id (0 for the player) starts as a held
+ * movement, and the player's gfx change runs (QuestLogUpdatePlayerSprite). The caller then runs the object's held
+ * movement (QL_UpdateObjectEventCurrentMovement: ObjectEvent.tick).
+ */
+export function QL_UpdateObject(obj: ObjectEvent, localId: number, isPlayer: boolean): void {
+  const m = sMovementScripts[isPlayer ? 0 : localId];
+  if (!m) return;
+  if (m[0] !== K.MOVEMENT_ACTION_NONE) {
+    obj.setHeldMovement(m[0]); // ObjectEventSetHeldMovement: in playback it replaces what the object holds
+    m[0] = K.MOVEMENT_ACTION_NONE;
+  }
+  if (isPlayer && m[1] !== QL_PLAYER_GFX_NONE) {
+    QuestLogUpdatePlayerSprite(m[1]);
+    m[1] = QL_PLAYER_GFX_NONE;
   }
 }
 

@@ -63,6 +63,7 @@ import { mailProbe } from '../menus/mail';
 import { seagallopProbe } from '../menus/seagallop';
 import type { SSAnneProbe } from '../world/ssAnne';
 import { questLogTestProbe } from '../world/questLog';
+import { questLogPlaybackDebugState } from '../world/questLogPlayback';
 import { SetQuestLogEvent } from '../world/questLogEvents';
 import type { WeatherProbe } from '../world/weather';
 import { gMPlayTable, gPokemonCryMusicPlayers, gSongTable } from '../audio/m4a';
@@ -251,6 +252,8 @@ export interface FieldProbe {
   locked: boolean;
   /** FreezeObjectEvents is in effect. */
   objectsFrozen: boolean;
+  /** The quest log plays the saved scenes back (CONTINUE, up to Task_EndQuestLog's end): the field isn't the player's */
+  questLogPlayback: boolean;
   moving: boolean;
   approaching: boolean;
   fading: boolean;
@@ -413,7 +416,7 @@ function createApi(game: Phaser.Game) {
   const free = () => {
     if (!game.scene.isActive('Overworld')) return false;
     const p = field();
-    return !!p && !p.busy && !p.script && !p.overlay && !p.moving && !p.approaching && !p.fading;
+    return !!p && !p.busy && !p.script && !p.overlay && !p.moving && !p.approaching && !p.fading && !p.questLogPlayback;
   };
   // A free field can still start an ON_FRAME script or a trainer on its next tick, so "idle" means it
   // was free at the start of two ticks in a row.
@@ -809,7 +812,7 @@ function createApi(game: Phaser.Game) {
      * index and the next action's delay, the step recording mode, and the four scenes (startType, map, warp id,
      * position, the active objects and the command stream up to its SCENE_END).
      */
-    questLog: () => questLogTestProbe(requireState()),
+    questLog: () => ({ ...questLogTestProbe(requireState()), playback: questLogPlaybackDebugState() }),
     /** SetQuestLogEvent(QL_EVENT_* name, data): an event as the C's call sites (QL3-QL4) would send it. */
     questLogEvent: (event: string, data: Record<string, unknown> | null) => SetQuestLogEvent(define(event), data),
     /** The move relearner while it's up (menus/learnMove.ts): its MENU_STATE_*, the list's moves and selection. */

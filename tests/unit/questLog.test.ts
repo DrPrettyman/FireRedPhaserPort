@@ -20,7 +20,7 @@ import {
   OBJECT_EVENTS_COUNT,
   QL_FinishRecordingScene,
   QL_RecordFieldInput,
-  QL_ResetForContinue,
+  QL_ResetOnSoftReset,
   QL_TryRunActions,
   QL_SCRIPT_LENGTH,
   QuestLog_CutRecording,
@@ -301,9 +301,10 @@ describe('a scene', () => {
     const cmds = decodeQuestLogScript(scene(1).script);
     expect(cmds.slice(-3).map((c) => c.id)).toEqual(['QL_EVENT_MOVEMENT', 'QL_EVENT_WAIT', 'QL_EVENT_SCENE_END'].map(d));
     expect(scene(2).startType).toBe(0);
-    // CONTINUE (without QL2's playback) leaves the next scene after the saved ones
-    QL_ResetForContinue(t.state);
-    expect(gQL.currentSceneNum).toBe(2);
+    // CONTINUE starts from a soft reset's state (questLogPlayback.ts plays the saved scenes from scene 0)
+    QL_ResetOnSoftReset();
+    expect(gQL.currentSceneNum).toBe(0);
+    expect(gQL.state).toBe(0);
   });
 });
 

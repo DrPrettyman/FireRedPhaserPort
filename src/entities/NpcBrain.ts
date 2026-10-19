@@ -47,6 +47,11 @@ export class NpcBrain {
   singleMovementActive = false;
   /** ObjectEventSetSingleMovement's quest log hook (QuestLogRecordNPCStep while recording): the action started. */
   onSingleMovement?: (movementActionId: number) => void;
+  /**
+   * QL_UpdateObject in place of the movement type: an object made while the quest log plays back moves only as
+   * recorded (the hook starts the queued action; the object's held movement then runs).
+   */
+  questLogUpdate?: () => void;
 
   constructor(
     readonly obj: ObjectEvent,
@@ -93,6 +98,11 @@ export class NpcBrain {
   paused = false;
 
   tick(): void {
+    if (this.questLogUpdate) {
+      this.questLogUpdate();
+      this.obj.tick(); // QL_UpdateObjectEventCurrentMovement
+      return;
+    }
     this.obj.tick();
     if (this.raiseHand) {
       // A frozen object stops where it is; the jump lands first (lock waits for singleMovementActive).

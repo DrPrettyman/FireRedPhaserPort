@@ -351,6 +351,11 @@ export class ScriptEngine {
     return this.ctx !== undefined;
   }
 
+  /** ScriptContext_Init: no script runs (the quest log's playback map loads drop what a scene started). */
+  init(): void {
+    this.ctx = undefined;
+  }
+
   /** The label the running script was started from (dev/test probes). */
   get runningLabel(): string | undefined {
     return this.ctx?.label;

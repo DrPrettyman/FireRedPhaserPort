@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
+import { K } from '../battle/constants';
 import { spriteTextureKey } from '../data/assets';
 import type { SpriteInfo } from '../data/types';
 import { DELTA, type Direction } from '../world/direction';
 import { TILE, objectDepth } from '../world/MapChunk';
+import { QL_GetPlaybackState } from '../world/questLog';
 import { heldActionSpec, movementActionNone } from './movementActions';
 
 /** Standard 9-frame overworld sheet: face S/N/W, then two step frames per direction. East = west flipped. */
@@ -306,7 +308,9 @@ export class ObjectEvent {
    * changes here, as the GBA's currentCoords do before the other objects update.
    */
   setHeldMovement(actionId: number): boolean {
-    if (this.movementOverridden) return true;
+    // While the quest log plays back (QL_UpdateObject), a new action replaces the held one.
+    if (QL_GetPlaybackState() === K.QL_PLAYBACK_STATE_RUNNING) this.clearHeldMovementIfActive();
+    else if (this.movementOverridden) return true;
     this.movementActionId = actionId;
     this.heldMovementActive = true;
     this.heldMovementFinished = false;
