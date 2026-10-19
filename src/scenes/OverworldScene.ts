@@ -2687,6 +2687,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       // IsPlayerDefeated: B_OUTCOME_LOST or B_OUTCOME_DREW
       playerWon: () => outcome !== d.require('B_OUTCOME_LOST') && outcome !== d.require('B_OUTCOME_DREW'),
       returnToField: () => {
+        // CB2_ReturnToField → InitOverworldBgs → InitFieldMessageBox: the field's windows are made anew, so the
+        // message the script left up before the battle ("Mew!", "Gyaoo!", "SNORLAX woke up!") is gone
+        this.messageBox.hide();
         this.resumeMap();
         // FieldCB_DefaultWarpExit (CB2_EndWildBattle) / FieldCB_ContinueScriptHandleMusic (a trainer's
         // CB2_ReturnToFieldContinueScriptPlayMapMusic): the map's music again after the battle's

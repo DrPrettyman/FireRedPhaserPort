@@ -119,3 +119,107 @@ export function battlesSince(game: Game, since: number) {
 export function scriptsSince(game: Game, since: number) {
   return game.eval((t, s) => t.events(s).filter((e) => e.type === 'script').map((e) => e.label as string), since);
 }
+
+// --- the legendaries' battles (postgameKanto*.test.ts)
+
+/** The outcome of the battle that ended since `since` (B_OUTCOME_*). */
+export async function outcomeSince(game: Game, since: number) {
+  const end = await game.waitForEvent('battleEnd', { since, timeout: 300_000 });
+  return game.eval((t, o) => t.nameOf('B_OUTCOME_', o), end.outcome as number);
+}
+
+/** The objects with graphics `gfx` on the current map, as map-local [x, y]. */
+export function objectsWith(game: Game, gfx: string) {
+  return game.eval((t, g) => t.objects().filter((o) => o.graphicsId === g).map((o) => [o.x, o.y]), gfx);
+}
+
+/** The foe's species and level once the battle has sent it out (mashing A through the script before it). */
+export function foeOf(game: Game, what: string) {
+  return game.mashUntil((t) => {
+    const m = t.battle()?.mons?.[1];
+    return m && m.species !== 'NONE' && ([m.species, m.level] as [string, number]);
+  }, { what, ...SCENE });
+}
+
+/**
+ * At the action menu: BAG → the POKé BALLS pocket → the first ball (the test's Master Ball) → throw it; "Give a
+ * nickname...?" answered NO by mashing B (a single B can land while the question still prints, and A would then
+ * pick YES) until the battle is over. Returns the battle messages from the throw on that matched `/transferred/`.
+ */
+export async function throwFirstBall(game: Game) {
+  await game.chooseAction('BAG');
+  await game.waitForBag();
+  await game.pressTimes('RIGHT', 2);
+  await game.pressTimes('A', 2);
+  await game.mashUntil((t) => {
+    const m = t.battle()?.message ?? '';
+    if (/transferred/.test(m)) (window as any).__sentToPc = m;
+    return t.events().some((e) => e.type === 'battleEnd');
+  }, { button: 'B', what: 'the catch and the battle to end', ...SCENE });
+  return game.eval(() => (window as any).__sentToPc as string | undefined);
+}
+
+/** Mash A through the battle (the first move every turn) until it's over. */
+export function fightToEnd(game: Game) {
+  return game.mashUntil((t) => t.events().some((e) => e.type === 'battleEnd'), { what: 'the battle to end', ...SCENE });
+}
+
+/** At the action menu: RUN, then mash until the battle is over. */
+export async function runFromBattle(game: Game) {
+  await game.chooseAction('RUN');
+  await game.mashUntil((t) => t.events().some((e) => e.type === 'battleEnd'), { what: 'the battle to end', ...SCENE });
+}
+
+/** Mash A through what the script does after the battle until the field is free; the field messages seen. */
+export async function finishScript(game: Game) {
+  const r = await game.eval(async (t) => {
+    const res = await (t as any).mash((u: any) => u.idle() && !u.field()!.script && !u.field()!.fading, 'A', 60000, []);
+    return (res.messages as string[]).map((m) => m.replace(/\s+/g, ' '));
+  });
+  return r;
+}
+
+/**
+ * A route across a map that needs Surf (planned from the map's collision, elevation and behaviors): `to` walks to
+ * a map-local tile along the shortest way (TestApi.walkTo), `surf` faces the water and uses Surf from the field
+ * (EventScript_UseSurf: YES), `land` steps off the water onto the shore (Task_StopSurfingInit).
+ */
+export type RouteStep = ['to', number, number] | ['surf' | 'land', 'up' | 'down' | 'left' | 'right'];
+
+export async function followRoute(game: Game, route: RouteStep[]) {
+  for (const step of route) {
+    if (step[0] === 'to') {
+      const r = await game.eval((t, x, y) => t.walkTo(x, y), step[1], step[2]);
+      if (!r.arrived) throw new Error(`Stopped at (${r.x}, ${r.y}) on the way to (${step[1]}, ${step[2]})`);
+    } else if (step[0] === 'surf') {
+      await game.eval((t, d) => t.face(d), step[1]);
+      await game.waitIdle();
+      await game.eval((t) => ((window as any).__surfSince = t.lastSeq()));
+      await game.press('A');
+      await game.waitFor((t) => t.message()?.includes('SURF'), { what: '"Would you like to SURF?"' });
+      // YES (the cursor starts there), "MEWTWO used SURF!", the banner, the jump onto the water (the field counts as
+      // idle while the field effects run: wait for them too)
+      await game.mashUntil((t) => t.events((window as any).__surfSince).some((e) => e.type === 'fieldMoveShowMon'), { what: 'the banner' });
+      await game.waitFor((t) => {
+        const f = t.field()!;
+        return t.idle() && !f.script && f.avatar.graphicsId.endsWith('_SURF') && !f.fieldEffects.some((e) => /^FLDEFF_(FIELD_MOVE_SHOW_MON|USE_)/.test(e));
+      }, { what: 'surfing' });
+    } else {
+      await game.eval((t, d) => t.walk(d, 1), step[1]);
+      await game.waitFor((t) => t.idle() && t.field()!.avatar.flags.includes('ON_FOOT'), { what: 'the player on land' });
+    }
+  }
+}
+
+/**
+ * Walk onto the warp at map-local (x, y) and wait until the next map is loaded and the field is idle there (a cave's
+ * map preview screen or flash can come first: wait on the field, not on a frame count). Returns the new map.
+ */
+export async function takeWarp(game: Game, x: number, y: number) {
+  const from = await game.eval((t) => t.field()!.map);
+  const since = await game.mark();
+  await game.eval((t, x, y) => t.walkTo(x, y), x, y);
+  await game.waitForEvent('map', { since, what: `the warp at (${x}, ${y}) on ${from}`, timeout: 60_000 });
+  await game.eval((t, from) => t.until(() => t.field()?.map !== from && t.idle() && !t.field()!.script, 20000), from);
+  return game.eval((t) => [t.field()!.map, t.field()!.x, t.field()!.y] as [string, number, number]);
+}
