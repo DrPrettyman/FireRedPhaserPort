@@ -19,8 +19,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     are CB2_SaveAndEndTrade's FadeOutBGM / IsBGMStopped wait.
   - The Elite Four and Champion rooms' lighting (world/leagueLighting.ts): Task_CancelPokemonLeagueLightingEffect's
     BlendPalettes(palette 7 → black) while a fade runs does nothing (the field's fade is an overlay over everything,
-    so the newly loaded palette is faded with the rest anyway). ApplyGlobalTintToPaletteSlot is a no-op (no quest
-    log tints).
+    so the newly loaded palette is faded with the rest anyway). ApplyGlobalTintToPaletteSlot tints the loaded palette
+    but, in the quest log's final scene (BACKUP_GRAYSCALE), doesn't back it up: the end puts back the tileset's palette 7,
+    which the lighting replaces on its next step.
   - Trainer Fan Club (script/miscSpecials.ts, trainer_fan_club.c): there are no link battle records, so
     Script_BufferFanClubTrainerName always names the NPC trainer (the rival, LT. SURGE, KOGA), and the link-battle
     fan updates (Special_UpdateTrainerFansAfterLinkBattle) never run.
@@ -185,7 +186,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (BlendPalettes / BeginNormalPaletteFade on PALETTES_BG only) is the field's fade overlay, which whitens the
     objects and the rock's fragments too for its 16 frames. Its and FLDEFF_MOVE_DEOXYS_ROCK's map num / group
     arguments are ignored (the object is looked up on the current map; `setfieldeffectargument` can't evaluate
-    `MAP_NUM(...)`). ApplyGlobalFieldPaletteTint (the quest log's tints) is a no-op.
+    `MAP_NUM(...)`).
   - `setmaplayoutindex` (World.setCurrentLayout): the swapped layout replaces the current map's chunk after
     ON_TRANSITION rather than being picked before the grid is first built (same result; ON_TRANSITION can't see
     the grid on the GBA either). gSaveBlock1Ptr->mapLayoutId is saved inside the save's `location`
@@ -324,13 +325,17 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     with a fresh Overworld scene and GameState; other module-level state isn't reset.
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, cable club monitors) start their scripts and hit the unimplemented-special warnings.
-  - Quest log (world/questLog*.ts; QUEST_LOG_PLAN.md QL1 records, QL2a plays back, QL2b-QL5 to come): the playback
-    has no screen yet (QL2b): no grey / sepia tint (gGlobalFieldTintMode, ApplyGlobalFieldPaletteTint,
-    QL_SlightlyDarkenSomePals, RestoreScreenAfterPlayback's fade), no top and bottom bars or "Previously on your
-    quest…" header, no description window or event texts, no "saved the game at" line, and the map music plays as
-    usual (gDisableMapMusicChangeOnMapLoad isn't set): `questLogScreen` in world/questLogPlayback.ts has the seams,
-    and their timings (GetQuestLogTextDisplayDuration, the 16 + 32 end frames, the 127-frame wait) already run, the
-    texts' length as 0 for now. In playback, a recorded input that starts a script runs it with the normal message
+  - Quest log (world/questLog*.ts; QUEST_LOG_PLAN.md QL1 records, QL2a plays back, QL2b draws the playback's
+    screen, QL3-QL5 to come): the tints (world/questLogScreen.ts) are on the field's palette path, so they cover
+    what the port's palettes are: the current map's BG palettes 0-12 (a connected map drawn with other tilesets, as
+    the port draws them, keeps its colours; the GBA draws connections with the current map's tiles) and the object
+    and field effect sheets (`spr_*`, `fldeff_obj_*`; the S.S. Anne's smoke, the fog and other sprites outside them
+    aren't tinted). QL_SlightlyDarkenSomePals's OBJ slots are the sheets' kinds (the reflections and field effects:
+    OBJ 1, 6-9, 11-15; the objects' own: 0, 2-5, 10). sPalettesBackup is the tileset's palettes (and the sheets as
+    loaded), not what was loaded with BACKUP_GRAYSCALE byte for byte; palettes the C leaves zeroed in it (BG 13-15)
+    aren't touched. The windows are Phaser windows over the field (ui/QuestLogWindows.ts), not BG0 tiles: a window
+    over another doesn't clear its tilemap, so CommitQuestLogWindow1 (the field message box's ClearDialogWindowAndFrame
+    in playback) has nothing to put back and has no caller yet (QL5). In playback, a recorded input that starts a script runs it with the normal message
     box, which waits for A (the auto-scroll and waitbuttonpress differences and QL_AvoidDisplay: QL5); the fishing
     rod's and the VS Seeker's gfx changes don't play (QL5), and getting off a mon changes the music. QL_LoadObjects
     sets the snapshot's position and facing on the objects the field spawned from the scene's flags (not each saved
@@ -339,8 +344,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     faded in, not at once. Task_EndQuestLog's gHelpSystemEnabled = TRUE is HelpSystem_Enable (which also lets R toggle
     the help again). Only QL_EVENT_DEPARTED and QL_EVENT_ARRIVED have recorders: SetQuestLogEvent drops the other events (QL3), and the
     menus, shops, PC and battles don't send theirs yet (QL4). The scene's objects snapshot is the player and the
-  - Quest log (world/questLog*.ts; QUEST_LOG_PLAN.md QL1 records, QL2-QL5 to come): CONTINUE doesn't play the
-    scenes back yet (QL2; QL_ResetForContinue puts sCurrentSceneNum where the playback would leave it). QL_EVENT_*
+  - Quest log (world/questLog*.ts; QUEST_LOG_PLAN.md QL1 records, QL2 plays back, QL3-QL5 to come): QL_EVENT_*
     3-29 (QL3a), DEPARTED and ARRIVED have recorders and loaders; SetQuestLogEvent drops 30-34, 37, 38 and 40 (the
     battles, field moves, shops, story items: QL3b), and the menus, shops, PC and battles don't send theirs yet (QL4:
     events 3-29 are recorded only by unit tests and `__test.questLogEvent`). The link events (12-19) have codecs but

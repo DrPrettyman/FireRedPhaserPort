@@ -4166,3 +4166,31 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   with QL_TryRepeatEvent; the Pokémon Center's non-repeat; the Escape Rope's scene end; the link events through the
   deferred path; TranslateLinkPartnersName), tests/e2e/questLog.test.ts (+1: three events through
   `__test.questLogEvent` in a running game, a repeat, the save's stream).
+
+### W-qlog 2b: the quest log's playback screen (QUEST_LOG_PLAN.md QL2b, batch 12)
+
+- New `world/questLogScreen.ts` fills QL2a's `questLogScreen` seams: gGlobalFieldTintMode and palette.c's
+  TintPalette_GrayScale / _SepiaTone / CopyPaletteInvertedTint on the field's palette path (fieldmap.c's
+  ApplyGlobalTintToPaletteEntries in `tilesetVram.resetBgPalettes`, field_effect.c's ApplyGlobalFieldPaletteTint on
+  the object and field effect sheets in WeatherTextures, QuestLog_BackUpPalette for BACKUP_GRAYSCALE), Task_EndQuestLog's
+  QL_SlightlyDarkenSomePals, RestoreScreenAfterPlayback's 16 frames back to colour and the backup restored; the windows
+  (new `ui/QuestLogWindows.ts`: DrawPreviouslyOnQuestHeader with the scenes left, DrawSceneDescription /
+  CopyDescriptionWindowTiles, QuestLog_CloseTextWindow, "<player> saved the game at <place>.", the bars cleared a row
+  a frame); the music (gDisableMapMusicChangeOnMapLoad STOP through the playback, Overworld_PlaySpecialMapMusic moved
+  from the final scene's load to Task_EndQuestLog's first state). The event lines are gStringVar4 (QL2a's
+  `setQuestLogDescriptionText` is gone): LoadEvent_DepartedLocation / _ArrivedInLocation now print theirs
+  (sLocationNameTexts, sLocationToDepartedTextId, sDepartedLocationTexts, sGymCityMapSecs: tools/extract_quest_log.py).
+  QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode at the scene loads' and the final scene's warp exits,
+  FieldCB_DefaultWarpExit, the fall warp, Teleport and the Escape Rope. Extractor: graphics/quest_log/
+  (sDescriptionWindow_Gfx).
+- Shared: WeatherTextures (`setTint` / `setUnfaded` / `setFaded`, one 15-bit colour table per sheet type; the non-faded
+  field effect sheets are now tinted, never gamma-shifted, as before), TilesetVram (the tint, the backup),
+  weather.ts (`WeatherSlightlyDarkensPals`), leagueLighting.ts (ApplyGlobalTintToPaletteSlot and the BACKUP_GRAYSCALE
+  check), OverworldScene (the screen host, the music move, the header calls), testHooks (`__test.questLogScreen()`).
+- Tests: tests/unit/questLogScreen.test.ts (10: the tints' arithmetic against the C's, GetQuestLogTextDisplayDuration,
+  the DEPARTED lines incl. a gym before and after its badge, ARRIVED), tests/e2e/questLog.test.ts (+1: during playback
+  BG palette 7 and the player's sheet equal TintPalette_GrayScale of the colours after the end, the atlases draw grey,
+  the header reads "…2", "…1", "…", the departed and arrived lines each stay up GetQuestLogTextDisplayDuration (+16)
+  frames, the final scene's "saved the game at this location: PALLET TOWN.", Task_EndQuestLog's frames go from grey
+  to the colours, the windows gone, MUS_PALLET the only song after CONTINUE). Ran weather, saveContinue, mapMusic,
+  mapNamePopup and leagueLighting e2e files: all pass.
