@@ -15,7 +15,7 @@ export { MEWTWO, warp } from './seagallopHelpers';
  * - The Hall of Fame: PokemonLeague_HallOfFame_EventScript_EnterRoom → EventScript_SetDefeatedEliteFourFlagsVars
  *   (data/scripts/hall_of_fame.inc: clearflag FLAG_HIDE_POSTGAME_GOSSIPERS, EventScript_ResetEliteFour, and without
  *   the National Dex EventScript_SetReadyTryGiveNationalDexScene: VAR_MAP_SCENE_PALLET_TOWN_OAK 2), then
- *   EnterHallOfFame (post_battle_event_funcs.c: FLAG_SYS_GAME_CLEAR).
+ *   EnterHallOfFame (post_battle_event_funcs.c: FLAG_SYS_GAME_CLEAR; its save counts GAME_STAT_ENTERED_HOF).
  * - Bill's trip (seviiQuest.test.ts plays it): seagallopHelpers' triPassState (the Tri-Pass, FLAG_SYS_SEVII_MAP_123,
  *   VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F 3 from LeaveOneIslandScene, VAR_MAP_SCENE_CINNABAR_ISLAND 4 from
  *   CinnabarIsland_EventScript_ReturnFromSeviiIslands, VAR_MAP_SCENE_ONE_ISLAND_HARBOR 3 from OneIsland's
@@ -35,6 +35,8 @@ export async function afterHallOfFame(game: Game) {
   await game.eval((t) => {
     const s = t.state!;
     for (const f of ['FLAG_DEFEATED_LEADER_GIOVANNI', 'FLAG_BADGE08_GET', 'FLAG_SYS_GAME_CLEAR']) s.setFlag(f, true);
+    // EnterHallOfFame's save (state/save.ts): GAME_STAT_ENTERED_HOF
+    s.setGameStat(t.define('GAME_STAT_ENTERED_HOF'), 1);
     // EventScript_SetDefeatedEliteFourFlagsVars
     s.setFlag('FLAG_HIDE_POSTGAME_GOSSIPERS', false);
     for (const f of ['FLAG_DEFEATED_LORELEI', 'FLAG_DEFEATED_BRUNO', 'FLAG_DEFEATED_AGATHA', 'FLAG_DEFEATED_LANCE', 'FLAG_DEFEATED_CHAMP']) s.setFlag(f, false);
@@ -64,6 +66,38 @@ export async function afterHallOfFame(game: Game) {
     s.setVar('VAR_MAP_SCENE_TWO_ISLAND_JOYFUL_GAME_CORNER', 3);
     s.setVar('VAR_MAP_SCENE_THREE_ISLAND', 4);
   });
+}
+
+/**
+ * The state the first postgame stretch leaves (postgame.test.ts plays it): the National Dex
+ * (PalletTown_ProfessorOaksLab_EventScript_EnterForNationalDexScene: EnableNationalPokedex, VAR_MAP_SCENE_PALLET_TOWN_OAK
+ * 3, VAR_MAP_SCENE_PALLET_TOWN_PROFESSOR_OAKS_LAB 8, FLAG_HIDE_OAK_IN_PALLET_TOWN), Mt. Ember's Rockets gone
+ * (MtEmber_Exterior_EventScript_RocketPasswordScene: VAR_MAP_SCENE_MT_EMBER_EXTERIOR 2; the grunts' defeat scripts:
+ * FLAG_HIDE_MT_EMBER_EXTERIOR_ROCKETS), the Ruby taken (FLAG_GOT_RUBY, FLAG_HIDE_RUBY), Moltres fought
+ * (FLAG_FOUGHT_MOLTRES), and Celio's OneIsland_PokemonCenter_1F_EventScript_GiveRainbowPass (the Ruby and the Tri-Pass
+ * for the Rainbow Pass, VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F 5, FLAG_SYS_SEVII_MAP_4567).
+ */
+export async function rainbowPassState(game: Game) {
+  await game.eval((t) => {
+    const s = t.state!;
+    s.nationalDexEnabled = true;
+    s.setVar('VAR_MAP_SCENE_PALLET_TOWN_OAK', 3);
+    s.setVar('VAR_MAP_SCENE_PALLET_TOWN_PROFESSOR_OAKS_LAB', 8);
+    s.setVar('VAR_MAP_SCENE_MT_EMBER_EXTERIOR', 2);
+    for (const f of ['FLAG_HIDE_OAK_IN_PALLET_TOWN', 'FLAG_HIDE_MT_EMBER_EXTERIOR_ROCKETS', 'FLAG_GOT_RUBY', 'FLAG_HIDE_RUBY', 'FLAG_FOUGHT_MOLTRES', 'FLAG_SYS_SEVII_MAP_4567']) s.setFlag(f, true);
+    s.bag.remove(t.define('ITEM_TRI_PASS'), 1);
+    s.bag.add(t.define('ITEM_RAINBOW_PASS'), 1);
+    s.setVar('VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F', 5);
+  });
+}
+
+/** At map-local (x, y) facing `dir`, press A: the object or bg event there starts. */
+export async function talk(game: Game, x: number, y: number, dir: 'up' | 'down' | 'left' | 'right') {
+  await game.eval(async (t, x, y, dir) => {
+    await t.walkTo(x, y);
+    await t.face(dir);
+  }, x, y, dir);
+  await game.press('A');
 }
 
 /** Kanto Pokédex numbers 1..n seen and caught (GetPokedexCount's VAR_0x8006 for Oak's 60, prof_pc.c). */

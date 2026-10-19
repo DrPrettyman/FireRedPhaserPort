@@ -31,7 +31,7 @@ function iceField() {
 
 describe('IcefallCaveIcePerStepCallback', () => {
   test('a step onto thin ice cracks it on the fifth frame after, marks FLAG_TEMP_n; a step back onto it breaks it', () => {
-    const { g, pos, grid, host, run } = iceField();
+    const { g, pos, grid, run } = iceField();
     SetUpFieldTasks();
     expect(perStepCallbackProbe()).toEqual({ callbackId: g.d('STEP_CB_DUMMY'), state: 0 });
     ActivatePerStepCallback(g.d('STEP_CB_ICE'));
