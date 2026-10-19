@@ -42,7 +42,7 @@ import { ClearContinueGameWarpStatus, gSave, UseContinueGameWarp } from '../stat
 import { fromSaveData, type SaveData } from '../state/saveData';
 import { PlayTimeCounter_Reset, PlayTimeCounter_Start, PlayTimeCounter_Update } from '../state/playTime';
 import { AgbMainFrameEnd } from '../audio/frame';
-import { BGMusicStopped, StopMapMusic } from '../gba/sound';
+import { BGMusicStopped, gDisableMapMusicChangeOnMapLoad, StopMapMusic } from '../gba/sound';
 import {
   type AmbientCryTaskData,
   ChooseAmbientCrySpecies,
@@ -91,6 +91,8 @@ import {
 import { MapPreviewLayer } from '../world/mapPreviewLayer';
 import { ForestMapPreviewScreenIsRunning, MapPreview_InitFieldBg0, MapPreview_LoadGfx, MapPreview_StartForestTransition, mapPreviewGfxSymbols } from '../world/mapPreviewScreen';
 import { WeatherTextures } from '../world/weatherTextures';
+import { globalFieldTintMode, installQuestLogScreen, mapJascColors, type ObjPaletteKind } from '../world/questLogScreen';
+import { QuestLogWindows, questLogWindowsGfxSymbols } from '../ui/QuestLogWindows';
 import { FogHorizontal } from '../world/fogHorizontal';
 import { leagueLightingProbe, loadLeagueLightingData, registerLeagueLighting, ResetLeagueLightingTasks, setLeagueLightingHost, StopPokemonLeagueLightingEffectTask } from '../world/leagueLighting';
 import { tilesetVram } from '../world/TilesetVram';
@@ -213,6 +215,7 @@ import {
   QL_RestoreMapLayoutId,
   QL_StartPlaybackScene,
   QuestLog_AdvancePlayhead_,
+  QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode,
   QuestLogScenePlaybackIsEnding,
   questLogPlaybackActive,
   setQuestLogPlaybackHost,
@@ -284,6 +287,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private screenFade!: ScreenFade;
   /** The weather's gamma shift on the field's sprite sheets (world/weatherTextures.ts). */
   private weatherTextures!: WeatherTextures;
+  /** The quest log's playback windows (ui/QuestLogWindows.ts). */
+  private questLogWindows!: QuestLogWindows;
   /** WEATHER_FOG_HORIZONTAL's sprites (world/fogHorizontal.ts). */
   private fog!: FogHorizontal;
   /** The camera's left edge in world pixels as of the last camera update (cameraTop's counterpart). */
@@ -467,7 +472,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.setUpWeather();
     this.gbaScreen = new FieldGbaScreen(this, DEPTH_FADE + 10);
     setTransitionFieldCamera(() => this.gbaScreen.cameraPixelOffset());
-    await loadGfx([...mapTransitionGfxSymbols, ...mapPreviewGfxSymbols(), ...fieldListMenuGfxSymbols, ...helpMessageWindowGfxSymbols, ...museumFossilPicGfxSymbols, ...brailleCursorGfxSymbols, ...helpSystemGfxSymbols]);
+    await loadGfx([...mapTransitionGfxSymbols, ...mapPreviewGfxSymbols(), ...fieldListMenuGfxSymbols, ...helpMessageWindowGfxSymbols, ...questLogWindowsGfxSymbols, ...museumFossilPicGfxSymbols, ...brailleCursorGfxSymbols, ...helpSystemGfxSymbols]);
     setUserFrameTypeSource(() => this.state.optionsWindowFrameType + 1); // the options' FRAME for field windows
     this.flash = new FieldFlash(this);
     this.fonts = new Fonts(this, this.assets.fonts);
@@ -594,6 +599,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.cameras.main.startFollow(this.player.anchor, true, 1, 1, 0, CAMERA_FOLLOW_OFFSET_Y);
     setQuestLogHost(this.createQuestLogHost());
     setQuestLogPlaybackHost(this.createQuestLogPlaybackHost());
+    this.questLogWindows = new QuestLogWindows(this, this.fonts, this.buttons);
+    installQuestLogScreen(this.createQuestLogScreenHost());
 
     if (start.continueGame) {
       await this.continueSavedGame(start);
@@ -1595,6 +1602,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    */
   private async defaultWarpExit(isExit: boolean): Promise<void> {
     Overworld_PlaySpecialMapMusic();
+    QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode();
     const arrival = this.world.tileAt(this.player.tileX, this.player.tileY);
     if (this.behaviors.isDoor(arrival.behavior)) this.exitDoor(isExit);
     else this.warpFadeInScreen(isExit);
@@ -1890,8 +1898,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       this.nextArrivalWarpId = w.warpId;
       await this.enterMap(name, dest.x, dest.y, undefined, true);
       if (fromQuestLog) {
-        Overworld_PlaySpecialMapMusic(); // (the quest log's music: QL2b)
-        FieldCB2_FinalScene();
+        FieldCB2_FinalScene(); // (its FieldCB_WarpExitFadeFromBlack's music: the host's warpExitFadeFromBlack)
         return;
       }
       this.showMapNameOnWarpArrival(undefined);
@@ -1903,11 +1910,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       const name = this.assets.mapNameForId(loc.mapId) ?? start.map;
       await this.enterMap(name, loc.x, loc.y, loc.facing, false, loc);
       this.resumeMap(); // ResumeMap's RunOnResumeMapScript, ReloadObjectsAndRunReturnToFieldMapScript
-      Overworld_PlaySpecialMapMusic();
       if (fromQuestLog) {
-        FieldCB2_FinalScene();
+        FieldCB2_FinalScene(); // (its FieldCB_WarpExitFadeFromBlack's music: the host's warpExitFadeFromBlack)
         return;
       }
+      Overworld_PlaySpecialMapMusic();
       // FieldCB_ShowMapNameOnContinue, then FieldCB_WarpExitFadeFromBlack → SetUpWarpExitTask(TRUE): FadeInFromBlack
       if (this.world.current.data.showMapName) this.showMapNamePopup();
       this.warpFadeInScreen(false);
@@ -1943,7 +1950,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       fadeScreenToBlack: (delay) => this.screenFade.begin(this.defines.require('FADE_TO_BLACK'), delay),
       paletteFadeActive: () => this.screenFade.active,
       warpExitFadeFromBlack: () => {
-        // FieldCB_WarpExitFadeFromBlack: LockPlayerFieldControls, FadeInFromBlack, Task_ExitNonDoor unlocks after it
+        // FieldCB_WarpExitFadeFromBlack: the music (stopped: gDisableMapMusicChangeOnMapLoad is still STOP),
+        // LockPlayerFieldControls, FadeInFromBlack, Task_ExitNonDoor unlocks after it
+        Overworld_PlaySpecialMapMusic();
+        QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode();
         this.qlLock();
         this.warpFadeInScreen(false);
         this.overlay = {
@@ -1966,6 +1976,56 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       showMapNamePopup: () => this.showMapNamePopup(),
       newKeys: () => ({ a: this.buttons.pressed('A'), b: this.buttons.pressed('B') }),
     };
+  }
+
+  /**
+   * What the playback's screen asks of the field (world/questLogScreen.ts): the tint on the field's palette path (the
+   * current map's BG palettes 0-12 through tilesetVram, the sprite sheets through WeatherTextures), the backup and
+   * the restore, and the windows.
+   */
+  private createQuestLogScreenHost() {
+    const pair = () => this.assets.tilesetPair(this.world.current.data.tilesetPair);
+    /** gPlttBufferUnfaded's OBJ colours as QL_SlightlyDarkenSomePals left them (for the end's CpuCopy16). */
+    let objUnfaded: ((kind: ObjPaletteKind, c: number) => number) | undefined;
+    return {
+      setFieldPaletteTint: (tint: ((c: number) => number) | undefined, backup: boolean) => {
+        tilesetVram.setBgPaletteTint(tint && ((colors) => mapJascColors(colors, tint)), backup, () => {
+          if (this.world.current) tilesetVram.makeAtlasesLive(this.textures, pair());
+        });
+        this.weatherTextures.setTint(tint); // (the sheets keep their colours as loaded: the backup)
+      },
+      setFieldPalettesUnfadedFromBackup: (map?: { bg: (c: number) => number; obj: (kind: ObjPaletteKind, c: number) => number }) => {
+        if (map) {
+          for (let slot = 0; slot < 13; slot++) {
+            const backup = tilesetVram.bgPaletteBackup(pair(), slot);
+            if (backup) tilesetVram.setBgPaletteUnfaded(pair(), slot, mapJascColors(backup, map.bg));
+          }
+          objUnfaded = map.obj;
+          this.weatherTextures.setUnfaded(map.obj);
+          return;
+        }
+        tilesetVram.restoreBgPaletteBackups();
+        // The sheets' unfaded colours are the backup again; what they show (RestoreScreenAfterPlayback's last frame,
+        // CopyPaletteInvertedTint with tone 0: gPlttBufferUnfaded as QL_SlightlyDarkenSomePals left it) stays
+        const shown = objUnfaded;
+        objUnfaded = undefined;
+        this.weatherTextures.setUnfaded(undefined);
+        this.weatherTextures.setFaded(shown);
+      },
+      setFieldPalettesFaded: (f: (c: number) => number) => {
+        for (let slot = 0; slot < 13; slot++) {
+          const unfaded = tilesetVram.bgPaletteUnfaded(pair(), slot);
+          if (unfaded) tilesetVram.loadBgPaletteFaded(this.textures, pair(), slot, mapJascColors(unfaded, f));
+        }
+        this.weatherTextures.setFaded((_kind, c) => f(c));
+      },
+      windows: this.questLogWindows,
+    };
+  }
+
+  /** Dev: the playback's screen for `__test.questLogScreen()`. */
+  testQuestLogScreen() {
+    return { tintMode: globalFieldTintMode(), musicDisabled: gDisableMapMusicChangeOnMapLoad, windows: this.questLogWindows.probe() };
   }
 
   /**
@@ -2020,8 +2080,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }
     const { x, y } = this.player.current; // PlayerGetDestCoords
     QL_TryStopSurfing(this.behaviors.isSurfable(this.world.tileAt(x, y).behavior));
-    // FieldCB2_QuestLogStartPlaybackWithWarpExit / _StandingInPlace
+    // FieldCB2_QuestLogStartPlaybackWithWarpExit / _StandingInPlace, then FieldCB_DefaultWarpExit /
+    // FieldCB_WarpExitFadeFromBlack: the music (stopped in playback) and the header
     QL_StartPlaybackScene();
+    Overworld_PlaySpecialMapMusic();
+    QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode();
     if (isWarp && this.behaviors.isDoor(this.world.tileAt(x, y).behavior)) {
       this.exitDoor(false); // FieldCB_DefaultWarpExit
     } else {

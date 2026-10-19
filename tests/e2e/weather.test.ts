@@ -130,7 +130,8 @@ test('a Tanoby chamber darkens through EventScript_TryDarkenRuins (its header sa
   await game.waitFor((t) => t.field()?.map === 'SevenIsland_TanobyRuins' && t.idle(), { what: 'the ruins' });
   await game.eval((t) => t.state!.setFlag('FLAG_SYS_UNLOCKED_TANOBY_RUINS'));
   expect(await game.eval((t) => [t.field()!.x, t.field()!.y]), 'back on the chamber entrance').toEqual([120, 10]);
-  await game.walk('down');
+  // (once, under load, the walk back up never reached the chamber: check the step down took)
+  expect(await game.walk('down'), 'a step off the entrance').toMatchObject({ x: 120, y: 11, arrived: true });
   await warp(game, 'up', 'SevenIsland_TanobyRuins_MoneanChamber');
   const lit = await probe(game);
   expect(lit.savedWeather).toBe(WEATHER_NONE);
@@ -278,16 +279,20 @@ test('Pokémon Tower 3F is fogged: the sprites blend (12, 8) over the field and 
   const before = await game.eval((t) => ({ w: t.weather()!, fog: t.fog()! }));
   expect(await game.walk('up'), 'a step up').toMatchObject({ x: 5, y: 9, arrived: true });
   await game.waitIdle();
-  const up = await game.eval((t) => ({ w: t.weather()!, fog: t.fog()! }));
+  const up = await game.eval((t) => ({ w: t.weather()!, fog: t.fog()!, frame: t.frame() }));
   expect(up.fog.spriteCoordOffset.y - before.fog.spriteCoordOffset.y).toBe(16);
   expect((up.fog.sprites[0].y - before.fog.sprites[0].y) & 0xff, 'the rows 16 pixels down').toBe(16);
   expect(await game.walk('left'), 'a step left').toMatchObject({ x: 4, y: 9, arrived: true });
   await game.waitIdle();
-  const left = await game.eval((t) => ({ w: t.weather()!, fog: t.fog()! }));
+  const left = await game.eval((t) => ({ w: t.weather()!, fog: t.fog()!, frame: t.frame() }));
   expect(left.fog.spriteCoordOffset.x - up.fog.spriteCoordOffset.x).toBe(16);
   const moved = (left.w.fogHScrollPosX! - up.w.fogHScrollPosX!) & 0xff;
-  expect(moved, 'the camera scroll less a few frames of drift').toBeLessThanOrEqual(16);
-  expect(moved).toBeGreaterThanOrEqual(16 - 30);
+  // The drift is a pixel every 4 frames, however many frames the step and waitIdle took (a loaded machine
+  // takes more: a race when this allowed a fixed 30 pixels)
+  const stepFrames = left.frame - up.frame;
+  const drift = (16 - moved) & 0xff;
+  expect(drift, `the camera scroll less ${stepFrames} frames of drift`).toBeGreaterThanOrEqual(Math.floor(stepFrames / 4) - 1);
+  expect(drift).toBeLessThanOrEqual(Math.ceil(stepFrames / 4) + 1);
   expect(left.fog.sprites.map((s) => (s.x - left.w.fogHScrollPosX! + 512) % 64), 'the columns 64 pixels apart from fogHScrollPosX').toEqual(Array(20).fill(0));
   await game.walk('right');
   await game.walk('down');

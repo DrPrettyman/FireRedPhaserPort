@@ -666,6 +666,13 @@ export function GetCurrentWeather(): number {
   return sWeather.currWeather;
 }
 
+/** SlightlyDarkenPalsInWeather's switch (the quest log's QL_SlightlyDarkenSomePals): the weathers that darken. */
+export function WeatherSlightlyDarkensPals(): boolean {
+  return ['WEATHER_RAIN', 'WEATHER_SNOW', 'WEATHER_RAIN_THUNDERSTORM', 'WEATHER_SHADE', 'WEATHER_DOWNPOUR'].some(
+    (w) => sWeather.currWeather === define(w),
+  );
+}
+
 /** IsWeatherChangeComplete */
 export function IsWeatherChangeComplete(): boolean {
   return sWeather.weatherChangeComplete;

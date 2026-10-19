@@ -6,16 +6,18 @@
 // (QuestLog_StartFinalScene's LoadGameSave), so nothing playback changed survives, and hands the field back
 // (Task_FinalScene_WaitFade ... Task_EndQuestLog).
 //
-// The screen is QL2b's: the tints (gGlobalFieldTintMode), the top and bottom bars, the description window, the
-// texts and the music. Each C function that draws has its seam below (`questLogScreen`), empty until then; the
-// timings they drive (GetQuestLogTextDisplayDuration, RestoreScreenAfterPlayback's 16 frames) run already.
+// The screen (the tints, the top and bottom bars, the description window, the texts and the music) is
+// world/questLogScreen.ts: each C function that draws has its seam below (`questLogScreen`), which it fills in
+// (installQuestLogScreen; unit tests run without it).
 //
 // No Phaser here: OverworldScene implements QuestLogPlaybackHost (the map loads, the fades, the controls, the tasks).
 
 import { K } from '../battle/constants';
 import { ClearPCItemSlots } from '../state/pcItems';
 import { boxMonFromMon } from '../state/PokemonStorage';
+import { EOS, gStringVar4 } from '../menus/common';
 import type { GameState } from '../state/GameState';
+import { CHAR_NEWLINE } from '../text/charmap';
 import { HelpSystem_Disable, HelpSystem_Enable } from '../ui/helpSystemContext';
 import { HandleEnforcedLookDirectionOnPlayerStopMoving, StopPlayerAvatar } from './playerAvatar';
 import {
@@ -60,8 +62,6 @@ let sPlaybackControl = emptyPlaybackControl();
 let sNumScenes = 0;
 /** From TryStartQuestLogPlayback to Task_EndQuestLog's last step: the field isn't the player's. */
 let sPlaybackActive = false;
-/** gStringVar4 as the event loaders (QL2b / QL3) leave it: what GetQuestLogTextDisplayDuration counts. */
-let sDescriptionText = '';
 
 /** What quest_log.c's playback asks of the field. OverworldScene implements it. */
 export interface QuestLogPlaybackHost {
@@ -115,11 +115,11 @@ function state(): GameState {
   return h.state;
 }
 
-// ------------------------------------------------------------------ QL2b's seams (the screen)
+// ------------------------------------------------------------------ the screen's seams
 
 /**
- * The C functions that draw the playback's screen and play its music. QL2b fills them in; until then they only
- * note the call (for tests: `questLogPlaybackDebugState().screenCalls`).
+ * The C functions that draw the playback's screen and play its music: world/questLogScreen.ts fills them in. Each call
+ * is noted too (for tests: `questLogPlaybackDebugState().screenCalls`).
  */
 export const questLogScreen = {
   /** gGlobalFieldTintMode = mode (QL_TINT_*): CB2_SetUpOverworldForQLPlayback* GRAYSCALE, CB2_EnterFieldFromQuestLog BACKUP_GRAYSCALE, Task_EndQuestLog NONE */
@@ -127,7 +127,7 @@ export const questLogScreen = {
   /** DrawPreviouslyOnQuestHeader(sceneNum): the top and bottom bars, "Previously on your quest…" and the scene number */
   drawPreviouslyOnQuestHeader: (_sceneNum: number): void => {},
   /** DrawSceneDescription: gStringVar4 in the description window */
-  drawSceneDescription: (_text: string): void => {},
+  drawSceneDescription: (): void => {},
   /** QuestLog_CloseTextWindow */
   closeTextWindow: (): void => {},
   /** Task_QuestLogScene_SavedGame: "<player> saved the game at <place>." (gText_QuestLog_SavedGameAtLocation) */
@@ -136,10 +136,14 @@ export const questLogScreen = {
   beginEnd: (): void => {},
   /** RestoreScreenAfterPlayback's frame `timer` (0-15): the bars scroll off, the tint fades */
   restoreScreenAfterPlayback: (_timer: number): void => {},
-  /** Task_EndQuestLog's last step: the windows removed, sPalettesBackup back into gPlttBufferUnfaded */
+  /** Task_EndQuestLog's case 1, after RestoreScreenAfterPlayback: ClearWindowTilemap / RemoveWindow for the three windows */
+  removeWindows: (): void => {},
+  /** Task_EndQuestLog's last step: sPalettesBackup back into gPlttBufferUnfaded */
   finishEnd: (): void => {},
   /** Task_BeginQuestLogPlayback: gDisableMapMusicChangeOnMapLoad = 1 */
   disableMapMusicChange: (): void => {},
+  /** A new game or a soft reset: gGlobalFieldTintMode and the windows as at boot */
+  reset: (): void => {},
 };
 
 const sScreenCalls: string[] = [];
@@ -148,11 +152,6 @@ function screen<Kk extends keyof typeof questLogScreen>(name: Kk, ...args: Param
   sScreenCalls.push(name);
   if (sScreenCalls.length > 64) sScreenCalls.shift();
   (questLogScreen[name] as (...a: unknown[]) => void)(...args);
-}
-
-/** gStringVar4 for GetQuestLogTextDisplayDuration and DrawSceneDescription (the event loaders set it: QL2b / QL3). */
-export function setQuestLogDescriptionText(text: string): void {
-  sDescriptionText = text;
 }
 
 // ------------------------------------------------------------------ starting
@@ -359,14 +358,15 @@ function HandleShowQuestLogMessage(): void {
     sPlaybackControl.timer = GetQuestLogTextDisplayDuration();
     if (gQuestLogRepeatEventTracker.counter === 0) sPlaybackControl.cursor++;
     if (sPlaybackControl.cursor > QUEST_LOG_EVENT_DATA_COUNT) return;
-    screen('drawSceneDescription', sDescriptionText); // DrawSceneDescription
+    screen('drawSceneDescription'); // DrawSceneDescription: gStringVar4, as the event's loader left it
   }
   TogglePlaybackStateForOverworldLock(1);
 }
 
 /** GetQuestLogTextDisplayDuration: by gStringVar4's length (newlines not counted). */
-export function GetQuestLogTextDisplayDuration(text = sDescriptionText): number {
-  const count = [...text.slice(0, 0x400)].filter((c) => c !== '\n').length;
+export function GetQuestLogTextDisplayDuration(text: readonly number[] = gStringVar4): number {
+  let count = 0;
+  for (let i = 0; i < 0x400 && i < text.length && text[i] !== EOS; i++) if (text[i] !== CHAR_NEWLINE) count++;
   if (count < 20) return 0x5f;
   if (count < 36) return 0x7f;
   if (count < 46) return 0xbf;
@@ -544,7 +544,7 @@ function Task_WaitAtEndOfQuestLog(): () => boolean {
 }
 
 /**
- * Task_EndQuestLog: the music and the palettes (QL2b), the bars scrolled off over 16 frames, 32 frames more, then
+ * Task_EndQuestLog: the music and the palettes (questLogScreen.ts), the bars scrolled off over 16 frames, 32 frames more, then
  * the field is the player's: the map name (after B), the controls, wild encounters and the help system back.
  */
 function Task_EndQuestLog(): () => boolean {
@@ -558,6 +558,7 @@ function Task_EndQuestLog(): () => boolean {
         return false;
       case 1:
         if (RestoreScreenAfterPlayback(tTimer)) {
+          screen('removeWindows');
           tTimer = 0;
           tState++;
         } else {
@@ -584,7 +585,7 @@ function Task_EndQuestLog(): () => boolean {
   };
 }
 
-/** RestoreScreenAfterPlayback: 16 frames (the bars and the tint are QL2b's); true after them. */
+/** RestoreScreenAfterPlayback: 16 frames (the bars scroll off, the tint fades: questLogScreen.ts); true after them. */
 function RestoreScreenAfterPlayback(timer: number): boolean {
   if (timer > 15) return true;
   screen('restoreScreenAfterPlayback', timer);
@@ -610,6 +611,7 @@ export function questLogPlaybackDebugState() {
 
 /** A new game or a soft reset: nothing is playing. */
 export function QL_ResetPlayback(): void {
+  questLogScreen.reset();
   sPlaybackControl = emptyPlaybackControl();
   sNumScenes = 0;
   sPlaybackActive = false;

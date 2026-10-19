@@ -9,7 +9,9 @@
 // (loaded by the battle unit tests) calls StopPokemonLeagueLightingEffectTask.
 
 import { state } from '../battle/env';
+import { K } from '../battle/constants';
 import { registerSpecials } from '../script/specials';
+import { globalFieldTintMode, mapJascColors, tintForMode } from './questLogScreen';
 
 /** public/gen/leagueLighting.json (tools/extract_field.py extract_league_lighting) */
 interface LeagueLightingData {
@@ -68,9 +70,13 @@ function inChampionsRoom(): boolean {
   return state.currentMapId === MAP_POKEMON_LEAGUE_CHAMPIONS_ROOM;
 }
 
-/** LoadPalette(pal, BG_PLTT_ID(7), PLTT_SIZE_4BPP) + ApplyGlobalTintToPaletteSlot(7, 1) (no quest log tints: QL_TINT_NONE). */
+/**
+ * LoadPalette(pal, BG_PLTT_ID(7), PLTT_SIZE_4BPP) + ApplyGlobalTintToPaletteSlot(7, 1): the quest log's tint on it
+ * (its backup in BACKUP_GRAYSCALE is the tileset's palette, which the lighting replaces again on its next step).
+ */
 function loadLightingPalette(pal: number[]): void {
-  host?.loadBgPalette(LIGHTING_PALETTE, pal);
+  const tint = tintForMode(globalFieldTintMode());
+  host?.loadBgPalette(LIGHTING_PALETTE, tint ? mapJascColors(pal, tint) : pal);
 }
 
 function CreateTask(func: LightingFunc): LightingTask {
@@ -109,8 +115,13 @@ export function DoPokemonLeagueLightingEffect(): void {
 /** Task_RunPokemonLeagueLightingEffect: the next palette each time the timer runs out, while FLAG_TEMP_2 is set. */
 function Task_RunPokemonLeagueLightingEffect(task: LightingTask): void {
   const d = task.data;
-  // gGlobalFieldTintMode is never QL_TINT_BACKUP_GRAYSCALE (no quest log)
-  if (!host?.paletteFadeActive() && state.getFlag('FLAG_TEMP_2') && !state.getFlag('FLAG_TEMP_5') && --d[0] === 0) {
+  if (
+    !host?.paletteFadeActive() &&
+    state.getFlag('FLAG_TEMP_2') &&
+    !state.getFlag('FLAG_TEMP_5') &&
+    globalFieldTintMode() !== K.QL_TINT_BACKUP_GRAYSCALE &&
+    --d[0] === 0
+  ) {
     if (++d[1] === d[2]) d[1] = 0;
     if (inChampionsRoom()) {
       d[0] = data!.championRoomTimers[d[1]];

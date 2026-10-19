@@ -780,16 +780,38 @@ this is the next level down. When you add or change a subsystem, update its entr
     Task_WaitAtEndOfQuestLog (gQuestLogState 0) → Task_EndQuestLog (the controls, wild encounters, the help system
     back). TryRunOnFrameMapScript is skipped in PLAYBACK_LAST. The quest log's Lock/UnlockPlayerFieldControls is a
     flag held as one count of `controlsLocked` (qlLock / qlUnlock).
-  - **QL2b's seams:** `questLogScreen` in questLogPlayback.ts (setGlobalFieldTintMode, drawPreviouslyOnQuestHeader,
-    drawSceneDescription, closeTextWindow, drawSavedGameText, beginEnd, restoreScreenAfterPlayback(timer),
-    finishEnd, disableMapMusicChange): assign them; `setQuestLogDescriptionText` is gStringVar4 for the event
-    loaders (GetQuestLogTextDisplayDuration counts it); `questLogScenesLeft()` is DrawPreviouslyOnQuestHeader's
-    number; QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode is there for QL5's field effects.
+  - **The screen (QL2b):** `world/questLogScreen.ts` (no Phaser) fills `questLogScreen`'s seams in
+    questLogPlayback.ts (`installQuestLogScreen(host)` from OverworldScene's create; unit tests run without it).
+    gGlobalFieldTintMode (`globalFieldTintMode()`, `tintForMode`) and palette.c's TintPalette_GrayScale / _SepiaTone /
+    CopyPaletteInvertedTint and SlightlyDarkenPalsInWeather's blend are BGR555 functions (`mapJascColors` runs them
+    on palettes.json's flat JASC palettes). The host puts the tint on the field's palette path: the map's BG palettes
+    through `tilesetVram.setBgPaletteTint` (resetBgPalettes = LoadMapTilesetPalettes then tints gPlttBufferUnfaded and
+    the shown palettes and, for BACKUP_GRAYSCALE, keeps the untinted ones as the backup; `bgPaletteBackup`,
+    `setBgPaletteUnfaded`, `restoreBgPaletteBackups`), the object and field effect sheets through WeatherTextures
+    (`setTint` before the gamma table; `setUnfaded` / `setFaded` for QL_SlightlyDarkenSomePals and
+    RestoreScreenAfterPlayback's writes; the weather's next gamma shift or map load drops them). The league
+    lighting's palette loads take the tint too. The windows are `ui/QuestLogWindows.ts` (sWindowTemplates as
+    TextWindows in GetTextWindowPalette(4) under the screen fade; sDescriptionWindow_Gfx from tools/extract_gfx.py's
+    `graphics/quest_log/`): DrawPreviouslyOnQuestHeader (also from the scene loads' and the final scene's warp exits,
+    FieldCB_DefaultWarpExit and the fall / Teleport / Escape Rope warp-ins:
+    QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode), DrawSceneDescription (gStringVar4, which the event
+    loaders fill and GetQuestLogTextDisplayDuration counts), QuestLog_CloseTextWindow, "saved the game at", the bars
+    cleared a row a frame. The music: gDisableMapMusicChangeOnMapLoad = MUSIC_DISABLE_STOP from
+    Task_BeginQuestLogPlayback (the warp exits' Overworld_PlaySpecialMapMusic stops it; PlaySE is quiet) to
+    Task_EndQuestLog, which plays the map's music. The DEPARTED / ARRIVED lines are questLogEvents.ts' loaders
+    (sLocationNameTexts, sLocationToDepartedTextId, sDepartedLocationTexts, sGymCityMapSecs in questLog.json).
+    `CommitQuestLogWindow1` is exported for QL5's message box; QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode for
+    any other warp exit.
   - **Tests:** tests/unit/questLog.test.ts ("playback": the actions at their recorded frames, the NPC by local id,
     the input; locked controls hold them), tests/e2e/questLog.test.ts (two scenes recorded in Pallet Town, then
     CONTINUE: each scene's flags / empty bag / placeholder Rattata, the player and NPCs end where they were
-    recorded, the field afterwards equals the save; A and B). Probes: `__test.questLog().playback` (active,
-    numScenes, sPlaybackControl, the seam calls), `__test.field().questLogPlayback` (and `idle()` waits for the end).
+    recorded, the field afterwards equals the save; A and B; the screen: the grey palettes and sheets against
+    TintPalette_GrayScale, the header's scene numbers, each event line's frames, "saved the game at", the 16 frames
+    back to colour, the music), tests/unit/questLogScreen.test.ts (the tints' arithmetic, GetQuestLogTextDisplayDuration,
+    the DEPARTED / ARRIVED lines). Probes: `__test.questLog().playback` (active, numScenes, sPlaybackControl, the seam
+    calls), `__test.questLogScreen()` (the tint mode, the music flag, the windows: added, shown, text),
+    `__test.weather(slot, colorIndex, sheet)` (a palette unfaded / shown, a sheet's pixel), `__test.field().questLogPlayback`
+    (and `idle()` waits for the end).
 
 ## GBA screens and menus
 

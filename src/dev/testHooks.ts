@@ -347,6 +347,7 @@ interface OverworldLike extends Phaser.Scene {
     pixel: { rgb: number[]; colorIndex: number } | undefined;
   };
   testSSAnne(): SSAnneProbe | undefined;
+  testQuestLogScreen(): { tintMode: number; musicDisabled: number; windows: { added: boolean; shown: boolean; text?: number[] }[] };
   testWeather(slot?: number, colorIndex?: number, texture?: string): WeatherProbe & {
     unfaded: number[] | undefined;
     palette: number[] | undefined;
@@ -818,6 +819,14 @@ function createApi(game: Phaser.Game) {
      * position, the active objects and the command stream up to its SCENE_END).
      */
     questLog: () => ({ ...questLogTestProbe(requireState()), playback: questLogPlaybackDebugState() }),
+    /**
+     * The quest log's playback screen (world/questLogScreen.ts): gGlobalFieldTintMode, gDisableMapMusicChangeOnMapLoad
+     * and the three windows (top bar, bottom bar, description: added, shown, the text printed last).
+     */
+    questLogScreen: () => {
+      const s = overworld()?.testQuestLogScreen();
+      return s && { ...s, windows: s.windows.map((w) => ({ ...w, text: w.text && decode(w.text) })) };
+    },
     /** SetQuestLogEvent(QL_EVENT_* name, data): an event as the C's call sites (QL3-QL4) would send it. */
     questLogEvent: (event: string, data: Record<string, unknown> | null) => SetQuestLogEvent(define(event), data),
     /** The line scene `scene`'s first QL_EVENT_* `event` plays back (its LoadEvent_*'s gStringVar4), or null. */
