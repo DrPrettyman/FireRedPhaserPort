@@ -30,6 +30,8 @@ import { POSTGAME_SPECIALS } from './postgameSpecials';
 import { EVENT_ISLAND_SPECIALS } from './eventIslandSpecials';
 import { TRAINER_TOWER_SPECIALS } from './trainerTowerSpecials';
 import * as Help from '../ui/helpSystemContext';
+import { GetQuestLogState, QuestLog_CutRecording } from '../world/questLog';
+import { QuestLog_StartRecordingInputsAfterDeferredEvent } from '../world/questLogEvents';
 import { SetFlavorTextFlagFromSpecialVars, UpdatePickStateFromSpecialVar8005 } from '../state/fameChecker';
 
 export interface SpecialEnv {
@@ -71,7 +73,6 @@ export type Special = (env: SpecialEnv) => number | void;
 
 /** Specials with no effect yet because the system they feed (quest log) doesn't exist. */
 const NO_OP = [
-  'QuestLog_CutRecording', // quest log
   'InitUnionRoom', // wireless only (and stubbed out from REVISION 0xA): CableClub_OnResume in every Pokémon Center
   'CloseLink', // link play: nothing was opened (TryBattleLinkup below never connects)
 ];
@@ -488,7 +489,17 @@ export const SPECIALS: Record<string, Special> = {
    * (QL_STATE_PLAYBACK) sent EventScript_DoNoIntroTrainerBattle to EventScript_EndQuestLogBattle (Giovanni).
    */
   GetQuestLogState({ state }) {
-    state.setVar('VAR_RESULT', 0);
+    GetQuestLogState(state);
+  },
+
+  /** QuestLog_CutRecording (quest_log.c): the scene being recorded ends here (world/questLog.ts). */
+  QuestLog_CutRecording() {
+    QuestLog_CutRecording();
+  },
+
+  /** QuestLog_StartRecordingInputsAfterDeferredEvent: a link event's scene, back from the cable club (none until link play). */
+  QuestLog_StartRecordingInputsAfterDeferredEvent() {
+    QuestLog_StartRecordingInputsAfterDeferredEvent();
   },
 
   /** EnableNationalPokedex */
@@ -535,6 +546,7 @@ export const SPECIALS: Record<string, Special> = {
 
   /** ShowTownMap (field_specials.c): the wall map, back through CB2_ReturnToFieldContinueScriptPlayMapMusic. */
   ShowTownMap({ host, setWaitState }) {
+    QuestLog_CutRecording();
     setWaitState(host.showTownMap());
   },
 

@@ -4,7 +4,7 @@
 // type's textpals; colours 10 / 11 of BG palette 0 the player's gender colours (sGenderPals). Bead and Dream Mail
 // show the mon's icon (MailSpeciesToIconSpecies). A or B fades out back to `savedCallback`.
 // Callers: the party menu's MAIL → READ (CB2_ReadHeldMail), the bag's CHECK on a mail item (FieldUseFunc_Mail: a
-// blank mail, no message); the PC mailbox's READ is W-mail unit 2.
+// blank mail, no message), the player's PC mailbox's READ (ui/PlayerPcMenu.ts: Task_WaitFadeAndReadSelectedMail).
 
 import { K } from '../battle/constants';
 import { state } from '../battle/env';
@@ -392,13 +392,13 @@ function CB2_InitMailView(): void {
   } while (MenuHelpers_IsLinkActive());
 }
 
-function StringLength(str: readonly number[]): number {
+export function StringLength(str: readonly number[]): number {
   const i = str.indexOf(EOS);
   return i < 0 ? str.length : i;
 }
 
 /** ConvertInternationalString (string_util.c): a Japanese string wrapped in {JPN} ... {ENG} (EXT_CTRL_CODE_JPN / _ENG). */
-function ConvertInternationalString(s: number[], language: number): number[] {
+export function ConvertInternationalString(s: number[], language: number): number[] {
   if (language !== K.LANGUAGE_JAPANESE) return s;
   const body = StripExtCtrlCodes(s);
   return [0xfc, 21, ...body, 0xfc, 22, EOS];

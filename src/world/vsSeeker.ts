@@ -23,6 +23,7 @@ import { registerSpecials } from '../script/specials';
 import { MovementRunner, type Instruction } from '../script/MovementRunner';
 import { random } from '../util/random';
 import type { Direction } from './direction';
+import { QuestLogRecordUseVsSeeker } from './questLogPlayer';
 import { FieldEffectActiveListContains, FieldEffectActiveListRemove, FieldEffectStart, registerFieldEffectNatives } from './fieldEffectScripts';
 import { DisplayItemMessageOnField, fieldItemsHost } from './fieldItems';
 import { CreateTask, fieldMoveHost, LockPlayerFieldControls, UnlockPlayerFieldControls } from './fieldMoves';
@@ -540,8 +541,9 @@ function StartAllRespondantIdleMovements(): void {
 /** gSprites[gPlayerAvatar.spriteId]'s anim state while it shows the VS Seeker graphics. */
 let sPlayerAnim: SpriteAnim | undefined;
 
-/** FldEff_UseVsSeeker (QuestLogRecordPlayerAvatarGfxTransitionWithDuration: no quest log) */
+/** FldEff_UseVsSeeker */
 function FldEff_UseVsSeeker(): number {
+  QuestLogRecordUseVsSeeker(); // QuestLogRecordPlayerAvatarGfxTransitionWithDuration(QL_PLAYER_GFX_VSSEEKER, 89) while recording
   const task = { state: 0, done: false };
   CreateTask(() => {
     sUseVsSeekerEffectFuncs[task.state](task);

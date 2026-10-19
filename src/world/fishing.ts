@@ -41,6 +41,8 @@ import {
   TestPlayerAvatarFlags,
 } from './playerAvatar';
 import { IsPlayerFacingSurfableFishableWater, PlayerSurfBlob, SetSurfBlob_PlayerOffset } from './surf';
+import { QL_AfterRecordFishActionSuccessful } from './questLog';
+import { QL_PLAYER_GFX_FISH, QuestLogTryRecordPlayerAvatarGfxTransition } from './questLogPlayer';
 
 // ------------------------------------------------------------------ item_use.c
 
@@ -191,7 +193,8 @@ export function StartFishing(rod: number): void {
   };
   sTask = task;
   testEvent('fishing', { rod });
-  Task_Fishing(task); // (QuestLogTryRecordPlayerAvatarGfxTransition: no quest log)
+  Task_Fishing(task);
+  if (QuestLogTryRecordPlayerAvatarGfxTransition(QL_PLAYER_GFX_FISH)) QL_AfterRecordFishActionSuccessful();
   CreateTask(() => {
     if (!task.destroyed) Task_Fishing(task);
     // AnimateSprites, after the tasks: the player's sprite runs its anim once more and is drawn

@@ -29,8 +29,14 @@ export interface Mail {
   itemId: number;
 }
 
-/** gPlayerPcMenuManager.notInRoom (player_pc.c, EWRAM): set by the player's PC, read by ReadMail's help context. */
-export const gPlayerPcMenuManager = { notInRoom: false };
+/**
+ * gPlayerPcMenuManager (player_pc.c's struct PlayerPCItemPageStruct, EWRAM): `notInRoom` is set by the player's PC
+ * and read by ReadMail's help context; the mailbox keeps its list here: `cursorPos` (the list's scroll offset) and
+ * `itemsAbove` (the cursor's row) as ListMenuGetScrollAndRow leaves them (the selected mail is PC slot
+ * cursorPos + itemsAbove: SELECTED_MAIL, and party_menu.c's TryGiveMailToSelectedMon), `count` the mails in the
+ * PC (CountPCMail) and `pageItems` the rows shown (Task_SetPageItemVars).
+ */
+export const gPlayerPcMenuManager = { itemsAbove: 0, cursorPos: 0, pageItems: 0, count: 0, notInRoom: false };
 
 function isMailItem(d: Defines, itemId: number): boolean {
   return itemId >= d.require('ITEM_ORANGE_MAIL') && itemId <= d.require('ITEM_RETRO_MAIL');
@@ -164,4 +170,39 @@ export function TakeMailFromMon2(state: GameState, mon: Pokemon): number {
     return i;
   }
   return 0xff;
+}
+
+// ------------------------------------------------------------------ player_pc.c's mailbox data
+
+/** PC_MAIL_NUM(i): the mail slot of the mailbox's i-th mail (after the party's PARTY_SIZE). */
+export function PC_MAIL_NUM(d: Defines, i: number): number {
+  return d.require('PARTY_SIZE') + i;
+}
+
+/** CountPCMail (player_pc.c): the mailbox's slots holding a mail. */
+export function CountPCMail(state: Pick<GameState, 'defines' | 'mail'>): number {
+  const d = state.defines;
+  let count = 0;
+  for (let i = PC_MAIL_NUM(d, 0); i < d.require('MAIL_COUNT'); i++) if (state.mail[i].itemId !== d.require('ITEM_NONE')) count++;
+  return count & 0xff;
+}
+
+/** PCMailCompaction (player_pc.c): the mailbox's mails moved to its first slots, in order (the C's swap loop). */
+export function PCMailCompaction(state: Pick<GameState, 'defines' | 'mail'>): void {
+  const d = state.defines;
+  const count = d.require('MAIL_COUNT');
+  for (let i = PC_MAIL_NUM(d, 0); i < count - 1; i++) {
+    for (let j = i + 1; j < count; j++) {
+      if (state.mail[i].itemId === d.require('ITEM_NONE')) {
+        const mail = state.mail[i];
+        state.mail[i] = state.mail[j];
+        state.mail[j] = mail;
+      }
+    }
+  }
+}
+
+/** SELECTED_MAIL (player_pc.c): the mailbox's mail under the list's cursor. */
+export function selectedPcMail(state: Pick<GameState, 'defines' | 'mail'>): Mail {
+  return state.mail[PC_MAIL_NUM(state.defines, gPlayerPcMenuManager.cursorPos) + gPlayerPcMenuManager.itemsAbove];
 }

@@ -12,6 +12,7 @@ import { InitEasyChatPhrases, InitQuestionnaireWords } from '../menus/easyChatDa
 import { ClearMailData, type Mail } from '../world/mail';
 import { boxMonFromMon, boxMonRestorePP, PokemonStorage } from './PokemonStorage';
 import { newTrainerTowerRecord, ResetTrainerTowerResults, type TrainerTowerRecord } from './trainerTowerRecord';
+import { emptyQuestLogScenes, type QuestLogScene } from '../world/questLog';
 import { newFameCheckerSaveData, ResetFameChecker, type FameCheckerSaveData } from './fameChecker';
 
 /**
@@ -140,6 +141,8 @@ export class GameState {
   towerChallengeId = 0;
   /** gSaveBlock1Ptr->trainerTower[NUM_TOWER_CHALLENGE_TYPES] (world/trainerTower.ts); ResetTrainerTowerResults in the constructor. */
   trainerTower: TrainerTowerRecord[] = [];
+  /** gSaveBlock1Ptr->questLog[QUEST_LOG_SCENE_COUNT] (world/questLog.ts); ResetQuestLog zeroes them on a new game. */
+  questLog: QuestLogScene[] = emptyQuestLogScenes();
   /** gSaveBlock1Ptr->fameChecker[NUM_FAMECHECKER_PERSONS] (state/fameChecker.ts); ResetFameChecker in the constructor. */
   fameChecker: FameCheckerSaveData[] = [];
 

@@ -7,8 +7,8 @@
 //
 // Mail (W-mail): giving mail from the bag or the party menu's GIVE writes it on the Easy Chat screen
 // (EASY_CHAT_TYPE_MAIL), MAIL → READ shows it (menus/mail.ts), MAIL → TAKE sends it to the PC mailbox or loses the
-// message; the data is world/mail.ts (mail_data.c). The PC mailbox's GIVE (PARTY_ACTION_GIVE_MAILBOX_MAIL) is W-mail
-// unit 2.
+// message; the data is world/mail.ts (mail_data.c). The player's PC mailbox's GIVE (ui/PlayerPcMenu.ts) opens it with
+// ChooseMonToGiveMailFromMailbox (PARTY_ACTION_GIVE_MAILBOX_MAIL: TryGiveMailToSelectedMon).
 //
 // Not ported because their screens or systems don't exist yet: the item-use animation (pokemon_special_anim.c),
 // link/multi battles, the Union Room, minigames and the Pokédude/Teachy TV demos.
@@ -174,7 +174,7 @@ import { GetMapName, GetMapSectionOfMap } from '../world/regionMap';
 import { CB2_BagMenuFromBattle, CB2_SetUpReshowBattleScreenAfterMenu, GoToBagMenu } from './itemMenu';
 import { DoEasyChatScreen } from './easyChatScreen';
 import { ReadMail } from './mail';
-import { GetMonMailId, GiveMailToMon, newMail, TakeMailFromMon, TakeMailFromMon2 } from '../world/mail';
+import { ClearMailStruct, GetMonMailId, GiveMailToMon, GiveMailToMon2, gPlayerPcMenuManager, newMail, TakeMailFromMon, TakeMailFromMon2 } from '../world/mail';
 import { SpecialVar } from './itemMenuState';
 import { CheckIfItemIsTMHMOrEvolutionStone } from './itemUse';
 import { InitTMCase, TMCASE_KEEP_PREV, TMCASE_REOPENING } from './tmCase';
@@ -1194,8 +1194,7 @@ function HandleChooseMonSelection(taskId: number, slotPtr: SlotPtr): void {
     case K.PARTY_ACTION_GIVE_MAILBOX_MAIL:
       if (IsSelectedMonNotEgg(slotPtr.get())) {
         PlaySE(K.SE_SELECT);
-        console.warn('[party_menu] mail is not implemented');
-        Task_ClosePartyMenu(taskId);
+        TryGiveMailToSelectedMon(taskId);
       }
       break;
     case K.PARTY_ACTION_GIVE_ITEM:
@@ -2711,7 +2710,7 @@ function CursorCB_Read(taskId: number): void {
   Task_ClosePartyMenu(taskId);
 }
 
-/** CB2_ReadHeldMail (a mail item without a slot, e.g. the traded Jynx's until W-mail unit 2, reads as a blank one) */
+/** CB2_ReadHeldMail (a mail item without a slot reads as a blank one) */
 function CB2_ReadHeldMail(): void {
   const mail = state.mail[GetMonMailId(state.defines, P(gPartyMenu.slotId))] ?? newMail(state.defines);
   ReadMail(mail, CB2_ReturnToPartyMenuFromReadingMail, true);
@@ -2737,7 +2736,7 @@ function Task_SendMailToPCYesNo(taskId: number): void {
   }
 }
 
-/** Task_HandleSendMailToPCYesNoInput: YES moves the mail into the PC mailbox's slots (its screen is W-mail unit 2). */
+/** Task_HandleSendMailToPCYesNoInput: YES moves the mail into the PC mailbox's slots (TakeMailFromMon2). */
 function Task_HandleSendMailToPCYesNoInput(taskId: number): void {
   switch (Menu_ProcessInputNoWrapClearOnChoose()) {
     case 0: // Yes, send to PC
@@ -4459,6 +4458,34 @@ function UpdatePartyToFieldOrder(): void {
 function CB2_SetUpExitToBattleScreen(): void {
   CB2_SetUpReshowBattleScreenAfterMenu();
   SetMainCallback2(SetCB2ToReshowScreenAfterMenu);
+}
+
+/**
+ * ChooseMonToGiveMailFromMailbox (the player's PC mailbox's GIVE): the party menu gives the mailbox's selected mail
+ * (gPlayerPcMenuManager) to the chosen mon, then leaves through `callback` (Mailbox_ReturnToMailListAfterDeposit:
+ * CB2_ReturnToField with the mailbox's field callback, which the field host sets).
+ */
+export function ChooseMonToGiveMailFromMailbox(callback: MainCallback): void {
+  InitPartyMenu(K.PARTY_MENU_TYPE_FIELD, K.PARTY_LAYOUT_SINGLE, K.PARTY_ACTION_GIVE_MAILBOX_MAIL, false, K.PARTY_MSG_GIVE_TO_WHICH_MON, Task_HandleChooseMonInput, callback);
+}
+
+/**
+ * TryGiveMailToSelectedMon: the mailbox's selected mail (PC slot cursorPos + itemsAbove) into a party mail slot for
+ * the chosen mon (GiveMailToMon2) and cleared in the PC, or "This POKéMON is holding an item..." if it holds one.
+ */
+function TryGiveMailToSelectedMon(taskId: number): void {
+  const mon = P(gPartyMenu.slotId);
+  gPartyMenuUseExitCallback = false;
+  const mail = state.mail[gPlayerPcMenuManager.cursorPos + K.PARTY_SIZE + gPlayerPcMenuManager.itemsAbove];
+  if (mon.heldItem !== K.ITEM_NONE) {
+    DisplayPartyMenuMessage(text('gText_PkmnHoldingItemCantHoldMail'), true);
+  } else {
+    GiveMailToMon2(state, mon, mail);
+    ClearMailStruct(state.defines, mail);
+    DisplayPartyMenuMessage(text('gText_MailTransferredFromMailbox'), true);
+  }
+  ScheduleBgCopyTilemapToVram(2);
+  gTasks[taskId].func = Task_UpdateHeldItemSpriteAndClosePartyMenu;
 }
 
 export function ChooseMonForDaycare(): void {

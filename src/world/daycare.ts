@@ -2,8 +2,8 @@
 // daycare (gSaveBlock1Ptr->daycare: two mons, the pending egg's personality, the egg-cycle step counter), with
 // the level / cost helpers, ShouldEggHatch's per-step part, and eggs: the compatibility, the egg species,
 // inherited IVs and moves, CreateEgg / ScriptGiveEgg. The script specials that call these are
-// script/daycareSpecials.ts; the hatching scene is menus/eggHatch.ts. Mail isn't modelled, so DaycareMon has no
-// struct DayCareMail.
+// script/daycareSpecials.ts; the hatching scene is menus/eggHatch.ts. A mon left holding mail has the mail moved
+// into its DaycareMon (struct DayCareMail) and given back when it's taken out.
 
 import { CanMonLearnTMHM } from '../battle/items';
 import { deleteFirstMoveAndGiveMoveToMon, monTryLearningNewMove, tryIncrementMonLevel, calculateMonStats } from '../battle/pokemonBattle';
@@ -15,11 +15,27 @@ import type { Pokemon, Stat } from '../pokemon/Pokemon';
 import { random } from '../util/random';
 import type { GameState } from '../state/GameState';
 import { boxMonFromMon, boxMonRestorePP, boxMonToMon, type BoxPokemon } from '../state/PokemonStorage';
+import { GetMonMailId, GiveMailToMon2, MonHasMail, newMail, TakeMailFromMon, type Mail } from './mail';
 
-/** struct DaycareMon (without its struct DayCareMail: mail isn't modelled). */
+/**
+ * struct DayCareMail: the mail a mon was holding when it was left (`message`), the player's name (`OT_name`) and the
+ * mon's nickname (`monName`) as StorePokemonInDaycare copied them (encoded, EOS-terminated). The C's gameLanguage /
+ * monLanguage are commented out there (never set).
+ */
+export interface DayCareMail {
+  message: Mail;
+  /** PLAYER_NAME_LENGTH + 1 bytes */
+  OT_name: number[];
+  /** POKEMON_NAME_LENGTH + 1 bytes */
+  monName: number[];
+}
+
+/** struct DaycareMon */
 export interface DaycareMon {
   /** struct BoxPokemon; null = empty (SPECIES_NONE). */
   mon: BoxPokemon | null;
+  /** struct DayCareMail; absent = cleared (ClearDaycareMonMail: no mail, message.itemId ITEM_NONE). */
+  mail?: DayCareMail;
   /** u32: steps walked since it was left, one experience point each. */
   steps: number;
 }
@@ -59,12 +75,41 @@ export function countPokemonInDaycare(daycare: DayCare): number {
   return daycare.mons.filter((m) => m.mon !== null).length;
 }
 
+/** StringCopy into a fixed buffer of `size` bytes (the rest zeroed, as ClearDaycareMonMail left it). */
+function copyString(src: readonly number[], size: number): number[] {
+  const out = new Array<number>(size).fill(0);
+  let i = 0;
+  for (; i < size - 1 && i < src.length && src[i] !== 0xff; i++) out[i] = src[i];
+  out[i] = 0xff; // EOS
+  return out;
+}
+
+/** ClearDaycareMonMail: the names zeroed and the message cleared (here: no `mail`). */
+export function clearDaycareMonMail(daycareMon: DaycareMon): void {
+  delete daycareMon.mail;
+}
+
+/** The DaycareMon's mail message's item (ITEM_NONE when it holds none). */
+function daycareMailItem(daycareMon: DaycareMon): number {
+  return daycareMon.mail?.message.itemId ?? 0;
+}
+
 /**
  * StorePokemonInDaycare: party slot `monIdx` goes into `daycareMon` with its PP restored and the step count
- * reset, and leaves the party (ZeroMonData + CompactPartySlots). The mail part (MonHasMail) isn't modelled.
+ * reset, and leaves the party (ZeroMonData + CompactPartySlots). A mon holding mail (MonHasMail) has it moved into
+ * the DaycareMon's struct DayCareMail with the player's name and its nickname, and holds nothing (TakeMailFromMon).
  */
 export function storePokemonInDaycare(state: GameState, monIdx: number, daycareMon: DaycareMon): void {
   const mon = state.party[monIdx];
+  const d = state.defines;
+  if (MonHasMail(d, mon)) {
+    const mail: DayCareMail = { message: newMail(d), OT_name: [], monName: [] };
+    mail.OT_name = copyString(state.pokemon.encodeName(state.playerName), d.require('PLAYER_NAME_LENGTH') + 1);
+    mail.monName = copyString(boxMonNickname(state, mon), d.require('POKEMON_NAME_LENGTH') + 1); // DayCare_GetMonNickname
+    mail.message = structuredClone(state.mail[GetMonMailId(d, mon)]);
+    daycareMon.mail = mail;
+    TakeMailFromMon(state, mon);
+  }
   daycareMon.mon = boxMonFromMon(mon);
   boxMonRestorePP(state.pokemon, daycareMon.mon);
   daycareMon.steps = 0;
@@ -93,7 +138,8 @@ export function applyDaycareExperience(state: GameState, mon: Pokemon): void {
 /**
  * TakeSelectedPokemonFromDaycare: gStringVar1 = its nickname; the mon (BoxMonToMon: fully healed) gets one
  * experience point per step (ApplyDaycareExperience) unless it's at MAX_LEVEL, and goes into the last party slot
- * (gPlayerParty[PARTY_SIZE - 1], then CompactPartySlots: the end of the party). Returns its species.
+ * (gPlayerParty[PARTY_SIZE - 1], then CompactPartySlots: the end of the party), holding its mail again if it was
+ * left with one (GiveMailToMon2 into a party mail slot). Returns its species.
  */
 export function takeSelectedPokemonFromDaycare(state: GameState, daycareMon: DaycareMon): number {
   const boxMon = daycareMon.mon!;
@@ -107,6 +153,10 @@ export function takeSelectedPokemonFromDaycare(state: GameState, daycareMon: Day
   const partySize = state.defines.require('PARTY_SIZE');
   if (state.party.length >= partySize) state.party[partySize - 1] = pokemon;
   else state.party.push(pokemon);
+  if (daycareMailItem(daycareMon)) {
+    GiveMailToMon2(state, pokemon, daycareMon.mail!.message);
+    clearDaycareMonMail(daycareMon);
+  }
   daycareMon.mon = null; // ZeroBoxMonData
   daycareMon.steps = 0;
   return species;
@@ -118,8 +168,11 @@ export function shiftDaycareSlots(daycare: DayCare): void {
   if (second.mon !== null && first.mon === null) {
     first.mon = second.mon;
     second.mon = null;
+    if (second.mail) first.mail = second.mail;
+    else delete first.mail;
     first.steps = second.steps;
     second.steps = 0;
+    clearDaycareMonMail(second);
   }
 }
 
@@ -286,6 +339,41 @@ export function getDaycareMonNicknames(state: GameState): void {
     state.stringVars[2] = state.pokemon.encodeName(first.mon.otName);
   }
   if (second.mon !== null) state.stringVars[1] = boxMonNickname(state, second.mon);
+}
+
+/** The bytes before EOS (StringCompare compares up to it). */
+function body(str: readonly number[]): number[] {
+  const i = str.indexOf(0xff);
+  return [...(i < 0 ? str : str.slice(0, i))];
+}
+
+/**
+ * BufferDayCareMonReceivedMail: whether daycare slot `daycareId`'s mon holds mail it didn't get from the player under
+ * its present nickname (the nickname or the writer's name differs from what was stored); then gStringVar1 = its
+ * nickname, gStringVar2 = the stored OT name, gStringVar3 = the stored nickname. (The special DaycareMonReceivedMail;
+ * no FRLG script calls it.)
+ */
+export function bufferDayCareMonReceivedMail(state: GameState, daycare: DayCare, daycareId: number): boolean {
+  const daycareMon = daycare.mons[daycareId];
+  if (!daycareMon || daycareMon.mon === null) {
+    // (an empty slot's nickname is SPECIES_NONE's; its mail is cleared, so the C returns FALSE too)
+    return false;
+  }
+  const nick = boxMonNickname(state, daycareMon.mon);
+  const mail = daycareMon.mail;
+  if (!mail || mail.message.itemId === state.defines.require('ITEM_NONE')) return false;
+  const same = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((c, i) => c === b[i]);
+  const playerName = body(state.pokemon.encodeName(state.playerName));
+  if (same(nick, body(mail.monName)) && same(playerName, body(mail.OT_name))) return false;
+  state.stringVars[0] = nick;
+  state.stringVars[1] = body(mail.OT_name);
+  state.stringVars[2] = body(mail.monName);
+  return true;
+}
+
+/** DaycareMonReceivedMail: BufferDayCareMonReceivedMail for the Four Island daycare's slot VAR_0x8004. */
+export function daycareMonReceivedMail(state: GameState): boolean {
+  return bufferDayCareMonReceivedMail(state, state.daycare, state.getVar('VAR_0x8004'));
 }
 
 /** GetDaycareState: DAYCARE_EGG_WAITING, DAYCARE_ONE_MON, DAYCARE_TWO_MONS or DAYCARE_NO_MONS. */

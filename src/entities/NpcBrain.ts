@@ -3,6 +3,7 @@ import { DELTA, DIRECTIONS, OPPOSITE, type Direction } from '../world/direction'
 import type { ObjectEvent } from './ObjectEvent';
 import { random } from '../util/random';
 import { gSineTable } from '../battle/trig';
+import { directionalAction } from './movementActions';
 
 /** ANIM_RAISE_HAND's frame (sAnim_RaiseHand: frame 9, then END) */
 const RAISE_HAND_FRAME = 9;
@@ -44,6 +45,13 @@ export class NpcBrain {
   private raiseHand?: RaiseHandState;
   /** objectEvent->singleMovementActive, as the raise-hand jump sets it (in the air); FreezeObjectEvent waits for it. */
   singleMovementActive = false;
+  /** ObjectEventSetSingleMovement's quest log hook (QuestLogRecordNPCStep while recording): the action started. */
+  onSingleMovement?: (movementActionId: number) => void;
+  /**
+   * QL_UpdateObject in place of the movement type: an object made while the quest log plays back moves only as
+   * recorded (the hook starts the queued action; the object's held movement then runs).
+   */
+  questLogUpdate?: () => void;
 
   constructor(
     readonly obj: ObjectEvent,
@@ -90,6 +98,11 @@ export class NpcBrain {
   paused = false;
 
   tick(): void {
+    if (this.questLogUpdate) {
+      this.questLogUpdate();
+      this.obj.tick(); // QL_UpdateObjectEventCurrentMovement
+      return;
+    }
     this.obj.tick();
     if (this.raiseHand) {
       // A frozen object stops where it is; the jump lands first (lock waits for singleMovementActive).
@@ -110,9 +123,9 @@ export class NpcBrain {
       case this.kind.startsWith('WALK_') && this.walkDir !== undefined:
         return this.pace();
       case this.kind === 'LOOK_AROUND':
-        return this.obj.face(pick(DIRECTIONS));
+        return this.face(pick(DIRECTIONS));
       case this.kind.startsWith('FACE_') && this.lookDirs.length > 1:
-        return this.obj.face(pick(this.lookDirs));
+        return this.face(pick(this.lookDirs));
     }
   }
 
@@ -208,8 +221,20 @@ export class NpcBrain {
 
   private wander(dirs: readonly Direction[]): void {
     const dir = pick(dirs);
+    this.face(dir);
+    if (this.withinRange(dir) && this.canMove(this.obj, dir)) this.walk(dir);
+  }
+
+  /** A face single movement (GetFaceDirectionMovementAction) */
+  private face(dir: Direction): void {
+    this.onSingleMovement?.(directionalAction('FACE', dir));
     this.obj.face(dir);
-    if (this.withinRange(dir) && this.canMove(this.obj, dir)) this.obj.move(dir);
+  }
+
+  /** A step single movement (GetWalkNormalMovementAction) */
+  private walk(dir: Direction): void {
+    this.onSingleMovement?.(directionalAction('WALK_NORMAL', dir));
+    this.obj.move(dir);
   }
 
   /** WALK_* types pace back and forth along an axis, reversing at the range edge or when blocked. */
@@ -220,8 +245,9 @@ export class NpcBrain {
       this.walkDir = dir;
     }
     this.wait = 1;
-    if (this.withinRange(dir) && this.canMove(this.obj, dir)) this.obj.move(dir);
-    else this.obj.face(dir);
+    if (this.withinRange(dir) && this.canMove(this.obj, dir)) this.walk(dir);
+    else if (this.obj.facing !== dir) this.face(dir);
+    else this.obj.face(dir); // blocked: the C walks in place every 16 frames; the port stands (and records nothing)
   }
 
   private withinRange(dir: Direction): boolean {

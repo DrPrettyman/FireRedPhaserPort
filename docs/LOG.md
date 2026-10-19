@@ -4086,3 +4086,116 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   his party menu (Matchups), each back to the list on the same option with no battle end, then runs Matchups to its
   end. Screenshots of a voiceover, the healthbox-lit voiceover, his party menu checked by eye. Typecheck, 661 unit
   tests; teachyTv, registeredItems, wildBattle, trainerBattle and audioBattleControllers e2e pass.
+### W-mail 2: the PC mailbox, the daycare's mail, the in-game trade's mail (FIELD_ITEMS_PLAN.md, batch 12)
+
+- player_pc.c's mailbox in `ui/PlayerPcMenu.ts` and mailbox_pc.c in the new `ui/MailboxPc.ts` (field overlays):
+  Task_PlayerPcMailbox ("There's no MAIL here." when CountPCMail is 0), PCMailCompaction, the list (the writers'
+  names by ItemPrintFunc, CANCEL, eight rows, upText_Y 10, the scroll arrows past seven mails), "What would you like
+  to do with X's MAIL?" (trailing spaces cut), READ (ReadMail on FieldMenuScene through the host's new
+  `enterScreen`, back through CB2_ReturnToMailbox), MOVE TO BAG (YES / NO, "The BAG is full." or "The MAIL was
+  returned to the BAG with its message erased."), GIVE (party_menu.c's ChooseMonToGiveMailFromMailbox and
+  TryGiveMailToSelectedMon for PARTY_ACTION_GIVE_MAILBOX_MAIL, back through
+  CB2_ReturnToMailboxPc_UpdateScrollVariables), EXIT; the mailbox's help contexts. `gPlayerPcMenuManager` (world/mail.ts)
+  has cursorPos / itemsAbove / count / pageItems now; CountPCMail, PCMailCompaction and SELECTED_MAIL (`selectedPcMail`)
+  are there too. OverworldScene's PlayerPcMenu host passes the state (no `countPcMail: () => 0`) and `hideMessage`.
+- daycare.c's struct DayCareMail (`DaycareMon.mail?`, absent = cleared): StorePokemonInDaycare's MonHasMail branch
+  (the message, the player's name, the nickname; TakeMailFromMon), TakeSelectedPokemonFromDaycare's GiveMailToMon2,
+  ShiftDaycareSlots moving it up, ClearDaycareMonMail, BufferDayCareMonReceivedMail and the special
+  DaycareMonReceivedMail (no FRLG script calls it). Save version 13 (12 at first; renumbered at the merge after W-qlog 1's 12): the daycare mons' `mail`; upgrading a version 12
+  save frees the party mail slots no party mon points at (a mon left in a daycare before kept its mail item but leaked
+  its slot).
+- trade_scene.c's GetInGameTradeMail (sInGameTradeMailMessages through extract_trades.py's `mailMessages`; the OT id
+  big-endian as the C writes it) into gLinkPartnerMail[0] with the mon's mail id 0, and TradeMons' mail lines (the
+  player's mon's slot cleared, the partner mail given to the mon received): DONTAE's Jynx's Fab Mail now reads
+  "THAT'S A HEALTHY JYNX! BE KIND TO IT" from DONTAE.
+- field_specials.c's mail lines (UpdateTrainerCardPhotoIcons' SpeciesToMailSpecies) were already on world/mail.ts
+  since unit 1.
+- Fixed on the way: the player's PC menus printed their items at the font's maxLetterWidth (10 px) instead of
+  GetMenuCursorDimensionByFont(FONT_NORMAL, 0) (8). The duplicated save and item-use lines in DEVIATIONS.md (merge
+  leftovers) are tidied.
+- Tests: tests/unit/mail.test.ts (+3: CountPCMail / PCMailCompaction, SELECTED_MAIL, the version 11 upgrade),
+  daycare.test.ts (+5: the mail into the daycare and back, another item kept, ShiftDaycareSlots, DaycareMonReceivedMail,
+  the save), inGameTrades.test.ts (+2: the trade mail message, GetInGameTradeMail and TradeMons); tests/e2e/mail.test.ts
+  (+4: the mailbox empty / READ / MOVE TO BAG with the bag full and not / GIVE; ten mails scrolled to the last and
+  read; a mon with mail through the Route 5 daycare and read after; DONTAE's Fab Mail read after the trade), passed
+  three times in a row; daycare, inGameTrades and pcStorage e2e pass.
+
+### W-qlog 1: the quest log's recording and the scenes in the save (QUEST_LOG_PLAN.md QL1, batch 12)
+
+- New `world/questLog.ts` (quest_log.c's recording half), `questLogEvents.ts` (quest_log_events.c: the u16 command
+  stream as the C lays it out, RecordEventHeader's repeats, SetQuestLogEvent with its filters, the deferred trainer /
+  link events, QL_EVENT_DEPARTED and QL_EVENT_ARRIVED), `questLogLocations.ts` (field_specials.c's departed
+  locations), `questLogObjects.ts` (QL_RecordObjects), `questLogPlayer.ts` (the gfx transition records); data from
+  the new `tools/extract_quest_log.py` (public/gen/questLog.json: MAP_* group / number / MAPSEC, the location and
+  flag tables, the command sizes). The field's hooks record what the C records: the player's steps
+  (PlayerSetAnimId), the gfx transitions, getting off Surf, Strength, fishing, the VS Seeker, NPC faces and steps
+  (NpcBrain's `onSingleMovement`), the field input that took the controls (gFieldInputRecord), and the frames
+  between actions (QL_TryRunActions while the controls are free). Scenes start at an event (here: leaving one of
+  the 51 buildings / caves / gates, entering a town for the first time) and end when the 128-u16 script or the
+  32-action buffer is full, on a cut (`special QuestLog_CutRecording`, ShowTownMap, ShowDiploma, a white-out, a
+  Victory Road switch, walking into a disabled location), on a rematch, or on a save (SaveQuestLogData from the save
+  dialog and the Hall of Fame, which also sorts the scenes oldest first). GetQuestLogState writes the real state.
+  The save keeps the four scenes: SAVE_VERSION 12 after W-fame's 10 and W-mail's 11 (upgradeSave gives a version 11
+  save none).
+- Found on the way: the after-rival start preset now sets VAR_QLBAK_MAP_LAYOUT as leaving the house does (BackUpMapLayout
+  at the departure's scene start); newGame.test.ts compares the preset against a real playthrough and caught it.
+- Not done (QL2-QL5): playback on CONTINUE (QL_ResetForContinue stands in: the next scene goes after the saved ones),
+  the other events' recorders and texts, the menus' call sites, QL_AvoidDisplay and `goto_if_questlog`.
+- Tests: tests/unit/questLog.test.ts (19: the codecs against the C's byte layout, a scene's head, the frames
+  between actions, the stream filling up after 30 steps, repeats past MAX_CMD_REPEAT, the ring of four and the
+  save's sort, the filters, the departed locations, the save round trip), tests/e2e/questLog.test.ts (3: leave the
+  house, walk, save; Daisy's cut; the fan club). Ran field, playerAvatar, saveContinue, hallOfFame, trainerBattle
+  and newGame e2e files: all pass, nothing in the field changed.
+
+### W-qlog 2a: the quest log's playback engine (QUEST_LOG_PLAN.md QL2a, batch 12)
+
+- New `world/questLogPlayback.ts` (quest_log.c's playback: TryStartQuestLogPlayback, Task_BeginQuestLogPlayback,
+  QLPlayback_InitOverworldState, QL_CopySaveState / RestoreTrainerRematches, QL_ResetPartyAndPC,
+  QL_RestoreMapLayoutId, QLogCB_Playback with QuestLog_PlayCurrentEvent / HandleShowQuestLogMessage /
+  GetQuestLogTextDisplayDuration, QL_HandleInput, QL_IsTrainerSightDisabled, DoSceneEndTransition /
+  QuestLog_AdvancePlayhead, DoSkipToEndTransition / QuestLog_WaitFadeAndCancelPlayback, QuestLog_StartFinalScene,
+  FieldCB2_FinalScene and the end tasks to Task_EndQuestLog); `world/questLog.ts` gets the action half
+  (ResetActions' and QL_TryRunActions' RUNNING cases, sMovementScripts, QL_UpdateObject, gQuestLogFieldInput,
+  ReadQuestLogScriptFromSav1, SetQuestLogState's playback branch); quest_log_objects.c's template load and
+  QL_TryStopSurfing; quest_log_player.c's QuestLogUpdatePlayerSprite (normal, bike, surf, getting off).
+- OverworldScene: continueSavedGame starts from QL_ResetOnSoftReset (replaces QL1's QL_ResetForContinue stand-in:
+  sCurrentSceneNum now comes from the playback) and TryStartQuestLogPlayback; the scene loads
+  (loadQuestLogScene: LoadMap_QLPlayback's steps around enterMap, hooks in onMapLoaded for the templates and the
+  objects), DoCB1_Overworld_QuestLogPlayback beside DoCB1_Overworld in tickField, QL_UpdateObject for the player
+  and the NPCs made during playback (NpcBrain `questLogUpdate`), the final scene reloading the save slot
+  (`savedGame`) through enterSavedField (CB2_ContinueSavedGame's steps, shared with CONTINUE). The screen (tints,
+  bars, texts, music) is QL2b's: `questLogScreen` seams.
+- Shared bits: ObjectEvent.setHeldMovement replaces a held action while playback runs (ObjectEventSetHeldMovement);
+  ScreenFade takes negative delays as the C does (deltaY += -delay: the skips' FadeScreen(FADE_TO_BLACK, -3));
+  ScriptEngine.init (ScriptContext_Init); trainerSee checks QL_IsTrainerSightDisabled; the test probe's `free()`
+  (so `idle()`) waits for the playback's end; `__test.questLog().playback`.
+- Found on the way: QL1 recorded the steps of the neighbouring maps' NPCs (the port spawns them, the GBA doesn't),
+  which playback, going by local id, then gave to the current map's NPC with that id: only the current map's are
+  recorded now. QL_ResetPartyAndPC's "too many" branch clears the party's last slots (PARTY_SIZE - 1 - i), not the
+  extra mons, as the C does (a two-mon party stays two against a one-mon scene).
+- Tests: tests/unit/questLog.test.ts (21: + playback's action timing and the controls' hold),
+  tests/e2e/questLog.test.ts (5: + two scenes played on CONTINUE with each scene's flags, empty bag and placeholder
+  Rattata, the player and Pallet Town's NPCs ending each scene where they were recorded, the field afterwards
+  equal to the save; A skips a scene, B to the end with the map name and no "saved the game"). Ran saveContinue,
+  titleScreen, field, newGame, hallOfFame, mapMusic, weather, mail, daycare and fameChecker e2e files: all pass.
+
+### W-qlog-events: the quest log's event codecs for QL_EVENT_* 3-29 (QUEST_LOG_PLAN.md QL3a, batch 12)
+
+- New `world/questLogEventCodecs.ts`: quest_log_events.c's RecordEvent_* / LoadEvent_* for SWITCHED_PARTY_ORDER,
+  USED_ITEM (items, key items, TMs / HMs learned or replacing a move, the Escape Rope with its map section, which
+  stops recording steps until the next departure and so ends the scene), GAVE_HELD_ITEM(_BAG / _PC), TOOK_HELD_ITEM,
+  SWAPPED_HELD_ITEM(_PC), USED_PKMN_CENTER (header only; a second heal at the same action writes nothing), the link
+  events 12-19 (their own header, no repeats; TranslateLinkPartnersName; no callers until link play), the box events
+  20-27 (the box bytes packed into a u16 as the C's u8 casts do; a party-first SWITCHED_PARTY_MON_FOR_PC_MON swapped
+  round; "a different spot" for the same box twice) and DEPOSITED / WITHDREW_ITEM_PC, with the shared helpers
+  (QuestLog_GetSpeciesName incl. the egg, GetBoxNamePtr, sBattleOutcomeTexts). Loaders expand the line into
+  gStringVar4 as the C does. questLogEvents.ts registers them in ensureEventTables and exports LoadEvent and
+  QL_DisableRecordingStepsUntilDepart.
+- `tools/extract.py` reads src/data/text/quest_log.h with strings.c: all 125 gText_QuestLog_* in strings.json, for
+  QL2b's and QL3b's texts too.
+- Not done: events 30-42 and quest_log_battle.c (QL3b); the menus' call sites (QL4).
+- Tests: tests/unit/questLogEvents.test.ts (17: every event recorded into a scene and loaded back to its line, against
+  quest_log.h's string with the buffers filled as the C fills them; the stream's words; repeats loaded copy by copy
+  with QL_TryRepeatEvent; the Pokémon Center's non-repeat; the Escape Rope's scene end; the link events through the
+  deferred path; TranslateLinkPartnersName), tests/e2e/questLog.test.ts (+1: three events through
+  `__test.questLogEvent` in a running game, a repeat, the save's stream).

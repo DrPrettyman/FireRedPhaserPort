@@ -16,6 +16,7 @@ import type { Pokemon } from '../pokemon/Pokemon';
 import type { GameState } from '../state/GameState';
 import { CompareMonSize, GetMonSizeRecordInfo, withPokedexData } from './pokemonSizeRecord';
 import type { Special } from './specials';
+import { QuestLog_CutRecording } from '../world/questLog';
 
 // ------------------------------------------------------------------ field_specials.c
 
@@ -272,6 +273,7 @@ export const MISC_SPECIALS: Record<string, Special> = {
    * CB2_ReturnToFieldFromDiploma (the field fades in from black); the script's `waitstate` ends then.
    */
   ShowDiploma({ host, setWaitState }) {
+    QuestLog_CutRecording();
     setWaitState(host.runScreenFromScript(() => SetMainCallback2(CB2_ShowDiploma), DIPLOMA_GFX));
   },
 

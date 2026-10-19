@@ -12,8 +12,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Pokémon Center nurse: SetUsedPkmnCenterQuestLogEvent is a no-op (no quest log) and BufferUnionRoomPlayerName always says no wireless
     player was seen.
   - In-game trades (script/tradeSpecials.ts): the traded mon's contest conditions and sheen aren't kept (Pokémon
-    have no contest stats), and DONTAE's Jynx holds its Fab Mail without a mail slot (GetInGameTradeMail /
-    gLinkPartnerMail aren't ported until W-mail unit 2), so its MAIL → READ shows a blank Fab Mail. The trade scene (menus/tradeScene.ts) skips
+    have no contest stats). GetInGameTradeMail's playerName bytes past the OT name's EOS are the C's uninitialised
+    stack; EOS here (nothing reads them). The trade scene (menus/tradeScene.ts) skips
     CheckPartnersMonForRibbons (no ribbons; no in-game trade mon has any) and TradeEvolutionScene (no FRLG
     in-game trade evolves). Only the in-game (wireless) path is ported: DoTradeAnim_Cable is a link trade's, and so
     are CB2_SaveAndEndTrade's FadeOutBGM / IsBGMStopped wait.
@@ -25,7 +25,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     Script_BufferFanClubTrainerName always names the NPC trainer (the rival, LT. SURGE, KOGA), and the link-battle
     fan updates (Special_UpdateTrainerFansAfterLinkBattle) never run.
   - Side specials (script/miscSpecials.ts): Daisy's MUS_HEAL fanfare is the script's; the diploma's
-    FANFARE_OBTAIN_BADGE holds its screen for sFanfares' 340 frames, as on the GBA. No quest log (QuestLog_CutRecording). The size records (script/pokemonSizeRecord.ts: the
+    FANFARE_OBTAIN_BADGE holds its screen for sFanfares' 340 frames, as on the GBA. The size records (script/pokemonSizeRecord.ts: the
     Magikarp and the Heracross) load pokedex.json for the heights the first time one is measured or read (the script
     waits for it). The diploma returns through the field's
     plain fade from black rather than FieldCB_WarpExitFadeFromBlack's Task_ExitNonDoor (same look).
@@ -49,7 +49,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     past the set (heap memory); the roof's result changes nothing. The e-Reader sets are never read (link content). The
     battle records' link page (menus/battleRecords.ts) reads five cleared records: gSaveBlock2Ptr->linkBattleRecords
     isn't in the save, since only a link battle writes it (UpdatePlayerLinkBattleRecords isn't ported).
-  - VS Seeker (world/vsSeeker.ts): no quest log event. Task_VsSeeker_0
+  - VS Seeker (world/vsSeeker.ts): no quest log item event (ItemUse_SetQuestLogEvent: QUEST_LOG_PLAN.md QL4). Task_VsSeeker_0
     takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for
     the Escape Rope). The movement scripts (Wait48, the trainers' emotes and step in place) run as MovementRunners
     in their own field tasks; a frozen trainer still finishes them, so UnfreezeObjectEvent has nothing to do.
@@ -111,6 +111,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     afterwards. Here the script waits at the special and that `fadescreen` does the fade in (same on screen).
   - Party menu: Union Room and minigames are not ported (the Pokédude's battle tasks are); the PC mailbox's GIVE
     (PARTY_ACTION_GIVE_MAILBOX_MAIL) waits for W-mail unit 2. No
+  - Party menu: Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
     field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
   - Move relearner (menus/learnMove.ts): the MUS_LEVEL_UP fanfare after a move is learned holds the screen as on
     the GBA. The C's scroll arrows are kept as they
@@ -204,11 +205,11 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     and ValidateSavedWonderCard are FALSE, IsBadEggInParty is FALSE (no bad eggs), CloseLink is a no-op.
   - Player avatar (world/playerAvatar.ts, world/bike.ts): the bike bell is item_use.c's (menus/itemUse.ts). Not ported: the warp arrow sprite on arrow mats
     (HandleWarpArrowSpriteHideShow), DoStairWarp's 12-frame delay when a stair warp takes the player off the
-    bike, the teleport spin and the quest log's recordings. Movement scripts
+    bike and the teleport spin. Movement scripts
     (applymovement) still run through MovementRunner rather than the player's held-movement actions, so `lock`
     waits for a scripted step to end by `isMoving`.
-  - Fishing (world/fishing.ts): no quest log (QuestLogTryRecordPlayerAvatarGfxTransition, QL_PLAYER_GFX_FISH's
-    playback task) and no GAME_STAT_FISHING_CAPTURES. StartFishing's task runs its second state a frame later than
+  - Fishing (world/fishing.ts): no quest log playback (QL_PLAYER_GFX_FISH's Task_QLFishMovement: QUEST_LOG_PLAN.md
+    QL2) and no GAME_STAT_FISHING_CAPTURES. StartFishing's task runs its second state a frame later than
     the GBA's (a new task there also runs in the RunTasks pass that created it). The dots and messages go through
     the field message box's printer, which runs after the field's tasks: a dot printed at speed 0 appears in the
     same frame, but Fishing11 / Fishing16 see a finished message a frame later than RunTextPrinters would. The
@@ -237,10 +238,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     with the field's message box palette, which the GBA field leaves there. The mon sprite buffers are freed on
     the NO path too (the C leaks them). The hatched mon's language, met game and fateful-encounter bit aren't
     modelled.
-  - Daycare (world/daycare.ts): struct DayCareMail waits for W-mail unit 2, so a mon left holding mail doesn't have
-    it moved into it (StorePokemonInDaycare's MonHasMail branch) and back (and DaycareMonReceivedMail isn't
-    ported): the mon keeps the mail item but loses its slot (boxMonFromMon drops `mail`; READ shows a blank mail),
-    and the slot stays taken. Eggs: MON_DATA_LANGUAGE isn't modelled, so CreateEgg / SetInitialEggData's LANGUAGE_JAPANESE isn't
+  - Daycare (world/daycare.ts): struct DayCareMail's gameLanguage / monLanguage aren't kept (the C's lines setting
+    them are commented out; MON_DATA_LANGUAGE isn't modelled). Eggs: MON_DATA_LANGUAGE isn't modelled, so CreateEgg / SetInitialEggData's LANGUAGE_JAPANESE isn't
     kept (the nickname is タマゴ). The level menu's 1 px letter spacing is dropped, as for all latin text.
     DetermineEggSpeciesAndParentSlots leaves parentSlots uninitialised in the C when neither mon is female nor
     Ditto; the port starts them at [0, 1] (no compatible pair gets there).
@@ -252,17 +251,16 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     back, compacted, when it hands over to another screen; a mon placed after an empty party slot would move up
     early if the summary / naming screen / bag opened while the party box still showed the gap.
     MON_DATA_SANITY_IS_BAD_EGG reads FALSE, so the bad-egg checks never trigger.
-  - Player's PC (ui/PlayerPcMenu.ts, menus/itemPc.ts): the mailbox is always empty (its screen is W-mail unit 2:
-    mail the party menu sends to the PC sits in gSaveBlock1Ptr->mail's PC slots unseen until then); no quest
-    log events (withdrew / deposited / gave from the PC).
+  - Player's PC (ui/PlayerPcMenu.ts, ui/MailboxPc.ts, menus/itemPc.ts): no quest log events (withdrew / deposited
+    / gave from the PC). The mailbox's windows and list are Phaser MenuWindows on the field (the field isn't on the
+    GBA layer); its list redraws every shown row on a scroll (the C scrolls the window's pixels: the same picture).
+    Menu_ProcessInput_other's JOY_REPT(DPAD_ANY) == DPAD_UP check is "UP without DOWN" (LEFT / RIGHT held along
+    don't block the move).
   - Save data (state/saveData.ts): one JSON save in browser localStorage instead of the flash's two 14-sector
     save slots, so there are no sector checksums, no alternating slots / save counter, no backup of the previous
     save and no encryption of money, coins and bag quantities (gSaveBlock2Ptr->encryptionKey). The save holds
     what the port keeps; left out because the port doesn't keep them: the current map's object events and object
-    templates (NPC positions, setobjectxyperm changes), game stats, the quest log,
-    Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, the fame
-    checker, minigame records, the enigma berry, mystery gift, link records and
-    templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail,
+    templates (NPC positions, setobjectxyperm changes), game stats,
     Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, minigame
     records, the enigma berry, mystery gift, link records and
     the region map zoom option. The player's position is stored only when the field writes it before
@@ -270,8 +268,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the copyright screen, the
     intro and the title screen. Dev starts (`?start=`, `?map=`) skip all of them and the main menu; dev
     `?skipIntro` (the e2e harness's default) skips the copyright screen, the intro, the title screen and Oak's
-    speech: the main menu with a save, the new game without. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
-    before CONTINUE. SAVE_STATUS_ERROR ("the previous save file will be loaded") can't happen: one
+    speech: the main menu with a save, the new game without. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept). SAVE_STATUS_ERROR ("the previous save file will be loaded") can't happen: one
     slot, no backup; an unreadable slot is SAVE_STATUS_INVALID ("The save file has been deleted...").
   - Copyright screen and intro (menus/intro.ts, intro.c): the GameCube multiboot the copyright screen listens for
     (Pokémon Colosseum's link over the GBA cable: SerialCB_CopyrightScreen, GameCubeMultiBoot_*, sGcmb) isn't
@@ -288,7 +285,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     anyway; the port loads just the palette. The trainer id is still rolled when the game state is created (see the
     RNG approximation), not by the naming screen's SeedRngAndSetTrainerId. CB2_NewGame hands only the names and the
     gender to the field, whose new GameState is NewGameInitData's.
-  - Save dialog (ui/SaveDialog.ts): no GAME_STAT_SAVED_GAME, no quest log data. A failed write shows the save error message without
+  - Save dialog (ui/SaveDialog.ts): no GAME_STAT_SAVED_GAME. A failed write shows the save error message without
     DoSaveFailedScreen. SaveMapView isn't ported: the map view isn't saved, so CONTINUE rebuilds the map from its
     header and ON_LOAD script (metatiles a script changed later aren't restored).
   - Option menu (menus/optionMenu.ts): the L=A button mode applies on the GBA-layer
@@ -301,7 +298,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - The help system (ui/helpSystem*.ts): the screens the port doesn't have don't set their contexts or toggle it
     (mail's HELPCONTEXT_*_MAILBOX: the mailbox is always empty; the main menu's MYSTERY GIFT; the link
     and wireless screens' HelpSystem_Enable / _DisableToggleWithRButton: link.c, link_rfu_2.c, union_room_chat.c,
-    trade_scene.c's link trades, the e-Reader; the berry fix program; the quest log's playback). HelpSystem_Enable
+    trade_scene.c's link trades, the e-Reader; the berry fix program). HelpSystem_Enable
     has no quest log check; HelpSystem_IsSinglePlayer is always TRUE (no link play: GAPS_PLAN.md decision 4). The
     title screen sets up its own GameState from the save (LoadGameSave's gSaveBlock1/2) for the help's flags and
     button mode.
@@ -313,8 +310,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Field ListMenu (ui/FieldListMenu.ts): the quest log's QL_AvoidDisplay is ignored.
   - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu.
   - Hall of Fame (menus/hallOfFame.ts): no Champion
-    Ribbons (mons have no ribbons; the event tickets come anyway: see "Deliberate QOL changes"); the
-    quest log isn't saved; a failed save carries on (no DoSaveFailedScreen / gGameContinueCallback).
+    Ribbons (mons have no ribbons; the event tickets come anyway: see "Deliberate QOL changes"); a
+    failed save carries on (no DoSaveFailedScreen / gGameContinueCallback).
     Other game stats than GAME_STAT_ENTERED_HOF and
     GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted.
   - Pokédex screen (menus/pokedexScreen.ts, menus/pokedexArea.ts): the mon page and the habitat pages load the shown mons'
@@ -337,7 +334,36 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     with a fresh Overworld scene and GameState; other module-level state isn't reset.
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, cable club monitors) start their scripts and hit the unimplemented-special warnings.
-  - No-op specials (`NO_OP` in `script/specials.ts`): the quest log, InitUnionRoom and CloseLink.
+  - Quest log (world/questLog*.ts; QUEST_LOG_PLAN.md QL1 records, QL2a plays back, QL2b-QL5 to come): the playback
+    has no screen yet (QL2b): no grey / sepia tint (gGlobalFieldTintMode, ApplyGlobalFieldPaletteTint,
+    QL_SlightlyDarkenSomePals, RestoreScreenAfterPlayback's fade), no top and bottom bars or "Previously on your
+    quest…" header, no description window or event texts, no "saved the game at" line, and the map music plays as
+    usual (gDisableMapMusicChangeOnMapLoad isn't set): `questLogScreen` in world/questLogPlayback.ts has the seams,
+    and their timings (GetQuestLogTextDisplayDuration, the 16 + 32 end frames, the 127-frame wait) already run, the
+    texts' length as 0 for now. In playback, a recorded input that starts a script runs it with the normal message
+    box, which waits for A (the auto-scroll and waitbuttonpress differences and QL_AvoidDisplay: QL5); the fishing
+    rod's and the VS Seeker's gfx changes don't play (QL5), and getting off a mon changes the music. QL_LoadObjects
+    sets the snapshot's position and facing on the objects the field spawned from the scene's flags (not each saved
+    object's other fields; previousCoords are the current ones); a QL_START_WARP scene's player state comes from the
+    warp, not the snapshot's graphics. A warp in playback into a disabled location ends the scene once the field has
+    faded in, not at once. Task_EndQuestLog's gHelpSystemEnabled = TRUE is HelpSystem_Enable (which also lets R toggle
+    the help again). Only QL_EVENT_DEPARTED and QL_EVENT_ARRIVED have recorders: SetQuestLogEvent drops the other events (QL3), and the
+    menus, shops, PC and battles don't send theirs yet (QL4). The scene's objects snapshot is the player and the
+  - Quest log (world/questLog*.ts; QUEST_LOG_PLAN.md QL1 records, QL2-QL5 to come): CONTINUE doesn't play the
+    scenes back yet (QL2; QL_ResetForContinue puts sCurrentSceneNum where the playback would leave it). QL_EVENT_*
+    3-29 (QL3a), DEPARTED and ARRIVED have recorders and loaders; SetQuestLogEvent drops 30-34, 37, 38 and 40 (the
+    battles, field moves, shops, story items: QL3b), and the menus, shops, PC and battles don't send theirs yet (QL4:
+    events 3-29 are recorded only by unit tests and `__test.questLogEvent`). The link events (12-19) have codecs but
+    no callers (no link play). The scene's objects snapshot is the player and the
+    current map's objects in the port's order (the C's gObjectEvents slots, offScreen, the sprite anim backups and
+    directionSequenceIndex aren't kept: 0); a scene's flags and vars are kept sparse, as the save keeps them,
+    rather than as the C's byte arrays. NPC steps are recorded from NpcBrain's movement types (a face, then a
+    WALK_NORMAL step), not each MovementType_*'s own single movements; a blocked pacer that the C has walk in place
+    every 16 frames records nothing. ArePlayerFieldControlsLocked (an action's frame count, the field input's
+    delay) is the field's busy / warping / script / overlay / lock / trainer approach state. MenuHelpers_IsLinkActive
+    and InUnionRoom are always FALSE. QuestLogGetFlagOrVarPtr / QuestLogSetFlagOrVar aren't ported (the C never sets
+    up their records: both return at once).
+  - No-op specials (`NO_OP` in `script/specials.ts`): InitUnionRoom and CloseLink.
   - Player names are "PLAYER"/"RIVAL" in dev starts and with `?skipIntro` (the e2e harness), which skip Oak's speech.
 - **Approximations:**
   - sound.c (gba/sound.ts, audio/frame.ts): the engine's logic runs every frame, output or not, so fanfare, `waitse`, `fadeoutbgm` and IsSEPlaying waits time like the GBA. Task_Fanfare is a

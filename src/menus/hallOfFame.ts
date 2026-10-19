@@ -131,6 +131,7 @@ import {
 import { TryFadeOutOldMapMusic, type MapMusicHeader } from '../gba/overworldMusic';
 import { SpeciesToPokedexNum } from '../state/nationalDex';
 import { HelpSystem_Disable } from '../ui/helpSystemContext';
+import { SaveQuestLogData } from '../world/questLog';
 
 const PARTY_SIZE = 6;
 const HALL_OF_FAME_BG_PAL = RGB(22, 24, 29);
@@ -385,7 +386,7 @@ function Task_Hof_InitMonData(taskId: number): void {
 }
 
 function Task_Hof_InitTeamSaveData(taskId: number): void {
-  // SaveQuestLogData: no quest log
+  SaveQuestLogData();
   if (!gHasHallOfFameRecords) ClearHofBuffer();
   else if (LoadHallOfFameSave() !== SAVE_STATUS_OK) ClearHofBuffer();
 

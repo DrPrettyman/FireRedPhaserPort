@@ -61,8 +61,12 @@ import { battleRecordsProbe } from '../menus/battleRecords';
 import { diplomaProbe } from '../menus/diploma';
 import { easyChatProbe } from '../menus/easyChatScreen';
 import { mailProbe } from '../menus/mail';
+import { mailboxProbe } from '../ui/PlayerPcMenu';
 import { seagallopProbe } from '../menus/seagallop';
 import type { SSAnneProbe } from '../world/ssAnne';
+import { questLogTestProbe } from '../world/questLog';
+import { questLogPlaybackDebugState } from '../world/questLogPlayback';
+import { SetQuestLogEvent } from '../world/questLogEvents';
 import type { WeatherProbe } from '../world/weather';
 import { gMPlayTable, gPokemonCryMusicPlayers, gSongTable } from '../audio/m4a';
 import { MPT_FLG_EXIST, MUSICPLAYER_STATUS_PAUSE, MUSICPLAYER_STATUS_TRACK, type MusicPlayerInfo } from '../audio/m4aInternal';
@@ -250,6 +254,8 @@ export interface FieldProbe {
   locked: boolean;
   /** FreezeObjectEvents is in effect. */
   objectsFrozen: boolean;
+  /** The quest log plays the saved scenes back (CONTINUE, up to Task_EndQuestLog's end): the field isn't the player's */
+  questLogPlayback: boolean;
   moving: boolean;
   approaching: boolean;
   fading: boolean;
@@ -412,7 +418,7 @@ function createApi(game: Phaser.Game) {
   const free = () => {
     if (!game.scene.isActive('Overworld')) return false;
     const p = field();
-    return !!p && !p.busy && !p.script && !p.overlay && !p.moving && !p.approaching && !p.fading;
+    return !!p && !p.busy && !p.script && !p.overlay && !p.moving && !p.approaching && !p.fading && !p.questLogPlayback;
   };
   // A free field can still start an ON_FRAME script or a trainer on its next tick, so "idle" means it
   // was free at the start of two ticks in a row.
@@ -663,6 +669,8 @@ function createApi(game: Phaser.Game) {
       const p = mailProbe();
       return p && { ...p, lines: p.lines.map(decode), authorName: decode(p.authorName) };
     },
+    /** The player's PC mailbox (ui/PlayerPcMenu.ts, W-mail) while the PC is on: the task phase, the list's state. */
+    mailbox: () => mailboxProbe(),
     /** The Seagallop ferry scene (menus/seagallop.ts) while it's up: setup state, frames, BG3's x, the ferry, wakes. */
     seagallop: () => seagallopProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */
@@ -803,6 +811,14 @@ function createApi(game: Phaser.Game) {
     eggHatch: () => eggHatchProbe(),
     /** The S.S. Anne's departure while it runs (world/ssAnne.ts): the task's state, the boat's x2, wake and smoke. */
     ssAnne: () => overworld()?.testSSAnne(),
+    /**
+     * The quest log (world/questLog*.ts): gQuestLogState, the playback state, the scene being recorded, the action
+     * index and the next action's delay, the step recording mode, and the four scenes (startType, map, warp id,
+     * position, the active objects and the command stream up to its SCENE_END).
+     */
+    questLog: () => ({ ...questLogTestProbe(requireState()), playback: questLogPlaybackDebugState() }),
+    /** SetQuestLogEvent(QL_EVENT_* name, data): an event as the C's call sites (QL3-QL4) would send it. */
+    questLogEvent: (event: string, data: Record<string, unknown> | null) => SetQuestLogEvent(define(event), data),
     /** The move relearner while it's up (menus/learnMove.ts): its MENU_STATE_*, the list's moves and selection. */
     moveRelearner: () => (gMain.callback2?.name === 'CB2_MoveRelearner' ? moveRelearnerProbe() : undefined),
     /** The berry pouch while it's open (menus/berryPouch.ts): BERRYPOUCH_* type, task, scroll/row and the pocket's berries in list order. */

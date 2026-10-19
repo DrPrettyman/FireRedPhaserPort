@@ -117,7 +117,7 @@ export const mainMenuEnv = {
   text: (_label: string): number[] => [EOS],
   /** Plain text (the player's name), encoded with EOS. */
   encode: (_s: string): number[] => [EOS],
-  /** TryStartQuestLogPlayback with no quest log scenes → SetMainCallback2(CB2_ContinueSavedGame) */
+  /** TryStartQuestLogPlayback: the field plays the saved scenes back, then CB2_ContinueSavedGame's steps */
   continueSavedGame: (): void => {},
   /** StartNewGameScene (Oak's speech isn't ported: straight into the new game) */
   startNewGame: (): void => {},
@@ -360,7 +360,8 @@ function Task_ExecuteMainMenuSelection(taskId: number): void {
       gPlttBufferUnfaded[0] = RGB_BLACK;
       gPlttBufferFaded[0] = RGB_BLACK;
       FreeAllWindowBuffers();
-      // TryStartQuestLogPlayback: no quest log, so never any scenes to play back
+      // TryStartQuestLogPlayback runs as the field starts (world/questLogPlayback.ts, from
+      // OverworldScene.continueSavedGame): the saved scenes play first, else CB2_ContinueSavedGame
       SetMainCallback2(null);
       DestroyTask(taskId);
       mainMenuEnv.continueSavedGame(); // SetMainCallback2(CB2_ContinueSavedGame)
