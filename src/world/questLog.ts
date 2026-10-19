@@ -137,6 +137,14 @@ export interface QuestLogData {
   specialEncounterSpecies: string[];
   /** ShouldRegisterEvent_HandleBeatStoryTrainer's classes (the trainers that register before the Hall of Fame) */
   storyTrainerClasses: string[];
+  /** quest_log_events.c's sLocationNameTexts by QL_LOCATION_* name (gText_* symbols) */
+  locationNameTexts: Record<string, string>;
+  /** sLocationToDepartedTextId: QL_LOCATION_* → QL_DEPARTED_* */
+  departedTextIds: Record<string, string>;
+  /** sDepartedLocationTexts: QL_DEPARTED_* → gText_QuestLog_* */
+  departedTexts: Record<string, string>;
+  /** sGymCityMapSecs (by badge) */
+  gymCityMapSecs: string[];
 }
 
 let sData: QuestLogData | undefined;

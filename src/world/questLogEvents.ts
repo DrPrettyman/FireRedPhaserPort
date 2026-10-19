@@ -13,7 +13,9 @@
 // The loaders (playback) for the two here decode the data; their texts are QL2's.
 
 import { constant, K } from '../battle/constants';
+import { gStringVar1, gStringVar2, setStringVar4, StringExpandPlaceholders, text } from '../menus/common';
 import { registerQuestLogEventCodecs } from './questLogEventCodecs';
+import { GetMapName } from './regionMap';
 import {
   QuestLog_CutRecording,
   QL_FinishRecordingScene,
@@ -561,11 +563,31 @@ function RecordEvent_DepartedLocation(dest: ScriptPtr | null, data: QuestLogEven
   return advance(record, 1);
 }
 
-/** LoadEvent_DepartedLocation's data (QL2 picks the text: sLocationToDepartedTextId, the gym's badge check). */
+/**
+ * LoadEvent_DepartedLocation: gStringVar1 the map's name, gStringVar2 the place's (sLocationNameTexts), and
+ * gStringVar4 the place's departed text (sLocationToDepartedTextId); a gym's is "Departed the GYM" once its badge is
+ * had, "full of tough trainers" before.
+ */
 function LoadEvent_DepartedLocation(eventData: ScriptPtr): QuestLogEventDeparted & { next: ScriptPtr } {
   const record = LoadEvent(K.QL_EVENT_DEPARTED, eventData);
   const w = scriptOf(record)[record.pos];
-  return { mapSec: w & 0xff, locationId: w >> 8, next: advance(record, 1) };
+  const mapSec = w & 0xff;
+  const locationId = w >> 8;
+  const data = questLogData();
+  const location = Object.keys(data.locationNameTexts).find((name) => K[name] === locationId);
+  gStringVar1.set(GetMapName(mapSec, 0)); // GetMapNameGeneric
+  gStringVar2.set(location ? text(data.locationNameTexts[location]) : []);
+  const textId = location ? data.departedTextIds[location] : undefined;
+  let symbol = textId ? data.departedTexts[textId] : undefined;
+  if (textId === 'QL_DEPARTED_GYM') {
+    const badge = data.gymCityMapSecs.findIndex((m) => K[m] === mapSec);
+    if (badge >= 0) {
+      const host = questLogHost();
+      symbol = host?.state.getFlag(K.FLAG_BADGE01_GET + badge) ? 'gText_QuestLog_DepartedGym' : 'gText_QuestLog_GymWasFullOfToughTrainers';
+    }
+  }
+  if (symbol) setStringVar4(StringExpandPlaceholders(text(symbol)));
+  return { mapSec, locationId, next: advance(record, 1) };
 }
 
 /** SetQLPlayedTheSlots (the slot machine; QL4 calls it) */
@@ -628,10 +650,13 @@ function RecordEvent_ArrivedInLocation(dest: ScriptPtr | null, data: QuestLogEve
   return advance(record, 1);
 }
 
-/** LoadEvent_ArrivedInLocation's data (QL2: gText_QuestLog_ArrivedInLocation with the map name) */
+/** LoadEvent_ArrivedInLocation: gText_QuestLog_ArrivedInLocation with the map's name in gStringVar4. */
 function LoadEvent_ArrivedInLocation(eventData: ScriptPtr): QuestLogEventArrived & { next: ScriptPtr } {
   const record = LoadEvent(K.QL_EVENT_ARRIVED, eventData);
-  return { mapSec: scriptOf(record)[record.pos] & 0xff, next: advance(record, 1) };
+  const mapSec = scriptOf(record)[record.pos] & 0xff;
+  gStringVar1.set(GetMapName(mapSec, 0)); // GetMapNameGeneric
+  setStringVar4(StringExpandPlaceholders(text('gText_QuestLog_ArrivedInLocation')));
+  return { mapSec, next: advance(record, 1) };
 }
 
 /** For tests: the step recording mode and the departure filter's memory. */
