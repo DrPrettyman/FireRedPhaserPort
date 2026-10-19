@@ -129,7 +129,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     follows. The show-mon banner's graphics load while the player's pose plays, so a very slow load would hold the
     banner back. Dig/Escape Rope with no escape warp saved (a dev start in a cave) go to the last heal location.
   - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Bag uses that need overworld systems
-    (Fame Checker, Teachy TV, mail) log "not implemented" and return to the bag. Berry
+    (Fame Checker, mail) log "not implemented" and return to the bag. Berry
     powder reads as 0. The Escape Rope's quest log event (ItemUse_SetQuestLogEvent) isn't
     recorded; ItemUseOnFieldCB_EscapeRope takes the field controls lock itself (on the GBA the start menu's lock is
     still held when the bag returns; here the field's overlay held the controls until then). RemoveUsedItem after
@@ -139,13 +139,20 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     the item's task (data[3] = 1) runs its first step in the frame SELECT is read (as RunTasks would, after the
     input callback) and then once a frame from a field task of its own, which stops when the task is destroyed;
     the VS Seeker and the Itemfinder destroy it at once and go on in their own field tasks (on the GBA,
-    Task_VsSeeker_0 / ItemUseOnFieldCB_Itemfinder carry on as the item's task). The Fame Checker and Teachy TV
-    from SELECT log and give the controls back (no screens). ChangeBgY(0, 0, 0) is a no-op (the field's message
+    Task_VsSeeker_0 / ItemUseOnFieldCB_Itemfinder carry on as the item's task). The Fame Checker
+    from SELECT logs and gives the controls back (no screen). ChangeBgY(0, 0, 0) is a no-op (the field's message
     box isn't on a scrolled BG); InUnionRoom is always FALSE. No quest log events (ItemUse_SetQuestLogEvent).
     The Town Map, TM case and berry pouch from SELECT start their screen once the map headers the region map /
     party menu read have loaded (prepareFieldMoveMenu), a frame or more after the fade instead of in the same frame.
   - TM case (menus/tmCase.ts): no quest log (RecordItemTransaction). Not ported:
     the Pokédude's Teachy TV demo (TMCASE_POKEDUDE) and the Union Room's GIVE / EXIT menu (no link play).
+  - Teachy TV (menus/teachyTv.ts): the Pokédude's demos aren't ported (FIELD_ITEMS_PLAN.md W-teachy units 2-3):
+    the four battle options' battle (TeachyTvPrepBattle's SavePlayerParty / InitPokedudePartyAndOpponent /
+    PlayMapChosenOrBattleBGM, the battle transition, CB2_InitBattle and battle_controller_pokedude.c) and TMS /
+    REGISTER's scripted bag and TM case (InitPokedudeBag). Each goes through PokedudeDemoNotPorted, which logs and
+    comes back as from the demo's end (CB2_ReturnToTeachyTV in mode 2: the option's closing text, the walk off,
+    THE END, the list); the battle's transition is a plain fade to black meanwhile and its outcome reads as a win.
+    No quest log event (ItemUse_SetQuestLogEvent).
   - Berry pouch (menus/berryPouch.ts): no quest log
     (RecordItemTransaction). Not ported: Berry Crush (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room context
     menus (GIVE / EXIT, EXIT) and IsHoldingItemAllowed's Enigma Berry check there (always TRUE: neither can be
@@ -275,7 +282,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     start menu (and its help window) goes away as soon as an item that leaves the field is chosen, before the fade
     (on the GBA both stay up under the fade).
   - The help system (ui/helpSystem*.ts): the screens the port doesn't have don't set their contexts or toggle it
-    (mail's HELPCONTEXT_*_MAILBOX: the mailbox is always empty; Teachy TV; the main menu's MYSTERY GIFT; the link
+    (mail's HELPCONTEXT_*_MAILBOX: the mailbox is always empty; the main menu's MYSTERY GIFT; the link
     and wireless screens' HelpSystem_Enable / _DisableToggleWithRButton: link.c, link_rfu_2.c, union_room_chat.c,
     trade_scene.c's link trades, the e-Reader; the berry fix program; the quest log's playback). HelpSystem_Enable
     has no quest log check; HelpSystem_IsSinglePlayer is always TRUE (no link play: GAPS_PLAN.md decision 4). The

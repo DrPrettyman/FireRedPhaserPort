@@ -3968,3 +3968,29 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
     for the field (or a trainer's script) first; the test passed again alone. What held the field for those ticks
     wasn't pinned down.
 - Typecheck clean, 646 unit tests.
+
+### W-teachy 1: Teachy TV's screen (FIELD_ITEMS_PLAN.md batch 12)
+
+- `menus/teachyTv.ts` is teachy_tv.c whole but the demos: InitTeachyTvController, CB2_ReturnToTeachyTV,
+  SetTeachyTvControllerModeToResume, the main callback (modes 0-2), the BGs (the TV set, the noise, the title, Route 1
+  drawn on BG3 from its layout and tilesets: TeachyTvLoadBg3Map and its tile / palette helpers), the Pokédude's object,
+  the six-option list (four without the TM case) with its scroll arrows and WIN0 darkening, every TTVcmd, the tall
+  grass sprites (the field effect's template on the GBA layer, with the C's subsprite tables), quitting to the bag or
+  the field (Overworld_PlaySpecialMapMusic). menus/itemUse.ts: FieldUseFunc_TeachyTv, InitTeachyTvFromBag,
+  Task_InitTeachyTvFromField. The Pokédude's battles and scripted bag / TM case (units 2-3) go through one seam,
+  PokedudeDemoNotPorted: logged, and the screen comes back as from the demo's end (mode 2: the closing text).
+- Extractor: `graphics/teachy_tv/` in extract_gfx.py's prefixes (gTeachyTv_Gfx, the screen and title tilemaps, the
+  4-palette gTeachyTv_Pal); extract.py reads `src/data/text/teachy_tv.h` with strings.c (strings.c #includes it, the
+  regex only saw strings.c's own text). FieldMenuScene awaits `prepareTeachyTv` for the bag and SELECT screens when
+  the bag holds Teachy TV (the layout is a JSON fetch, the rest graphics).
+- On the way: the grass sprites' callback reads sResources after TeachyTvPrepBattle has freed it (on the GBA, the
+  freed heap during the transition); the port keeps the freed buffer for it (sFreedResources).
+- Tests: tests/e2e/teachyTv.test.ts, 4 tests: the old man's tutorial to the gift and Teachy TV from the bag (five
+  rows, no arrows, MUS_TEACHY_TV_MENU, SELECT ignored from the bag, B back to the bag and the map music); all six
+  options with the TM case, each recorded tick by tick in the page (the texts printed, every TTVcmd in order, mode 2
+  after the skipped demo, grass sprites in the battle options only, MUS_FOLLOW_ME then MUS_TEACHY_TV_MENU, back on
+  the same row), then CANCEL scrolled into view; B mid-sequence (TTVcmd_End's state, the list on the same option);
+  SELECT from the field (HELPCONTEXT_BAG, SELECT and CANCEL back to the field with the controls locked until the
+  fade in). Screenshots of the noise, title, walk-in, hello, the grass, mode 2, the walk off and THE END checked by
+  eye. Typecheck, 646 unit tests; teachyTv, registeredItems and fieldItems e2e pass.
+

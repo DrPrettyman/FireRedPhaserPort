@@ -612,8 +612,9 @@ this is the next level down. When you add or change a subsystem, update its entr
     CB2_ReturnToField. Back on the field, `OverworldScene.runFieldCallback` (RunFieldCallback, shared with the start
     menu's screens) runs FieldCB2_UseItemFromField: objects frozen and controls locked while the field fades in,
     then both released. The TM case / pouch's USE and GIVE go through the party menu and back to the screen as from
-    the bag (the reopening keeps the CB2_ReturnToField exit); SELECT closes both. The Fame Checker and Teachy TV
-    (no screens) log and give the controls back (registeredItemFieldFunc). Script `release` / `releaseall` now also
+    the bag (the reopening keeps the CB2_ReturnToField exit); SELECT closes both. Teachy TV opens from the field the
+    same way (Task_InitTeachyTvFromField). The Fame Checker (no screen) logs and gives the controls back
+    (registeredItemFieldFunc). Script `release` / `releaseall` now also
     unfreeze objects (ClearPlayerHeldMovementAndUnfreezeObjectEvents), and a map load or a battle's return clears the
     freeze. Probes: `field().locked` (LockPlayerFieldControls held), `field().objectsFrozen`, `__test.gbaTasks()`
     (active gTasks by function name, e.g. `Task_BagMenu_HandleInput`, `Task_FieldItemContextMenuHandleInput`),
@@ -776,6 +777,32 @@ this is the next level down. When you add or change a subsystem, update its entr
   Item icons: `CreateBerryPouchItemIcon` (menus/itemMenuIcons.ts). Probe `__test.berryPouch()` (BERRYPOUCH_* type,
   the screen task's name, `fading`, scroll/row, the pocket's berries in list order). Tests:
   tests/e2e/berryPouch.test.ts.
+- **Teachy TV:** `menus/teachyTv.ts` is teachy_tv.c. Ways in (menus/itemUse.ts FieldUseFunc_TeachyTv): the bag's
+  KEY ITEMS → TEACHY TV → USE (InitTeachyTvFromBag: `InitTeachyTvController(0, CB2_BagMenuFromStartMenu)`, B /
+  CANCEL back to the bag) and SELECT when it's registered (Task_InitTeachyTvFromField through
+  `OpenScreenFromFieldOnceFaded`, `InitTeachyTvController(0, CB2_ReturnToField)`; SELECT closes it too). The screen
+  draws synchronously, so FieldMenuScene awaits `prepareTeachyTv(assets)` for the 'bag' and 'itemFromField' menus
+  when the bag holds Teachy TV: Route 1's layout (`assets.loadLayout('LAYOUT_ROUTE1')`, the C's `&Route1_Layout`),
+  its tilesets' tiles / palettes / metatiles, `graphics/teachy_tv/` (extract_gfx.py), the tall grass field effect pic
+  and palette, the Pokédude's object (OBJ_EVENT_GFX_TEACHY_TV_HOST); the text is `data/text/teachy_tv.h`, which
+  extract.py now reads with strings.c. Structure as in the C: sStaticResources (mode, option, scroll / row: kept
+  across the demos) and sResources (the BG buffers, the grass counters: per open); TeachyTvMainCallback builds the
+  screen in mode 0 / 1 (the list: TeachyTvOptionListController) or mode 2 (after a demo:
+  TeachyTvPostBattleFadeControl, then the option's script from sWhereToReturnToFromBattle); an option runs its
+  TTVcmd list through TeachyTvRenderMsgAndSwitchClusterFuncs (B at any step: TTVcmd_End, the noise, the list).
+  BG3 is TeachyTvLoadBg3Map: Route 1's blocks (8..23, 6..14), each metatile's layers merged into four tiles, the
+  bottom layer's palettes from slot 15 down. **The seam for units 2-3** is at the bottom of the file:
+  TeachyTvPrepBattle / TeachyTvPreBattleAnimAndSetBattleCallback (unit 2: SavePlayerParty,
+  InitPokedudePartyAndOpponent, the transition, CB2_InitBattle; TeachyTvRestorePlayerPartyCallback is the way back
+  and already reads `state.battleOutcome` for B_OUTCOME_DREW = B quit) and InitPokedudeBag (unit 3: it belongs in
+  item_menu.c's itemMenu.ts, whose CreateBagInputHandlerTask still logs for the TTVSCR locations); both call
+  PokedudeDemoNotPorted until then. Exported for them: InitTeachyTvController, CB2_ReturnToTeachyTV,
+  SetTeachyTvControllerModeToResume, TTVSCR_*. Probe `__test.teachyTv()` (while TeachyTvCallback runs): mode,
+  whichScript, scrollOffset / selectedRow, the task and its TTVcmd (`step`, `timer`, `cmd`), `listReady`,
+  `listItems`, `arrows`, `text` (the symbol printed last) and `textActive`, the Pokédude's `dude` sprite, the
+  `grass` sprites up, BG3's scroll. Test: tests/e2e/teachyTv.test.ts (the Viridian old man's gift, the bag without
+  the TM case, each of the six options' sequences with the TM case, B mid-sequence, SELECT from the field). Quick
+  look: `?start=after-rival&map=PalletTown&x=12&y=14`, add ITEM_TEACHY_TV and register it, SELECT.
 - **Naming screen:** `DoNamingScreen` (`menus/namingScreen.ts`) runs on any GBA host. From a script, use
   `ScriptHost.doNamingScreen` (FieldMenuScene `naming`). Oak's speech calls it with NAMING_SCREEN_PLAYER
   (monSpecies = the player's gender) and NAMING_SCREEN_RIVAL on MainMenuScene, preloading `namingScreenGfxSymbols`
