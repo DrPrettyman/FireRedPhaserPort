@@ -192,6 +192,8 @@ export interface SpriteInfo {
 export interface ObjectEventGbaInfo {
   /** OBJ_EVENT_PAL_TAG_* value */
   paletteTag: number;
+  /** PALSLOT_*: the OBJ palette slot the object draws with (CreateFameCheckerObject's oam.paletteNum) */
+  paletteSlot: number;
   /** sObjectEventSpritePalettes' palette symbol for that tag */
   palette: string | null;
   /** gObjectEventBaseOam_<shape> */

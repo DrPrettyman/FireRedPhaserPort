@@ -131,6 +131,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Bag uses that need overworld systems
     (Fame Checker, Teachy TV) log "not implemented" and return to the bag. Mail's CHECK (CB2_CheckMail) reads an
     uninitialised struct Mail with only its item set; the port's has SPECIES_NONE, so Bead / Dream Mail show no icon. Berry
+    (Teachy TV, mail) log "not implemented" and return to the bag. Berry
     powder reads as 0. The Escape Rope's quest log event (ItemUse_SetQuestLogEvent) isn't
     recorded; ItemUseOnFieldCB_EscapeRope takes the field controls lock itself (on the GBA the start menu's lock is
     still held when the bag returns; here the field's overlay held the controls until then). RemoveUsedItem after
@@ -140,17 +141,22 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     the item's task (data[3] = 1) runs its first step in the frame SELECT is read (as RunTasks would, after the
     input callback) and then once a frame from a field task of its own, which stops when the task is destroyed;
     the VS Seeker and the Itemfinder destroy it at once and go on in their own field tasks (on the GBA,
-    Task_VsSeeker_0 / ItemUseOnFieldCB_Itemfinder carry on as the item's task). The Fame Checker and Teachy TV
-    from SELECT log and give the controls back (no screens). ChangeBgY(0, 0, 0) is a no-op (the field's message
+    Task_VsSeeker_0 / ItemUseOnFieldCB_Itemfinder carry on as the item's task). Teachy TV
+    from SELECT logs and gives the controls back (no screen). ChangeBgY(0, 0, 0) is a no-op (the field's message
     box isn't on a scrolled BG); InUnionRoom is always FALSE. No quest log events (ItemUse_SetQuestLogEvent).
-    The Town Map, TM case and berry pouch from SELECT start their screen once the map headers the region map /
-    party menu read have loaded (prepareFieldMoveMenu), a frame or more after the fade instead of in the same frame.
+    The Town Map, TM case, berry pouch and Fame Checker from SELECT start their screen once the map headers the
+    region map / party menu read (prepareFieldMoveMenu) and the screen's graphics have loaded, a frame or more after
+    the fade instead of in the same frame.
   - TM case (menus/tmCase.ts): no quest log (RecordItemTransaction). Not ported:
     the Pokédude's Teachy TV demo (TMCASE_POKEDUDE) and the Union Room's GIVE / EXIT menu (no link play).
   - Berry pouch (menus/berryPouch.ts): no quest log
     (RecordItemTransaction). Not ported: Berry Crush (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room context
     menus (GIVE / EXIT, EXIT) and IsHoldingItemAllowed's Enigma Berry check there (always TRUE: neither can be
     entered) and AbortBerryPouchLoading (for a failed Alloc).
+  - Fame Checker (menus/fameChecker.ts): no quest log event (FieldUseFunc_FameChecker's ItemUse_SetQuestLogEvent).
+    Its graphics (incl. every trainer pic and object event its flavor texts use) are preloaded with the bag when the
+    bag holds it, or before the screen when it's opened with SELECT. FullyUnlockFameChecker is ported but, as in
+    the C, nothing calls it.
   - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
     overworld's ScreenFade.
   - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;
@@ -244,6 +250,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     templates (NPC positions, setobjectxyperm changes), game stats, the quest log,
     Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, the fame
     checker, minigame records, the enigma berry, mystery gift, link records and
+    templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail,
+    Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, minigame
+    records, the enigma berry, mystery gift, link records and
     the region map zoom option. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
   - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the copyright screen, the
@@ -316,7 +325,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     with a fresh Overworld scene and GameState; other module-level state isn't reset.
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, cable club monitors) start their scripts and hit the unimplemented-special warnings.
-  - No-op specials (`NO_OP` in `script/specials.ts`): the quest log, the fame checker, InitUnionRoom and CloseLink.
+  - No-op specials (`NO_OP` in `script/specials.ts`): the quest log, InitUnionRoom and CloseLink.
   - Player names are "PLAYER"/"RIVAL" in dev starts and with `?skipIntro` (the e2e harness), which skip Oak's speech.
 - **Approximations:**
   - sound.c (gba/sound.ts, audio/frame.ts): the engine's logic runs every frame, output or not, so fanfare, `waitse`, `fadeoutbgm` and IsSEPlaying waits time like the GBA. Task_Fanfare is a

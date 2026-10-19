@@ -30,6 +30,7 @@ import { POSTGAME_SPECIALS } from './postgameSpecials';
 import { EVENT_ISLAND_SPECIALS } from './eventIslandSpecials';
 import { TRAINER_TOWER_SPECIALS } from './trainerTowerSpecials';
 import * as Help from '../ui/helpSystemContext';
+import { SetFlavorTextFlagFromSpecialVars, UpdatePickStateFromSpecialVar8005 } from '../state/fameChecker';
 
 export interface SpecialEnv {
   state: GameState;
@@ -68,11 +69,9 @@ export interface SpecialEnv {
 /** A gSpecials entry (data/specials.inc). The return value is stored by `specialvar`. */
 export type Special = (env: SpecialEnv) => number | void;
 
-/** Specials with no effect yet because the system they feed (quest log, fame checker) doesn't exist. */
+/** Specials with no effect yet because the system they feed (quest log) doesn't exist. */
 const NO_OP = [
   'QuestLog_CutRecording', // quest log
-  'SetFlavorTextFlagFromSpecialVars', // fame checker
-  'UpdatePickStateFromSpecialVar8005',
   'InitUnionRoom', // wireless only (and stubbed out from REVISION 0xA): CableClub_OnResume in every Pokémon Center
   'CloseLink', // link play: nothing was opened (TryBattleLinkup below never connects)
 ];
@@ -90,11 +89,18 @@ const HELP_SPECIALS: Record<string, Special> = {
   HelpSystem_Enable: () => Help.HelpSystem_Enable(),
 };
 
+/** fame_checker.c's specials (the `famechecker` macro): state/fameChecker.ts. */
+const FAME_CHECKER_SPECIALS: Record<string, Special> = {
+  SetFlavorTextFlagFromSpecialVars: ({ state }) => SetFlavorTextFlagFromSpecialVars(state),
+  UpdatePickStateFromSpecialVar8005: ({ state }) => UpdatePickStateFromSpecialVar8005(state),
+};
+
 export const SPECIALS: Record<string, Special> = {
   ...Object.fromEntries(NO_OP.map((name) => [name, () => {}])),
   ...PARTY_MENU_SPECIALS, // menus/partyMenuSpecials.ts: party_menu_specials.c, ChooseMonForMoveTutor
   ...STORY_SPECIALS, // storySpecials.ts: field_specials.c's story specials (Lt. Surge's trash cans, ...)
   ...HELP_SPECIALS,
+  ...FAME_CHECKER_SPECIALS,
   ...SIDE_SPECIALS, // sideSpecials.ts: Oak's Pokédex rating, money.c's cost specials
   ...DAYCARE_SPECIALS, // daycareSpecials.ts: daycare.c's Route 5 daycare specials
   ...GAME_CORNER_SPECIALS, // gameCornerSpecials.ts: GetRandomSlotMachineId

@@ -3976,7 +3976,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   MailSpeciesToSpecies, plus pokemon_icon.c's MailSpeciesToIconSpecies; the Game Corner's photo special and the
   trainer card now use these instead of their own copies. `GameState.mail` (gSaveBlock1Ptr->mail[16], ClearMailData
   in the constructor; InitEasyChatPhrases clears the words), MON_DATA_MAIL as the party-only `Pokemon.mail` (absent =
-  MAIL_NONE). Save version 10: `mail` and each party mon's `mail` (a version-9 save keeps the new-game slots).
+  MAIL_NONE). Save version 11 (10 at first; renumbered at the merge after W-fame's 10): `mail` and each party mon's `mail` (an older save keeps the new-game slots).
 - mail.c whole in `menus/mail.ts`: ReadMail, DoInitMailView's 19 steps, every mail type's graphics (graphics/mail/
   through extract_gfx.py) and textpals, sMessageLayouts_5x2 (and the unused 3x3), the gender colours, Bead / Dream
   Mail's icon (new CreateMonIcon_HandleDeoxys / LoadMonIconPalette / FreeMonIconPalette in menus/pokemonIcon.ts: the
@@ -3995,3 +3995,35 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   given from the bag with HI AWESOME typed, read, taken into the bag; ITEM → GIVE cancelled and written, Bead Mail's
   icon, TAKE → YES to the PC slots; CHECK; a held mail through SAVE and CONTINUE), passed three times in a row;
   easyChat.test.ts, fieldItems.test.ts, trainerCard.test.ts and gameCorner.test.ts's photo printer pass.
+
+### The Fame Checker (W-fame, FIELD_ITEMS_PLAN.md batch 12)
+
+- fame_checker.c whole in `menus/fameChecker.ts` (new): UseFameChecker and MainCB2_LoadFameChecker's setup (BG3 the
+  background, BG2 the frame, BG1's 512 px info box / pick panel, BG0's four windows), the persons list with CANCEL
+  (FC_PopulateListMenu, AdjustGiovanniIndexIfBeatenInGym, FC_DoMoveCursor's green / grey names), the six flavor-text
+  icons (CreateFameCheckerObject's object events, PlaceQuestionMarkTile's "?"), the selector cursor and the dimmed
+  icons (OBJ blending), the icon description box and its open / close animation, the pick mode (START: the person's
+  trainer pic or Daisy / Fuji / Oak / Bill's own, in colour or as a silhouette, sliding in with the spinning Poké
+  Ball and BG1; the name, or the quote with all six texts), the scroll arrows past five persons, the UI help line,
+  B / CANCEL / SELECT (from the field) closing with a fade. `menus/itemUse.ts`: FieldUseFunc_FameChecker (from the
+  bag, and with SELECT through FadeToScreenFromField / OpenScreenFromFieldOnceFaded); registeredItem.ts's "not
+  implemented" fallback is Teachy TV's only now.
+- Save data and specials in `state/fameChecker.ts` (new, Phaser-free): GameState.fameChecker, ResetFameChecker in
+  the constructor (NewGameInitData), FullyUnlockFameChecker, SetFlavorTextFlagFromSpecialVars and
+  UpdatePickStateFromSpecialVar8005 (out of specials.ts' NO_OP; the `famechecker` macro was already expanded by the
+  extractor). SAVE_VERSION 9 → 10 (`fameChecker`; upgradeSave keeps the new-game state for a version 9 save).
+- Extractor: `tools/extract_fame_checker.py` (new: fameChecker.json, loaded by Assets.init), `graphics/fame_checker/`
+  in extract_gfx.py, and `paletteSlot` in the sprite manifest's `gba` info (extract.py's gba_info; the Fame
+  Checker's objects draw with it). Rerun `npm run extract`.
+- Shared files: state/saveData.ts (version 10), script/specials.ts (FAME_CHECKER_SPECIALS, NO_OP), menus/itemUse.ts,
+  menus/registeredItem.ts (a comment), scenes/FieldMenuScene.ts (setObjectEventGraphicsInfo always; the Fame
+  Checker's graphics for the bag / the registered item), data/Assets.ts, data/types.ts, dev/testHooks.ts
+  (`fameChecker()`), tools/extract.py, tools/extract_gfx.py. No help context: the C sets none for it.
+- Verified: typecheck; `npm test` (53 files, 653 tests; tests/unit/fameChecker.test.ts new, 7: the new-game state, both
+  specials' rules, the save and a version 9 save, the extracted tables against fame_checker.c); e2e fameChecker.test.ts
+  (new, 2 tests: the rival's battle and gift in Cerulean, the bag's USE, OAK / BILL / CANCEL, Bill's first text from
+  the rival's icon, "?" elsewhere, the selector and dimming, pick mode with Bill's silhouette and Oak in colour with
+  his name, B back to the bag and the field; Brock beaten in his gym, SELECT from the field, his icon and text, his
+  pic in colour, B back to the field without the bag, the flags through a save and CONTINUE, SELECT closing it),
+  registeredItems, fieldItems. Screenshots of the list, a flavor text, a silhouette and Brock's pic match the GBA's
+  layout.

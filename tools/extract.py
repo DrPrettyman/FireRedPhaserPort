@@ -417,6 +417,7 @@ def extract_object_events(decomp, out):
             frames.append([sym, 0, -1] if frame is None else [sym, frame * frame_size, frame_size])
         return {
             "paletteTag": pal_tag_values.get(tag, 0x11FF),
+            "paletteSlot": pal_slots.get(info.get("paletteSlot", "").strip(), 0),  # the Fame Checker's objects (W-fame)
             "palette": pal_by_tag.get(tag),
             "oam": re.sub(r"^&gObjectEventBaseOam_", "", info.get("oam", "").strip()),
             "images": frames,
@@ -1594,6 +1595,10 @@ def main():
     from extract_trainer_tower import extract_trainer_tower
 
     extract_trainer_tower(decomp, out)
+    print("fame checker")
+    from extract_fame_checker import extract_fame_checker
+
+    extract_fame_checker(decomp, out)
     print("gfx")
     from extract_gfx import extract_gfx
     extract_gfx(decomp, out)

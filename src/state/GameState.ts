@@ -12,6 +12,7 @@ import { InitEasyChatPhrases, InitQuestionnaireWords } from '../menus/easyChatDa
 import { ClearMailData, type Mail } from '../world/mail';
 import { boxMonFromMon, boxMonRestorePP, PokemonStorage } from './PokemonStorage';
 import { newTrainerTowerRecord, ResetTrainerTowerResults, type TrainerTowerRecord } from './trainerTowerRecord';
+import { newFameCheckerSaveData, ResetFameChecker, type FameCheckerSaveData } from './fameChecker';
 
 /**
  * Save-block style game state: event flags, vars, names, options, party, bag, Pokédex.
@@ -139,6 +140,8 @@ export class GameState {
   towerChallengeId = 0;
   /** gSaveBlock1Ptr->trainerTower[NUM_TOWER_CHALLENGE_TYPES] (world/trainerTower.ts); ResetTrainerTowerResults in the constructor. */
   trainerTower: TrainerTowerRecord[] = [];
+  /** gSaveBlock1Ptr->fameChecker[NUM_FAMECHECKER_PERSONS] (state/fameChecker.ts); ResetFameChecker in the constructor. */
+  fameChecker: FameCheckerSaveData[] = [];
 
   private flags = new Set<number>();
   private vars = new Map<number, number>();
@@ -227,6 +230,8 @@ export class GameState {
     InitQuestionnaireWords(this); // ClearMysteryGift
     this.trainerTower = Array.from({ length: defines.require('NUM_TOWER_CHALLENGE_TYPES') }, newTrainerTowerRecord);
     ResetTrainerTowerResults(this); // NewGameInitData
+    this.fameChecker = Array.from({ length: defines.require('NUM_FAMECHECKER_PERSONS') }, newFameCheckerSaveData);
+    ResetFameChecker(this, defines.require('FAMECHECKER_OAK')); // NewGameInitData
     // ResetPokemonStorageSystem (NewGameInitData)
     this.storage = new PokemonStorage(
       {
