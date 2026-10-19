@@ -3600,3 +3600,31 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   GBA layer at BLDALPHA (12, 8) and back after the battle; the Lost Cave fogged), pokemonTower.test.ts and
   transitions.test.ts (15 passed with weather), battleAnims "a ghost dodges the ball" (3F). Screenshots of 3F on the
   field and mid-transition show the fog.
+
+### W-sevii 5: Seven Island, the Tanoby Ruins, Altering Cave (POSTGAME_PLAN.md batch 10)
+
+- Played headless (`tests/e2e/postgameSevenIsland.test.ts`, 6 tests): Three Island → Seven Island on the Rainbow Pass
+  menu's second page (HI-SPEED 6); the Liptoo Chamber dark (EventScript_TryDarkenRuins' WEATHER_SHADE) with no
+  encounter in 40 steps while the ruins are locked; Sevault Canyon → the Tanoby Key, Strength from a boulder, the
+  puzzle in 34 pushes (a search over the map's collision found them), each switch's script
+  (HandleBoulderActivateVictoryRoadSwitch → Switch1-7, VAR_TEMP_1-7 100, VAR_TEMP_8 7), every ShakeScreen's camera
+  pan per tick (seven 1 px shakes, then PuzzleSolvedShakeScreen's 2 px and 3 px ones), SE_TRUCK_MOVE x7,
+  SE_LAVARIDGE_FALL_WARP, the rumble message, FLAG_SYS_UNLOCKED_TANOBY_RUINS, the boulders on the switches again on
+  the next visit (MoveBouldersToSolvedPos); the chamber lit and a seeded wild Unown with one of its letters; all seven
+  chambers dark then lit, each with sUnownLetterSlots' letters by slot (GenerateWildMon); Altering Cave's Zubat (set
+  0); and a sweep: all 18 trainer battles of the Sevault Canyon entrance, the canyon, the Tanoby Ruins and the Trainer
+  Tower's path, their 4 item balls and 10 hidden items, the town's, Mart's, Pokémon Center's and house's NPCs and
+  signs, the Swords Dance tutor (declined), the Black Belt, the Chansey and the Chansey Dance (the party healed).
+- Fixes found on the way: an Unown's battle threw "gMonFrontPic_UnownD used before loadGfx()" (BattleScene's
+  gfxSymbolsFor preloaded only the species' pic; it now adds the letter's front / back pics as LoadSpecialPokePic
+  reads them); ValidateEReaderTrainer (script/postgameSpecials.ts, off the link gaps) left VAR_RESULT 0, so the
+  Seven Island house opened its battle-room door and the old woman offered the e-Reader trainer's challenge: it now
+  gives 1, as the C does for a save without an e-Reader trainer (DEVIATIONS).
+- Everything else ran as it was: the canyon's trainers, items and NPCs, the Chansey Dance, the chambers and Altering
+  Cave. Neighbouring maps' objects spawn in the port, so the Sevault Canyon entrance's `clone` of the Swords Dance
+  tutor needs nothing.
+- Coverage gaps: the postgame lines left are all owned: CompareHeracrossSize, GetHeracrossSizeRecordInfo,
+  disable_anim, restore_anim (W-sevii 3), SampleResortGorgeousMonAndReward, SetPostgameFlags (W-sevii 4),
+  ShowBattleRecords (W-ttower). One link gap fewer (ValidateEReaderTrainer).
+- Verified: typecheck; unit 622 passed; e2e postgameSevenIsland.test.ts (6 passed, ~7 min: most of it the sweep's
+  battles) and wildBattle.test.ts (3 passed: the battle's preload).

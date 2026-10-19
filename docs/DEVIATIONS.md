@@ -420,6 +420,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     doesn't run while OverworldScene loads a map (`busy`), when the GBA isn't running the overworld either.
     `warphole MAP_UNDEFINED` (SetWarpDestinationToFixedHoleWarp: R/S's `setholewarp`, else gLastUsedWarp, which the
     port doesn't keep) logs and ends the script; only the unused EventScript_FallDownHole reaches it.
+  - Seven Island's house (W-sevii unit 5): ValidateEReaderTrainer (script/postgameSpecials.ts) always gives VAR_RESULT
+    1, the C's result for the all-zero e-Reader trainer a save holds without an e-Reader (link content), so the
+    visiting trainer's door never opens; the battle room's specials (SetEReaderTrainerGfxId, StartSpecialBattle,
+    ReducePlayerPartyToThree, the party save / load) stay link gaps.
   - Field weather (world/weather.ts, W-weather units 1 and 2): WEATHER_NONE, SUNNY, SHADE and FOG_HORIZONTAL are
     ported (and UNDERWATER, which shares the fog's callbacks); the weathers no FRLG map or script reaches (rain, snow,
     thunder, ash, sandstorm, diagonal fog, drought, downpour, bubbles) run as WEATHER_NONE and log once
