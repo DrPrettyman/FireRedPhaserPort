@@ -27,10 +27,10 @@ import {
   type Subsprite,
   type SubspriteTable,
 } from '../gba/sprite';
+import { PlaySE12WithPanning, PlaySE1WithPanning, PlaySE2WithPanning } from '../gba/sound';
 import { CreateTask, DestroyTask, gTasks, TaskDummy, type TaskFunc } from '../gba/task';
 import { AddTextPrinterParameterized4, AddWindow, FillWindowPixelBuffer, GetStringWidth, gWindows, PIXEL_FILL, RemoveWindow, TEXT_SKIP_DRAW } from '../gba/window';
 import type { Pokemon } from '../pokemon/Pokemon';
-import { ui } from './battleUi';
 import { K } from './constants';
 import { charmap, g, gSpeciesInfo, pokemon, state } from './env';
 import { encodeBattleText } from './message';
@@ -528,7 +528,7 @@ export function CreatePartyStatusSummarySprites(battlerId: number, partyInfo: Hp
   d[tSummaryBarSpriteId] = summaryBarSpriteId;
   for (let i = 0; i < K.PARTY_SIZE; i++) d[tBallIconSpriteId(i)] = ballIconSpritesIds[i];
   d[tIsBattleStart] = +isBattleStart;
-  ui.playSE(K.SE_BALL_TRAY_ENTER);
+  PlaySE12WithPanning(K.SE_BALL_TRAY_ENTER, 0);
   return taskId;
 }
 
@@ -628,7 +628,9 @@ function SpriteCB_PartySummaryBall_OnBattleStart(sprite: Sprite): void {
     if (sprite.x2 < 0) sprite.x2 = 0;
   }
   if (sprite.x2 === 0) {
-    ui.playSE(sprite.data[sIsEmptyBall] ? K.SE_BALL_TRAY_EXIT : K.SE_BALL_TRAY_BALL);
+    const pan = isOpponent ? K.SOUND_PAN_ATTACKER : K.SOUND_PAN_TARGET;
+    if (sprite.data[sIsEmptyBall]) PlaySE2WithPanning(K.SE_BALL_TRAY_EXIT, pan);
+    else PlaySE1WithPanning(K.SE_BALL_TRAY_BALL, pan);
     sprite.callback = SpriteCallbackDummy;
   }
 }

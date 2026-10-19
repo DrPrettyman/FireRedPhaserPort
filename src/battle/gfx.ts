@@ -7,7 +7,19 @@
 // that isn't ported yet finishes immediately (see the per-animation notes below).
 
 import { gfx, gfx16 } from '../gba/gfx';
-import { PlaySE } from '../gba/sound';
+import { gMPlayInfo_BGM, gMPlayInfo_SE1, gMPlayInfo_SE2, m4aMPlayStop, m4aMPlayVolumeControl, m4aSongNumStop } from '../audio/m4a';
+import { TRACKS_ALL } from '../audio/m4aInternal';
+import { gMain } from '../gba/main';
+import {
+  IsBGMPlaying,
+  IsCryPlayingOrClearCrySongs,
+  IsSEPlaying,
+  PlayCry_ByMode,
+  PlayCry_Normal,
+  PlayCry_ReleaseDouble,
+  PlaySE,
+  StopCryAndClearCrySongs,
+} from '../gba/sound';
 import { LaunchBattleAnimation, LaunchStatusAnimation } from './anim/battleAnim';
 import { AnimateBallOpenParticles, LaunchBallFadeMonTask } from './anim/special';
 import { anim } from './anim/state';
@@ -57,10 +69,9 @@ import {
   UpdateHealthboxAttribute,
   UpdateNickInHealthbox,
 } from './battleInterface';
-import { ui } from './battleUi';
 import { K } from './constants';
 import { bdata, g, pokemon } from './env';
-import { bufferBattlePartyCurrentOrderBySide } from './partyOrder';
+import { bufferBattlePartyCurrentOrderBySide, getPartyIdFromBattlePartyId } from './partyOrder';
 import { gSineTable, Sin } from './trig';
 import { getBattlerAtPosition, getBattlerPosition, getBattlerSide } from './util';
 
@@ -390,7 +401,7 @@ function SpriteCB_MoveWildMonToRight(sprite: Sprite): void {
     sprite.x2 += 2;
     if (sprite.x2 === 0) {
       sprite.callback = SpriteCB_WildMonShowHealthbox;
-      ui.playCry(sprite.data[2]);
+      PlayCry_Normal(sprite.data[2], 25);
     }
   }
 }
@@ -973,15 +984,56 @@ export function ClearBehindSubstituteBit(battlerId: number): void {
   sbd().battlerData[battlerId].behindSubstitute = 0;
 }
 
-/** HandleLowHpMusicChange: the low-HP beep isn't played (no audio). */
+/** HandleLowHpMusicChange (battle_gfx_sfx_util.c): the low HP beep (SE_LOW_HEALTH, a looping song on SE3) starts when
+ *  a player's mon drops into the red, unless its partner's already plays it, and stops when it leaves the red (in a
+ *  double battle only once neither is). */
 export function HandleLowHpMusicChange(mon: Pokemon, battlerId: number): void {
-  sbd().battlerData[battlerId].lowHpSong = GetHPBarLevel(mon.hp, mon.maxHP) === K.HP_BAR_RED ? 1 : 0;
+  if (GetHPBarLevel(mon.hp, mon.maxHP) === K.HP_BAR_RED) {
+    if (!sbd().battlerData[battlerId].lowHpSong) {
+      if (!sbd().battlerData[battlerId ^ K.BIT_FLANK].lowHpSong) PlaySE(K.SE_LOW_HEALTH);
+      sbd().battlerData[battlerId].lowHpSong = 1;
+    }
+  } else {
+    sbd().battlerData[battlerId].lowHpSong = 0;
+    if (!isDoubleBattle()) m4aSongNumStop(K.SE_LOW_HEALTH);
+    else if (isDoubleBattle() && !sbd().battlerData[battlerId ^ K.BIT_FLANK].lowHpSong) m4aSongNumStop(K.SE_LOW_HEALTH);
+  }
 }
 
+/** BattleStopLowHpSound (battle_gfx_sfx_util.c) */
 export function BattleStopLowHpSound(): void {
   const b = getBattlerAtPosition(K.B_POSITION_PLAYER_LEFT);
   sbd().battlerData[b].lowHpSong = 0;
   if (isDoubleBattle()) sbd().battlerData[b ^ K.BIT_FLANK].lowHpSong = 0;
+  m4aSongNumStop(K.SE_LOW_HEALTH);
+}
+
+/** HandleBattleLowHpMusicChange (battle_gfx_sfx_util.c): party_menu.c's call after an item restored HP. */
+export function HandleBattleLowHpMusicChange(): void {
+  if (gMain.inBattle) {
+    const playerBattler1 = getBattlerAtPosition(K.B_POSITION_PLAYER_LEFT);
+    const playerBattler2 = getBattlerAtPosition(K.B_POSITION_PLAYER_RIGHT);
+    const battler1PartyId = getPartyIdFromBattlePartyId(g.battlerPartyIndexes[playerBattler1]);
+    const battler2PartyId = getPartyIdFromBattlePartyId(g.battlerPartyIndexes[playerBattler2]);
+    const mon1 = g.playerParty[battler1PartyId];
+    const mon2 = g.playerParty[battler2PartyId];
+    if (mon1 && mon1.hp !== 0) HandleLowHpMusicChange(mon1, playerBattler1);
+    if (isDoubleBattle() && mon2 && mon2.hp !== 0) HandleLowHpMusicChange(mon2, playerBattler2);
+  }
+}
+
+/** IsBattleSEPlaying (battle_gfx_sfx_util.c): the controllers hold a move / status anim while an SE plays, for up to
+ *  30 calls, then stop SE1 and SE2. Reads gActiveBattler's soundTimer as the C does (its UB: only ever passed
+ *  gActiveBattler). */
+export function IsBattleSEPlaying(battlerId: number): boolean {
+  if (IsSEPlaying()) {
+    ++sbd().healthBoxesData[battlerId].soundTimer;
+    if (sbd().healthBoxesData[g.activeBattler].soundTimer < 30) return true;
+    m4aMPlayStop(gMPlayInfo_SE1);
+    m4aMPlayStop(gMPlayInfo_SE2);
+  }
+  sbd().healthBoxesData[battlerId].soundTimer = 0;
+  return false;
 }
 
 /** SetBattlerSpriteAffineMode */
@@ -1280,7 +1332,84 @@ function SpriteCB_OpponentMonSendOut(sprite: Sprite): void {
   }
 }
 
-/** SpriteCB_ReleaseMonFromBall (the cry task only matters for audio, which isn't implemented) */
+// Task_PlayCryWhenReleasedFromBall's data
+const tCryTaskSpecies = 0;
+const tCryTaskPan = 1;
+const tCryTaskWantedCry = 2;
+const tCryTaskMonPtr1 = 3; // the C keeps the mon's pointer in data[3..4]: here its side and party index
+const tCryTaskMonPtr2 = 4;
+const tCryTaskFrames = 10;
+const tCryTaskState = 15;
+
+/** Task_PlayCryWhenReleasedFromBall (pokeball.c): the cry of a mon let out of its ball, 3 frames after the ball
+ *  opens; weak (CRY_MODE_WEAK) when the mon is statused or in the yellow / red. In a double battle's intro the left
+ *  mon's cry (case 1 → state 2) and the right one's (case 2 → state 3, after the first stops) are the doubles
+ *  versions. */
+const Task_PlayCryWhenReleasedFromBall: TaskFunc = (taskId) => {
+  const d = gTasks[taskId].data;
+  const wantedCry = d[tCryTaskWantedCry];
+  const pan = d[tCryTaskPan];
+  const species = d[tCryTaskSpecies];
+  const mon = (d[tCryTaskMonPtr1] ? g.enemyParty : g.playerParty)[d[tCryTaskMonPtr2]]!;
+  switch (d[tCryTaskState]) {
+    case 0:
+    default:
+      if (d[8] < 3) d[8]++;
+      else d[tCryTaskState] = wantedCry + 1;
+      break;
+    case 1: // single cry
+      if (ShouldPlayNormalMonCry(mon) === true) PlayCry_ByMode(species, pan, K.CRY_MODE_NORMAL);
+      else PlayCry_ByMode(species, pan, K.CRY_MODE_WEAK);
+      DestroyTask(taskId);
+      break;
+    case 2:
+      StopCryAndClearCrySongs();
+      d[tCryTaskFrames] = 3;
+      d[tCryTaskState] = 20;
+      break;
+    case 20:
+      if (d[tCryTaskFrames] === 0) {
+        // first doubles cry
+        if (ShouldPlayNormalMonCry(mon) === true) PlayCry_ReleaseDouble(species, pan, K.CRY_MODE_DOUBLES);
+        else PlayCry_ReleaseDouble(species, pan, K.CRY_MODE_WEAK_DOUBLES);
+        DestroyTask(taskId);
+      } else {
+        d[tCryTaskFrames]--;
+      }
+      break;
+    case 3:
+      d[tCryTaskFrames] = 6;
+      d[tCryTaskState] = 30;
+      break;
+    case 30:
+    case 31:
+      if (d[tCryTaskState] === 30) {
+        if (d[tCryTaskFrames] !== 0) {
+          d[tCryTaskFrames]--;
+          break;
+        }
+        d[tCryTaskState]++;
+      } // fall through
+      if (!IsCryPlayingOrClearCrySongs()) {
+        StopCryAndClearCrySongs();
+        d[tCryTaskFrames] = 3;
+        d[tCryTaskState]++;
+      }
+      break;
+    case 32:
+      if (d[tCryTaskFrames] !== 0) {
+        d[tCryTaskFrames]--;
+        break;
+      }
+      // second doubles cry
+      if (ShouldPlayNormalMonCry(mon) === true) PlayCry_ReleaseDouble(species, pan, K.CRY_MODE_NORMAL);
+      else PlayCry_ReleaseDouble(species, pan, K.CRY_MODE_WEAK);
+      DestroyTask(taskId);
+      break;
+  }
+};
+
+/** SpriteCB_ReleaseMonFromBall */
 function SpriteCB_ReleaseMonFromBall(sprite: Sprite): void {
   const battlerId = sprite.data[sBattler];
   StartSpriteAnim(sprite, 1);
@@ -1288,8 +1417,32 @@ function SpriteCB_ReleaseMonFromBall(sprite: Sprite): void {
   AnimateBallOpenParticles(sprite.x, sprite.y - 5, 1, 28, ballId);
   sprite.data[0] = LaunchBallFadeMonTask(true, battlerId, 14, ballId);
   sprite.callback = HandleBallAnimEnd;
-  const party = getBattlerSide(battlerId) !== K.B_SIDE_PLAYER ? g.enemyParty : g.playerParty;
-  ui.playCry(party[g.battlerPartyIndexes[battlerId]]?.species ?? 0);
+  if (gMain.inBattle) {
+    const enemy = getBattlerSide(battlerId) !== K.B_SIDE_PLAYER;
+    const pan = enemy ? 25 : -25;
+    const partyIndex = g.battlerPartyIndexes[battlerId];
+    const species = (enemy ? g.enemyParty : g.playerParty)[partyIndex]?.species ?? 0;
+    const leftBattler = battlerId === getBattlerAtPosition(K.B_POSITION_PLAYER_LEFT) || battlerId === getBattlerAtPosition(K.B_POSITION_OPPONENT_LEFT);
+    if (leftBattler && isDoubleBattle() && sbd().animationData.introAnimActive) {
+      if (g.battleTypeFlags & K.BATTLE_TYPE_MULTI) {
+        if (IsBGMPlaying()) m4aMPlayStop(gMPlayInfo_BGM);
+      } else {
+        m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 128);
+      }
+    }
+    let wantedCryCase: number;
+    if (!isDoubleBattle() || !sbd().animationData.introAnimActive) wantedCryCase = 0;
+    else if (leftBattler) wantedCryCase = 1;
+    else wantedCryCase = 2;
+    const taskId = CreateTask(Task_PlayCryWhenReleasedFromBall, 3);
+    const d = gTasks[taskId].data;
+    d[tCryTaskSpecies] = species;
+    d[tCryTaskPan] = pan;
+    d[tCryTaskWantedCry] = wantedCryCase;
+    d[tCryTaskMonPtr1] = enemy ? 1 : 0;
+    d[tCryTaskMonPtr2] = partyIndex;
+    d[tCryTaskState] = 0;
+  }
   const mon = gSprites[g.battlerSpriteIds[battlerId]];
   StartSpriteAffineAnim(mon, K.BATTLER_AFFINE_EMERGE);
   AnimateSprite(mon);
