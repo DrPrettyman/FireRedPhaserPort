@@ -4429,3 +4429,40 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   `t.textColor()`, `t.objects()` gains `texture`.
 - Verified: typecheck, unit tests, tests/e2e/dynamicGfx.test.ts (new, 4 tests), trainerTower.test.ts,
   eventIslands.test.ts, story.test.ts.
+
+### W-weather 2 (GAPS_PLAN.md batch 13): Snow, Ash, Sandstorm
+
+- **WEATHER_SNOW** (`world/weatherSnow.ts`, field_weather_effects.c): Snow_InitVars / _InitAll / _Main / _Finish,
+  UpdateVisibleSnowflakeSprites (a flake more or less every 37 frames, to 16), CreateSnowflakeSprite,
+  DestroySnowflakeSprite, InitSnowflakeSpriteMovement, WaitSnowflakeSprite, UpdateSnowflakeSprite (tPosY Q9.7, the
+  sway gSineTable / 64, the side and bottom wraps). The shade (gamma 3, 20 frames a step) and FadeInScreen_RainShowShade
+  were in already. As in the C, a flake whose fall time (210-241 frames) runs out waits for snowflakeTimer, which
+  nothing increments: it stays invisible, so the snow thins out a few seconds after the last flake is made (Snow_InitAll
+  on a map load leaves 9-10 of the 16 waiting). Faithful, not fixed.
+- **WEATHER_VOLCANIC_ASH** (`world/weatherAsh.ts`): Ash_*, LoadAshSpriteSheet, CreateAshSprites (20 ST_OAM_OBJ_BLEND
+  64x64), DestroyAshSprites, UpdateAshSprite (ashBaseSpritesX = (gSpriteCoordOffsetX & 0x1FF) mod 240, the columns
+  wrapped past 272, a pixel down every 6 frames); the blend (0, 16) → (16, 0) a step every 2 frames, and back on
+  finish. Ash_InitVars' BLDALPHA_BLEND(64, 63) and Ash_Finish's 0 are raw register writes: weather.ts
+  `SetWeatherBldAlpha` (the 5-bit fields: 64 → 0, 63 → 31).
+- **WEATHER_SANDSTORM** (`world/weatherSandstorm.ts`): Sandstorm_*, UpdateSandstormWaveIndex, UpdateSandstormMovement
+  (the u32 offsets), CreateSandstormSprites, CreateSwirlSandstormSprites, DestroySandstormSprites,
+  UpdateSandstormSprite, WaitSandSwirlSpriteEntrance, UpdateSandstormSwirlSprite; gSandstormWeatherPalette through
+  LoadCustomWeatherSpritePalette; the blend a step a frame.
+- No sounds (none of the three plays one; SetNextWeather's PlayRainStoppingSoundEffect was in already).
+- **Layer change (shared, small):** templates with frame images (the snowflakes: TAG_NONE + sSnowflakeSpriteImages)
+  as `WeatherSpriteTemplate.imageSymbols` in world/weatherSprites.ts; `WeatherOam.image` and the renderer's `frame()`
+  draw the image (world/weatherSpriteRenderer.ts). The renderer's `probe` takes `drawn` (the last render's OAM).
+- weather.ts: the gWeatherPtr fields, StartWeather's resets (snowflakeSpriteCount, ashSpritesCreated,
+  sandstormSpritesCreated, sandstormSwirlSpritesCreated), `ported()` rows Snow / Ash / Sandstorm, SetWeatherBldAlpha.
+  tests/unit/weather.test.ts' "unported weather" check moved from SNOW to FOG_DIAGONAL.
+- Test hooks: `weatherSprites(px, py, visible, drawn)`, `weatherPtr()`, `weatherSprite(id)`, `weatherBlendCoeffs`.
+  A blended pixel read back has to be compared with the frame that render drew (`drawn`): the sand moves up to 4
+  pixels a tick, so the e2e test picks a point that's a sprite pixel now and checks it against the drawn OAM after the
+  read (and runs at `speed: 1`).
+- Verified: typecheck; unit tests (tests/unit/weatherSnowAshSand.test.ts: a flake's fall frame by frame against the
+  LCG and gSineTable, the wraps, InitAll, the finish; the ash's positions, BLDALPHA writes and blend steps; the
+  sandstorm's drift and swirls for 420 frames, the blend, the finish); e2e tests/e2e/weatherSnowAshSand.test.ts
+  (snow: counts 37 frames apart, the gamma steps, a flake tick by tick, a drawn flake pixel, the finish; ash and
+  sandstorm: the blend tick by tick, every sprite's position tick by tick, blended pixels read back at BLDALPHA
+  (10, 9), the sand palette, the finish; a battle in the sandstorm: "A sandstorm is raging."), plus weatherRain and
+  weather.

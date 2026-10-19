@@ -493,9 +493,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     ReducePlayerPartyToThree, the party save / load) stay link gaps.
   - Field weather (world/weather.ts, W-weather units 1 and 2): WEATHER_NONE, SUNNY, SHADE and FOG_HORIZONTAL are
     ported (and UNDERWATER, which shares the fog's callbacks), and RAIN, RAIN_THUNDERSTORM and DOWNPOUR (batch 13,
-    world/weatherRain.ts); the other weathers no FRLG map or script reaches (clouds, snow, ash, sandstorm, diagonal
-    fog, drought, bubbles) run as WEATHER_NONE and log once (POSTGAME_PLAN.md decision 1); their saved number is
-    kept. SetCurrentAndNextWeatherNoDelay (static, never called in FRLG) isn't ported. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
+    world/weatherRain.ts), SNOW, VOLCANIC_ASH and SANDSTORM (batch 13, world/weatherSnow.ts, weatherAsh.ts,
+    weatherSandstorm.ts); the other weathers no FRLG map or script reaches (clouds, diagonal fog, drought, bubbles) run
+    as WEATHER_NONE and log once (POSTGAME_PLAN.md decision 1); their saved number is kept. SetCurrentAndNextWeatherNoDelay (static, never called in FRLG) isn't ported. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
     the field's sprite sheets redrawn in place (world/weatherTextures.ts: `spr_*` GAMMA_ALT, their reflection sheets
     and the loadfadedpal field effects GAMMA_NORMAL), not to palette RAM: a connected map with another secondary
     tileset isn't shifted until it's the current map. FadeScreen's fade-out copy of the shifted palettes into the
@@ -538,6 +538,13 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     objects), and StartWeather's ApplyGlobalFieldPaletteTint (the quest log's playback tint) doesn't reach it: no
     weather with sprites is recorded by the quest log, no FRLG map having one. The GBA layer's copy of the field
     puts the weathers' sprites in its OBJ layer among the objects by depth, the blended ones semi-transparent.
+    The snowflakes' frame images (sSnowflakeSpriteImages) aren't copied into tiles of their own
+    (RequestSpriteFrameImageCopy): the renderer draws the anim frame's image directly, the same picture. The C's
+    gWeatherPtr->sprites union (the snowflakes' pointers share memory with the ash's and the sandstorm's) is separate
+    arrays here: a weather's Finish ends before the next one's InitVars, so nothing reads the other's pointers.
+    Ash_InitVars' and Ash_Finish's raw BLDALPHA writes reach the field's sprites but not the GBA layer's copy (a
+    battle transition), which takes gWeatherPtr's coefficients; they differ only before the ash is up and after it's
+    gone.
 - **Data:** Castform has no front pic (its `front.png` isn't in the decomp; it's built from per-form images).
 
 ## Deliberate QOL changes
