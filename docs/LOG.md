@@ -3153,3 +3153,10 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   WarpFadeOutScreen).
 - The Hall of Fame's cries don't hold anything in the C (the 120-frame timer runs alongside); the only wait this
   unit adds is DoWarp's BGMusicStopped (a frame: the BGM has faded out under the screen's fade already).
+- Tests: typecheck clean, unit 577 in 42 files; new `tests/e2e/audioScenes2.test.ts` (4: the Hall of Fame and the
+  credits, the Hall of Fame PC, the Pokédex, the title screen); hallOfFame, pokedex, pokedexArea, titleScreen,
+  trainerCard, fieldItems, registeredItems green. Full suite on dc88453 (load from the other workers): 415 e2e in 65
+  files, 411 passed, 35 min. Of the four failures, audioScenes2's Hall of Fame test is fixed (it read the ducked BGM
+  volume after an awaited `t.until`, past the first cry's duck under load; now recorded tick by tick in one `t.mash`
+  predicate); transitions' "every battle transition" (its 120 s timeout), battleAnims.3e3a's Smokescreen and
+  battleAnims.2d's Memento were green on rerun: races outside this unit, not fixed. No tick budgets needed raising.
