@@ -84,7 +84,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   `PokemonLeague_ChampionsRoom&x=6&y=19`).
 - **Field weather:** `world/weather.ts` is field_weather.c / field_weather_util.c and FRLG's weathers of
   field_weather_effects.c (None, Sunny, Shade, FogHorizontal in weather.ts; the weathers no FRLG map reaches each in
-  a module of their own: Rain, Thunderstorm and Downpour in `world/weatherRain.ts`, Clouds in `world/weatherClouds.ts`,
+  a module of their own: Rain, Thunderstorm and Downpour in `world/weatherRain.ts`, Snow in `world/weatherSnow.ts`,
+  Ash in `world/weatherAsh.ts`, Sandstorm in `world/weatherSandstorm.ts`, Clouds in `world/weatherClouds.ts`,
   FogDiagonal in `world/weatherFogDiagonal.ts`, Drought in `world/weatherDrought.ts`, Bubbles in
   `world/weatherBubbles.ts`; `ported()` is keyed by sWeatherFuncs' row names, so WEATHER_UNDERWATER runs the fog's
   callbacks as in FRLG; a number past the table, which TranslateWeatherNum never saves, runs None's). The
@@ -158,6 +159,14 @@ this is the next level down. When you add or change a subsystem, update its entr
     DoDiveWarp / Task_DoorWarp / Task_StairWarp, `openFieldMenu` for the start menu's five screens, world/dive.ts'
     DoDiveWarp, menus/seagallop.ts' Task_Seagallop_3). The battle's ABILITYEFFECT_SWITCH_IN_WEATHER takes
     GetCurrentWeather() at the battle's start (BattleStart.overworldWeather).
+  - **Snow, Ash, Sandstorm** (W-weather 2): Snow_* (`world/weatherSnow.ts`: a flake every 37 frames up to 16, the
+    shade's gamma 3; its template has frame images, not a sheet: `WeatherSpriteTemplate.imageSymbols` in
+    weatherSprites.ts, so `oam.tileNum` is the image's index and `WeatherOam.image` its gfx symbol), Ash_*
+    (`world/weatherAsh.ts`: 20 blended 64x64 sprites; Ash_InitVars' and Ash_Finish's raw BLDALPHA writes go through
+    weather.ts `SetWeatherBldAlpha`), Sandstorm_* (`world/weatherSandstorm.ts`: 20 sand sprites, 5 swirls,
+    gSandstormWeatherPalette through LoadCustomWeatherSpritePalette). Their gWeatherPtr fields are in weather.ts'
+    struct (StartWeather resets snowflakeSpriteCount, ashSpritesCreated and the sandstorm's two flags). No sound. The
+    battle's switch-in weather starts a sandstorm from WEATHER_SANDSTORM.
   Commands: `setweather`, `doweather`, `resetweather`. Probes:
   `__test.weather(slot?, colorIndex?, texture?)` (state, gamma index, BLDALPHA's EVA / EVB, fogHScrollPosX, BG palette
   `slot` unfaded / shown, an atlas pixel drawn with it, a sheet pixel now / as loaded), `__test.fog(px?, py?,
@@ -165,11 +174,16 @@ this is the next level down. When you add or change a subsystem, update its entr
   the GBA layer's semi-transparent pixels; `visible` hides it to read the field under it), `__test.screenPixel(x, y)`
   (a rendered pixel, read at the end of the next render; one at a time: Phaser keeps one request per render),
   `__test.doWeather(weather)` (setweather + doweather), `__test.weatherSprites(px?, py?, visible?)` (the layer's OAM
-  now, BLDALPHA, the front sprite's colour at a pixel, the GBA layer's semi pixels; `visible` hides them),
+  now, BLDALPHA, the front sprite's colour at a pixel, the GBA layer's semi pixels; `visible` hides them; `drawn`: the
+  OAM the last render drew, so a check right after a `screenPixel` sees the frame it read), `__test.weatherPtr()`
+  (gWeatherPtr's scalar fields), `__test.weatherSprite(id)` (a weather sprite's x / y / x2 / y2 / data[]),
+  `__test.weatherBlendCoeffs(eva, evb)` (Weather_SetBlendCoeffs, test-only),
   `__test.weatherTestSprite({ x, y, blend, eva, evb })` (a still 64x64 ash frame on the layer, test-only). Tests:
   tests/unit/weather.test.ts (tables, the task, the fog's blend steps, scroll, fade in and finish),
   tests/unit/weatherRain.test.ts (the rain's set-up / finish frame by frame, a raindrop against the C's arithmetic,
-  the SE3 calls, BuildWeatherOam), tests/e2e/weatherRain.test.ts (`PalletTown_PlayersHouse_2F` (6, 6): rain,
+  the SE3 calls, BuildWeatherOam), tests/unit/weatherSnowAshSand.test.ts (snow, ash, sandstorm frame by frame
+  against the C's arithmetic), tests/e2e/weatherSnowAshSand.test.ts (the three in the player's house: sprites and
+  blend tick by tick, blended pixels read back, the finishes, a battle in the sandstorm), tests/e2e/weatherRain.test.ts (`PalletTown_PlayersHouse_2F` (6, 6): rain,
   thunderstorm, downpour, the stop, a warp out, a battle in rain, the layer's blend), tests/e2e/weather.test.ts (dev starts: `?map=ViridianForest`,
   `?map=NavelRock_Summit&x=9&y=13`, `?map=SevenIsland_TanobyRuins&x=120&y=11` then up into the Monean Chamber,
   `?map=PokemonTower_3F&x=5&y=10` (the stairs to 2F at (4, 10) are a push warp: `t.enterWarp()`; column 6 is

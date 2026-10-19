@@ -160,11 +160,12 @@ export class WeatherSpriteRenderer {
 
   /**
    * Dev: the sprites' OAM as of now (front first), BLDALPHA, and the colour (JASC [r, g, b]) of the front sprite's
-   * opaque pixel at screen pixel (px, py), if any, with whether that sprite blends.
+   * opaque pixel at screen pixel (px, py), if any, with whether that sprite blends. `drawn`: the OAM the last render
+   * drew instead (read right after a `screenPixel`, it's the frame that pixel came from).
    */
-  probe(px?: number, py?: number) {
+  probe(px?: number, py?: number, drawn = false) {
     // BuildOamBuffer now (the drawn OAM is the last render's, a few ticks behind under the e2e harness's speed)
-    const oam = BuildWeatherOam(this.host.spriteCoordOffsetX(), this.host.spriteCoordOffsetY());
+    const oam = drawn ? this.oam : BuildWeatherOam(this.host.spriteCoordOffsetX(), this.host.spriteCoordOffsetY());
     this.refreshFrames();
     let pixel: { rgb: number[]; blend: boolean; id: number } | undefined;
     if (px !== undefined && py !== undefined) {
@@ -214,16 +215,18 @@ export class WeatherSpriteRenderer {
   }
 
   private frame(o: WeatherOam): Frame | undefined {
-    const key = `${TEXTURE_PREFIX}_${o.tag}_${o.tileNum}_${o.width}x${o.height}`;
+    const key = `${TEXTURE_PREFIX}_${o.image ?? o.tag}_${o.tileNum}_${o.width}x${o.height}`;
     const cached = this.frames.get(key);
-    const sheet = weatherSpriteSheet(o.tag);
-    if (!sheet) return undefined;
+    // A sheet's frame starts at its tile offset; a template's image (the snowflakes) is the frame's tiles
+    const data = o.image ?? weatherSpriteSheet(o.tag)?.data;
+    if (!data) return undefined;
     if (cached) return cached;
-    const tiles = gfx(sheet.data);
+    const tiles = gfx(data);
+    const firstTile = o.image ? 0 : o.tileNum;
     const indices = new Uint8Array(o.width * o.height);
     const tilesW = o.width / 8;
     for (let t = 0; t < tilesW * (o.height / 8); t++) {
-      const base = (o.tileNum + t) * 32;
+      const base = (firstTile + t) * 32;
       const tx = (t % tilesW) * 8;
       const ty = Math.floor(t / tilesW) * 8;
       for (let i = 0; i < 64; i++) {
