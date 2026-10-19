@@ -49,6 +49,9 @@ Next: the open work below. The map preview screens are the most visible gap left
 then the help system and the intro movie. A Kanto-wide postgame sweep (the National Dex's Kanto changes, Cerulean
 Cave beyond Mewtwo's battle start) is still open.
 
+**Batch 11** ([GAPS_PLAN.md](GAPS_PLAN.md)): the map preview screens, the help system, the intro movie and the
+Kanto postgame sweep.
+
 [SIDE_PLAN.md](SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
 `bufferdecorationname` (and the other decoration commands) and FLDEFF_USE_DIVE with DoDiveWarp, ported as FRLG's C
 has them; the `unused` gap tag is gone.
