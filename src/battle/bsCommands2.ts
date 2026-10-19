@@ -4,7 +4,7 @@ import { recordAbilityBattle } from './ai';
 import { adv, b, compare, h, typeAtk, typeDef, typeMul, w } from './bsCommands1';
 import { K } from './constants';
 import { PlayBGM } from '../gba/sound';
-import { HandleLowHpMusicChange } from './gfx';
+import { BattleStopLowHpSound, HandleLowHpMusicChange } from './gfx';
 import {
   emitBattleAnimation,
   emitCantSwitch,
@@ -138,7 +138,7 @@ export function Cmd_getexp(): void {
         } else {
           // music change in wild battle after fainting a poke
           if (!(g.battleTypeFlags & (K.BATTLE_TYPE_TRAINER | K.BATTLE_TYPE_POKEDUDE)) && g.battleMons[0].hp !== 0 && !bst.wildVictorySong) {
-            // TODO(W-sound 6a): BattleStopLowHpSound (battle_gfx_sfx_util.c, battle/gfx.ts)
+            BattleStopLowHpSound();
             PlayBGM(K.MUS_VICTORY_WILD);
             bst.wildVictorySong++;
           }

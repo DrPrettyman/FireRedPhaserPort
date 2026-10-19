@@ -143,10 +143,13 @@ test("a send-out in the red starts the beep, and winning stops it before the vic
   await game.eval((t) => t.startWildBattle({ species: 'MAGIKARP', level: 5, moves: ['SPLASH'] }));
   await game.waitForActionMenu();
   expect(await se3(game)).toMatchObject({ song: 'SE_LOW_HEALTH', playing: true });
-  const since = await game.mark();
+  // getexp's BattleStopLowHpSound + PlayBGM(MUS_VICTORY_WILD): SE3 in the tick after the victory music starts.
+  const atVictory = game.watch((t) => {
+    const e = t.audioEvents().find((a) => a.name === 'MUS_VICTORY_WILD');
+    return e && t.frame() > e.frame && { se3: t.audio().players.SE3 };
+  }, { what: 'MUS_VICTORY_WILD' });
   await game.mashUntil((t) => t.events().some((e) => e.type === 'battleEnd'), { what: 'the battle to end' });
-  const victory = (await game.eval((t, s) => t.audioEvents(s), since)).find((e) => e.name === 'MUS_VICTORY_WILD');
-  expect(victory).toBeTruthy();
+  expect((await atVictory).se3).toMatchObject({ song: 'SE_LOW_HEALTH', playing: false });
   expect((await se3(game)).playing).toBe(false);
 });
 
