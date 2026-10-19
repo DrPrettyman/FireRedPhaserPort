@@ -8,6 +8,8 @@ import { setRoamerInactive, updateRoamerHPStatus } from '../world/roamer';
 import { battleAI_HandleItemUseBeforeAISetup, recordAbilityBattle } from './ai';
 import { BeginFastPaletteFade, gPaletteFade } from '../gba/palette';
 import { gMain } from '../gba/main';
+import { FadeOutMapMusic, PlayBGM, PlaySE } from '../gba/sound';
+import { m4aSongNumStop } from '../audio/m4a';
 import { ResetSpriteData } from '../gba/sprite';
 import { FreeAllWindowBuffers } from '../gba/window';
 import { EvolutionScene, setCB2_AfterEvolution } from '../menus/evolutionScene';
@@ -16,7 +18,6 @@ import { ClearBattleAnimationVars } from './anim/battleAnim';
 import { gBattleAnimBgTileBuffer, gBattleAnimBgTilemapBuffer } from './anim/state';
 import { BattleMainCB2 } from './battleCallbacks';
 import { GetEvolutionTargetSpecies } from './items';
-import { ui } from './battleUi';
 import { K } from './constants';
 import {
   emitChooseAction,
@@ -1246,10 +1247,21 @@ function runTurnActionsFunctions(): void {
 function handleEndTurn_BattleWon(): void {
   g.currentActionFuncId = 0;
   if (g.battleTypeFlags & (K.BATTLE_TYPE_TRAINER_TOWER | K.BATTLE_TYPE_EREADER_TRAINER | K.BATTLE_TYPE_BATTLE_TOWER)) {
+    // TODO(W-sound 6a): BattleStopLowHpSound (battle_gfx_sfx_util.c, battle/gfx.ts)
+    PlayBGM(K.MUS_VICTORY_TRAINER);
     g.battlescriptCurrInstr = bs('BattleScript_BattleTowerTrainerBattleWon');
   } else if (g.battleTypeFlags & K.BATTLE_TYPE_TRAINER && !(g.battleTypeFlags & K.BATTLE_TYPE_LINK)) {
-    // BattleStopLowHpSound + PlayBGM(victory music): no audio yet
+    // TODO(W-sound 6a): BattleStopLowHpSound (battle_gfx_sfx_util.c, battle/gfx.ts)
     g.battlescriptCurrInstr = bs('BattleScript_LocalTrainerBattleWon');
+    switch (bdata.tables.trainers[g.trainerBattleOpponent_A]!.trainerClass) {
+      case K.TRAINER_CLASS_LEADER:
+      case K.TRAINER_CLASS_CHAMPION:
+        PlayBGM(K.MUS_VICTORY_GYM_LEADER);
+        break;
+      default: // BOSS, TEAM_ROCKET, COOLTRAINER, ELITE_FOUR, GENTLEMAN, ...
+        PlayBGM(K.MUS_VICTORY_TRAINER);
+        break;
+    }
   } else {
     g.battlescriptCurrInstr = bs('BattleScript_PayDayMoneyAndPickUpItems');
   }
@@ -1321,7 +1333,7 @@ function handleEndTurn_FinishBattle(): void {
     }
     // TrySetQuestLogBattleEvent / ClearRematchStateByTrainerId: no quest log or rematches yet
     BeginFastPaletteFade(3);
-    // FadeOutMapMusic(5): no audio
+    FadeOutMapMusic(5);
     g.battleMainFunc = freeResetData_ReturnToOvOrDoEvolutions;
     setCB2_AfterEvolution(BattleMainCB2);
   } else if (g.battleControllerExecFlags === 0) {
@@ -1375,6 +1387,7 @@ function returnFromBattleToOverworld(): void {
     // matches `& B_OUTCOME_WON` and is gone for good (fixed in REVISION 0xA)
     if (g.battleOutcome & K.B_OUTCOME_WON || g.battleOutcome === K.B_OUTCOME_CAUGHT) setRoamerInactive(state);
   }
+  m4aSongNumStop(K.SE_LOW_HEALTH);
   g.battleMainFunc = () => {};
   g.onBattleEnd?.(g.battleOutcome);
 }
@@ -1702,7 +1715,7 @@ function handleAction_ThrowRock(): void {
 
 function handleAction_SafariZoneRun(): void {
   g.battlerAttacker = g.battlerByTurnOrder[g.currentTurnActionNumber];
-  ui.playSE(K.SE_FLEE);
+  PlaySE(K.SE_FLEE);
   g.currentTurnActionNumber = g.battlersCount;
   g.battleOutcome = K.B_OUTCOME_RAN;
 }

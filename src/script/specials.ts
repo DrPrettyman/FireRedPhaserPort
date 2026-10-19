@@ -597,10 +597,28 @@ export const SPECIALS: Record<string, Special> = {
       warnOnce('StartLegendaryBattle', '[special] StartLegendaryBattle without a `setwildbattle` mon');
       return;
     }
-    // CreateBattleStartTask(transition, song): the song is MUS_VS_MEWTWO, MUS_VS_DEOXYS, MUS_VS_LEGEND
-    // (the birds, Ho-Oh, Lugia) or MUS_RS_VS_TRAINER, but there's no audio; the transition is always BLUR.
+    // CreateBattleStartTask(B_TRANSITION_BLUR, song)
+    let song: number;
+    switch (enemy.species) {
+      case d.require('SPECIES_MEWTWO'):
+        song = d.require('MUS_VS_MEWTWO');
+        break;
+      case d.require('SPECIES_DEOXYS'):
+        song = d.require('MUS_VS_DEOXYS');
+        break;
+      case d.require('SPECIES_MOLTRES'):
+      case d.require('SPECIES_ARTICUNO'):
+      case d.require('SPECIES_ZAPDOS'):
+      case d.require('SPECIES_HO_OH'):
+      case d.require('SPECIES_LUGIA'):
+        song = d.require('MUS_VS_LEGEND');
+        break;
+      default:
+        song = d.require('MUS_RS_VS_TRAINER');
+        break;
+    }
     const flags = d.require('BATTLE_TYPE_LEGENDARY') | d.require('BATTLE_TYPE_LEGENDARY_FRLG');
-    setWaitState(runScriptedWildBattle(env, flags, [enemy], d.require('B_TRANSITION_BLUR')));
+    setWaitState(runScriptedWildBattle(env, flags, [enemy], d.require('B_TRANSITION_BLUR'), song));
   },
 
   /** BufferMonNickname: nickname of party slot VAR_0x8004 into STR_VAR_1. */
@@ -630,7 +648,7 @@ export function StartScriptedWildBattle(env: SpecialEnv): (() => boolean) | unde
     warnOnce('dowildbattle', '[script] dowildbattle without a `setwildbattle` mon');
     return undefined;
   }
-  // CreateBattleStartTask(GetWildBattleTransition(), 0): the map's music (no audio)
+  // CreateBattleStartTask(GetWildBattleTransition(), 0): the battle's default music (MUS_VS_WILD)
   return runScriptedWildBattle(env, state.defines.require('BATTLE_TYPE_WILD_SCRIPTED'), [enemy], host.wildBattleTransition(enemy));
 }
 
@@ -642,11 +660,11 @@ export function StartScriptedWildBattle(env: SpecialEnv): (() => boolean) | unde
  * FLAG_SYS_SPECIAL_WILD_BATTLE still set, so Route 12 / 16 and the legendaries' maps remove the mon), and the
  * script continues once the field has faded back in. gBattleOutcome stays for GetBattleOutcome.
  */
-function runScriptedWildBattle(env: SpecialEnv, battleTypeFlags: number, enemyParty: Pokemon[], transition: number): () => boolean {
+function runScriptedWildBattle(env: SpecialEnv, battleTypeFlags: number, enemyParty: Pokemon[], transition: number, song = 0): () => boolean {
   const { host, endScript } = env;
   // LockPlayerFieldControls: the waiting script holds the field's input.
   // IncrementGameStat(GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES): game stats aren't tracked yet
-  const run = host.startScriptedBattle(battleTypeFlags, enemyParty, transition);
+  const run = host.startScriptedBattle(battleTypeFlags, enemyParty, transition, song);
   let fadeIn: (() => boolean) | undefined;
   return () => {
     if (fadeIn) return fadeIn();

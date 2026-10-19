@@ -1469,6 +1469,52 @@ or extend them:
   SE_SELECTs, the save dialog closing SE_SAVE's length + 60 frames after it, the heal machine's SE_BALLs 25 frames
   apart, MUS_HEAL 32 frames after the last, the effect running until the fanfare task resumes the BGM).
 
+### Battle sounds: the controllers (W-sound 5b)
+
+- **Where:** each controller calls `gba/sound.ts` (and `audio/m4a.ts` for m4aMPlayContinue / m4aMPlayVolumeControl /
+  m4aSongNumStop) as its C file does, with the C's pans and cry modes: `battle/controllerPlayer.ts`
+  (battle_controller_player.c), `controllerOpponent.ts`, `controllerOakOldMan.ts`, `controllerSafari.ts`; the exp
+  bar's SE_EXP (PlaySE, then m4aSongNumStop when the bar is full) and Task_CreateLevelUpVerticalStripes' SE_RS_SHOP
+  are in `controllerCommon.ts`. The menus' SE_SELECT (action, move, target, move switching, the Old Man's
+  simulated input, Safari's menu), SE_FAINT (PlaySE12WithPanning: SOUND_PAN_ATTACKER for the player's side,
+  SOUND_PAN_TARGET for the foe's), CONTROLLER_PLAYSE (panned by side, except the Oak/Old Man controller's plain
+  PlaySE), PLAYFANFARE, PLAYBGM (the player's only; the others just complete), FAINTINGCRY (player / opponent:
+  PlayCry_ByMode(species, -25 / 25, CRY_MODE_FAINT); Oak/Old Man and Safari: PlayCry_Normal(species, 25)), Cmd55's
+  FadeOutMapMusic(5).
+- **Waits:** Intro_WaitForShinyAnimAndHealthbox (player, opponent) and SwitchIn_HandleSoundAndEnd hold until
+  `!IsCryPlayingOrClearCrySongs()` (the send-out cry), then put the BGM back to 256 (m4aMPlayContinue in multi
+  battles). The Oak/Old Man intro doesn't wait: it starts Task_PlayerController_RestoreBgmAfterCry (exported by
+  controllerPlayer.ts). The cries themselves come from pokeball.c / battle_main.c's ports (`gfx.ts`, W-sound 6a).
+- **Tests:** `tests/e2e/audioBattleControllers.test.ts` (a wild battle's intro leaves Intro_WaitForShinyAnimAndHealthbox
+  only after MEWTWO's send-out cry stops; 4 SE_SELECTs from the action and move menus; a fainting PIDGEY's SE_FAINT
+  at SOUND_PAN_TARGET and CRY_MODE_FAINT cry; SE_EXP stopped well before its 100 frames; the Old Man's two
+  SE_SELECTs 64 frames apart and the catch's speed-5 fade).
+### Battle sounds (W-sound 5a)
+
+- **Where:** each C call sits in the file that ports its C file and calls `gba/sound.ts` directly with the C's
+  arguments. The battle's music: `battle/battleBgm.ts` (pokemon.c's GetBattleBGM, PlayMapChosenOrBattleBGM; the
+  caller passes the battle type flags and the trainer's class, which the C reads from gBattleTypeFlags / gTrainers),
+  called by `OverworldScene.runBattle` (CreateBattleStartTask: before the transition, with `song`: 0 for the
+  default, MUS_VS_LEGEND for a roamer, StartLegendaryBattle's MUS_VS_MEWTWO / _VS_DEOXYS / _VS_LEGEND /
+  MUS_RS_VS_TRAINER through `script/specials.ts` and `ScriptHost.startScriptedBattle`'s `song`) and by
+  battle-test.html's `launch`. SE_MUGSHOT: `battle/transition.ts` (Mugshot_StartOpponentSlide). battle_main.c in
+  `battle/main.ts`: the victory music (HandleEndTurn_BattleWon: MUS_VICTORY_GYM_LEADER for leaders and the
+  Champion, else MUS_VICTORY_TRAINER), FadeOutMapMusic(5) at the end, SE_FLEE (the Safari run), SE_LOW_HEALTH's
+  stop on the way out. battle_script_commands.c in `battle/bsCommands1-4.ts`: getexp's MUS_VICTORY_WILD (not for a
+  level-100 mon: the C skips it there too), the level-up's HandleLowHpMusicChange (battle/gfx.ts), the yes / no
+  boxes' SE_SELECT, VARIOUS_WAIT_FANFARE (`waitfanfare`, only the Poké Flute's script uses it); `playse`, `fanfare`
+  and `playfaintcry` emit to the controllers, as in the C.
+- **The hooks:** BattleUi's `playSE / playCry / playBGM / playFanfare` pass through to sound.ts (PlayCry_Normal(species,
+  0): no mode or pan) for the callers not converted yet; new code calls sound.ts (AUDIO_PLAN.md decision 21: W-sound
+  8 deletes them). MainMenuScene's and tradeScene's BattleUi stand-ins keep no-op hooks.
+- **After the battle:** returnToField's Overworld_PlaySpecialMapMusic brings the map's music back (the battle song is
+  the map music state's current song, so it always differs). The level-up fanfare pauses the victory music for 80
+  frames but holds nothing: BattleScript_LevelUp has no `waitfanfare`.
+- **Tests:** `tests/unit/battleBgm.test.ts` (GetBattleBGM by flags and class), `tests/e2e/audioBattle.test.ts`
+  (a wild battle: MUS_VS_WILD before the transition, MUS_VICTORY_WILD, MUS_LEVEL_UP pausing it 80 frames,
+  FadeOutMapMusic's fade before the end, MUS_ROUTE1 after; a level-100 win without victory music; Rick:
+  MUS_ENCOUNTER_BOY, MUS_VS_TRAINER, MUS_VICTORY_TRAINER, MUS_VIRIDIAN_FOREST after; Lorelei's mugshot SE_MUGSHOT;
+  Zapdos's MUS_VS_LEGEND; the Poké Flute's `waitfanfare` holding "...awoke!" until MUS_POKE_FLUTE's 450 frames end).
 ### Scene sounds (W-sound 7a)
 
 - **Where:** each C call at its port function, through `gba/sound.ts` with the C's arguments.

@@ -3039,6 +3039,34 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   tests/README.md. A headless render of MUS_PALLET (`tools/render-audio.ts`, 600 frames) gave 134,400 samples per
   FIFO, RMS 9.7 / peak 47 of 128.
 
+### W-sound 5a: battle music, the BattleUi hooks, the battle scripts' sounds (AUDIO_PLAN.md batch D)
+
+- BattleScene's `ui.playSE / playCry / playBGM / playFanfare` pass through to gba/sound.ts (PlaySE, PlayCry_Normal(species,
+  0), PlayBGM, PlayFanfare), so the controllers', battle/gfx.ts', battleInterface's and the anims' calls are heard
+  until their units call sound.ts directly (decision 21; W-sound 8 deletes the hooks).
+- Battle music: new `battle/battleBgm.ts` (pokemon.c's GetBattleBGM and PlayMapChosenOrBattleBGM, taking the flags
+  and the trainer class as arguments). `OverworldScene.runBattle` is CreateBattleStartTask: it starts the song before
+  the transition; `song` is 0 (the default: MUS_VS_WILD, MUS_VS_TRAINER, MUS_VS_GYM_LEADER for leaders and the
+  Elite Four, MUS_VS_CHAMPION), MUS_VS_LEGEND for a roamer, StartLegendaryBattle's MUS_VS_MEWTWO / _VS_DEOXYS /
+  _VS_LEGEND / MUS_RS_VS_TRAINER (`ScriptHost.startScriptedBattle` takes an optional `song`). battle-test.html
+  starts the battle music on launch.
+- SE_MUGSHOT in the mugshot transitions (Mugshot_StartOpponentSlide). battle_main.c: HandleEndTurn_BattleWon's
+  victory music (MUS_VICTORY_GYM_LEADER for leaders and the Champion, else MUS_VICTORY_TRAINER), FadeOutMapMusic(5)
+  in HandleEndTurn_FinishBattle, SE_FLEE (Safari run), m4aSongNumStop(SE_LOW_HEALTH) in ReturnFromBattleToOverworld.
+  battle_script_commands.c: getexp's MUS_VICTORY_WILD, the level-up's HandleLowHpMusicChange call (gfx.ts' function,
+  still a no-op until W-sound 6a), the yes / no boxes' SE_SELECT, VARIOUS_WAIT_FANFARE's IsFanfareTaskInactive.
+  BattleStopLowHpSound (battle_gfx_sfx_util.c) is a TODO in main.ts / bsCommands2.ts for W-sound 6a.
+- Found on the way: the level-up fanfare holds nothing on the GBA. BattleScript_LevelUp has `fanfare MUS_LEVEL_UP`
+  and no `waitfanfare`, so it only pauses the victory music for 80 frames. The one battle script that waits
+  (VARIOUS_WAIT_FANFARE) is the Poké Flute's (BattleScript_PokeFluteWakeUp: MUS_POKE_FLUTE, 450 frames). A level-100
+  mon gets no MUS_VICTORY_WILD: getexp's music change is in the branch that MAX_LEVEL skips (as in the C).
+- Tick budgets raised: none (no wait in the battle got longer: the level-up fanfare holds nothing, see above).
+- Verified: typecheck; `npm test` (41 files, 544 tests; new tests/unit/battleBgm.test.ts 2); `tests/e2e/audioBattle.test.ts`
+  (6), wildBattle, trainerBattle, scriptedBattles, audio, transitions. transitions.test.ts' "every battle transition"
+  (17 page loads in one test, 120 s wall clock) timed out twice at load averages of 80-140 while another worker's
+  full suite ran (and the tests after it failed on the leftover page), then passed (50 s) on the rerun; master ran it
+  in 59 s at a similar load, and timing each transition alone showed nothing slower. The full suite was not run
+  (the coordinator's checkpoint came while the lock was held by another worker).
 ### W-sound 7a: the evolution scene's, egg hatching's and the in-game trade's sounds; map music after script screens
 
 - **Evolution scene** (`menus/evolutionScene.ts`, evolution_scene.c): m4aMPlayAllStop on entry and on a cancel,
@@ -3099,6 +3127,37 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   four channels and the PSG-only SEs' off frames. Typecheck clean, unit 560 in 41 files; e2e audio, audioCries,
   audioOutput, mapMusic, fieldSounds: 20 passed.
 
+### W-sound 5b: the battle controllers' sounds (AUDIO_PLAN.md batch D, unit 4)
+
+- Every sound call of battle_controller_player.c, _opponent.c, _oak_old_man.c and _safari.c now calls gba/sound.ts
+  (or audio/m4a.ts) with the C's arguments instead of BattleScene's `ui.play*`: the menus' SE_SELECT (action, move,
+  target, move switching, the Old Man's simulated input, Safari's menu), SE_FAINT panned by side (PlaySE12WithPanning
+  SOUND_PAN_ATTACKER / _TARGET), CONTROLLER_PLAYSE (panned by side; the Oak/Old Man controller's plain PlaySE),
+  PLAYFANFARE, the player's PLAYBGM, FAINTINGCRY (PlayCry_ByMode(species, ∓25, CRY_MODE_FAINT) for the player and
+  opponent, PlayCry_Normal(species, 25) for Oak/Old Man and Safari), Cmd55's FadeOutMapMusic(5) (Oak/Old Man,
+  Safari, and the player's link-only one with its BeginFastPaletteFade), SE_EXP and its m4aSongNumStop when the
+  exp bar is full (controllerCommon.ts).
+- Waits: Intro_WaitForShinyAnimAndHealthbox (player, opponent) and SwitchIn_HandleSoundAndEnd hold until
+  !IsCryPlayingOrClearCrySongs() and then set the BGM volume back to 256 (m4aMPlayContinue in multi battles);
+  Task_PlayerController_RestoreBgmAfterCry (exported from controllerPlayer.ts) runs after the Oak/Old Man intro.
+- Found on the way: Task_CreateLevelUpVerticalStripes wasn't ported (the player's DestroyExpTask... went straight
+  to CompleteOnInactiveTextPrinter): it now runs with its BG move and SE_RS_SHOP; the stripes themselves
+  (pokemon_special_anim_scene.c's CreateLevelUpVerticalSpritesTask) are a DEVIATIONS entry. The player's
+  PlayerHandleCmd55 had dropped FadeOutMapMusic(5) / BeginFastPaletteFade(3) (link battles only).
+- The cries the waits wait on come from gfx.ts (pokeball.c / battle_main.c: W-sound 6a), through W-sound 5a's
+  `ui.playCry` pass-through until then. W-sound 5a's pass-through commit was cherry-picked to run the tests and
+  reverted before the PR.
+- Verified: typecheck; `npm test`; `tests/e2e/audioBattleControllers.test.ts` (4: the wild intro leaves
+  Intro_WaitForShinyAnimAndHealthbox only after MEWTWO's send-out cry stops, and fails with the wait taken out; 4
+  SE_SELECTs from the menus; SE_FAINT at SOUND_PAN_TARGET and the CRY_MODE_FAINT cry; SE_EXP stopped well before its
+  100 frames; the Old Man's SE_SELECTs 64 frames apart and the catch's speed-5 fade), wildBattle, trainerBattle,
+  scriptedBattles, battleAnims, newGame (39 passed); the full e2e suite once (below).
+- Full e2e suite (with 5a's pass-through cherry-picked, so the send-out cries play; load up to ~300 from another
+  worker's run): 411 tests in 64 files, 408 passed, 26.6 min. Failures, none in the controllers: listMenuFlash's
+  dark-cave Blur transition (fails on the base commit 2fbcf54 too), battleAnims.2d's Teleport (reads `t.battle()`
+  from Node after the anim ended: the battle can be over by then, tests/README.md rule 5) and battleAnims.3e3b's
+  Snatch (polls a short-lived sprite from Node; timed out under load; on the rerun Memento timed out instead).
+  Tick budgets raised: none.
 ### W-m4a 4b: the PSG synth, music complete (AUDIO_PLAN.md batch D, unit 2)
 
 - New `src/audio/psgSynth.ts` (`PsgSynth`): the GBA's four PSG channels driven by the engine's register writes

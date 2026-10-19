@@ -9,11 +9,12 @@ export interface BattleUi {
   joyHeld(button: GbaButton): boolean;
   /** gMain.newKeys != 0 */
   anyNewKeys(): boolean;
-  /** PlaySE (audio isn't implemented; kept so call sites read like the C) */
+  /** PlaySE. The play* hooks pass through to gba/sound.ts; new code calls sound.ts directly (AUDIO_PLAN.md
+   *  decision 21: W-sound 8 deletes them once nothing calls them). */
   playSE(songId: number): void;
-  /** PlayCry_* (no audio yet) */
+  /** PlayCry_Normal(species, 0): no cry mode or pan, call sound.ts's PlayCry_ByMode instead */
   playCry(species: number): void;
-  /** PlayBGM / PlayFanfare (no audio yet) */
+  /** PlayBGM / PlayFanfare */
   playBGM(songId: number): void;
   playFanfare(songId: number): void;
   /** AddBagItem */

@@ -4,6 +4,7 @@ import type { MapData, ObjectEventData, WarpEventData } from '../data/types';
 import { bdata, initBattleEnv } from '../battle/env';
 import { K } from '../battle/constants';
 import { PlaySE } from '../gba/sound'; // field_control_avatar.c's SEs (W-sound 4)
+import { PlayMapChosenOrBattleBGM } from '../battle/battleBgm';
 import { BattleTransition_StartOnField, battleTransitionGfxSymbols, IsBattleTransitionDone, setTransitionFieldCamera } from '../battle/transition';
 import { loadGfx } from '../gba/gfx';
 import { RGB_BLACK, RGB_WHITE } from '../gba/hw';
@@ -363,7 +364,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     initInGameTrades(this.assets.trades);
     this.wild = new WildEncounters(this.assets.wildEncounters, this.state, this.defines, {
       startWildBattle: (mon) => this.startWildBattle(mon),
-      startRoamerBattle: (mon) => this.runWildBattle(this.defines.require('BATTLE_TYPE_ROAMER'), mon), // StartRoamerBattle
+      startRoamerBattle: (mon) => this.runWildBattle(this.defines.require('BATTLE_TYPE_ROAMER'), mon, K.MUS_VS_LEGEND), // StartRoamerBattle
     });
     const playerInfo = await this.assets.loadSprite(this, PLAYER_GFX);
     if (!playerInfo) throw new Error(`Missing player sprite ${PLAYER_GFX}`);
@@ -2263,9 +2264,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }, this.trainerBattleTransition(battle.trainer));
   }
 
-  /** Scripted non-trainer battles (StartOldManTutorialBattle etc.): gEnemyParty is set up by the caller. */
-  startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number): TrainerBattleRun {
-    return this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty }, transition);
+  /**
+   * Scripted non-trainer battles (StartOldManTutorialBattle etc.): gEnemyParty is set up by the caller. `song`
+   * is CreateBattleStartTask's (0: the battle's default music).
+   */
+  startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number, song = 0): TrainerBattleRun {
+    return this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty }, transition, song);
   }
 
   /** GetBattleTransitionTypeByMap: TRANSITION_TYPE_NORMAL (0), _CAVE (1), _FLASH (2) or _WATER (3). */
@@ -2405,8 +2409,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /** The DoStandardWildBattle / StartRoamerBattle / DoGhostBattle part: battle, then CB2_EndWildBattle. */
-  private runWildBattle(battleTypeFlags: number, enemy: Pokemon): void {
-    const run = this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty: [enemy] }, this.wildBattleTransition(enemy));
+  private runWildBattle(battleTypeFlags: number, enemy: Pokemon, song = 0): void {
+    const run = this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty: [enemy] }, this.wildBattleTransition(enemy), song);
     let fadeIn: (() => boolean) | undefined;
     this.overlay = {
       tick: () => {
@@ -2424,14 +2428,17 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /**
-   * CreateBattleStartTask + Task_BattleStart: the battle transition (B_TRANSITION_*) over the field on the
-   * GBA layer, then BattleScene; the field is left black for the caller.
+   * CreateBattleStartTask + Task_BattleStart: the battle's music (PlayMapChosenOrBattleBGM: `song`, or the
+   * default for the battle type and trainer class when 0), the battle transition (B_TRANSITION_*) over the
+   * field on the GBA layer, then BattleScene; the field is left black for the caller.
    */
   private runBattle(
     setup: Pick<BattleStart, 'battleTypeFlags' | 'trainerBattleOpponent_A' | 'trainerBattleMode' | 'rivalBattleFlags' | 'defeatSpeech' | 'victorySpeech' | 'enemyParty'>,
     transition: number,
+    song = 0,
   ): TrainerBattleRun {
     const d = this.defines;
+    PlayMapChosenOrBattleBGM(song, setup.battleTypeFlags, bdata.tables.trainers[setup.trainerBattleOpponent_A]?.trainerClass ?? 0);
     const color = this.scripts.contextTextColor();
     const map = this.world.current.data;
     let phase: 'poison' | 'transition' | 'battle' | 'done' = 'poison';
