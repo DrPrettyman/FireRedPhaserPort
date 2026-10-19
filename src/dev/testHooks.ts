@@ -33,6 +33,7 @@ import { tmCaseProbe } from '../menus/tmCase';
 import { eggHatchProbe } from '../menus/eggHatch';
 import { moveRelearnerProbe } from '../menus/learnMove';
 import { berryPouchProbe } from '../menus/berryPouch';
+import { teachyTvProbe } from '../menus/teachyTv';
 import { hallOfFameProbe } from '../menus/hallOfFame';
 import { creditsProbe, creditsSkipToClosing } from '../menus/credits';
 import { pokedexAreaProbe } from '../menus/pokedexArea';
@@ -798,6 +799,11 @@ function createApi(game: Phaser.Game) {
     moveRelearner: () => (gMain.callback2?.name === 'CB2_MoveRelearner' ? moveRelearnerProbe() : undefined),
     /** The berry pouch while it's open (menus/berryPouch.ts): BERRYPOUCH_* type, task, scroll/row and the pocket's berries in list order. */
     berryPouch: () => (gMain.callback2?.name === 'CB2_BerryPouchIdle' ? berryPouchProbe() : undefined),
+    /**
+     * Teachy TV while it's up (menus/teachyTv.ts): its mode, option, scroll/row, the task and TTVcmd step, the text
+     * printed last (symbol), the Pokédude's sprite, the grass sprites, BG3's scroll.
+     */
+    teachyTv: () => (gMain.callback2?.name === 'TeachyTvCallback' ? teachyTvProbe() : undefined),
     /** The map name popup while Task_MapNamePopup runs: its text, decoded, and how many px of it are on screen. */
     mapNamePopup: () => {
       const f = field();

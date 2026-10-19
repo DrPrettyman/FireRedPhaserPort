@@ -27,6 +27,7 @@ import { gMain, SetMainCallback1, SetMainCallback2, SetVBlankCallback } from '..
 import { initGbaText } from '../gba/window';
 import { CB2_ReturnToField, CB2_ReturnToFieldContinueScriptPlayMapMusic, CB2_ReturnToFieldWithOpenMenu, fieldReturn } from '../menus/fieldCallbacks';
 import { prepareMenus } from '../menus/host';
+import { prepareTeachyTv } from '../menus/teachyTv';
 import { CB2_BagMenuFromStartMenu, GoToBagMenu } from '../menus/itemMenu';
 import { setObjectEventGraphicsInfo } from '../menus/objectEventGraphics';
 import { DoNamingScreen, NAMING_SCREEN_BOX, namingScreenGfxSymbols } from '../menus/namingScreen';
@@ -138,6 +139,8 @@ export class FieldMenuScene extends GbaHostScene {
     }
     if (start.menu === 'options') await loadGfx(optionMenuGfxSymbols());
     if (start.menu === 'itemFromField') await loadGfx(start.itemScreen!.gfxSymbols);
+    // Teachy TV from the bag or with SELECT: Route 1's layout and tilesets, its graphics, the Pokédude.
+    if ((start.menu === 'bag' || start.menu === 'itemFromField') && start.state.bag.has(K.ITEM_TEACHY_TV, 1)) await prepareTeachyTv(assets);
     // The trainer card (StartMenuPlayerCallback): its graphics and the player's pic.
     if (start.menu === 'trainerCard') await loadGfx(trainerCardGfxSymbols(start.state.playerGender === 'female' ? K.FEMALE : K.MALE));
     // The item PC's list (WITHDRAW ITEM) draws the PC's items' icons.
