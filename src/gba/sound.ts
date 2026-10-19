@@ -202,7 +202,7 @@ export function SetDisableMapMusicChangeOnMapLoad(value: number): void {
   gDisableMapMusicChangeOnMapLoad = value;
 }
 
-/** gDisableHelpSystemVolumeReduce (help_system.c, not ported): the help system halves the BGM unless it's set. */
+/** gDisableHelpSystemVolumeReduce (help_system_util.c's EWRAM): the help system halves the BGM unless it's set. */
 let gDisableHelpSystemVolumeReduce = false;
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -540,6 +540,24 @@ export function SetBGMVolume_SuppressHelpSystemReduction(volume: number): void {
 export function BGMVolumeMax_EnableHelpSystemReduction(): void {
   gDisableHelpSystemVolumeReduce = false;
   m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 256);
+}
+
+// The help system's sound (help_system_util.c's RunHelpSystemCallback; ui/helpSystem.ts).
+
+/** gDisableHelpSystemVolumeReduce */
+export function IsHelpSystemVolumeReduceDisabled(): boolean {
+  return gDisableHelpSystemVolumeReduce;
+}
+
+/** RunHelpSystemCallback's m4aMPlayStop(&gMPlayInfo_SE1) and m4aMPlayStop(&gMPlayInfo_SE2) as it opens. */
+export function HelpSystem_StopSE1AndSE2(): void {
+  stopPlayer(gMPlayInfo_SE1);
+  stopPlayer(gMPlayInfo_SE2);
+}
+
+/** RunHelpSystemCallback's m4aMPlayVolumeControl(&gMPlayInfo_BGM, TRACKS_ALL, volume): 0x80 open, 0x100 closed. */
+export function HelpSystem_BGMVolumeControl(volume: number): void {
+  m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, volume);
 }
 
 // ---------------------------------------------------------------------------------------------------------------

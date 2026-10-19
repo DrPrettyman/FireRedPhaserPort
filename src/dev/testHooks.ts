@@ -49,6 +49,7 @@ import { saveDialogProbe } from '../ui/SaveDialog';
 import { startMenuProbe } from '../ui/StartMenu';
 import { helpMessageWindowProbe } from '../ui/HelpMessageWindow';
 import { optionMenuProbe } from '../menus/optionMenu';
+import { helpSystemProbe } from '../ui/helpSystemMenu';
 import { museumFossilPicProbe } from '../ui/MuseumFossilPic';
 import { daycareLevelMenuProbe } from '../ui/DaycareLevelMenu';
 import { battleRecordsProbe } from '../menus/battleRecords';
@@ -632,6 +633,11 @@ function createApi(game: Phaser.Game) {
     helpMessage: () => {
       const text = helpMessageWindowProbe();
       return text && decode(text);
+    },
+    /** The L/R help system (ui/helpSystem.ts, ui/helpSystemMenu.ts): its video state (0 closed, 5 up), menu state, level, topic, context and the list shown (labels decoded). */
+    helpSystem: () => {
+      const p = helpSystemProbe();
+      return { ...p, items: p.items.map((it) => ({ ...it, label: decode(it.label) })) };
     },
     /** The option menu while it's up (menus/optionMenu.ts): Task_OptionMenu's loadState (2 = input), the cursor and the settings shown. */
     optionMenu: () => optionMenuProbe(),

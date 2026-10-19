@@ -9,6 +9,7 @@ import { STD_FRAME_TEXTURE, userFrameTexture } from '../ui/MenuWindow';
 import { loadGfx } from '../gba/gfx';
 import { initEasyChatData, type EasyChatData } from '../menus/easyChatData';
 import { initTrainerTowerData, type TrainerTowerData } from '../world/trainerTower';
+import { initHelpSystemData, type HelpSystemData } from '../ui/helpSystemContext';
 import { FieldDoors, type DoorData } from '../world/doors';
 import { ATLAS_LAYERS, TilesetPair } from '../world/TilesetPair';
 import { TILESET_ANIM_SYMBOLS, type TilesetAnimInfo } from '../world/tilesetAnims';
@@ -74,6 +75,7 @@ export class Assets {
     this.trades = await fetchJson<TradesData>(`${GEN}/trades.json`);
     initEasyChatData(await fetchJson<EasyChatData>(`${GEN}/easyChat.json`)); // before any GameState (InitEasyChatPhrases)
     initTrainerTowerData(await fetchJson<TrainerTowerData>(`${GEN}/trainerTower.json`)); // world/trainerTower.ts
+    initHelpSystemData(await fetchJson<HelpSystemData>(`${GEN}/helpSystem.json`)); // ui/helpSystemMenu.ts
     await loadGfx(FieldDoors.gfxSymbols(this.doors));
     this.wildEncounters = wildEncounters;
     this.species = species;

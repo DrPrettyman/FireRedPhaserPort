@@ -3772,6 +3772,57 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   ended). Fixed by starting inside a chamber; the file rerun alone: 6 passed. tests/README.md item 10 names the
   pattern.
 
+### W-kanto 1: Cerulean Cave and the legendaries' battles to the end (GAPS_PLAN.md batch 11)
+
+- Played headless: Cerulean Cave from Cerulean City's entrance (the guard hidden by FLAG_HIDE_CERULEAN_CAVE_GUARD)
+  through 1F (Surf across the lake), 2F and 1F's north-west corner down to B1F, Surf round to Mewtwo, and Mewtwo's
+  StartLegendaryBattle to its end: caught with a full party (Text_MonSentToBoxInBillsPC, BOX1), ON_RESUME's
+  CeruleanCave_B1F_EventScript_TryRemoveMewtwo, FLAG_FOUGHT_MEWTWO, MUS_ROCKET_HIDEOUT back, gone on the next visit;
+  beaten (CeruleanCave_B1F_EventScript_DefeatedMewtwo → EventScript_RemoveStaticMon's fade, never back); run from
+  (EventScript_MonFlewAway, back on the next visit). Moltres, Articuno and Zapdos caught; Moltres teleported away
+  from (B_OUTCOME_PLAYER_TELEPORTED, back on the next visit); Lugia caught and beaten (FLAG_LUGIA_FLEW_AWAY, stays
+  away); Ho-Oh caught (VAR_TEMP_1 keeps the coord event off) and run from (where Movement_HoOhApproach left it, the
+  script's `setweather 0` kept through the battle, WEATHER_SHADE again on the next visit); Deoxys caught (the
+  triangle's last touch; no Deoxys, no rock on the next visit).
+- Fixed: the field message box stayed up through a scripted battle. Mewtwo's "Mew!", the birds' "Gyaoo!" and the
+  like (`message` + `waitbuttonpress`, then StartLegendaryBattle) were still on screen when the field faded back
+  in after the battle, and through EventScript_RemoveStaticMon's fades, until `release`. On the GBA,
+  CB2_ReturnToField → InitOverworldBgs → InitFieldMessageBox (overworld.c) makes the field's windows anew with the
+  message box hidden; `returnToField` (OverworldScene.runBattle) now hides it. Trainer and wild battles return the
+  same way.
+- Test state: `afterHallOfFame` now sets FLAG_SYS_NOT_SOMEONES_PC (Route25_SeaCottage: Bill met), so the postgame's
+  PC texts say BILL'S PC as they would.
+- Everything else ran as the scripts have it: StartLegendaryBattle's music and BLUR, CB2_EndScriptedWildBattle,
+  every map's ON_RESUME / ON_TRANSITION, the GetBattleOutcome branches.
+- Verified: typecheck; unit 630 passed; e2e postgameKanto.test.ts (3 passed, ~85 s), postgameKantoLegendaries.test.ts
+  (9 passed, ~2.5 min), scriptedBattles.test.ts (6) and trainerBattle.test.ts (3) for the message box change.
+
+### W-help 1: the help system's engine and menus (help_system_util.c, help_system.c)
+
+- `ui/helpSystem.ts` (help_system_util.c: RunHelpSystemCallback's states 0-8, SaveCallbacks with DMA0 stopped,
+  the tiles / GPU regs saved and restored, BG0's HS_* panels in a 0x4000 buffer committed to char block 3,
+  HelpSystemRenderText with {PLAYER}, {STR_VAR_1} (BILL / SOMEONE), CLEAR_TO and keypad icons, the list menu
+  controller, TryMoveCursor1 / MoveCursor, the scroll arrows), `ui/helpSystemMenu.ts` (RunHelpMenuSubroutine and
+  its subroutines), `ui/helpSystemContext.ts` (contexts, SetHelpContextForMap, the enable / R toggles, the list
+  builders and gates), `ui/helpSystemField.ts` (the field's hook and overlay). The tables through
+  `tools/extract_help.py` (helpSystem.json); the strings were already in strings.json.
+- Hooks: GbaHostScene runs RunHelpSystemCallback before CallCallbacks; OverworldScene.tick samples the buttons
+  first, asks the help, and skips tickField, the flash VBlank and the GBA layer's frame while it's up.
+  AgbMainFrameEnd(callbacksRan) keeps the sound tasks (gTasks in the C) waiting too. ReadKeys takes a key state
+  (`gba/main.ts` KeyState / NewKeyState): the field reads the help's keys into its own, leaving gMain alone (the
+  field's credits read gMain's A, which the field never updates: unchanged). gba/sound.ts: HelpSystem_StopSE1AndSE2,
+  HelpSystem_BGMVolumeControl, IsHelpSystemVolumeReduceDisabled.
+- SetHelpContextForMap where overworld.c calls it (warps and CONTINUE: LoadMapInStepsLocal; returns to the field:
+  ReturnToFieldLocal). The other screens' contexts, the specials and the title screen's HelpSystem_Enable are
+  unit 2's; gHelpSystemEnabled starts TRUE meanwhile (DEVIATIONS).
+- Found on the way: in the HELP button mode (the new-game default) R in the slot machine opens the help, as on the
+  GBA (RunHelpSystemCallback takes it before the machine's callback). gameCorner.test.ts's spins set the LR mode
+  before betting with R.
+- Verified: typecheck; unit 637 passed (new tests/unit/helpSystem.test.ts: 7); e2e helpSystem.test.ts (3: the field,
+  the LR mode and HelpSystem_Disable's SE_HELP_ERROR, the bag), options.test.ts (2), audio.test.ts (2),
+  gameCorner.test.ts (8). Screenshots of the welcome page, the topics, a scrolled submenu and a help item looked
+  like FRLG's.
+
 ### W-intro 1: the copyright screen, the intro's framework and the Game Freak scene (batch 11)
 
 - `menus/intro.ts` ports intro.c up to the end of the Game Freak scene: CB2_InitCopyrightScreenAfterBootup /
