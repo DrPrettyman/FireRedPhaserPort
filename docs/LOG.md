@@ -3038,3 +3038,90 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   CB2_InitInGameTrade's one frame): the modules now load in an awaited eval first, 3 reruns green, cause added to
   tests/README.md. A headless render of MUS_PALLET (`tools/render-audio.ts`, 600 frames) gave 134,400 samples per
   FIFO, RMS 9.7 / peak 47 of 128.
+
+### W-sound 7a: the evolution scene's, egg hatching's and the in-game trade's sounds; map music after script screens
+
+- **Evolution scene** (`menus/evolutionScene.ts`, evolution_scene.c): m4aMPlayAllStop on entry and on a cancel,
+  PlayNewMapMusic(MUS_EVOLUTION), EVOSTATE_RESTORE_SCREEN's `if (IsSEPlaying())` after SE_EXP (no longer skipped:
+  the m4aMPlayAllStop the frame after it starts cuts SE_EXP and MUS_EVOLUTION), PlayBGM(MUS_EVOLVED),
+  PlayFanfare(MUS_LEVEL_UP), StopMapMusic + Overworld_PlaySpecialMapMusic when a move is learned or at the end
+  (battle-test.html has no field: skipped there). The cries, MUS_EVOLUTION_INTRO and the sparkles' SEs
+  (evolutionGraphics.ts, complete) were live already.
+- **Egg hatching** (`menus/eggHatch.ts`): gSpecialVar_0x8005 = GetCurrentMapMusic(), Task_EggHatchPlayBGM's
+  StopMapMusic; m4aSoundVSyncOn is a no-op (nothing turned the sound off).
+- **In-game trade** (`menus/tradeScene.ts`): cachedMapMusic + PlayNewMapMusic(MUS_EVOLUTION) at STATE_START,
+  PlayNewMapMusic(cachedMapMusic) at the end; its stand-in BattleUi's playSE is PlaySE (SE_BALL_OPEN). The cable /
+  link path's FadeOutBGM / IsBGMStopped wait isn't ported (no link play).
+- **Map music after script screens:** `OverworldScene.runScreenFromScript` calls Overworld_PlaySpecialMapMusic when
+  the screen set no field callback: in the C every such screen returns through FieldCB_ContinueScriptHandleMusic
+  (trades, egg hatching, the move relearner, the move tutor, the slot machine), FieldCB_WarpExitFadeFromBlack (the
+  diploma) or RunFieldCallback's FieldCB_DefaultWarpExit; the party menu's, Easy Chat's and the move deleter's set
+  their own. After egg hatching MUS_PALLET comes back on the field.
+- Shared: `gba/sound.ts` gains an `m4aMPlayAllStop` that reports a `stop` per player with a live track;
+  `gba/overworldMusic.ts` gains `hasOverworldMusicHost()`.
+- Found on the way (the full run): two test races, both fixed. gameCorner's slot machine read the main task in a
+  `.then()` after `t.until`, so a loss's MainTask_DarnNoPayout could be over before the read (now read inside the
+  predicate); easyChat's special profile mashed A through `delay 80` + Text_HeardThatBefore, which once went past the
+  page and on into talking to the woman again until the 120 s timeout (now waits in the page without pressing).
+- Tests: typecheck clean, 542 unit; new `tests/e2e/audioScenes.test.ts` (3: a Rare Candy evolution's events in
+  order with MUS_EVOLUTION exactly MUS_EVOLUTION_INTRO's length after it and SE_EXP stopped one frame after it
+  starts; an egg hatching's MUS_DUMMY / MUS_EVOLUTION_INTRO / MUS_EVOLUTION 60 frames later / cry / MUS_EVOLVED /
+  MUS_PALLET on the field; Reyley's trade's MUS_EVOLUTION, both cries, MUS_EVOLVED and MUS_PEWTER again); evolution,
+  eggHatch, daycare, inGameTrades, moveTutors, gameCorner (39) green. Full suite on 5e23095 + this (load ~90 from
+  the other workers): 410 e2e in 64 files, 408 passed, 27.4 min; the two failures are the races above, both green on
+  rerun after the fixes. No tick budgets needed raising (the waits this unit adds are a frame or none: the cries and
+  MUS_EVOLUTION_INTRO's wait were live already).
+### W-m4a 4a: CgbSound, the engine side of the PSG (AUDIO_PLAN.md batch D, unit 1)
+
+- `src/audio/m4aCgb.ts` replaces the placeholder with m4a.c's CgbSound (the per-frame software envelope with its
+  attack / decay / sustain / release, the pseudo echo, c15's double step every 15 frames, the NRx0-NRx4 writes, the
+  wave channel's RAM load through NR30's bank switch), CgbModVol / CgbPan (`soundInfo.mode & 1`: mono plays the
+  PSG on both sides), CgbOscOff and MidiKeyToCgbFreq (gCgbScaleTable, gCgbFreqTable, gNoiseTable, gCgb3Vol in
+  m4aTables.ts). CgbSound's gotos are a small state machine named after the C's labels.
+- New `src/audio/soundRegs.ts`: the sound registers 0x4000060-0x400009F as a register file (reads return what was
+  written; wave RAM writes go to the bank NR30 doesn't play), the write log, and `PsgFrame { writes, state }`.
+  SoundInit, MPlayExtender, m4aSoundMode, SetPokemonCryStereo and ply_port write through it as the C does
+  (SOUNDCNT_X, SOUNDCNT_L / NR50 0x77, SOUNDCNT_H, SOUNDBIAS_H 0x42); `gSoundInfo.soundRegs` is gone. m4aSoundInit
+  resets it to the power-on state first.
+- `m4aPcmFrame()` now carries `psg`; AgbMainFrameEnd takes it every frame (so the log can't pile up headless) and
+  pushes it with the frame; output.ts posts `psg` and `psgState` to the worklet (`FrameMessage`), which ignores them
+  until W-m4a 4b's synth. docs/DEV_NOTES.md "PSG frames" says what the frame holds and when, for W-m4a 4b.
+- Lifetimes: a CGB channel now lives through its release and echo (SE_SELECT's square 1 goes off in frame 15, SE_DOOR
+  22, SE_EXIT 36, SE_PC_ON 68, SE_WALL_HIT 14, SE_FLEE 39). No wait moved: IsSEPlaying and the other waits read the
+  tracks (m4a, m4aRom, m4aChannels unchanged and green).
+- Found on the way: audioCries.test.ts's Meowth `waitmoncry` test raced (a `press('A')` from Node then a mash: under
+  load the message closed ~40 frames after the cry, and the script with it; 71 instead of 31). It now talks and
+  mashes in one in-page mash; the script's end is checked to be 3 to 9 frames after the cry (the mash's cycle can
+  close the message just after the cry ends).
+- Tests: `tests/unit/m4aCgb.test.ts` (18): MidiKeyToCgbFreq against the tables, the init writes in order, wave RAM
+  banking, CgbModVol stereo / mono, and square, sweep, square 2, wave and noise notes frame by frame against m4a.c
+  (worked by hand), START with STOP, TrackStop's CgbOscOff, the echo; on the extracted songs SE_SELECT, MUS_ROUTE1's
+  four channels and the PSG-only SEs' off frames. Typecheck clean, unit 560 in 41 files; e2e audio, audioCries,
+  audioOutput, mapMusic, fieldSounds: 20 passed.
+
+### W-m4a 4b: the PSG synth, music complete (AUDIO_PLAN.md batch D, unit 2)
+
+- New `src/audio/psgSynth.ts` (`PsgSynth`): the GBA's four PSG channels driven by the engine's register writes
+  (W-m4a 4a's PsgFrame): squares with duty, square 1's sweep (overflow check, down / up), the hardware envelope and
+  length counters on a 512 Hz frame sequencer, the wave channel (both banks, NR30's bank switch and 64-sample mode,
+  the RAM rotating as it plays, NR32's shifts and 75%), noise (15 / 7-bit LFSR, NR43's divisor and shift), restart
+  and DAC semantics, NR52, NR50 / NR51 / SOUNDCNT_H's mix into the 10-bit sum (mGBA's GBA scale: a channel at 15 adds
+  240). Each output sample is the channels' average over its cycles (a box filter).
+- `src/audio/outputCore.ts`: `SoundCircuit` mixes it with the FIFOs as the GBA does: 896 samples a frame (4 per FIFO
+  sample), the FIFO samples held back a frame (the PSG writes take effect in VBlank, the DirectSound mix plays the
+  frame after), all writes applied in order at the frame's start, `state` loaded on the first frame, after a flush
+  and whenever the writes so far don't match it (missed frames). `dacOutput` takes SOUNDBIAS (bias, resolution).
+  The worklet plays it at 53,760 Hz through the same resampler; `tests/audioRender.ts` gains `speakers()`,
+  `speakerRms()` and a 53,516 Hz `toWav`; `tools/render-audio.ts` prints the RMS with and without the PSG (`nopsg`,
+  `mono` flags).
+- docs/DEVIATIONS.md: the m4a engine's "PSG silent" entry and the "no PSG parts until W-m4a 4" clauses are gone; a
+  PSG synth entry says what it approximates (the box filter at 53.76 kHz, writes at the frame's start, mGBA's choices
+  where the documents are open, a stopped channel at 0, mid-song pickup).
+- Checked: the PSG-only SEs are heard from the frame they start to the frame before their CgbOscOff (SE_SELECT 0-13,
+  SE_DOOR 0-20, SE_EXIT 0-34, SE_PC_ON 0-66, SE_WALL_HIT 0-12, SE_FLEE 0-37); MUS_PALLET's speakers' RMS goes
+  0.067 → 0.081 with the PSG (MUS_ROUTE1 0.051 → 0.077); mono is identical on both sides. 60 s of MUS_ROUTE1
+  through the circuit takes ~0.8 s in Node.
+- Tests: `tests/unit/psgSynth.test.ts` (17: hand-worked duty / box averages / envelope / DAC / length / sweep /
+  LFSR / noise clock / wave samples, volumes, banks / mixing / the circuit's timing and resync, then the extracted
+  SEs and songs); `tests/e2e/audioOutput.test.ts` + 1 (SE_SELECT alone reaches the worklet's speakers; checked to
+  fail with the PSG switched off). Typecheck clean; unit 577 in 42 files; e2e audioOutput 5, audio 2.

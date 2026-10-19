@@ -1761,12 +1761,22 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * SelectMoveDeleterMove, ChooseMonForMoveTutor). The field is gone (black) until the screen returns through
    * CB2_ReturnToField; then RunFieldCallback runs gFieldCallback2 / gFieldCallback (or a plain fade in), and the
    * wait ends once that has finished (its ScriptContext_Enable).
+   *
+   * The map music: a screen that leaves no field callback here returns through one that starts with
+   * Overworld_PlaySpecialMapMusic, as each does in the C: FieldCB_ContinueScriptHandleMusic (the in-game trade's
+   * Task_InGameTrade, egg hatching's Task_EggHatch, the move relearner's Task_InitMoveRelearnerMenu, the move tutor's
+   * and the slot machine's CB2_ReturnToFieldContinueScriptPlayMapMusic), the diploma's FieldCB_WarpExitFadeFromBlack,
+   * or RunFieldCallback's FieldCB_DefaultWarpExit. It brings the map's song back after a screen that changed it
+   * (egg hatching's MUS_EVOLUTION; a trade restores its cached song itself, so there nothing changes). The screens
+   * that set a callback of their own (the party menu's CB2_FadeFromPartyMenu, Easy Chat's FieldCB_ContinueScript)
+   * play none.
    */
   runScreenFromScript(init: () => void, gfxSymbols: string[] = []): Wait {
     let overlay: { tick(): boolean } | undefined;
     this.messageBox.hide(); // CleanupOverworldWindowsAndTilemaps
     this.screenFade.fill(false); // CB2_ReturnToField reloads the field's palettes black
     this.runFieldMenu({ menu: 'itemFromField', itemScreen: { init, gfxSymbols } }, () => {
+      if (!gFieldCallback2.fn && !gFieldCallback.fn) Overworld_PlaySpecialMapMusic();
       this.runFieldCallback(false);
       overlay = this.overlay;
     });

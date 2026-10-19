@@ -236,12 +236,18 @@ async function spin(game: Game, payWithStart: boolean) {
     await game.eval((t, r) => t.until(() => t.slotMachine()?.step === 3 && t.slotMachine()?.currentReel === r && t.slotMachine()?.reelIsSpinning[r]), reel);
     await game.press('A');
   }
-  const result = await game.eval((t) =>
-    t.until(() => /Darn|Win/.test(t.slotMachine()?.mainTask ?? '')).then(() => {
-      const p = t.slotMachine()!;
-      return { mainTask: p.mainTask, reelPositions: p.reelPositions, winFlags: p.winFlags, payout: p.payout, buttonsPressed: p.buttonsPressed, linePalettes: p.linePalettes };
-    }),
-  );
+  // Read inside the predicate: a loss's MainTask_DarnNoPayout can be over by the time an awaited read comes back
+  const result = await game.eval(async (t) => {
+    let seen: ReturnType<typeof t.slotMachine>;
+    await t.until(() => {
+      const p = t.slotMachine();
+      if (!/Darn|Win/.test(p?.mainTask ?? '')) return false;
+      seen = structuredClone(p);
+      return true;
+    });
+    const p = seen!;
+    return { mainTask: p.mainTask, reelPositions: p.reelPositions, winFlags: p.winFlags, payout: p.payout, buttonsPressed: p.buttonsPressed, linePalettes: p.linePalettes };
+  });
   if (result.payout && !payWithStart) await game.screenshot('slots-win');
   if (payWithStart && result.payout) {
     // MainTask_WinHandlePayout's step 2 (a coin every 8 ticks): START pays the rest at once

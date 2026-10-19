@@ -8,10 +8,9 @@
 // sample position every frame, so channels live and end as on the GBA. The cry songs (SetPokemonCryTone and the
 // SetPokemonCry* setters, IsPokemonCryPlaying) are at the end. The voices come from setVoiceData (m4aVoices.ts).
 //
-// SoundMainRAM (m4aMixer.ts) also mixes the DirectSound channels into pcmBuffer while mixing is on (audio/frame.ts
-// hands each frame's slot to the output: m4aPcmFrame). What isn't here yet (AUDIO_PLAN.md section 6): W-m4a 4, the
-// CGB channels' envelope, registers and frequencies (m4aCgb.ts is a placeholder), so songs play without their PSG
-// parts.
+// SoundMainRAM (m4aMixer.ts) also mixes the DirectSound channels into pcmBuffer while mixing is on, and CgbSound
+// (m4aCgb.ts) writes the PSG's sound registers (soundRegs.ts); audio/frame.ts hands each frame's slot and register
+// writes to the output (m4aPcmFrame).
 //
 // Naming follows the C. The asm's local labels are cited as `m4a_1.s _081DD8E0` and so on.
 
@@ -50,6 +49,7 @@ import {
   SOUND_CHANNEL_SF_ON,
   SOUND_CHANNEL_SF_START,
   SOUND_CHANNEL_SF_STOP,
+  SOUND_MODE_DA_BIT,
   SOUND_MODE_DA_BIT_8,
   SOUND_MODE_FREQ,
   SOUND_MODE_FREQ_13379,
@@ -85,6 +85,25 @@ import {
 import { CgbOscOff, CgbSound, MidiKeyToCgbFreq, newCgbChannels } from './m4aCgb';
 import { PcmSlotOffset, SoundMainRAM, isWaveData } from './m4aMixer';
 import { SOUNDCNT_H_MONO, SOUNDCNT_H_STEREO } from './outputCore';
+import {
+  PSG_NR12,
+  PSG_NR14,
+  PSG_NR22,
+  PSG_NR24,
+  PSG_NR30,
+  PSG_NR42,
+  PSG_NR44,
+  PSG_NR50,
+  PSG_NR52,
+  PSG_SOUNDBIAS_H,
+  PSG_SOUNDCNT_H_L,
+  SoundRegRead8,
+  SoundRegWrite16,
+  SoundRegWrite8,
+  resetSoundRegs,
+  takePsgFrame,
+  type PsgFrame,
+} from './soundRegs';
 import {
   gClockTable,
   gFreqTable,
@@ -140,7 +159,7 @@ function newSoundInfo(): SoundInfo {
     ident: 0, pcmDmaCounter: 0, reverb: 0, maxChans: 0, masterVolume: 0, freq: 0, mode: 0, c15: 0,
     pcmDmaPeriod: 0, maxLines: 0, pcmSamplesPerVBlank: 0, pcmFreq: 0, divFreq: 0, MPlayMainHead: null,
     musicPlayerHead: null, CgbSound: DummyFunc, CgbOscOff: DummyFunc, MidiKeyToCgbFreq: () => 0, plynote: ply_note,
-    ExtVolPit: DummyFunc, cgbChans: null, chans: [], soundRegs: new Uint8Array(0x100),
+    ExtVolPit: DummyFunc, cgbChans: null, chans: [],
     pcmBuffer: new Int8Array(PCM_DMA_BUF_SIZE * 2),
   };
 }
@@ -276,6 +295,7 @@ function TrackInit(track: MusicPlayerTrack): void {
  *  DirectSound channels), then opens the four music players and the two cry players. Calling it again resets the
  *  whole engine (tests do). */
 export function m4aSoundInit(): void {
+  resetSoundRegs(); // the sound registers as the BIOS leaves them (a soft reset starts like a boot)
   SoundInit(gSoundInfo);
   MPlayExtender();
   m4aSoundMode(
@@ -302,7 +322,10 @@ export function m4aSoundInit(): void {
   }
 }
 
-/** SoundInit (m4a.c). The DMA and sound registers it sets have no counterpart here. */
+/** REG_SOUNDCNT_X's value in SoundInit and MPlayExtender: SOUND_MASTER_ENABLE | SOUND_4_ON | ... | SOUND_1_ON. */
+const SOUNDCNT_X_ALL_ON = 0x80 | 0x08 | 0x04 | 0x02 | 0x01;
+
+/** SoundInit (m4a.c). The sound registers go to soundRegs.ts; the DMA and its FIFO resets have no counterpart. */
 export function SoundInit(soundInfo: SoundInfo): void {
   Object.assign(soundInfo, newSoundInfo()); // CpuFill32(0, soundInfo, sizeof(struct SoundInfo))
   soundInfo.chans = Array.from({ length: MAX_DIRECTSOUND_CHANNELS }, newSoundChannel);
@@ -312,8 +335,12 @@ export function SoundInit(soundInfo: SoundInfo): void {
   soundInfo.CgbSound = DummyFunc;
   soundInfo.CgbOscOff = DummyFunc;
   soundInfo.ExtVolPit = DummyFunc;
+  SoundRegWrite8(PSG_NR52, SOUNDCNT_X_ALL_ON); // REG_SOUNDCNT_X (before the CpuFill32 in the C)
+  // REG_SOUNDCNT_H (the FIFO reset bits read back as 0; the timer bits have no counterpart)
+  gRegSoundCntH = SOUNDCNT_H_STEREO;
+  SoundRegWrite16(PSG_SOUNDCNT_H_L, gRegSoundCntH);
+  SoundRegWrite8(PSG_SOUNDBIAS_H, (SoundRegRead8(PSG_SOUNDBIAS_H) & 0x3f) | 0x40);
   MPlayJumpTableCopy();
-  gRegSoundCntH = SOUNDCNT_H_STEREO; // REG_SOUNDCNT_H (the FIFO resets and timer bits have no counterpart)
   SampleFreqSet(SOUND_MODE_FREQ_13379);
   soundInfo.ident = ID_NUMBER;
 }
@@ -324,11 +351,22 @@ export function SoundInit(soundInfo: SoundInfo): void {
  */
 export let gRegSoundCntH = SOUNDCNT_H_STEREO;
 
-/** MPlayExtender (m4a.c:257): puts the C versions of ply_memacc, ply_lfos, ply_mod, ply_xcmd and ply_endtie in the
- *  jump table and sets up the CGB channels (gCgbChans) and functions (m4aCgb.ts: placeholders until W-m4a 4, as are
- *  the sound registers it writes). */
+/** MPlayExtender (m4a.c:257): the PSG's registers (all four channels on, master volume 7 on both sides, the squares'
+ *  and noise's envelopes at 0, the wave's DAC off), the C versions of ply_memacc, ply_lfos, ply_mod, ply_xcmd and
+ *  ply_endtie in the jump table, and the CGB channels (gCgbChans) and functions (m4aCgb.ts). */
 export function MPlayExtender(): void {
   const soundInfo = gSoundInfo;
+  SoundRegWrite8(PSG_NR52, SOUNDCNT_X_ALL_ON); // REG_SOUNDCNT_X
+  SoundRegWrite16(PSG_NR50, 0); // REG_SOUNDCNT_L = 0: set master volume to zero
+  SoundRegWrite8(PSG_NR12, 0x8);
+  SoundRegWrite8(PSG_NR22, 0x8);
+  SoundRegWrite8(PSG_NR42, 0x8);
+  SoundRegWrite8(PSG_NR14, 0x80);
+  SoundRegWrite8(PSG_NR24, 0x80);
+  SoundRegWrite8(PSG_NR44, 0x80);
+  SoundRegWrite8(PSG_NR30, 0);
+  SoundRegWrite8(PSG_NR50, 0x77);
+  if (soundInfo.ident !== ID_NUMBER) return;
   gMPlayJumpTable[8] = ply_memacc;
   gMPlayJumpTable[17] = ply_lfos;
   gMPlayJumpTable[19] = ply_mod;
@@ -358,7 +396,12 @@ export function m4aSoundMode(mode: number): void {
   temp = mode & SOUND_MODE_MASVOL;
   if (temp) soundInfo.masterVolume = temp >> SOUND_MODE_MASVOL_SHIFT;
 
-  // SOUND_MODE_DA_BIT sets REG_SOUNDBIAS_H's resolution bits: no counterpart (the mixer writes 8-bit samples).
+  // REG_SOUNDBIAS_H's resolution bits (8 bits at 65,536 Hz for SOUND_MODE_DA_BIT_8: CgbSound reads them).
+  temp = mode & SOUND_MODE_DA_BIT;
+  if (temp) {
+    temp = (temp & 0x300000) >> 14;
+    SoundRegWrite8(PSG_SOUNDBIAS_H, (SoundRegRead8(PSG_SOUNDBIAS_H) & 0x3f) | temp);
+  }
 
   temp = mode & SOUND_MODE_FREQ;
   if (temp) SampleFreqSet(temp); // after m4aSoundVSyncOff, which only stops the DMA
@@ -424,14 +467,17 @@ export function m4aSoundVSync(): void {
 }
 
 /** A frame of sound as the DMA reads it: the slot SoundMain mixed into this frame (views into pcmBuffer: copy them
- *  before the next frame) and REG_SOUNDCNT_H. The shape of output.ts's SoundFrame. */
+ *  before the next frame), REG_SOUNDCNT_H and the PSG's register writes since the previous frame (soundRegs.ts).
+ *  The shape of output.ts's SoundFrame. */
 export interface PcmFrame {
   fifoA: Int8Array;
   fifoB: Int8Array;
   soundcntH: number;
+  psg: PsgFrame;
 }
 
-/** The frame m4aSoundMain just mixed (call it after m4aSoundMain, before the next m4aSoundVSync). */
+/** The frame m4aSoundMain just mixed (call it after m4aSoundMain, before the next m4aSoundVSync). It takes the PSG
+ *  writes since the last call, so call it once per frame whether or not the frame is heard (AgbMainFrameEnd). */
 export function m4aPcmFrame(): PcmFrame {
   const soundInfo = gSoundInfo;
   const n = soundInfo.pcmSamplesPerVBlank;
@@ -441,6 +487,7 @@ export function m4aPcmFrame(): PcmFrame {
     fifoA: buf.subarray(slot, slot + n),
     fifoB: buf.subarray(PCM_DMA_BUF_SIZE + slot, PCM_DMA_BUF_SIZE + slot + n),
     soundcntH: gRegSoundCntH,
+    psg: takePsgFrame(),
   };
 }
 
@@ -983,11 +1030,11 @@ export function ply_tune(_mplayInfo: MusicPlayerInfo, track: MusicPlayerTrack): 
   track.flags |= MPT_FLG_PITCHG;
 }
 
-/** ply_port (m4a_1.s:1056): writes a byte to a sound register (REG_SOUND1CNT_L + offset); kept in
- *  gSoundInfo.soundRegs for the PSG (W-m4a 4). */
+/** ply_port (m4a_1.s:1056): writes a byte to a sound register (REG_SOUND1CNT_L + offset: soundRegs.ts). No FRLG
+ *  song has a PORT command. */
 export function ply_port(_mplayInfo: MusicPlayerInfo, track: MusicPlayerTrack): void {
   const reg = ld_r3_tp_adr_i(track);
-  gSoundInfo.soundRegs[reg] = ld_r3_tp_adr_i(track);
+  SoundRegWrite8(reg, ld_r3_tp_adr_i(track));
 }
 
 /** ply_endtie (m4a_1.s:1818): EOT [key]: releases the first held channel of that key (the last note's key if
@@ -1617,7 +1664,7 @@ export function SetPokemonCryChorus(val: number): void {
 
 /** SetPokemonCryStereo (m4a.c:1758): the options menu's SOUND setting (OPTIONS_SOUND_MONO 0 / _STEREO 1). Stereo:
  *  FIFO A to the right speaker, B to the left, at full volume, and soundInfo.mode's bit 0 clear; mono: both FIFOs
- *  to both speakers at half volume, and bit 0 set (CgbSound then centres the PSG channels, W-m4a 4). The mixer
+ *  to both speakers at half volume, and bit 0 set (CgbModVol then plays the PSG channels on both sides). The mixer
  *  writes both FIFOs the same either way: the routing (gRegSoundCntH) is what the output's DAC applies. */
 export function SetPokemonCryStereo(val: number): void {
   const soundInfo = gSoundInfo;
@@ -1628,6 +1675,7 @@ export function SetPokemonCryStereo(val: number): void {
     gRegSoundCntH = SOUNDCNT_H_MONO;
     soundInfo.mode |= 1;
   }
+  SoundRegWrite16(PSG_SOUNDCNT_H_L, gRegSoundCntH);
 }
 
 /** SetPokemonCryPriority (m4a.c:1778) */

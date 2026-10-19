@@ -1,6 +1,10 @@
 // The browser output's pure parts (AUDIO_PLAN.md W-out 1): when the output is on, the messages between
-// output.ts and the AudioWorklet, the GBA's DirectSound DAC and the sample-and-hold upsampler. No DOM and no
-// Web Audio here, so the unit tests import it (tests/unit/audioOutput.test.ts) and the worklet bundles it.
+// output.ts and the AudioWorklet, the GBA's sound circuit (the DirectSound DAC, the PSG synth from psgSynth.ts,
+// mixed as the GBA mixes them: SoundCircuit) and the sample-and-hold upsampler. No DOM and no Web Audio here, so
+// the unit tests and the headless renderer import it (tests/unit/audioOutput.test.ts, tests/audioRender.ts) and
+// the worklet bundles it.
+
+import { GBA_CYCLES_PER_FRAME, PsgSynth } from './psgSynth';
 
 /** Samples the m4a mixer writes per frame at SOUND_MODE_FREQ_13379 (gPcmSamplesPerVBlankTable[3]). */
 export const PCM_SAMPLES_PER_VBLANK = 224;
@@ -14,6 +18,17 @@ export const PORT_FRAME_RATE = 60;
  * output keeps the GBA's samples per frame instead (docs/DEVIATIONS.md: 0.46% higher, like all port timing).
  */
 export const PCM_INPUT_RATE = PCM_SAMPLES_PER_VBLANK * PORT_FRAME_RATE;
+/**
+ * The sound circuit's output: 4 samples per FIFO sample (896 per frame), each the PSG's average over its 313.5
+ * cycles plus the FIFO sample it holds. The GBA's DAC runs at 65,536 Hz (SOUNDBIAS_H 0x40: 8 bits); this keeps a
+ * whole number of samples per FIFO sample instead (docs/DEVIATIONS.md).
+ */
+export const DAC_OVERSAMPLE = 4;
+export const DAC_SAMPLES_PER_FRAME = PCM_SAMPLES_PER_VBLANK * DAC_OVERSAMPLE;
+/** The rate the output plays the circuit's samples at (53,760 Hz: 896 per 60 Hz frame). */
+export const DAC_RATE = PCM_INPUT_RATE * DAC_OVERSAMPLE;
+/** The same samples at the GBA's speed (53,516 Hz: 896 per 59.7275 Hz frame), for WAV files. */
+export const GBA_DAC_RATE = GBA_PCM_FREQ * DAC_OVERSAMPLE;
 
 // REG_SOUNDCNT_H bits (include/gba/io_reg.h).
 export const SOUND_CGB_MIX_FULL = 0x0002;
@@ -77,8 +92,11 @@ export interface FrameMessage {
   type: 'frame';
   pcm: ArrayBuffer;
   soundcntH: number;
-  /** TODO W-m4a 4: the PSG register writes (see PsgFrame in output.ts); the worklet ignores them until then. */
+  /** The PSG's register writes (PsgFrame.writes in soundRegs.ts: a Uint16Array's buffer), which the worklet's
+   *  SoundCircuit replays. Without them (the dev test tone) the PSG is silent. */
   psg?: ArrayBuffer;
+  /** PsgFrame.state (a Uint8Array's buffer, PSG_STATE_SIZE bytes): the registers before `psg`. */
+  psgState?: ArrayBuffer;
 }
 export type ToWorklet = FrameMessage | { type: 'mute'; muted: boolean } | { type: 'flush' };
 
@@ -103,8 +121,8 @@ export type FromWorklet = { type: 'stats'; stats: OutputStats };
 
 /**
  * The GBA's sound mixer for one speaker's DirectSound part (GBATEK "Sound Control Registers"): each FIFO routed to
- * this speaker adds its signed 8-bit sample ×4 at 100% or ×2 at 50% (the 10-bit scale). PSG adds in the same
- * units (W-m4a 4).
+ * this speaker adds its signed 8-bit sample ×4 at 100% or ×2 at 50% (the 10-bit scale). The PSG adds in the same
+ * units (PsgSynth.render).
  */
 export function directSoundLevel(a: number, b: number, soundcntH: number, left: boolean): number {
   let sum = 0;
@@ -113,13 +131,18 @@ export function directSoundLevel(a: number, b: number, soundcntH: number, left: 
   return sum;
 }
 
+/** REG_SOUNDBIAS as SoundInit leaves it: the bias 0x200, resolution 1 (8 bits at 65,536 Hz). */
+export const SOUNDBIAS_DEFAULT = 0x4200;
+
 /**
- * The DAC: the 10-bit sum plus SOUNDBIAS's 0x200, clipped to 0..0x3FF, at the amplitude resolution SoundInit sets
- * (SOUNDBIAS_H 0x40: 8 bits at 65,536 Hz, so the two low bits drop), as a float in [-1, 1).
+ * The DAC: the 10-bit sum (rounded down) plus SOUNDBIAS's bias (0x200), clipped to 0..0x3FF, at SOUNDBIAS's
+ * amplitude resolution (bits 14-15: 0 9 bits, 1 8 bits (SoundInit's 0x40 in SOUNDBIAS_H: the two low bits drop),
+ * 2 7 bits, 3 6 bits), as a float in [-1, 1) around the middle (0x200).
  */
-export function dacOutput(level10: number): number {
-  const biased = Math.min(Math.max(level10 + 0x200, 0), 0x3ff);
-  return ((biased >> 2) - 128) / 128;
+export function dacOutput(level10: number, soundbias = SOUNDBIAS_DEFAULT): number {
+  const drop = ((soundbias >> 14) & 3) + 1;
+  const biased = Math.min(Math.max(Math.floor(level10) + (soundbias & 0x3fe), 0), 0x3ff);
+  return (((biased >> drop) << drop) - 0x200) / 0x200;
 }
 
 /** One frame's FIFO samples → speaker samples (floats), as the DAC outputs them. */
@@ -127,6 +150,95 @@ export function frameToDac(fifoA: Int8Array, fifoB: Int8Array, soundcntH: number
   for (let i = 0; i < fifoA.length; i++) {
     outL[i] = dacOutput(directSoundLevel(fifoA[i], fifoB[i], soundcntH, true));
     outR[i] = dacOutput(directSoundLevel(fifoA[i], fifoB[i], soundcntH, false));
+  }
+}
+
+// ------------------------------------------------------------------ the sound circuit (FIFOs + PSG)
+
+/** One frame's PSG part as the worklet gets it (PsgFrame in soundRegs.ts). */
+export interface PsgInput {
+  writes: Uint16Array;
+  state: Uint8Array;
+}
+
+/**
+ * The GBA's sound circuit for one frame at a time: the PSG (PsgSynth) driven by the frame's register writes, and the
+ * FIFOs, summed per speaker in the 10-bit scale and through the DAC (dacOutput), DAC_OVERSAMPLE samples per FIFO
+ * sample.
+ *
+ * Timing (docs/DEV_NOTES.md "PSG frames", gotcha 1): CgbSound writes the PSG registers in VBlank, where they take
+ * effect at once, but the FIFO samples SoundMainRAM mixes in the same VBlank play during the *next* frame. So each
+ * frame plays the previous frame's FIFO samples (held back here) with this frame's PSG writes, all applied in
+ * order at the frame's start (CgbSound runs in the first lines of VBlank; the game logic's CgbOscOff writes came a
+ * little earlier).
+ *
+ * Picking up: the first frame, a frame after `reset()` (the output flushed) and any frame whose `state` isn't what
+ * the writes so far left (frames went missing) load `state` first: channels started before then stay silent until
+ * their next restart.
+ */
+export class SoundCircuit {
+  readonly psg = new PsgSynth();
+  /** Play the PSG (false: the FIFOs only, for comparisons). */
+  psgOn = true;
+  private synced = false;
+  private heldA = new Int8Array(PCM_SAMPLES_PER_VBLANK);
+  private heldB = new Int8Array(PCM_SAMPLES_PER_VBLANK);
+  private psgL = new Float32Array(DAC_SAMPLES_PER_FRAME);
+  private psgR = new Float32Array(DAC_SAMPLES_PER_FRAME);
+
+  /** Start over: the held FIFO samples are dropped and the next frame's `state` is loaded. */
+  reset(): void {
+    this.synced = false;
+    this.heldA.fill(0);
+    this.heldB.fill(0);
+  }
+
+  /**
+   * One frame: `fifoA` / `fifoB` (n samples each) are held for the next frame; the speakers get the held ones and
+   * the PSG, n × DAC_OVERSAMPLE samples per side in `outL` / `outR`.
+   */
+  frame(fifoA: Int8Array, fifoB: Int8Array, soundcntH: number, psg: PsgInput | undefined, outL: Float32Array, outR: Float32Array): void {
+    const n = fifoA.length;
+    const out = n * DAC_OVERSAMPLE;
+    if (this.heldA.length !== n) {
+      this.heldA = new Int8Array(n);
+      this.heldB = new Int8Array(n);
+    }
+    if (this.psgL.length < out) {
+      this.psgL = new Float32Array(out);
+      this.psgR = new Float32Array(out);
+    }
+    let cntH = soundcntH;
+    let soundbias = SOUNDBIAS_DEFAULT;
+    const synth = this.psg;
+    if (psg) {
+      if (!this.synced || !synth.matchesState(psg.state)) synth.loadState(psg.state);
+      this.synced = true;
+      for (let i = 0; i < psg.writes.length; i++) synth.write(psg.writes[i] >> 8, psg.writes[i] & 0xff);
+      cntH = synth.soundcntH;
+      soundbias = synth.soundbias;
+      synth.render(this.psgL, this.psgR, out, GBA_CYCLES_PER_FRAME / out);
+      if (!this.psgOn) {
+        this.psgL.fill(0);
+        this.psgR.fill(0);
+      }
+    } else {
+      this.synced = false;
+      this.psgL.fill(0);
+      this.psgR.fill(0);
+    }
+    const heldA = this.heldA;
+    const heldB = this.heldB;
+    for (let j = 0, i = 0; j < n; j++) {
+      const l = directSoundLevel(heldA[j], heldB[j], cntH, true);
+      const r = directSoundLevel(heldA[j], heldB[j], cntH, false);
+      for (let k = 0; k < DAC_OVERSAMPLE; k++, i++) {
+        outL[i] = dacOutput(l + this.psgL[i], soundbias);
+        outR[i] = dacOutput(r + this.psgR[i], soundbias);
+      }
+    }
+    heldA.set(fifoA);
+    heldB.set(fifoB.subarray(0, n));
   }
 }
 

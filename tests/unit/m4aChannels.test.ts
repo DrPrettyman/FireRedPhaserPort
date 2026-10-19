@@ -321,7 +321,7 @@ describe('channel allocation and stealing', () => {
     frames(1);
     const cgb = gSoundInfo.cgbChans![0];
     expect(cgb.track).toBe(gMPlayInfo_BGM.tracks[0]);
-    expect(cgb.statusFlags & SOUND_CHANNEL_SF_ENV).toBe(3); // CgbSound (placeholder) started it
+    expect(cgb.statusFlags & SOUND_CHANNEL_SF_ENV).toBe(3); // CgbSound started it (attack 255)
     MPlayStart(gMPlayInfo_SE1, song([[VOICE, 0, TIE, 70, 127, W(96), FINE]], [sq1], 5));
     frames(1);
     expect(cgb.track).toBe(gMPlayInfo_SE1.tracks[0]);

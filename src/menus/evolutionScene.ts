@@ -1,9 +1,12 @@
 // evolution_scene.c: the evolution screen (EvolutionScene / BeginEvolutionScene), run on the GBA layer
 // by whichever host started it: the battle after it ends (TryEvolvePokemon) or the field's party menu
 // (Rare Candy, evolution stones). It draws on the battle's BG/window layout, then hands back through
-// gCB2_AfterEvolution. TradeEvolutionScene isn't ported (there's no trading).
+// gCB2_AfterEvolution. TradeEvolutionScene isn't ported (no FRLG in-game trade evolves).
 //
-// Audio isn't implemented: cries and sound effects count as already finished (see gba/sound.ts).
+// The sounds are evolution_scene.c's, through gba/sound.ts: m4aMPlayAllStop on entry, the cries (IsCryFinished holds
+// the scene), MUS_EVOLUTION_INTRO on an SE player (!IsSEPlaying), MUS_EVOLUTION as the map music, SE_EXP (stopped
+// with everything else by m4aMPlayAllStop the frame after it starts), MUS_EVOLVED, MUS_LEVEL_UP, and the map music
+// again at the end (StopMapMusic + Overworld_PlaySpecialMapMusic). The sparkles' SEs are evolutionGraphics.ts's.
 
 import { gBattleBgTemplates, InitBattleBgsVideo, LoadBattleTextboxAndBackground } from '../battle/battleBg';
 import { K } from '../battle/constants';
@@ -57,7 +60,8 @@ import {
 import { A_BUTTON, B_BUTTON, DPAD_DOWN, DPAD_UP, gMain, JOY_NEW, SetHBlankCallback, SetMainCallback2, SetVBlankCallback, type MainCallback } from '../gba/main';
 import { BeginNormalPaletteFade, BG_PLTT_ID, FillPalette, gPaletteFade, gPlttBufferUnfaded, LoadPalette, OBJ_PLTT_ID, PLTT_SIZE_4BPP, ResetPaletteFade, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
 import { ScanlineEffect_InitHBlankDmaTransfer, ScanlineEffect_Stop } from '../gba/scanline';
-import { IsCryFinished, IsSEPlaying, PlayCry_Normal, PlaySE } from '../gba/sound';
+import { IsCryFinished, IsSEPlaying, m4aMPlayAllStop, PlayBGM, PlayCry_Normal, PlayFanfare, PlayNewMapMusic, PlaySE, StopMapMusic } from '../gba/sound';
+import { hasOverworldMusicHost, Overworld_PlaySpecialMapMusic } from '../gba/overworldMusic';
 import { AnimateSprites, BuildOamBuffer, CreateSprite, FreeAllSpritePalettes, gDummySpriteAffineAnimTable, gSprites, ProcessSpriteCopyRequests, ResetSpriteData, SetReservedSpritePaletteCount } from '../gba/sprite';
 import { CreateTask, DestroyTask, FindTaskIdByFunc, FuncIsActiveTask, gTasks, ResetTasks, RunTasks, TASK_NONE } from '../gba/task';
 import { FreeAllWindowBuffers, IsTextPrinterActive, RunTextPrinters } from '../gba/window';
@@ -323,7 +327,8 @@ export function EvolutionScene(mon: Pokemon, postEvoSpecies: number, canStopEvo:
 
   SetHBlankCallback(EvoDummyFunc);
   SetVBlankCallback(VBlankCB_EvolutionScene);
-  // m4aMPlayAllStop / HelpSystem_Disable: no audio or help system
+  m4aMPlayAllStop();
+  // HelpSystem_Disable: no help system
   SetMainCallback2(CB2_EvolutionSceneUpdate);
 }
 
@@ -437,6 +442,11 @@ const MVSTATE_RETRY_AFTER_HM = 12;
 
 const WINDOW_CLEAR = 1;
 
+/** Overworld_PlaySpecialMapMusic. battle-test.html has no field, so there the map music just stays stopped. */
+function playSpecialMapMusic(): void {
+  if (hasOverworldMusicHost()) Overworld_PlaySpecialMapMusic();
+}
+
 function Task_EvolutionScene(taskId: number): void {
   const d = gTasks[taskId].data;
   const mon = state.party[d[tPartyId]];
@@ -492,7 +502,8 @@ function Task_EvolutionScene(taskId: number): void {
       break;
     case EVOSTATE_START_MUSIC:
       if (!IsSEPlaying()) {
-        // Start music (PlayNewMapMusic(MUS_EVOLUTION)), fade background to black
+        // Start music, fade background to black
+        PlayNewMapMusic(K.MUS_EVOLUTION);
         d[tState]++;
         BeginNormalPaletteFade(0x1c, 4, 0, 0x10, RGB_BLACK);
       }
@@ -541,12 +552,14 @@ function Task_EvolutionScene(taskId: number): void {
       }
       break;
     case EVOSTATE_RESTORE_SCREEN:
-      // `if (IsSEPlaying())`: SE_EXP was just started, so this is TRUE on the GBA; with no audio, go on
-      // m4aMPlayAllStop
-      gPlttBufferUnfaded.set(evo().savedPalette, BG_PLTT_ID(2));
-      RestoreBgAfterAnim();
-      BeginNormalPaletteFade(0x1c, 0, 0x10, 0, RGB_BLACK);
-      d[tState]++;
+      // SE_EXP's first tick is the end of the frame it was started in, so this holds from the frame after it on
+      if (IsSEPlaying()) {
+        m4aMPlayAllStop();
+        gPlttBufferUnfaded.set(evo().savedPalette, BG_PLTT_ID(2));
+        RestoreBgAfterAnim();
+        BeginNormalPaletteFade(0x1c, 0, 0x10, 0, RGB_BLACK);
+        d[tState]++;
+      }
       break;
     case EVOSTATE_EVO_MON_ANIM:
       if (!gPaletteFade.active) {
@@ -558,7 +571,7 @@ function Task_EvolutionScene(taskId: number): void {
       if (IsCryFinished()) {
         ExpandToStringVar4(encodeBattleText('gText_CongratsPkmnEvolved'));
         BattlePutTextOnWindow(gStringVar4, K.B_WIN_MSG);
-        // PlayBGM(MUS_EVOLVED)
+        PlayBGM(K.MUS_EVOLVED);
         d[tState]++;
         mon.species = d[tPostEvoSpecies];
         calculateMonStats(mon);
@@ -574,7 +587,8 @@ function Task_EvolutionScene(taskId: number): void {
         // HelpSystem_Enable
         const learn = monTryLearningNewMove(mon, !!d[tLearnsFirstMove]);
         if (learn !== K.MOVE_NONE && !d[tEvoWasStopped]) {
-          // StopMapMusic / Overworld_PlaySpecialMapMusic
+          StopMapMusic();
+          playSpecialMapMusic();
           d[tBits] |= TASK_BIT_LEARN_MOVE;
           d[tLearnsFirstMove] = 0;
           d[tLearnMoveState] = MVSTATE_INTRO_MSG_1;
@@ -592,7 +606,10 @@ function Task_EvolutionScene(taskId: number): void {
       break;
     case EVOSTATE_END:
       if (!gPaletteFade.active) {
-        // if (!(tBits & TASK_BIT_LEARN_MOVE)) StopMapMusic / Overworld_PlaySpecialMapMusic
+        if (!(d[tBits] & TASK_BIT_LEARN_MOVE)) {
+          StopMapMusic();
+          playSpecialMapMusic();
+        }
         if (!d[tEvoWasStopped]) CreateShedinja(d[tPreEvoSpecies], mon);
 
         DestroyTask(taskId);
@@ -604,7 +621,7 @@ function Task_EvolutionScene(taskId: number): void {
       break;
     case EVOSTATE_CANCEL:
       if (!evoGraphicsTask().isActive) {
-        // m4aMPlayAllStop
+        m4aMPlayAllStop();
         BeginNormalPaletteFade(0x6001c, 0, 0x10, 0, RGB_WHITE);
         d[tState]++;
       }
@@ -629,7 +646,7 @@ function Task_EvolutionScene(taskId: number): void {
     case EVOSTATE_LEARNED_MOVE:
       if (!IsTextPrinterActive(0) && !IsSEPlaying()) {
         bufferMoveToLearnIntoBattleTextBuff2();
-        // PlayFanfare(MUS_LEVEL_UP)
+        PlayFanfare(K.MUS_LEVEL_UP);
         putBattleString(K.STRINGID_PKMNLEARNEDMOVE);
         d[tLearnsFirstMove] = 0x40; // re-used as a counter
         d[tState]++;
