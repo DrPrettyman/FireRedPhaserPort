@@ -708,6 +708,23 @@ this is the next level down. When you add or change a subsystem, update its entr
     the player's side; a won or caught wild battle) and TrySetQuestLogLinkBattleEvent (gLinkPlayers as an argument).
     QL4 calls them from battle/main.ts (HandleEndTurn_FinishBattle's comment marks the spot); the trainer events wait
     in SetQuestLogEvent's deferred slot until CB2_EndTrainerBattle's QuestLogEvents_HandleEndTrainerBattle (wired).
+  - **The menus' call sites (QL4a):** `ItemUse_SetQuestLogEvent` (item_use.c) is in questLogEvents.ts (a mon as
+    `{species, isEgg}` or null for 0xFFFF). Callers, each where the C calls it: menus/itemUse.ts (Coin Case, Powder
+    Jar, Poké Flute, Teachy TV, Repel, Black / White Flute, the Escape Rope with `questLogHost().mapSec()`, Fame
+    Checker, the battle's Poké Doll), world/vsSeeker.ts (Task_VsSeeker_0), menus/partyMenu.ts
+    (DisplayGaveHeldItemMessage's GIVE / _PC / _BAG by its new `fromBagMenu` argument, TOOK_HELD_ITEM,
+    SetSwappedHeldItemQuestLogEvent (the mail swaps go through DisplaySwitchedHeldItemMessage too),
+    SetSwitchedPartyOrderQuestLogEvent, SetUsedFieldMoveQuestLogEvent (Teleport's heal location / Dig's current map
+    section), every USED_ITEM: medicine, PP items in and out of battle, TMs learned or replacing a move, Rare Candy,
+    Sacred Ash's sSacredAshQuestLogMonBackup, evolution stones), SetUsedFlyQuestLogEvent (exported; region map's
+    SetFlyWarpDestination calls it), menus/itemPc.ts (WITHDREW_ITEM_PC), menus/itemMenu.ts's Task_TryDoItemDeposit
+    (DEPOSITED_ITEM_PC) and menus/pokemonStorage.ts's SetPokeStorageQuestLogEvent, whose QL_EVENT_* choice is
+    `pokeStorageQuestLogEvent` in menus/pokemonStorageQuestLog.ts (no screen state: unit tested). Map sections of a
+    MAP_* come from `mapSecOf` (questLogLocations.ts, questLog.json's maps). Still to wire (QL4b): the shops, the TM
+    case / berry pouch transactions, SetUsedPkmnCenterQuestLogEvent, the story items, TrySetQuestLogBattleEvent, the
+    Game Corner. Tests: tests/unit/questLogCalls.test.ts, tests/e2e/questLog.test.ts's "QL4a" tests (the menus driven
+    by key presses, each event loaded back with `__test.questLogEventLine`; the party menu's played on CONTINUE,
+    caught from gStringVar4 while sPlaybackControl.state is 1).
   - `world/questLogLocations.ts` is field_specials.c's QuestLog_CheckDepartingIndoorsMap /
     QuestLog_TryRecordDepartedLocation; `world/questLogObjects.ts` is QL_RecordObjects (and
     `questLogObjectEventFrom`, the port's ObjectEvent as a gObjectEvents entry, map coordinates with MAP_OFFSET);

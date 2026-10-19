@@ -4225,3 +4225,26 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   end. Screenshots of a voiceover, the healthbox-lit voiceover, his party menu checked by eye. Typecheck, 709 unit
   tests (after merging master at 4270872); teachyTv (twice), registeredItems, wildBattle, trainerBattle and
   audioBattleControllers e2e pass.
+
+### W-qlog-calls: the menus' quest log calls (QUEST_LOG_PLAN.md QL4a, batch 12)
+
+- item_use.c's ItemUse_SetQuestLogEvent in world/questLogEvents.ts, called where the C calls it: the field uses in
+  menus/itemUse.ts (Coin Case, Powder Jar, Poké Flute, Teachy TV, Repel, the flutes, Fame Checker, the Escape Rope
+  with the map section, the battle's Poké Doll) and the VS Seeker (world/vsSeeker.ts).
+- party_menu.c: GAVE_HELD_ITEM / _PC / _BAG (DisplayGaveHeldItemMessage got the C's fromBagMenu argument),
+  TOOK_HELD_ITEM, SetSwappedHeldItemQuestLogEvent (incl. the mail swaps), SetSwitchedPartyOrderQuestLogEvent,
+  SetUsedFieldMoveQuestLogEvent (both of the C's calls) and SetUsedFlyQuestLogEvent (from the region map's
+  SetFlyWarpDestination), every USED_ITEM (medicine, PP items in and out of battle, TMs / HMs with the replaced
+  move, Rare Candy, Sacred Ash's sSacredAshQuestLogMonBackup, evolution stones).
+- item_pc.c's WITHDREW_ITEM_PC, item_menu.c's DEPOSITED_ITEM_PC; pokemon_storage_system_tasks.c's
+  SetPokeStorageQuestLogEvent whole (its choice in the new menus/pokemonStorageQuestLog.ts). questLogLocations.ts
+  exports mapSecOf (a MAP_*'s section for Teleport and Fly).
+- DEVIATIONS: the "no quest log event" notes for these screens went (and a stray "No" in the party menu's).
+- Not done (QL4b): the shops, the TM case / berry pouch transactions, the Pokémon Center, story items, the battles,
+  the Game Corner.
+- Tests: tests/unit/questLogCalls.test.ts (4: ItemUse_SetQuestLogEvent's species / param; every branch of
+  SetPokeStorageQuestLogEvent's choice), tests/e2e/questLog.test.ts (+3: GIVE / TAKE / SWITCH in the party menu and a
+  Potion from the bag, each loaded back to its line and all four shown when CONTINUE plays the scene; the item PC's
+  withdraw / deposit and a mon deposited, then moved in its box; Fly's event with the destination, ending the scene).
+  Typecheck, unit tests, questLog / pcStorage / fieldItems / mail / fly / fieldMoves / vsSeeker / teachyTv /
+  fameChecker e2e pass.
