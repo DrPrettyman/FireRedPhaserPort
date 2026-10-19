@@ -3,6 +3,8 @@
 import { recordAbilityBattle } from './ai';
 import { adv, b, compare, h, typeAtk, typeDef, typeMul, w } from './bsCommands1';
 import { K } from './constants';
+import { PlayBGM } from '../gba/sound';
+import { HandleLowHpMusicChange } from './gfx';
 import {
   emitBattleAnimation,
   emitCantSwitch,
@@ -136,7 +138,9 @@ export function Cmd_getexp(): void {
         } else {
           // music change in wild battle after fainting a poke
           if (!(g.battleTypeFlags & (K.BATTLE_TYPE_TRAINER | K.BATTLE_TYPE_POKEDUDE)) && g.battleMons[0].hp !== 0 && !bst.wildVictorySong) {
-            bst.wildVictorySong++; // BattleStopLowHpSound + PlayBGM(MUS_VICTORY_WILD): no audio yet
+            // TODO(W-sound 6a): BattleStopLowHpSound (battle_gfx_sfx_util.c, battle/gfx.ts)
+            PlayBGM(K.MUS_VICTORY_WILD);
+            bst.wildVictorySong++;
           }
           if (party[id]?.hp) {
             g.battleMoveDamage = bst.sentInPokes & 1 ? bst.expValue : 0;
@@ -195,7 +199,7 @@ export function Cmd_getexp(): void {
         if (bufB[0] === K.CONTROLLER_TWORETURNVALUES && bufB[1] === K.RET_VALUE_LEVELED_UP) {
           const id = bst.expGetterMonId;
           const mon = party[id]!;
-          // HandleLowHpMusicChange: no audio yet
+          if (g.battleTypeFlags & K.BATTLE_TYPE_TRAINER && g.battlerPartyIndexes[ab] === id) HandleLowHpMusicChange(mon, ab);
           prepareMonNickWithPrefixBuffer(g.battleTextBuff1, ab, id);
           prepareByteNumberBuffer(g.battleTextBuff2, 3, mon.level);
           battleScriptPushCursor();

@@ -59,7 +59,8 @@ import {
   SetAnimBgAttribute,
   ToggleBg3Mode,
 } from './animMons';
-import { BattleAnimAdjustPanning2, PlaySE12WithPanning, ResetBattleAnimBg } from './battleAnim';
+import { PlaySE12WithPanning } from '../../gba/sound';
+import { BattleAnimAdjustPanning2, ResetBattleAnimBg } from './battleAnim';
 import { UnpackSelectedBattlePalettes } from './normal';
 import { anim, ARG_RET_ID, DestroyAnimVisualTask, gBattleAnimArgs, registerAnimExtraGfx } from './state';
 

@@ -102,7 +102,8 @@ import {
   WaitAnimForDuration,
 } from './animMons';
 import { GetBattlerSpriteBGPriorityRank, gMonSpritesGfxPtr, HandleSpeciesGfxDataChange, LoadBattleMonGfxAndAnimate, SetBattlerShadowSpriteCallback } from '../gfx';
-import { animSpriteTemplate, BattleAnimAdjustPanning, PlaySE12WithPanning } from './battleAnim';
+import { PlaySE1WithPanning, PlaySE12WithPanning } from '../../gba/sound';
+import { animSpriteTemplate, BattleAnimAdjustPanning } from './battleAnim';
 import { SMOKESCREEN_GFX, SmokescreenImpact } from './smokescreen';
 import { anim, ARG_RET_ID, DestroyAnimSprite, DestroyAnimVisualTask, gBattleAnimArgs, registerAnimExtraGfx } from './state';
 
@@ -471,7 +472,7 @@ function AnimClappingHand_Step(sprite: Sprite): void {
     sprite.x2 += d[1];
     if (sprite.x2 === 0) {
       d[2]++;
-      if (d[3] === 0) PlaySE12WithPanning(K.SE_M_ENCORE, BattleAnimAdjustPanning(K.SOUND_PAN_ATTACKER)); // PlaySE1WithPanning
+      if (d[3] === 0) PlaySE1WithPanning(K.SE_M_ENCORE, BattleAnimAdjustPanning(K.SOUND_PAN_ATTACKER));
     }
   } else {
     sprite.x2 -= d[1];

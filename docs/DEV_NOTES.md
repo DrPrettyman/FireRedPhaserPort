@@ -912,6 +912,17 @@ this is the next level down. When you add or change a subsystem, update its entr
   `ScanlineEffect_InitWave` (src/gba/scanline.ts) for a travelling sine wave. An e2e test can read module state
   in the page with `await new Function('p', 'return import(p)')('/src/gba/hw.ts')` (a bare `import()` in the
   function gets rewritten by Vitest); see battleAnims.2d.test.ts's `hblankLines`.
+  **Sounds:** every anim file calls `gba/sound.ts` directly, as the C does: PlaySE12WithPanning (and PlaySE1 / 2
+  WithPanning, PlaySE) with the pan BattleAnimAdjustPanning / BattleAnimAdjustPanning2 give (SOUND_PAN_ATTACKER
+  -64 .. SOUND_PAN_TARGET 63, negated for the opponent's side), SE12PanpotControl from `setpan` and the panse
+  task, PlayCry_ByMode with the C's species and CRY_MODE_* (soundTasks.ts), and audio/m4a.ts's m4aMPlayStop /
+  m4aMPlayAllStop / m4aMPlayVolumeControl. **Waits:** `end` waits for IsSEPlaying up to 90 frames
+  (sSoundAnimFramesToWait), then stops SE1 / SE2; `waitsound` waits for the sound tasks, then the same way. So an
+  anim whose SE outlasts its visuals ends in the frame after the SE's last tick (an SE started in frame s that
+  lasts n engine ticks: frame s + n). gMovesWithQuietBGM (read from the anim ROM image) sets the BGM to 128 at
+  launch; `end` sets 256. special.ts: the ball SEs, and the caught click's m4aMPlayAllStop + PlaySE(MUS_CAUGHT_INTRO).
+  Tests: tests/e2e/audioBattleAnims.test.ts (`__test.audioEvents`: Tackle's pan from both sides and its end on the
+  SE's end, Growl's two cries, Perish Song's BGM volume, a Master Ball's SEs and the jingle).
 
 ## Audio
 
@@ -1177,15 +1188,21 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   after a `reset()`, or frames missed) `loadState(state)` (registers latched, every channel off); then each write
   in order at the frame's start (`PsgSynth.write`: NRx4 bit 7 restarts, NRx2 bits 3-7 are the DAC, NR30's bank and
   64-sample mode, NR52 bit 7 resets NR10-NR51); then `render` plays 280,896 cycles as 896 samples. Each sample:
-  the frame sequencer's steps due (512 Hz: lengths at 0/2/4/6, square 1's sweep at 2/6, envelopes at 7), each
-  channel's average output over the sample's 313.5 cycles (0-15: squares 16 × (2048 − f) cycles a duty step, the
-  wave 8 × (2048 − f) a sample, noise 32 or 64r << s cycles an LFSR clock), routed by NR51, × 8 × (NR50 + 1), / 4,
-  8 or 16 by SOUNDCNT_H's share (a channel at 15 adds 240 at 100%). The circuit adds the previous frame's FIFO
+  the frame sequencer's steps (512 Hz: lengths at 0/2/4/6, square 1's sweep at 2/6, envelopes at 7; through the DAC
+  each on its own cycle, a step on a tick's cycle before the tick; the box filter steps at the sample boundaries)
+  and the DAC's point samples (every 0x200 >> SOUNDBIAS's resolution = 256 cycles, 65,536 Hz, as the GBA and mGBA: each
+  channel's level at that cycle, held to the next tick; `dacInterval`, set by SoundCircuit) averaged over the
+  sample's 313.5 cycles (channel levels 0-15: squares 16 × (2048 − f) cycles a duty step, the wave 8 × (2048 − f) a
+  sample, noise 32 or 64r << s cycles an LFSR clock), routed by NR51, × 8 × (NR50 + 1), / 4, 8 or 16 by SOUNDCNT_H's
+  share (a channel at 15 adds 240 at 100%). Point sampling matters for fast noise (NR43 0x00: a 524 kHz clock): a
+  plain average over the sample cancels it out, the GBA's DAC aliases it at full level (W-ref 2: SE_FLEE was 10 dB
+  down in its noise frames). `PsgSynth.render` with `dacInterval` 0 is the plain average (the hand-worked tests). The circuit adds the previous frame's FIFO
   samples (×4 / ×2 by SOUNDCNT_H, the register as it stands now) and goes through `dacOutput(level, SOUNDBIAS)`.
 - **Behaviour worth knowing:** PSG levels are unsigned (a sounding channel adds DC, as on the GBA); a square's duty
   position free-runs (a restart doesn't move it; from power-on its timer counts 16 × 2048 cycles); the wave RAM
   rotates as it plays and a restart keeps the position (fresh RAM written by CgbSound starts at its first sample);
-  the sample after a restart is the one that was playing; noise restarts its LFSR at 0 (XNOR feedback, output = the
+  the sample after a restart is the one that was playing, for a period + 24 cycles (`WAVE_RESTART_DELAY`: mGBA,
+  SameBoy); noise restarts its LFSR at 0 (XNOR feedback, output = the
   feedback bit); a stopped channel outputs 0. docs/DEVIATIONS.md has what is approximated.
 - **Hooking in:** nothing to do for new sounds: everything the engine writes is played. To render: `speakers(render(
   frames, before), { psg })` (tests/audioRender.ts), `speakerRms` (AC RMS: the DC taken out), `toWav`.
@@ -1194,7 +1211,8 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
 - **Tests:** `tests/unit/psgSynth.test.ts`: duty patterns and the free-running position, box averages, the envelope
   up / down / held, the DAC bits, the length counter and its reload, square 1's sweep (up, overflow, down, the
   restart check), the LFSR's first values (15 and 7 bits) and its clock, the wave's samples, volumes, banks and
-  restarts, NR50 / NR51 / SOUNDCNT_H / NR52, the circuit (the FIFOs a frame late, resync after a missed frame, no
+  restarts and the restart's 24-cycle delay, the sequencer's steps on their own cycle through the DAC, NR50 / NR51 /
+  SOUNDCNT_H / NR52, the circuit (the FIFOs a frame late, resync after a missed frame, no
   PSG part); on public/gen/audio: the PSG-only SEs heard from their first frame to the one before CgbOscOff
   (SE_SELECT 0-13 ... SE_FLEE 0-37), MUS_PALLET / MUS_TITLE's PSG part, mono (L = R) and stereo.
   `tests/e2e/audioOutput.test.ts`: SE_SELECT alone reaches the worklet's speakers.
@@ -1236,6 +1254,42 @@ or extend them:
   (FINE and stop frames), 10 looping songs (the frames of track 0's first three GOTOs, watched through
   `gMPlayJumpTable[1]`), 8 species' cries in 5 modes (IsPokemonCryPlaying) and the cry song's end per mode. To add
   a number, measure it the same way and add a row; a mismatch is an engine bug or a difference in what is counted.
+- **W-ref 2: the output per frame, and the listening comparison** (scripts in `wref-scratch/wref2/`, outside the
+  repos; results in AUDIO_PLAN.md section 6 "W-ref"). Same mGBA, freeze and start method. `capture.py` (through
+  `run.sh`, which starts mGBA with `-C fpsTarget=100000 -C audioSync=0 -C videoSync=0 -C mute=1 -g`; set TCP_NODELAY
+  on the socket) runs a job list (`jobs.py`: songs by id, `PlayCry_ByMode`, `SetPokemonCryStereo` at 0x081DE844,
+  found by its literal pool with REG_SOUNDCNT_H and SOUND_INFO_PTR) and stops at every m4aSoundMain entry (~100 ms a
+  frame: 900 frames ≈ 90 s) to read: SoundInfo's first 16 bytes (`*0x03007FF0`; pcmDmaCounter at +4, c15 at +10),
+  the slot the previous frame mixed (`pcmBuffer` = SoundInfo + 0x350, slot from that frame's counter as
+  `PcmSlotOffset`; FIFO B at + 1,584), the four CgbChannel structs (SoundInfo + 28 → 4 × 64 bytes) and the sound
+  registers 0x4000060-0x40000AF as mGBA reads them back (write-only bits read 0: NRx3, NRx4's low bits; NR52's low
+  bits are the channels' on flags; wave RAM is the bank not playing). Jobs end with the song's stop and 60 idle
+  frames. `port_capture.ts` (run from the worktree: `npx vite-node --root /Users/joshua/Coding/PokemonProjects
+  <path>`, since vite-node won't load a file outside its root) replays the same job list headless, syncing
+  pcmDmaCounter and c15 to the ROM's at each start, and writes the same records plus each job's speakers WAV and
+  PSG writes; `compare.py` compares them field by field (the registers through mGBA's read masks, NR52 against the
+  port's synth's `on` flags). A one-frame shift shows up in every field (checked), so "identical" means identical.
+  The listening part: mGBA's Qt app records only from its GUI and nothing headless is installed, so `mgba_model.py`
+  renders a reference from the ROM's own FIFO bytes plus an independent model of mGBA's PSG (gb_audio.c /
+  gba_audio.c's GB_AUDIO_GBA paths in `Scratch/mgba-ref`: point samples every 256 cycles, a stopped channel holds
+  its level, the writes ~14,000 cycles into the frame) driven by the port's PSG writes; `analyze.py` compares it
+  with the port's WAV after a 20 Hz DC blocker and a 20 kHz band limit; `make_page.py` builds `index.html`.
+  Nothing from the ROM goes into the repo: only pass / fail facts and dB numbers the port computes itself.
+- **W-ref 2b: making the listening comparison like for like** (same directory; AUDIO_PLAN.md "W-ref" has the
+  numbers). The PSG's sound depends on phases nothing on the ROM shows (the frame sequencer's against the frames,
+  the squares' duty positions), and with DirectSound playing related pitches a frame's RMS swings ±2 dB with them,
+  so both sides must start from the same: `port_capture.ts` renders each job's WAV with a circuit reset at the job
+  (its first frame's state loaded; a second circuit that runs on gives the records' NR52 bits, as the ROM's PSG
+  runs on), and `mgba_model.render(label, write_at, seq_phase=32768, hw)` starts the sequencer 32,768 cycles in as
+  the port's loadState. `hw=True` swaps mGBA's shortcuts for the documented hardware (the list is in
+  docs/DEVIATIONS.md's PSG entry); with `write_at=0` it is what the port should be, and it equals the port at every
+  DAC tick (`wref-scratch/wref2b/`: `port_tick.ts` records the port's channel levels at its ticks, `points.py` the
+  model's, and compares them channel by channel; per-channel renders with NR51 masked: `port_chan.ts`, `exp.py`).
+  `ref_all.py` renders both references (`ref/`: mGBA as is, `ref_hw/`), `analyze2.py <refdir>` compares through
+  the port's output stage (the held 65,536 Hz reference averaged over each 313.5-cycle sample: brightness and
+  level then measure the synth, not the output rate) and adds a sample-by-sample residual; `make_page.py` reads
+  both. To check a synth change: rerun `port_capture.ts`, `analyze2.py ref_hw ...` (r ≥ 0.9998 and the PSG-only
+  SEs' residual ≤ −32 dB today).
 ### Audio output
 
 - **Where:** `src/audio/output.ts` (the AudioContext, the worklet node, autoplay, visibility, mute, `pushFrame`, the
@@ -1427,6 +1481,53 @@ or extend them:
   apart, MUS_HEAL 32 frames after the last, the effect running until the fanfare task resumes the BGM).
 
 ### Scene sounds (W-sound 7a, 7b)
+### Battle sounds: the controllers (W-sound 5b)
+
+- **Where:** each controller calls `gba/sound.ts` (and `audio/m4a.ts` for m4aMPlayContinue / m4aMPlayVolumeControl /
+  m4aSongNumStop) as its C file does, with the C's pans and cry modes: `battle/controllerPlayer.ts`
+  (battle_controller_player.c), `controllerOpponent.ts`, `controllerOakOldMan.ts`, `controllerSafari.ts`; the exp
+  bar's SE_EXP (PlaySE, then m4aSongNumStop when the bar is full) and Task_CreateLevelUpVerticalStripes' SE_RS_SHOP
+  are in `controllerCommon.ts`. The menus' SE_SELECT (action, move, target, move switching, the Old Man's
+  simulated input, Safari's menu), SE_FAINT (PlaySE12WithPanning: SOUND_PAN_ATTACKER for the player's side,
+  SOUND_PAN_TARGET for the foe's), CONTROLLER_PLAYSE (panned by side, except the Oak/Old Man controller's plain
+  PlaySE), PLAYFANFARE, PLAYBGM (the player's only; the others just complete), FAINTINGCRY (player / opponent:
+  PlayCry_ByMode(species, -25 / 25, CRY_MODE_FAINT); Oak/Old Man and Safari: PlayCry_Normal(species, 25)), Cmd55's
+  FadeOutMapMusic(5).
+- **Waits:** Intro_WaitForShinyAnimAndHealthbox (player, opponent) and SwitchIn_HandleSoundAndEnd hold until
+  `!IsCryPlayingOrClearCrySongs()` (the send-out cry), then put the BGM back to 256 (m4aMPlayContinue in multi
+  battles). The Oak/Old Man intro doesn't wait: it starts Task_PlayerController_RestoreBgmAfterCry (exported by
+  controllerPlayer.ts). The cries themselves come from pokeball.c / battle_main.c's ports (`gfx.ts`, W-sound 6a).
+- **Tests:** `tests/e2e/audioBattleControllers.test.ts` (a wild battle's intro leaves Intro_WaitForShinyAnimAndHealthbox
+  only after MEWTWO's send-out cry stops; 4 SE_SELECTs from the action and move menus; a fainting PIDGEY's SE_FAINT
+  at SOUND_PAN_TARGET and CRY_MODE_FAINT cry; SE_EXP stopped well before its 100 frames; the Old Man's two
+  SE_SELECTs 64 frames apart and the catch's speed-5 fade).
+### Battle sounds (W-sound 5a)
+
+- **Where:** each C call sits in the file that ports its C file and calls `gba/sound.ts` directly with the C's
+  arguments. The battle's music: `battle/battleBgm.ts` (pokemon.c's GetBattleBGM, PlayMapChosenOrBattleBGM; the
+  caller passes the battle type flags and the trainer's class, which the C reads from gBattleTypeFlags / gTrainers),
+  called by `OverworldScene.runBattle` (CreateBattleStartTask: before the transition, with `song`: 0 for the
+  default, MUS_VS_LEGEND for a roamer, StartLegendaryBattle's MUS_VS_MEWTWO / _VS_DEOXYS / _VS_LEGEND /
+  MUS_RS_VS_TRAINER through `script/specials.ts` and `ScriptHost.startScriptedBattle`'s `song`) and by
+  battle-test.html's `launch`. SE_MUGSHOT: `battle/transition.ts` (Mugshot_StartOpponentSlide). battle_main.c in
+  `battle/main.ts`: the victory music (HandleEndTurn_BattleWon: MUS_VICTORY_GYM_LEADER for leaders and the
+  Champion, else MUS_VICTORY_TRAINER), FadeOutMapMusic(5) at the end, SE_FLEE (the Safari run), SE_LOW_HEALTH's
+  stop on the way out. battle_script_commands.c in `battle/bsCommands1-4.ts`: getexp's MUS_VICTORY_WILD (not for a
+  level-100 mon: the C skips it there too), the level-up's HandleLowHpMusicChange (battle/gfx.ts), the yes / no
+  boxes' SE_SELECT, VARIOUS_WAIT_FANFARE (`waitfanfare`, only the Poké Flute's script uses it); `playse`, `fanfare`
+  and `playfaintcry` emit to the controllers, as in the C.
+- **The hooks:** BattleUi's `playSE / playCry / playBGM / playFanfare` pass through to sound.ts (PlayCry_Normal(species,
+  0): no mode or pan) for the callers not converted yet; new code calls sound.ts (AUDIO_PLAN.md decision 21: W-sound
+  8 deletes them). MainMenuScene's and tradeScene's BattleUi stand-ins keep no-op hooks.
+- **After the battle:** returnToField's Overworld_PlaySpecialMapMusic brings the map's music back (the battle song is
+  the map music state's current song, so it always differs). The level-up fanfare pauses the victory music for 80
+  frames but holds nothing: BattleScript_LevelUp has no `waitfanfare`.
+- **Tests:** `tests/unit/battleBgm.test.ts` (GetBattleBGM by flags and class), `tests/e2e/audioBattle.test.ts`
+  (a wild battle: MUS_VS_WILD before the transition, MUS_VICTORY_WILD, MUS_LEVEL_UP pausing it 80 frames,
+  FadeOutMapMusic's fade before the end, MUS_ROUTE1 after; a level-100 win without victory music; Rick:
+  MUS_ENCOUNTER_BOY, MUS_VS_TRAINER, MUS_VICTORY_TRAINER, MUS_VIRIDIAN_FOREST after; Lorelei's mugshot SE_MUGSHOT;
+  Zapdos's MUS_VS_LEGEND; the Poké Flute's `waitfanfare` holding "...awoke!" until MUS_POKE_FLUTE's 450 frames end).
+### Scene sounds (W-sound 7a)
 
 - **Where:** each C call at its port function, through `gba/sound.ts` with the C's arguments.
   `menus/evolutionScene.ts` (evolution_scene.c): m4aMPlayAllStop on entry (EvolutionScene) and on a cancel, the

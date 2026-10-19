@@ -5,6 +5,7 @@ import { IsDma3ManagerBusyWithBgCopy } from '../gba/bg';
 import { DISPLAY_WIDTH, PALETTES_ALL, RGB_BLACK } from '../gba/hw';
 import { gMain } from '../gba/main';
 import { BeginFastPaletteFade, BeginNormalPaletteFade, gPaletteFade } from '../gba/palette';
+import { FadeOutMapMusic, PlayCry_Normal, PlayFanfare, PlaySE, PlaySE12WithPanning } from '../gba/sound';
 import { CreateSprite, gSprites, SpriteCallbackDummy } from '../gba/sprite';
 import { IsTextPrinterActive } from '../gba/window';
 import { SpecialVar } from '../menus/itemMenuState';
@@ -61,13 +62,13 @@ function HandleInputChooseAction(): void {
   // Left/right flip bit 0, up/down bit 1, each only towards the other column/row
   const move = (mask: number, toSet: boolean) => {
     if (!!(cursor & mask) === toSet) return;
-    ui.playSE(K.SE_SELECT);
+    PlaySE(K.SE_SELECT);
     ActionSelectionDestroyCursorAt(cursor);
     g.actionSelectionCursor[a] ^= mask;
     ActionSelectionCreateCursorAt(g.actionSelectionCursor[a], 0);
   };
   if (ui.joyNew('A')) {
-    ui.playSE(K.SE_SELECT);
+    PlaySE(K.SE_SELECT);
     emitTwoReturnValues(K.BUFFER_B, SAFARI_ACTIONS()[cursor], 0);
     SafariBufferExecCompleted();
   } else if (ui.joyNew('LEFT')) {
@@ -197,7 +198,7 @@ function SafariHandleBattleAnimation(): void {
 
 function SafariHandleCmd55(): void {
   g.battleOutcome = bufA()[1];
-  // FadeOutMapMusic(5): no audio
+  FadeOutMapMusic(5);
   BeginFastPaletteFade(3);
   SafariBufferExecCompleted();
 }
@@ -251,15 +252,17 @@ function sSafariBufferCommands(): Record<number, () => void> {
     [K.CONTROLLER_HITANIMATION]: complete,
     [K.CONTROLLER_CANTSWITCH]: complete,
     [K.CONTROLLER_PLAYSE]: () => {
-      ui.playSE(bufA()[1] | (bufA()[2] << 8)); // PlaySE12WithPanning
+      // SafariHandlePlaySE
+      const pan = getBattlerSide(ab()) === K.B_SIDE_PLAYER ? K.SOUND_PAN_ATTACKER : K.SOUND_PAN_TARGET;
+      PlaySE12WithPanning(bufA()[1] | (bufA()[2] << 8), pan);
       complete();
     },
     [K.CONTROLLER_PLAYFANFARE]: () => {
-      ui.playFanfare(bufA()[1] | (bufA()[2] << 8));
+      PlayFanfare(bufA()[1] | (bufA()[2] << 8)); // SafariHandlePlayFanfareOrBGM
       complete();
     },
     [K.CONTROLLER_FAINTINGCRY]: () => {
-      ui.playCry(playerMon().species);
+      PlayCry_Normal(playerMon().species, 25); // SafariHandleFaintingCry
       complete();
     },
     [K.CONTROLLER_INTROSLIDE]: () => {

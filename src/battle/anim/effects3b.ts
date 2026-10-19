@@ -88,7 +88,8 @@ import {
   TryResetSpriteAffineState,
   TrySetSpriteRotScale,
 } from './animMons';
-import { animSpriteTemplate, BattleAnimAdjustPanning, IsContest, PlaySE12WithPanning } from './battleAnim';
+import { PlaySE12WithPanning } from '../../gba/sound';
+import { animSpriteTemplate, BattleAnimAdjustPanning, IsContest } from './battleAnim';
 import { anim, ARG_RET_ID, DestroyAnimSprite, DestroyAnimVisualTask, gBattleAnimArgs, registerAnimExtraGfx } from './state';
 import { StartMonScrollingBgMask } from './utilityFuncs';
 

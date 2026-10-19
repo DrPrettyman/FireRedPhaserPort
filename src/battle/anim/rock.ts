@@ -57,7 +57,8 @@ import {
   TranslateSpriteInEllipse,
   TranslateSpriteLinearFixedPoint,
 } from './animMons';
-import { animSpriteTemplate, BattleAnimAdjustPanning, PlaySE12WithPanning } from './battleAnim';
+import { PlaySE12WithPanning } from '../../gba/sound';
+import { animSpriteTemplate, BattleAnimAdjustPanning } from './battleAnim';
 import { anim, ARG_RET_ID, DestroyAnimSprite, DestroyAnimVisualTask, gBattleAnimArgs, registerAnimExtraGfx } from './state';
 
 const isOpponent = (battler: number) => getBattlerSide(battler) !== K.B_SIDE_PLAYER;

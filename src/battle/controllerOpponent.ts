@@ -1,7 +1,10 @@
 // battle_controller_opponent.c: the AI-driven opponent's controller.
 
 import { FreeSpriteOamMatrix, FreeSpritePaletteByTag, FreeSpriteTilesByTag, GetSpriteTileStartByTag, gSprites, CreateSprite, DestroySprite, IndexOfSpritePaletteTag, SpriteCallbackDummy, StartSpriteAnim, StoreSpriteCallbackInData6, type Sprite } from '../gba/sprite';
+import { IsCryPlayingOrClearCrySongs, PlayCry_ByMode, PlayFanfare, PlaySE12WithPanning } from '../gba/sound';
 import { CreateTask, DestroyTask, gTasks } from '../gba/task';
+import { gMPlayInfo_BGM, m4aMPlayContinue, m4aMPlayVolumeControl } from '../audio/m4a';
+import { TRACKS_ALL } from '../audio/m4aInternal';
 import { IsTextPrinterActive } from '../gba/window';
 import { DISPLAY_WIDTH } from '../gba/hw';
 import { random } from '../util/random';
@@ -9,7 +12,6 @@ import { battleAI_ChooseMoveOrAction, battleAI_SetupAIData } from './ai';
 import { AI_TrySwitchOrUseItem, getMostSuitableMonToSwitchInto } from './aiSwitchItems';
 import { CreatePartyStatusSummarySprites, SetBattleBarStruct, SetHealthboxSpriteInvisible, SetHealthboxSpriteVisible, Task_HidePartyStatusSummary, UpdateHealthboxAttribute } from './battleInterface';
 import { HandleIntroSlide } from './battleIntro';
-import { ui } from './battleUi';
 import { BattlePutTextOnWindow } from './battleWindow';
 import { K } from './constants';
 import { handleGetMonData, handleSetMonData, healthbarStep, hitAnimBlinkStep } from './controllerCommon';
@@ -116,12 +118,14 @@ function Intro_WaitForShinyAnimAndHealthbox(): void {
   } else if (gSprites[g.healthboxSpriteIds[a]].callback === SpriteCallbackDummy && gSprites[g.healthboxSpriteIds[a ^ K.BIT_FLANK]].callback === gSprites[g.healthboxSpriteIds[a]].callback) {
     v = true;
   }
-  // IsCryPlayingOrClearCrySongs: no audio
+  if (IsCryPlayingOrClearCrySongs()) v = false;
   if (v && h[a].finishedShinyMonAnim && h[a ^ K.BIT_FLANK].finishedShinyMonAnim) {
     h[a].triedShinyMonAnim = h[a].finishedShinyMonAnim = 0;
     h[a ^ K.BIT_FLANK].triedShinyMonAnim = h[a ^ K.BIT_FLANK].finishedShinyMonAnim = 0;
     FreeSpriteTilesByTag(ANIM_TAG_GOLD_STARS());
     FreeSpritePaletteByTag(ANIM_TAG_GOLD_STARS());
+    if (g.battleTypeFlags & K.BATTLE_TYPE_MULTI) m4aMPlayContinue(gMPlayInfo_BGM);
+    else m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 256);
     h[a].introEndDelay = 3;
     g.battlerControllerFuncs[a] = Intro_DelayAndEnd;
   }
@@ -212,7 +216,10 @@ function SwitchIn_ShowSubstitute(): void {
 }
 
 function SwitchIn_HandleSoundAndEnd(): void {
-  if (!sbd().healthBoxesData[ab()].specialAnimActive) OpponentBufferExecCompleted();
+  if (!sbd().healthBoxesData[ab()].specialAnimActive && !IsCryPlayingOrClearCrySongs()) {
+    m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 0x100);
+    OpponentBufferExecCompleted();
+  }
 }
 
 function SwitchIn_ShowHealthbox(): void {
@@ -415,7 +422,7 @@ function OpponentHandleFaintAnimation(): void {
     ++h.animationState;
   } else if (!h.specialAnimActive) {
     h.animationState = 0;
-    ui.playSE(K.SE_FAINT);
+    PlaySE12WithPanning(K.SE_FAINT, K.SOUND_PAN_TARGET);
     gSprites[g.battlerSpriteIds[a]].callback = SpriteCB_FaintOpponentMon;
     g.battlerControllerFuncs[a] = HideHealthboxAfterMonFaint;
   }
@@ -566,17 +573,18 @@ function OpponentHandleHitAnimation(): void {
 }
 
 function OpponentHandlePlaySE(): void {
-  ui.playSE(bufA()[1] | (bufA()[2] << 8));
+  const pan = getBattlerSide(ab()) === K.B_SIDE_PLAYER ? K.SOUND_PAN_ATTACKER : K.SOUND_PAN_TARGET;
+  PlaySE12WithPanning(bufA()[1] | (bufA()[2] << 8), pan);
   OpponentBufferExecCompleted();
 }
 
 function OpponentHandlePlayFanfare(): void {
-  ui.playFanfare(bufA()[1] | (bufA()[2] << 8));
+  PlayFanfare(bufA()[1] | (bufA()[2] << 8));
   OpponentBufferExecCompleted();
 }
 
 function OpponentHandleFaintingCry(): void {
-  ui.playCry(monOf(ab()).species);
+  PlayCry_ByMode(monOf(ab()).species, 25, K.CRY_MODE_FAINT);
   OpponentBufferExecCompleted();
 }
 

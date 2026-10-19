@@ -57,13 +57,13 @@ import {
   TranslateAnimHorizontalArc,
   TranslateAnimVerticalArc,
 } from './animMons';
-import { animSpriteTemplate, animTagGfx, LoadAnimSpriteGfx, PlaySE12WithPanning } from './battleAnim';
+import { m4aMPlayAllStop, PlaySE, PlaySE12WithPanning } from '../../gba/sound';
+import { animSpriteTemplate, animTagGfx, LoadAnimSpriteGfx } from './battleAnim';
 import { anim, ARG_RET_ID, DestroyAnimSprite, DestroyAnimVisualTask, gBattleAnimArgs, registerAnimExtraGfx } from './state';
 
 const sbd = () => g.battleSpritesDataPtr;
 const u16 = (v: number) => v & 0xffff;
 const s8 = (v: number) => (v << 24) >> 24;
-const PlaySE = (songId: number) => ui.playSE(songId);
 
 // gMonShrinkDuration / gMonShrinkDelta / gMonShrinkDistance (COMMON_DATA)
 let gMonShrinkDuration = 0;
@@ -568,7 +568,7 @@ function SpriteCB_ThrowBall_DoClick(sprite: Sprite): void {
   } else if (sprite.data[4] === 95) {
     g.doingBattleAnim = false;
     UpdateOamPriorityInAllHealthboxes(1);
-    // m4aMPlayAllStop(); PlaySE(MUS_CAUGHT_INTRO): no audio yet
+    m4aMPlayAllStop();
     PlaySE(K.MUS_CAUGHT_INTRO);
   } else if (sprite.data[4] === 315) {
     const target = gSprites[g.battlerSpriteIds[anim.target]];

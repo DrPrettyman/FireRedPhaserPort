@@ -15,6 +15,7 @@ import { AddTextPrinter, AddTextPrinterParameterized3, FreeAllWindowBuffers, Cle
 import { ConvertIntToDecimalStringN, STR_CONV_MODE_LEFT_ALIGN, strBody } from './stringUtil';
 import type { Pokemon } from '../pokemon/Pokemon';
 import { ui } from './battleUi';
+import { IsFanfareTaskInactive, PlaySE } from '../gba/sound';
 import { BattleCreateYesNoCursorAt, BattleDestroyYesNoCursorAt, BattlePutTextOnWindow, HandleBattleWindow } from './battleWindow';
 import { adv, b, h, typeAtk, typeDef, typeMul, w } from './bsCommands1';
 import { K } from './constants';
@@ -111,13 +112,13 @@ export function Cmd_handlelearnnewmove(): void {
 function yesNoMove(): void {
   const mc = g.battleCommunication;
   if (ui.joyNew('UP') && mc[K.CURSOR_POSITION] !== 0) {
-    ui.playSE(K.SE_SELECT);
+    PlaySE(K.SE_SELECT);
     BattleDestroyYesNoCursorAt(mc[K.CURSOR_POSITION]);
     mc[K.CURSOR_POSITION] = 0;
     BattleCreateYesNoCursorAt(0);
   }
   if (ui.joyNew('DOWN') && mc[K.CURSOR_POSITION] === 0) {
-    ui.playSE(K.SE_SELECT);
+    PlaySE(K.SE_SELECT);
     BattleDestroyYesNoCursorAt(mc[K.CURSOR_POSITION]);
     mc[K.CURSOR_POSITION] = 1;
     BattleCreateYesNoCursorAt(1);
@@ -148,7 +149,7 @@ export function Cmd_yesnoboxlearnmove(): void {
     case 1:
       yesNoMove();
       if (ui.joyNew('A')) {
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         if (g.battleCommunication[1] === 0) {
           HandleBattleWindow(23, 8, 29, 13, WINDOW_CLEAR);
           BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_BLACK);
@@ -157,7 +158,7 @@ export function Cmd_yesnoboxlearnmove(): void {
           scr.learnMoveState = 4;
         }
       } else if (ui.joyNew('B')) {
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         scr.learnMoveState = 4;
       }
       break;
@@ -223,12 +224,12 @@ export function Cmd_yesnoboxstoplearningmove(): void {
     case 1:
       yesNoMove();
       if (ui.joyNew('A')) {
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         if (g.battleCommunication[1] !== 0) g.battlescriptCurrInstr = w(1);
         else adv(5);
         HandleBattleWindow(23, 8, 29, 13, WINDOW_CLEAR);
       } else if (ui.joyNew('B')) {
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         g.battlescriptCurrInstr = w(1);
         HandleBattleWindow(23, 8, 29, 13, WINDOW_CLEAR);
       }
@@ -390,11 +391,11 @@ export function Cmd_yesnobox(): void {
       yesNoMove();
       if (ui.joyNew('B')) {
         mc[K.CURSOR_POSITION] = 1;
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         HandleBattleWindow(23, 8, 29, 13, WINDOW_CLEAR);
         adv(1);
       } else if (ui.joyNew('A')) {
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         HandleBattleWindow(23, 8, 29, 13, WINDOW_CLEAR);
         adv(1);
       }
@@ -635,7 +636,7 @@ export function Cmd_drawlvlupbox(): void {
     case 6:
       if (ui.anyNewKeys()) {
         // Draw page 2 of level up box
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         DrawLevelUpWindow2();
         CopyWindowToVram(K.B_WIN_LEVEL_UP_BOX, COPYWIN_GFX);
         scr.drawlvlupboxState++;
@@ -644,7 +645,7 @@ export function Cmd_drawlvlupbox(): void {
     case 8:
       if (ui.anyNewKeys()) {
         // Close level up box
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         HandleBattleWindow(18, 7, 29, 19, K.WINDOW_BG1 | WINDOW_CLEAR);
         scr.drawlvlupboxState++;
       }
@@ -849,7 +850,7 @@ export function Cmd_various(): void {
       break;
     }
     case K.VARIOUS_WAIT_FANFARE:
-      // IsFanfareTaskInactive: no audio, so the fanfare is always done
+      if (!IsFanfareTaskInactive()) return;
       break;
   }
   adv(3);

@@ -9,7 +9,7 @@
 import { describe, expect, test } from 'vitest';
 import { m4aSongNumStart, SetPokemonCryStereo } from '../../src/audio/m4a';
 import { dacOutput, SoundCircuit } from '../../src/audio/outputCore';
-import { clockLfsr, noisePeriod, PsgSynth, type Noise } from '../../src/audio/psgSynth';
+import { clockLfsr, noisePeriod, PsgSynth, WAVE_RESTART_DELAY, type Noise } from '../../src/audio/psgSynth';
 import {
   PSG_NR10,
   PSG_NR11,
@@ -235,6 +235,38 @@ describe('noise', () => {
     }
   });
 
+  test('through the DAC (dacInterval): point samples held, so fast noise keeps its full level (W-ref 2)', () => {
+    // NR43 0: a clock every 32 cycles. Averaged over 256-cycle samples (the box) the bits mostly cancel out; the
+    // GBA's DAC (and mGBA) takes the bit at each tick, so every sample is 0 or the full 15.
+    const run = (dacInterval: number) => {
+      const s = psg();
+      s.dacInterval = dacInterval;
+      s.write(PSG_NR42, 0xf0);
+      s.write(PSG_NR43, 0x00);
+      s.write(PSG_NR44, 0x80);
+      return levels(s, 400, 256);
+    };
+    const box = run(0);
+    const dac = run(256);
+    expect(dac.every((v) => v === 0 || v === 15)).toBe(true);
+    expect(dac.filter((v) => v === 15).length).toBeGreaterThan(100);
+    const sd = (xs: number[]) => {
+      const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+      return Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / xs.length);
+    };
+    expect(sd(dac)).toBeGreaterThan(6); // a fair coin at 0 / 15: 7.5
+    expect(sd(box)).toBeLessThan(4);
+    // Each tick's level is held until the next: at 128-cycle samples, pairs. The first sample holds the level
+    // taken at the render's start (the restart's 0).
+    const s = psg();
+    s.dacInterval = 256;
+    s.write(PSG_NR42, 0xf0);
+    s.write(PSG_NR43, 0x00);
+    s.write(PSG_NR44, 0x80);
+    const half = levels(s, 64, 128);
+    for (let i = 0; i < 64; i += 2) expect(half[i + 1]).toBe(half[i]);
+  });
+
   test('its clock: 524,288 Hz / r / 2^(s + 1), r = 0 as 0.5; no clocks at shift 14 and 15', () => {
     const period = (nr43: number) =>
       noisePeriod({ ratio: nr43 & 7, shift: nr43 >> 4 } as Noise);
@@ -256,7 +288,12 @@ describe('the wave channel', () => {
     s.write(PSG_NR32, nr32);
     s.write(PSG_NR30, 0x80);
     s.write(PSG_NR33, 0xe0);
-    s.write(PSG_NR34, 0x87); // 2016: a sample every 8 × 32 = 256 cycles
+    restart(s); // 2016: a sample every 8 × 32 = 256 cycles
+  }
+  /** NR34's restart, then the 24 cycles its first sample comes late (so the samples below line up). */
+  function restart(s: PsgSynth): void {
+    s.write(PSG_NR34, 0x87);
+    levels(s, 1, WAVE_RESTART_DELAY);
   }
   const RAMP = [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef];
 
@@ -283,11 +320,27 @@ describe('the wave channel', () => {
     }
   });
 
+  test("a restart's first sample comes 24 cycles after a period (mGBA, SameBoy: 3 ticks of the 2 MHz clock)", () => {
+    const s = psg();
+    s.write(PSG_NR30, 0x40);
+    s.write(PSG_WAVE_RAM, 0x8f);
+    s.write(PSG_NR30, 0x00);
+    s.write(PSG_NR32, 0x20);
+    s.write(PSG_NR30, 0x80);
+    s.write(PSG_NR33, 0xe0);
+    s.write(PSG_NR34, 0x87);
+    // The sample that was playing (0) for 256 + 24 cycles, then 8, 15 every 256.
+    expect(levels(s, 1, 279)).toEqual([0]);
+    expect(levels(s, 1, 1)).toEqual([0]);
+    expect(levels(s, 1, 1)).toEqual([8]);
+    expect(levels(s, 2, 255)).toEqual([8, 15]);
+  });
+
   test('a restart keeps the position; NR30 bit 7 clear stops it; the other bank', () => {
     const s = psg();
     loadWave(s, RAMP);
     levels(s, 5, 256); // played 0, 0, 1, 2, 3; 4 rotated out at the end
-    s.write(PSG_NR34, 0x87);
+    restart(s);
     expect(levels(s, 3, 256)).toEqual([4, 5, 6]); // the sample playing (4) goes on for a whole step
     s.write(PSG_NR30, 0x00);
     expect(s.wave.on).toBe(false);
@@ -295,16 +348,30 @@ describe('the wave channel', () => {
     // NR30 0x00 lets the CPU reach bank 1; NR30 0xC0 plays it.
     for (let i = 0; i < 16; i++) s.write(PSG_WAVE_RAM + i, 0xff);
     s.write(PSG_NR30, 0xc0);
-    s.write(PSG_NR34, 0x87);
+    restart(s);
     expect(levels(s, 3, 256)).toEqual([7, 15, 15]); // 7 was playing when it stopped
     // Back to bank 0: it goes on where it stopped (sample 8 next), its rotation kept.
     s.write(PSG_NR30, 0x80);
-    s.write(PSG_NR34, 0x87);
+    restart(s);
     expect(levels(s, 3, 256)).toEqual([15, 8, 9]);
   });
 });
 
 describe('mixing', () => {
+  test("through the DAC, the frame sequencer steps on its own cycle, not the output sample's boundary (W-ref 2b)", () => {
+    // Square 2 at 50% duty, frequency 0 (a duty step every 32,768 cycles from power-on): high from 229,376 to
+    // 294,912. Its envelope (15, down, a step per clock) steps at the sequencer's first step 7: 262,144 cycles.
+    // The output's sample 836 covers 262,086-262,399.5: the tick at 261,888 (15) holds for 58 cycles, the one at
+    // 262,144 (= 1,024 × 256) already sees 14.
+    const s = psg();
+    s.dacInterval = 256;
+    square2(s, 0x80, 0xf1, 0, 0, false);
+    const out = levels(s, 838, 313.5);
+    expect(out[835]).toBe(15);
+    expect(out[836]).toBeCloseTo((15 * 58 + 14 * 255.5) / 313.5, 6);
+    expect(out[837]).toBe(14);
+  });
+
   test('NR51 routes, NR50 scales each side (×1-8), SOUNDCNT_H bits 0-1 the PSG share', () => {
     const s = psg();
     s.write(PSG_NR51, 0x02); // square 2 right only
@@ -377,7 +444,9 @@ describe.skipIf(!haveGenAudio())('the extracted songs through the circuit', () =
     const s = speakers(r);
     const audible: number[] = [];
     for (let f = 0; f < frames; f++) {
-      const part = [...s.l.subarray(f * 896, (f + 1) * 896), ...s.r.subarray(f * 896, (f + 1) * 896)];
+      // From the frame's second sample: the first can still hold the DAC's last tick of the frame before (the GBA's
+      // DAC samples the PSG every 256 cycles, a sample here is 313.5).
+      const part = [...s.l.subarray(f * 896 + 1, (f + 1) * 896), ...s.r.subarray(f * 896 + 1, (f + 1) * 896)];
       if (Math.max(...part) > Math.min(...part)) audible.push(f);
     }
     const last = audible.length ? audible[audible.length - 1] + 1 : 0;
@@ -392,7 +461,7 @@ describe.skipIf(!haveGenAudio())('the extracted songs through the circuit', () =
       expect([name, audible[0], audible[audible.length - 1]]).toEqual([name, 0, frame - 2]);
       expect([name, rms > 0.03]).toEqual([name, true]);
     }
-  });
+  }, 30_000);
 
   test('MUS_PALLET and MUS_TITLE gain their square, wave and noise parts', () => {
     const songs = loadGenAudio();
@@ -409,7 +478,7 @@ describe.skipIf(!haveGenAudio())('the extracted songs through the circuit', () =
       expect([name, speakerRms(psgOnly) > 0.02]).toEqual([name, true]);
       expect([name, speakerRms(all) > speakerRms(fifos)]).toEqual([name, true]);
     }
-  });
+  }, 30_000);
 
   test('mono plays everything on both sides; stereo does not', () => {
     const songs = loadGenAudio();
@@ -424,5 +493,5 @@ describe.skipIf(!haveGenAudio())('the extracted songs through the circuit', () =
     const stereo = play(false);
     expect(stereo.l.some((v, i) => v !== stereo.r[i])).toBe(true);
     SetPokemonCryStereo(1);
-  });
+  }, 30_000);
 });

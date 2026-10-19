@@ -9,6 +9,7 @@ import { gfx16 } from '../gba/gfx';
 import { PALETTES_ALL, RGB_BLACK } from '../gba/hw';
 import { BeginFastPaletteFade, BeginNormalPaletteFade, gPaletteFade, gPlttBufferUnfaded, LoadPalette, OBJ_PLTT_ID, PLTT_SIZE_4BPP } from '../gba/palette';
 import { AllocSpritePalette, CreateSprite, DestroySprite, FreeOamMatrix, FreeSpriteOamMatrix, FreeSpritePaletteByTag, FreeSpriteTilesByTag, gSprites, IndexOfSpritePaletteTag, SpriteCallbackDummy, StartSpriteAnim, StoreSpriteCallbackInData6 } from '../gba/sprite';
+import { FadeOutMapMusic, PlayCry_Normal, PlayFanfare, PlaySE, PlaySE12WithPanning } from '../gba/sound';
 import { CreateTask, DestroyTask, gTasks } from '../gba/task';
 import { FreeAllWindowBuffers, IsTextPrinterActive } from '../gba/window';
 import { gMain } from '../gba/main';
@@ -21,7 +22,6 @@ import { BattleMainCB2 } from './battleCallbacks';
 import { DISPLAY_HEIGHT, DISPLAY_WIDTH } from '../gba/hw';
 import { CreatePartyStatusSummarySprites, SetBattleBarStruct, SetHealthboxSpriteInvisible, SetHealthboxSpriteVisible, Task_HidePartyStatusSummary, UpdateHealthboxAttribute, UpdateHpTextInHealthbox } from './battleInterface';
 import { HandleIntroSlide } from './battleIntro';
-import { ui } from './battleUi';
 import { BattlePutTextOnWindow } from './battleWindow';
 import { K } from './constants';
 import { handleGetMonData, handleSetMonData, healthbarStep, hitAnimBlinkStep, startExpTask } from './controllerCommon';
@@ -38,6 +38,7 @@ import {
   playerBackPic,
   setOakOldManHandleInputChooseMove,
   SpriteCB_FreePlayerSpriteLoadMonSprite,
+  Task_PlayerController_RestoreBgmAfterCry,
   TryShinyAnimation,
 } from './controllerPlayer';
 import { emitChosenMonReturnValue, emitOneReturnValue, emitTwoReturnValues } from './controllers';
@@ -118,7 +119,7 @@ function SimulateInputChooseAction(): void {
     case 1:
       if (--s[2] === 0) {
         // Move cursor to BAG
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         ActionSelectionDestroyCursorAt(0);
         ActionSelectionCreateCursorAt(1, 0);
         s[2] = 64;
@@ -128,7 +129,7 @@ function SimulateInputChooseAction(): void {
     case 2:
       if (--s[2] === 0) {
         // Open bag
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         emitTwoReturnValues(K.BUFFER_B, K.B_ACTION_USE_ITEM, 0);
         OakOldManBufferExecCompleted();
       }
@@ -224,7 +225,7 @@ function Intro_WaitForShinyAnimAndHealthbox(): void {
     h[a ^ K.BIT_FLANK].triedShinyMonAnim = h[a ^ K.BIT_FLANK].finishedShinyMonAnim = 0;
     FreeSpriteTilesByTag(K.ANIM_TAG_GOLD_STARS);
     FreeSpritePaletteByTag(K.ANIM_TAG_GOLD_STARS);
-    // CreateTask(Task_PlayerController_RestoreBgmAfterCry, 10): no audio
+    CreateTask(Task_PlayerController_RestoreBgmAfterCry, 10);
     HandleLowHpMusicChange(monOf(a), a);
     g.battlerControllerFuncs[a] = PrintOakText_ForPetesSake;
   }
@@ -538,7 +539,7 @@ function OakOldManHandleFaintAnimation(): void {
   } else if (!h.specialAnimActive) {
     h.animationState = 0;
     HandleLowHpMusicChange(monOf(a), a);
-    ui.playSE(K.SE_FAINT);
+    PlaySE12WithPanning(K.SE_FAINT, K.SOUND_PAN_ATTACKER);
     const s = gSprites[g.battlerSpriteIds[a]];
     s.data[1] = 0;
     s.data[2] = 5;
@@ -675,7 +676,7 @@ function OakOldManHandleChooseMove(): void {
     // fall through
     case 1:
       if (--s[3] === 0) {
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         emitTwoReturnValues(K.BUFFER_B, 10, 0x100);
         OakOldManBufferExecCompleted();
       }
@@ -828,7 +829,7 @@ function OakOldManHandleLinkStandbyMsg(): void {
 
 function OakOldManHandleCmd55(): void {
   g.battleOutcome = bufA()[1];
-  // FadeOutMapMusic(5): no audio
+  FadeOutMapMusic(5);
   BeginFastPaletteFade(3);
   OakOldManBufferExecCompleted();
 }
@@ -949,15 +950,15 @@ function sOakOldManBufferCommands(): Record<number, () => void> {
     [K.CONTROLLER_HITANIMATION]: OakOldManHandleHitAnimation,
     [K.CONTROLLER_CANTSWITCH]: complete,
     [K.CONTROLLER_PLAYSE]: () => {
-      ui.playSE(bufA()[1] | (bufA()[2] << 8));
+      PlaySE(bufA()[1] | (bufA()[2] << 8)); // OakOldManHandlePlaySE: no panning, unlike the player's
       complete();
     },
     [K.CONTROLLER_PLAYFANFARE]: () => {
-      ui.playFanfare(bufA()[1] | (bufA()[2] << 8));
+      PlayFanfare(bufA()[1] | (bufA()[2] << 8));
       complete();
     },
     [K.CONTROLLER_FAINTINGCRY]: () => {
-      ui.playCry(monOf(ab()).species);
+      PlayCry_Normal(monOf(ab()).species, 25); // OakOldManHandleFaintingCry
       complete();
     },
     [K.CONTROLLER_INTROSLIDE]: () => {
