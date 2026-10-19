@@ -132,7 +132,7 @@ import { setFieldItemsHost, type FieldItemsHost } from '../world/fieldItems';
 import { fishingProbe, registerFieldItems } from '../world/fishing';
 import { ITEMFINDER_GFX, itemfinderProbe, registerItemfinder, setItemfinderHost } from '../world/itemfinder';
 import { ClearRematchStateByTrainerId, registerVsSeeker, ResetMovementOfRematchableTrainers, setVsSeekerHost, vsSeekerBikeGraphicsId, vsSeekerProbe, type VsSeekerHost } from '../world/vsSeeker';
-import { FieldFlash, FldEff_UseFlash, IsMapTypeOutdoors, Overworld_GetFlashLevel, SetDefaultFlashLevel } from '../world/flash';
+import { DEPTH_FLASH, FieldFlash, FldEff_UseFlash, IsMapTypeOutdoors, Overworld_GetFlashLevel, SetDefaultFlashLevel } from '../world/flash';
 import { fieldListMenuGfxSymbols, fieldListMenuProbe, type ListMenuHost } from '../ui/FieldListMenu';
 import { stringWidth } from '../text/stringWidth';
 import { setTrainerTowerStringWidth } from '../world/trainerTower';
@@ -297,6 +297,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private fog!: FogHorizontal;
   /** The other weathers' sprites on the field (world/weatherSprites.ts, drawn by world/weatherSpriteRenderer.ts). */
   private weatherSpriteRenderer!: WeatherSpriteRenderer;
+  /** UpdateDroughtBlend's lighten effect (StartDroughtWeatherBlend), made on first use. */
+  private weatherLighten?: Phaser.GameObjects.Rectangle;
   /** The camera's left edge in world pixels as of the last camera update (cameraTop's counterpart). */
   private cameraLeft = 0;
   /**
@@ -768,6 +770,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * the sprite sheets through WeatherTextures) and FadeScreen's weather half in the screen fade.
    */
   private setUpWeather(): void {
+    this.weatherLighten = undefined; // (a scene restart destroyed it)
     this.weatherTextures = WeatherTextures.for(this.textures, new Set(
       Object.entries(this.assets.fieldEffectObjects.templates)
         .filter(([, t]) => fadedFieldEffectPaletteTags().includes(t.paletteTag))
@@ -792,6 +795,16 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       destroyFogHorizontalSprites: () => this.fog.destroy(),
       spriteCoordOffsetX,
       spriteCoordOffsetY,
+      // SetSpritePosToMapCoords: the tile's top-left corner on screen now, less gSpriteCoordOffsetX / Y (MAP_OFFSET 7)
+      mapCoordsToSpritePos: (mapX, mapY) => ({
+        x: (this.world.current.originX + mapX - 7) * TILE - this.cameraLeft - spriteCoordOffsetX(),
+        y: (this.world.current.originY + mapY - 7) * TILE - this.field.cameraTop - spriteCoordOffsetY(),
+      }),
+      // UpdateDroughtBlend's BLDCNT_EFFECT_LIGHTEN (BG1-3, OBJ) with BLDY: white over the field, under the windows
+      setBrightnessLighten: (evy) => {
+        this.weatherLighten ??= this.add.rectangle(0, 0, this.scale.width, this.scale.height, 0xffffff, 1).setOrigin(0, 0).setScrollFactor(0).setDepth(DEPTH_FLASH - 1);
+        this.weatherLighten.setVisible(evy !== undefined).setAlpha((evy ?? 0) / 16);
+      },
     });
     setWeatherPaletteFadeActive(() => this.screenFade.active);
     this.screenFade.weather = {

@@ -33,6 +33,7 @@ import * as Help from '../ui/helpSystemContext';
 import { GetQuestLogState, QuestLog_CutRecording } from '../world/questLog';
 import { QuestLog_StartRecordingInputsAfterDeferredEvent } from '../world/questLogEvents';
 import { SetFlavorTextFlagFromSpecialVars, UpdatePickStateFromSpecialVar8005 } from '../state/fameChecker';
+import { StartDroughtWeatherBlend } from '../world/weatherDrought';
 
 export interface SpecialEnv {
   state: GameState;
@@ -114,6 +115,16 @@ export const SPECIALS: Record<string, Special> = {
   ...POSTGAME_SPECIALS, // postgameSpecials.ts: the postgame's specials (BrailleCursorToggle, ...)
   ...EVENT_ISLAND_SPECIALS, // eventIslandSpecials.ts: ShakeScreen, LoopWingFlapSound, Birth Island's triangle
   ...TRAINER_TOWER_SPECIALS, // trainerTowerSpecials.ts: trainer_tower.c's CallTrainerTowerFunc (world/trainerTower.ts), battle_records.c's ShowBattleRecords
+
+  /**
+   * StartDroughtWeatherBlend (field_weather_effects.c, world/weatherDrought.ts): the UpdateDroughtBlend task's
+   * brightness flash, which re-enables the script when it's over (a `waitstate` after it). No FRLG script calls it.
+   */
+  StartDroughtWeatherBlend({ host, setWaitState }: SpecialEnv) {
+    let enabled = false;
+    StartDroughtWeatherBlend((task) => host.startFieldTask(task), () => (enabled = true));
+    setWaitState(() => enabled);
+  },
 
   // field_player_avatar.c / bike.c / field_specials.c's player avatar specials
   ForcePlayerOntoBike,

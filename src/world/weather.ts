@@ -6,10 +6,12 @@
 //
 // FRLG's maps and scripts reach WEATHER_NONE, WEATHER_SUNNY, WEATHER_SHADE and WEATHER_FOG_HORIZONTAL
 // (POSTGAME_PLAN.md decision 1); WEATHER_UNDERWATER shares the fog's callbacks in FRLG's sWeatherFuncs, so it runs
-// too. The rain weathers (RAIN, RAIN_THUNDERSTORM, DOWNPOUR: world/weatherRain.ts) no FRLG map reaches are ported as
-// the C has them (GAPS_PLAN.md batch 13), with field_weather.c's sound half (SetRainStrengthFromSoundEffect's SE3
-// loops, PlayRainStoppingSoundEffect). Asking for any other weather logs once and runs as WEATHER_NONE (clouds, snow,
-// ash, sandstorm, diagonal fog, underwater bubbles, drought).
+// too. The weathers no FRLG map or script reaches are ported as the C has them (GAPS_PLAN.md batch 13), each in its
+// own module: the rain weathers (RAIN, RAIN_THUNDERSTORM, DOWNPOUR: world/weatherRain.ts, with field_weather.c's sound
+// half: SetRainStrengthFromSoundEffect's SE3 loops, PlayRainStoppingSoundEffect), SUNNY_CLOUDS
+// (world/weatherClouds.ts), FOG_DIAGONAL (world/weatherFogDiagonal.ts), DROUGHT (world/weatherDrought.ts, with
+// field_weather.c's drought half, which FRLG dummied out) and UNDERWATER_BUBBLES (world/weatherBubbles.ts, the
+// horizontal fog's callbacks plus the bubbles).
 //
 // The weathers' sprites (but the horizontal fog's, world/fogHorizontal.ts) are world/weatherSprites.ts's: the
 // weathers create them there, the field runs their callbacks (AnimateWeatherSprites) and draws them
@@ -27,6 +29,10 @@
 import { state } from '../battle/env';
 import { IsSpecialSEPlaying, PlaySE } from '../gba/sound';
 import type { Sprite } from '../gba/sprite';
+import { BUBBLES } from './weatherBubbles';
+import { CLOUDS } from './weatherClouds';
+import { DROUGHT, FadeInScreen_Drought } from './weatherDrought';
+import { FOG_DIAGONAL } from './weatherFogDiagonal';
 import { DOWNPOUR, RAIN, THUNDERSTORM } from './weatherRain';
 import { ResetWeatherSprites, setWeatherSpritePalette } from './weatherSprites';
 
@@ -78,6 +84,13 @@ export interface WeatherHost {
   /** gSpriteCoordOffsetX / Y: the camera's offset as the sprites take it (field_camera.c UpdateCameraPanning). */
   spriteCoordOffsetX(): number;
   spriteCoordOffsetY(): number;
+  /**
+   * SetSpritePosToMapCoords: a sprite's x / y (to which gSpriteCoordOffsetX / Y are added) for the top-left corner of
+   * map coords (mapX, mapY) of the current map (MAP_OFFSET included, as the C's object coords are).
+   */
+  mapCoordsToSpritePos?(mapX: number, mapY: number): { x: number; y: number };
+  /** BLDCNT_EFFECT_LIGHTEN on BG1-3 and OBJ with BLDY = evy (UpdateDroughtBlend); undefined turns it off. */
+  setBrightnessLighten?(evy: number | undefined): void;
 }
 
 /** A 5-bit channel → 5-bit channel table, for all three channels or one each for red, green and blue. */
@@ -108,6 +121,11 @@ export async function loadWeatherData(base: string): Promise<void> {
 
 export function setWeatherHost(h: WeatherHost | undefined): void {
   host = h;
+}
+
+/** The field the weather draws on (the weathers' modules: SetSpritePosToMapCoords, the palettes, BLDY). */
+export function weatherHost(): WeatherHost | undefined {
+  return host;
 }
 
 /** The field effect palette tags whose sprites the weather shifts (FieldEffectScript_LoadFadedPalette). */
@@ -164,6 +182,33 @@ const sWeather = {
   thunderSkipShort: 0,
   thunderShortRetries: 0,
   thunderTriggered: false,
+  // WEATHER_SUNNY_CLOUDS (world/weatherClouds.ts)
+  cloudSprites: Array.from({ length: 3 }, (): Sprite | null => null),
+  cloudSpritesCreated: false,
+  // WEATHER_FOG_DIAGONAL (world/weatherFogDiagonal.ts)
+  fogDSprites: Array.from({ length: 20 }, (): Sprite | null => null),
+  fogDBaseSpritesX: 0,
+  fogDPosY: 0,
+  fogDScrollXCounter: 0,
+  fogDScrollYCounter: 0,
+  fogDXOffset: 0,
+  fogDYOffset: 0,
+  fogDSpritesCreated: false,
+  // WEATHER_UNDERWATER_BUBBLES (world/weatherBubbles.ts)
+  bubblesDelayCounter: 0,
+  bubblesDelayIndex: 0,
+  bubblesCoordsIndex: 0,
+  bubblesSpriteCount: 0,
+  bubblesSpritesCreated: false,
+  // WEATHER_DROUGHT (world/weatherDrought.ts)
+  droughtBrightnessStage: 0,
+  droughtLastBrightnessStage: 0,
+  droughtTimer: 0,
+  droughtState: 0,
+  loadDroughtPalsIndex: 0,
+  loadDroughtPalsOffset: 0,
+  /** FadeScreen's fade colour for a fade in (RGB_BLACK or RGB_WHITEALPHA), as a GBA colour. */
+  fadeDestColor: 0,
 };
 
 /** gWeatherPtr: the weathers' modules (world/weatherRain.ts, ...) work on it as the C's do. */
@@ -213,8 +258,8 @@ const SHADE: WeatherCallbacks = {
 
 // ------------------------------------------------------------------ WEATHER_FOG_HORIZONTAL and WEATHER_UNDERWATER
 
-/** FogHorizontal_InitVars: no gamma shift; the fog's scroll and blend start over unless its sprites are up. */
-function FogHorizontal_InitVars(): void {
+/** FogHorizontal_InitVars (Bubbles_InitVars too): no gamma shift; the fog's scroll and blend start over unless its sprites are up. */
+export function FogHorizontal_InitVars(): void {
   sWeather.initStep = 0;
   sWeather.weatherGfxLoaded = false;
   sWeather.gammaTargetIndex = 0;
@@ -242,7 +287,7 @@ function UpdateFogHorizontalMovement(): void {
   }
 }
 
-function FogHorizontal_Main(): void {
+export function FogHorizontal_Main(): void {
   UpdateFogHorizontalMovement();
   switch (sWeather.initStep) {
     case 0:
@@ -261,7 +306,7 @@ function FogHorizontal_Main(): void {
 }
 
 /** FogHorizontal_Finish: the fog fades out (a blend step every 4 frames), then its sprites go. */
-function FogHorizontal_Finish(): boolean {
+export function FogHorizontal_Finish(): boolean {
   UpdateFogHorizontalMovement();
   switch (sWeather.finishStep) {
     case 0:
@@ -318,31 +363,38 @@ export function fogHorizontalScrollPosX(): number | undefined {
 }
 
 /**
- * sWeatherFuncs rows the port has (FogHorizontal: WEATHER_FOG_HORIZONTAL and WEATHER_UNDERWATER; Downpour:
- * Downpour_InitVars / _InitAll with Thunderstorm_Main / _Finish). The rest run None's callbacks. Built on first use:
- * the weathers' modules import this one.
+ * sWeatherFuncs' rows by their callbacks' prefix (FogHorizontal: WEATHER_FOG_HORIZONTAL and WEATHER_UNDERWATER;
+ * Downpour: Downpour_InitVars / _InitAll with Thunderstorm_Main / _Finish). Built on first use: the weathers'
+ * modules import this one.
  */
 let PORTED: Record<string, WeatherCallbacks> | undefined;
 const ported = (): Record<string, WeatherCallbacks> =>
-  (PORTED ??= { None: NONE, Sunny: SUNNY, Shade: SHADE, FogHorizontal: FOG_HORIZONTAL, Rain: RAIN, Thunderstorm: THUNDERSTORM, Downpour: DOWNPOUR });
+  (PORTED ??= {
+    None: NONE,
+    Sunny: SUNNY,
+    Shade: SHADE,
+    FogHorizontal: FOG_HORIZONTAL,
+    Rain: RAIN,
+    Thunderstorm: THUNDERSTORM,
+    Downpour: DOWNPOUR,
+    Clouds: CLOUDS,
+    FogDiagonal: FOG_DIAGONAL,
+    Drought: DROUGHT,
+    Bubbles: BUBBLES,
+  });
 
-const loggedUnported = new Set<number>();
-
-/** sWeatherFuncs[weather] */
+/**
+ * sWeatherFuncs[weather]. TranslateWeatherNum keeps the saved weather in range, so every weather has its row; a
+ * number past the table (a weather the C would index out of bounds) runs None's callbacks.
+ */
 function weatherFuncs(weather: number): WeatherCallbacks {
   const name = data?.funcs[weather];
-  const funcs = name ? ported()[name] : undefined;
-  if (funcs) return funcs;
-  if (!loggedUnported.has(weather)) {
-    loggedUnported.add(weather);
-    console.warn(`[weather] weather ${weather} (${name ?? 'unknown'}) isn't ported: it runs as WEATHER_NONE`);
-  }
-  return NONE;
+  return (name ? ported()[name] : undefined) ?? NONE;
 }
 
-/** The weathers FadeScreen fades in with the weather's palettes (useWeatherPal), but WEATHER_DROUGHT (not ported). */
+/** The weathers FadeScreen fades in with the weather's palettes (useWeatherPal). */
 function fadesInWithWeatherPalettes(weather: number): boolean {
-  return ['WEATHER_RAIN', 'WEATHER_RAIN_THUNDERSTORM', 'WEATHER_DOWNPOUR', 'WEATHER_SNOW', 'WEATHER_FOG_HORIZONTAL', 'WEATHER_SHADE'].some((w) => weather === define(w));
+  return ['WEATHER_RAIN', 'WEATHER_RAIN_THUNDERSTORM', 'WEATHER_DOWNPOUR', 'WEATHER_SNOW', 'WEATHER_FOG_HORIZONTAL', 'WEATHER_SHADE', 'WEATHER_DROUGHT'].some((w) => weather === define(w));
 }
 
 /** FadeInScreenWithWeather's FadeInScreen_RainShowShade weathers. */
@@ -366,8 +418,9 @@ export function StartWeather(): void {
   ResetWeatherSprites();
   sWeather.rainSpriteCount = 0;
   sWeather.curRainSpriteIndex = 0;
-  // (cloudSpritesCreated, snowflakeSpriteCount, ashSpritesCreated, fogDSpritesCreated, sandstormSpritesCreated,
-  // sandstormSwirlSpritesCreated, bubblesSpritesCreated: their weathers aren't ported)
+  sWeather.cloudSpritesCreated = false;
+  sWeather.fogDSpritesCreated = false;
+  sWeather.bubblesSpritesCreated = false;
   if (sWeather.fogHSpritesCreated) host?.destroyFogHorizontalSprites();
   sWeather.fogHSpritesCreated = false;
   Weather_SetBlendCoeffs(16, 0);
@@ -496,13 +549,18 @@ function FadeInScreenWithWeather(): void {
       sWeather.gammaIndex = 3;
       sWeather.palProcessingState = WEATHER_PAL_STATE_IDLE;
     }
+  } else if (sWeather.currWeather === define('WEATHER_DROUGHT')) {
+    if (!FadeInScreen_Drought()) {
+      sWeather.gammaIndex = -6;
+      sWeather.palProcessingState = WEATHER_PAL_STATE_IDLE;
+    }
   } else if (sWeather.currWeather === define('WEATHER_FOG_HORIZONTAL')) {
     if (!FadeInScreen_FogHorizontal()) {
       sWeather.gammaIndex = 0;
       sWeather.palProcessingState = WEATHER_PAL_STATE_IDLE;
     }
   } else if (!paletteFadeActive()) {
-    // default (WEATHER_UNDERWATER among them): wait for the normal palette fade (WEATHER_DROUGHT has its own: not ported)
+    // default (WEATHER_VOLCANIC_ASH, WEATHER_SANDSTORM, WEATHER_FOG_DIAGONAL, WEATHER_UNDERWATER among them): wait for the normal palette fade
     sWeather.gammaIndex = sWeather.gammaTargetIndex;
     sWeather.palProcessingState = WEATHER_PAL_STATE_IDLE;
   }
@@ -574,7 +632,7 @@ function gammaRow(table: Uint8Array[], gammaIndex: number): Uint8Array | undefin
  * colours through gamma row gammaIndex - 1 (GAMMA_ALT palettes through altGammaShifts); 0 copies them back unshifted,
  * a negative index (drought) does nothing in FRLG.
  */
-function ApplyGammaShift(startPalIndex: number, numPalettes: number, gammaIndex: number): void {
+export function ApplyGammaShift(startPalIndex: number, numPalettes: number, gammaIndex: number): void {
   if (gammaIndex < 0 || !host) return; // Dummied out in FRLG
   const end = startPalIndex + numPalettes;
   for (let pal = startPalIndex; pal < Math.min(end, NUM_BG_PALS); pal++) {
@@ -646,7 +704,8 @@ export function WeatherFadeScreen(mode: number): boolean {
     sWeather.palProcessingState = WEATHER_PAL_STATE_SCREEN_FADING_OUT;
     return false;
   }
-  // fadeDestColor (RGB_BLACK / RGB_WHITEALPHA): the overlay's colour
+  // fadeDestColor (RGB_BLACK / RGB_WHITEALPHA): the overlay's colour, kept for the drought's last fade step
+  sWeather.fadeDestColor = mode === define('FADE_FROM_WHITE') ? 0xffff : 0x0000;
   if (useWeatherPal) sWeather.fadeScreenCounter = 0;
   sWeather.palProcessingState = WEATHER_PAL_STATE_SCREEN_FADING_IN;
   sWeather.fadeInActive = 1;

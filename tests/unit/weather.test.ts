@@ -278,16 +278,18 @@ describe('the saved weather', () => {
     expect(t.state.getGameStat(stat)).toBe(before + 1);
   });
 
-  test('an unported weather runs as WEATHER_NONE and says so once', () => {
+  test('a weather number past sWeatherFuncs is saved as WEATHER_NONE (TranslateWeatherNum); the unused weathers run their own callbacks', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    SetSavedWeather(0xff);
+    expect(GetSav1Weather()).toBe(t.d('WEATHER_NONE'));
     ResetWeatherTask();
-    SetSavedWeather(t.d('WEATHER_SNOW'));
+    SetSavedWeather(t.d('WEATHER_SUNNY_CLOUDS'));
     StartWeather();
     ResumePausedWeather();
     WeatherFadeScreen(t.d('FADE_FROM_BLACK'));
-    for (let i = 0; i < 5; i++) WeatherTask();
-    expect(weatherProbe()).toMatchObject({ currWeather: t.d('WEATHER_SNOW'), gammaIndex: 0 });
-    expect(warn.mock.calls.filter(([m]) => /weather 4 \(Snow\)/.test(String(m)))).toHaveLength(1);
+    WeatherTask(); // Clouds_InitAll: the blend at once
+    expect(weatherProbe()).toMatchObject({ currWeather: t.d('WEATHER_SUNNY_CLOUDS'), blendEVA: 12, blendEVB: 8 });
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 });
