@@ -516,3 +516,299 @@ test("QL3b's events: a field move ends the preset's scene, a story item starts o
   expect(await line(storyScene, 'QL_EVENT_OBTAINED_STORY_ITEM')).toMatch(/^Here in VIRIDIAN CITY, \S+ obtained the item TOWN MAP\.$/);
   expect(await line(storyScene, 'QL_EVENT_BOUGHT_ITEM')).toBe('Went to the POKéMON MART in VIRIDIAN CITY and spent ¥1200 for items including POTION(s).');
 });
+
+// ------------------------------------------------------------------ QL4a: the menus' calls
+
+/** In the page: gStringVar4 (menus/common.ts) up to its EOS. */
+const stringVar4 = (game: Game) =>
+  game.eval(async () => {
+    const m = await new Function("return import('/src/menus/common.ts')")();
+    const s = m.gStringVar4 as number[];
+    return s.slice(0, s.indexOf(0xff) + 1);
+  });
+
+/** The index of the first scene with an `event` command (or -1). */
+const sceneWith = async (game: Game, event: string) => {
+  const [ql, id] = await Promise.all([QL(game), game.eval((t, e) => t.define(e), event)]);
+  return ql.scenes.findIndex((s) => s.commands.some((c) => c.id === id));
+};
+
+/** The line `event` plays back (QL_LoadEvent → gStringVar4) and its encoded bytes; the event must be recorded. */
+async function eventLine(game: Game, event: string): Promise<{ line: string; bytes: number[] }> {
+  const scene = await sceneWith(game, event);
+  expect(scene, `${event} in a scene`).toBeGreaterThanOrEqual(0);
+  const line = await game.eval((t, [s, e]) => t.questLogEventLine(s, e), [scene, event] as [number, string]);
+  return { line: line!, bytes: await stringVar4(game) };
+}
+
+/** The party / item events count only after the Hall of Fame and once linking with R/S is allowed. */
+const allowPartyEvents = (game: Game) =>
+  game.eval((t) => {
+    t.state!.setFlag('FLAG_SYS_GAME_CLEAR');
+    t.state!.setFlag('FLAG_SYS_CAN_LINK_WITH_RS');
+  });
+
+/** Wait (in the page) until the GBA task `name` runs with no fade. */
+async function waitForTask(game: Game, name: string): Promise<void> {
+  expect(await game.eval((t, n) => t.until(() => t.gbaTasks().includes(n) && !t.paletteFadeActive(), 20000), name), name).toBe(true);
+}
+
+/** START, then the start menu's `item`. */
+async function startMenu(game: Game, item: string): Promise<void> {
+  await game.waitIdle();
+  await game.press('START');
+  const menu = await game.waitFor((t) => t.startMenu(), { what: 'the start menu' });
+  const to = menu.items.indexOf(item as (typeof menu.items)[number]);
+  for (let i = menu.cursor; i !== to; i += Math.sign(to - i)) await game.press(to > i ? 'DOWN' : 'UP');
+  await game.press('A');
+}
+
+/** In the party menu (choosing a mon): A on the cursor's mon, then down `downs` rows of its action menu and A. */
+async function partyAction(game: Game, downs: number): Promise<void> {
+  await game.press('A');
+  await waitForTask(game, 'Task_HandleSelectionMenuInput');
+  await game.pressTimes('DOWN', downs);
+  await game.press('A');
+}
+
+test("QL4a: the party menu's GIVE / TAKE / SWITCH and a Potion used from the bag each record their event, which plays back on CONTINUE", async () => {
+  const game = await session.start({
+    start: 'after-rival',
+    map: 'Route1',
+    x: 11,
+    y: 30,
+    party: [
+      { species: 'RATTATA', level: 5 },
+      { species: 'PIDGEY', level: 3 },
+    ],
+  });
+  await game.waitIdle();
+  await allowPartyEvents(game);
+  await game.eval((t) => {
+    t.state!.bag.pockets[0].forEach((s) => ((s.itemId = 0), (s.quantity = 0)));
+    t.state!.bag.add(t.define('ITEM_POTION'), 1);
+    t.state!.bag.add(t.define('ITEM_SILK_SCARF'), 1);
+    t.state!.party[0].hp = 1;
+  });
+
+  // RATTATA: SUMMARY / SWITCH / ITEM / CANCEL → ITEM: GIVE / TAKE / CANCEL → GIVE → the bag's SILK SCARF (second)
+  await startMenu(game, 'POKEMON');
+  await game.waitForPartyMenu();
+  await partyAction(game, 2);
+  await waitForTask(game, 'Task_HandleSelectionMenuInput');
+  await game.press('A');
+  await game.waitForBag();
+  await game.press('DOWN');
+  await game.press('A');
+  await game.mashUntil((t) => t.state!.party[0].heldItem !== 0 && t.gbaTasks().includes('Task_HandleChooseMonInput'), { button: 'B', what: 'the scarf given' });
+  // ITEM → TAKE: "Received the SILK SCARF from RATTATA."
+  await partyAction(game, 2);
+  await waitForTask(game, 'Task_HandleSelectionMenuInput');
+  await game.press('DOWN');
+  await game.press('A');
+  await game.mashUntil((t) => t.state!.party[0].heldItem === 0 && t.gbaTasks().includes('Task_HandleChooseMonInput'), { button: 'B', what: 'the scarf taken' });
+  // SWITCH with PIDGEY
+  await partyAction(game, 1);
+  await waitForTask(game, 'Task_HandleChooseMonInput');
+  await game.press('DOWN');
+  await game.press('A');
+  await game.waitFor((t) => t.party()[0].species === 'PIDGEY' && t.gbaTasks().includes('Task_HandleChooseMonInput'), { what: 'the switch' });
+  await game.mashUntil((t) => !t.gbaScreen() && t.idle(), { button: 'B', what: 'the field' });
+
+  // BAG → POTION → USE → RATTATA (now second)
+  await startMenu(game, 'BAG');
+  await game.waitForBag();
+  await game.press('UP'); // (the bag kept its cursor on the scarf)
+  await game.press('A');
+  await waitForTask(game, 'Task_FieldItemContextMenuHandleInput');
+  await game.press('A');
+  await game.waitForPartyMenu();
+  await game.press('DOWN');
+  await game.press('A');
+  await game.waitFor((t) => t.itemCount('POTION') === 0, { what: 'the Potion used' });
+  await game.mashUntil((t) => !t.gbaScreen() && t.idle(), { button: 'B', what: 'the field again' });
+
+  const lines = {
+    gave: await eventLine(game, 'QL_EVENT_GAVE_HELD_ITEM'),
+    took: await eventLine(game, 'QL_EVENT_TOOK_HELD_ITEM'),
+    switched: await eventLine(game, 'QL_EVENT_SWITCHED_PARTY_ORDER'),
+    used: await eventLine(game, 'QL_EVENT_USED_ITEM'),
+  };
+  expect(Object.values(lines).map((l) => l.line)).toEqual([
+    'Made RATTATA hold the item SILK SCARF.',
+    'Took the item SILK SCARF from RATTATA.',
+    'PLAYER switched the POKéMON RATTATA with PIDGEY.',
+    'Used the item POTION on RATTATA at this location.',
+  ]);
+
+  // Saved, then CONTINUE: the scene plays each event's line (HandleShowQuestLogMessage with gStringVar4)
+  await save(game);
+  await game.load({ keepSave: true, mainMenu: true });
+  const watch = game.eval(async (t) => {
+    const m = await new Function("return import('/src/menus/common.ts')")();
+    const shown: number[][] = [];
+    let last: number[] | undefined;
+    const ok = await t.until(() => {
+      if (!t.field()) return false; // (the main menu)
+      const ql = t.questLog();
+      // a line is up (sPlaybackControl.state 1); the next one can follow in the same frame
+      if (ql.playback.active && ql.playback.control.state === 1 && m.gStringVar4 !== last) {
+        last = m.gStringVar4 as number[];
+        shown.push(last.slice(0, last.indexOf(0xff) + 1));
+      }
+      return shown.length > 0 && !ql.playback.active;
+    }, 60000);
+    return { ok, shown };
+  });
+  await continueGame(game);
+  const seen = await watch;
+  expect(seen.ok).toBe(true);
+  for (const l of Object.values(lines)) expect(seen.shown, l.line).toContainEqual(l.bytes);
+});
+
+/** The PC above, then PLAYER's PC (the second entry) up to "What would you like to do?". */
+async function openPlayerPc(game: Game): Promise<void> {
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await game.mashUntil((t) => /Which PC should be accessed\?/.test(t.message() ?? ''), { what: 'the PC menu' });
+  await game.eval((t) => t.waitFrames(60));
+  await game.press('DOWN');
+  await game.press('A');
+  await game.mashUntil((t) => /What would you like to do\?/.test(t.message() ?? ''), { what: "the player's PC" });
+}
+
+/** Wait (in the page) until the box screen runs `task` in `state`. */
+async function waitStorage(game: Game, task: string, state: number): Promise<void> {
+  const ok = await game.eval((t, [tk, st]) => t.until(() => t.pcStorage()?.task === tk && t.pcStorage()?.state === st, 3600), [task, state] as [string, number]);
+  expect(ok, `the box screen's ${task}`).toBe(true);
+}
+
+test('QL4a: the item PC (withdraw, deposit) and the boxes (deposit, move) record their events', async () => {
+  const game = await session.start({
+    start: 'after-rival',
+    map: 'ViridianCity_PokemonCenter_1F',
+    x: 11,
+    y: 2,
+    party: [
+      { species: 'MEWTWO', level: 100, moves: ['PSYCHIC'] },
+      { species: 'RATTATA', level: 5 },
+    ],
+  });
+  await game.waitIdle();
+  await allowPartyEvents(game);
+  await game.eval((t) => t.state!.bag.pockets[0].forEach((s) => ((s.itemId = 0), (s.quantity = 0))));
+
+  // PLAYER's PC → ITEM STORAGE → WITHDRAW ITEM → the new game's POTION → WITHDRAW
+  await openPlayerPc(game);
+  await game.mashUntil((t) => /Take out items from the PC\./.test(t.message() ?? ''), { what: 'the item storage menu' });
+  await game.mashUntil((t) => t.itemPc()?.task === 'Task_ItemPcMain', { what: 'the item PC' });
+  await game.eval((t) => t.waitFrames(40));
+  await game.press('A');
+  await game.waitFor((t) => t.itemPc()?.task === 'Task_ItemPcSubmenuRun', { what: 'the item menu' });
+  await game.press('A');
+  await game.waitFor((t) => t.itemPc()?.task === 'Task_ItemPcWaitButtonAndFinishWithdrawMultiple', { what: 'the withdraw message' });
+  await game.press('A');
+  await game.waitFor((t) => t.itemPc()?.task === 'Task_ItemPcMain' && t.itemPc()?.nItems === 0, { what: 'the emptied list' });
+  await game.eval((t) => t.waitFrames(4));
+  await game.press('B');
+  await game.waitFor((t) => !t.gbaScreen() && /Take out items/.test(t.message() ?? ''), { what: 'the item storage menu' });
+  // DEPOSIT ITEM (once the menu takes input) → the bag's POTION (one: no quantity)
+  await game.mashUntil((t) => /Store items in the PC/.test(t.message() ?? ''), { button: 'DOWN', what: 'DEPOSIT ITEM' });
+  await game.press('A');
+  await game.waitForBag();
+  await game.press('A');
+  await game.waitFor((t) => t.state!.pcItems.some((s) => s.itemId === t.define('ITEM_POTION')), { what: 'the Potion deposited' });
+  await game.eval((t) => t.waitFrames(20));
+  await game.press('A');
+  await game.eval((t) => t.waitFrames(20));
+  await game.press('B');
+  await game.waitFor((t) => !t.gbaScreen() && /Store items in the PC/.test(t.message() ?? ''), { what: 'the item storage menu again' });
+  await game.eval((t) => t.waitFrames(30));
+  await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the field' });
+
+  // Someone's PC → DEPOSIT POKéMON: RATTATA into BOX 1; then MOVE POKéMON: it moves one slot right
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await game.mashUntil((t) => /withdraw a POK/.test(t.message() ?? ''), { what: 'the storage menu' });
+  await game.press('DOWN');
+  await game.press('A');
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  await game.press('DOWN');
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  await game.press('A'); // STORE
+  await waitStorage(game, 'Task_OnSelectedMon', 2);
+  await game.press('A');
+  await waitStorage(game, 'Task_DepositMenu', 1);
+  await game.press('A'); // BOX 1
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  await game.press('B');
+  await waitStorage(game, 'Task_OnBPressed', 2);
+  await game.press('B');
+  await game.waitFor((t) => !t.gbaScreen() && /POK|BOX|items/.test(t.message() ?? ''), { what: 'the storage menu again' });
+  expect(await game.eval((t) => t.party().map((m) => m.species))).toEqual(['MEWTWO']); // (written back on leaving)
+  // the menu comes back on DEPOSIT: down to MOVE POKéMON once it takes input
+  await game.mashUntil((t) => /move POK/i.test(t.message() ?? ''), { button: 'DOWN', what: 'MOVE POKéMON' });
+  await game.press('A');
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  await game.press('A');
+  await waitStorage(game, 'Task_OnSelectedMon', 2);
+  await game.press('A'); // MOVE: the hand picks RATTATA up
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  await game.press('RIGHT');
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  await game.press('A');
+  await waitStorage(game, 'Task_OnSelectedMon', 2);
+  await game.press('A'); // PLACE
+  await waitStorage(game, 'Task_PokeStorageMain', 0);
+  expect(await game.eval((t) => t.state!.storage.getBoxedMon(0, 1)?.species)).toBe(await game.eval((t) => t.define('SPECIES_RATTATA')));
+  await game.press('B');
+  await waitStorage(game, 'Task_OnBPressed', 2);
+  await game.press('B');
+  await game.waitFor((t) => !t.gbaScreen() && /POK|BOX|items/.test(t.message() ?? ''), { what: 'the storage menu once more' });
+  await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the field again' });
+
+  const lines = [];
+  for (const e of ['QL_EVENT_WITHDREW_ITEM_PC', 'QL_EVENT_DEPOSITED_ITEM_PC', 'QL_EVENT_DEPOSITED_MON_PC', 'QL_EVENT_MOVED_MON_WITHIN_BOX'])
+    lines.push((await eventLine(game, e)).line);
+  expect(lines).toEqual([
+    'PLAYER withdrew the item POTION from the PC.',
+    'Removed the item POTION from the BAG’s ITEMS POCKET and stored it on the PC.',
+    'Moved RATTATA from the party to BOX1.',
+    'Moved RATTATA in BOX1.',
+  ]);
+});
+
+test('QL4a: Fly records USED_FIELD_MOVE with the destination (SetUsedFlyQuestLogEvent), which ends the scene', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown_PlayersHouse_1F', x: 4, y: 8, party: [{ species: 'PIDGEOT', level: 40, moves: ['FLY'] }] });
+  await game.waitIdle();
+  // a scene to record into (a field move doesn't start one): leaving the house
+  await game.eval((t) => t.enterWarp());
+  await game.waitIdle();
+  expect((await QL(game)).state).toBe(await game.eval((t) => t.define('QL_STATE_RECORDING')));
+  await game.eval((t) => {
+    t.state!.setFlag('FLAG_BADGE03_GET');
+    t.state!.setFlag('FLAG_WORLD_MAP_VIRIDIAN_CITY');
+  });
+  // START → POKéMON → PIDGEOT → FLY → up to VIRIDIAN CITY → A
+  await startMenu(game, 'POKEMON');
+  await game.waitForPartyMenu();
+  await partyAction(game, 1);
+  await game.eval((t) => t.until(() => !!t.regionMap()?.ready));
+  for (let i = 0; i < 3; i++) {
+    await game.press('UP');
+    await game.eval((t) => t.until(() => !!t.regionMap()?.ready && !t.regionMap()!.moving));
+  }
+  const since = await game.mark();
+  await game.press('A');
+  await game.waitForEvent('flyDone', { since, timeout: 60_000 });
+  await game.waitIdle();
+  const scene = await sceneWith(game, 'QL_EVENT_USED_FIELD_MOVE');
+  const ql = await QL(game);
+  const [FIELD_MOVE, SCENE_END, PIDGEOT, FLY, VIRIDIAN] = await game.eval((t) =>
+    ['QL_EVENT_USED_FIELD_MOVE', 'QL_EVENT_SCENE_END', 'SPECIES_PIDGEOT', 'FIELD_MOVE_FLY', 'MAPSEC_VIRIDIAN_CITY'].map((n) => t.define(n)),
+  );
+  const cmds = ql.scenes[scene].commands;
+  expect(cmds.find((c) => c.id === FIELD_MOVE)!.words.slice(2)).toEqual([PIDGEOT, FLY | (VIRIDIAN << 8)]);
+  expect(cmds.at(-1)!.id).toBe(SCENE_END);
+  expect((await eventLine(game, 'QL_EVENT_USED_FIELD_MOVE')).line).toMatch(/PIDGEOT.*FLY.*VIRIDIAN CITY|VIRIDIAN CITY.*PIDGEOT.*FLY/);
+});

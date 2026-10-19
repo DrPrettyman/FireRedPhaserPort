@@ -8,7 +8,7 @@ import { MAP_OFFSET, questLogData, questLogHost } from './questLog';
 import { SetQuestLogEvent } from './questLogEvents';
 
 /** The MAPSEC_* number of a map (Overworld_GetMapHeaderByGroupAndId(...)->regionMapSectionId). */
-function mapSecOf(mapId: string): number {
+export function mapSecOf(mapId: string): number {
   return K[questLogData().maps[mapId]?.[2] ?? 'MAPSEC_NONE'];
 }
 

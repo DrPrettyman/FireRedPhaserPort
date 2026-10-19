@@ -166,6 +166,7 @@ import { CB2_ReturnToPokeStorage } from './pokemonStorage';
 import { InitTMCase, Pokedude_InitTMCase, TMCASE_GIVE_PARTY, TMCASE_GIVE_PC, TMCASE_SELL } from './tmCase';
 import { BERRYPOUCH_FROMMARTSELL, BERRYPOUCH_FROMPARTYGIVE, BERRYPOUCH_FROMPOKEMONSTORAGEPC, InitBerryPouch } from './berryPouch';
 import { SetHelpContext } from '../ui/helpSystemContext';
+import { ItemUse_SetQuestLogEvent } from '../world/questLogEvents';
 
 const LIST_TILES_WIDTH = 18;
 const LIST_TILES_HEIGHT = 12;
@@ -1402,7 +1403,7 @@ function Task_SelectQuantityToDeposit(taskId: number): void {
 function Task_TryDoItemDeposit(taskId: number): void {
   const data = gTasks[taskId].data;
   if (AddPCItem(state.pcItems, K.ITEM_NONE, SpecialVar.ItemId, data[8])) {
-    // ItemUse_SetQuestLogEvent(QL_EVENT_DEPOSITED_ITEM_PC, ...): the quest log isn't ported
+    ItemUse_SetQuestLogEvent(K.QL_EVENT_DEPOSITED_ITEM_PC, null, SpecialVar.ItemId, 0xffff);
     gStringVar1.set(CopyItemName(SpecialVar.ItemId));
     gStringVar2.set(ConvertIntToDecimalStringN(data[8], STR_CONV_MODE_LEFT_ALIGN, 3));
     BagPrintTextOnWindow(ShowBagWindow(6, 3), K.FONT_NORMAL, ExpandToStringVar4(text('gText_DepositedStrVar2StrVar1s')), 0, 2, 1, 0, 0, 1);

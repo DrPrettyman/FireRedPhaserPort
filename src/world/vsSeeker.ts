@@ -24,6 +24,7 @@ import { MovementRunner, type Instruction } from '../script/MovementRunner';
 import { random } from '../util/random';
 import type { Direction } from './direction';
 import { QuestLogRecordUseVsSeeker } from './questLogPlayer';
+import { ItemUse_SetQuestLogEvent } from './questLogEvents';
 import { FieldEffectActiveListContains, FieldEffectActiveListRemove, FieldEffectStart, registerFieldEffectNatives } from './fieldEffectScripts';
 import { DisplayItemMessageOnField, fieldItemsHost } from './fieldItems';
 import { CreateTask, fieldMoveHost, LockPlayerFieldControls, UnlockPlayerFieldControls } from './fieldMoves';
@@ -306,8 +307,9 @@ export function Task_VsSeeker_0(): void {
     task.destroyed = true;
     DisplayItemMessageOnField(ExpandToStringVar4(text('VSSeeker_Text_NoTrainersWithinRange')), Task_ItemUse_CloseMessageBoxAndReturnToField_VsSeeker);
   } else {
-    // (ItemUse_SetQuestLogEvent: no quest log.) The item's task runs before FLDEFF_USE_VS_SEEKER's each frame (its
-    // priority is 0xFF, the lowest), so Task_VsSeeker_2 sees the effect end the frame after.
+    ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, null, K.ITEM_VS_SEEKER, 0xffff); // (gSpecialVar_ItemId)
+    // The item's task runs before FLDEFF_USE_VS_SEEKER's each frame (its priority is 0xFF, the lowest), so
+    // Task_VsSeeker_2 sees the effect end the frame after.
     CreateTask(() => {
       if (!task.destroyed) sVsSeekerTaskFuncs[task.func](task);
       return task.destroyed;

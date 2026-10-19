@@ -8,7 +8,7 @@
 // gPlayerParty: the C keeps empty party slots while the screen runs (a placed mon can leave a gap until the
 // party box closes, CompactPartySlots). The port's party has no empty slots, so the screen works on its own
 // six-slot copy (sPlayerParty), loaded when it starts and written back (compacted) when it hands over to
-// another screen. Not ported: the quest log events (SetPokeStorageQuestLogEvent), the help context and SEs.
+// another screen.
 
 import { K } from '../battle/constants';
 import { SetHelpContext } from '../ui/helpSystemContext';
@@ -204,6 +204,8 @@ import {
   type PokeStorageItemIcon,
 } from './pokemonStorageMisc';
 import { ShowPokemonSummaryScreen } from './summaryScreen';
+import { pokeStorageQuestLogEvent } from './pokemonStorageQuestLog';
+import { SetQuestLogEvent } from '../world/questLogEvents';
 import { TilemapUtil_Free, TilemapUtil_Init, TilemapUtil_Move, TilemapUtil_SetPos, TilemapUtil_SetRect, TilemapUtil_SetTilemap, TilemapUtil_Update } from './tilemapUtil';
 
 // ------------------------------------------------------------------ gStorage
@@ -2667,9 +2669,20 @@ function InitCursorItemIcon(): void {
   }
 }
 
-/** SetPokeStorageQuestLogEvent: the quest log isn't ported. */
-function SetPokeStorageQuestLogEvent(_action: number): void {
-  void GetMovingMonOriginalBoxId;
+/** SetPokeStorageQuestLogEvent: the event's choice is pokeStorageQuestLogEvent (pokemonStorageQuestLog.ts). */
+function SetPokeStorageQuestLogEvent(action: number): void {
+  const pos = GetBoxCursorPosition();
+  const ev = pokeStorageQuestLogEvent(action, {
+    box1: GetMovingMonOriginalBoxId(),
+    species1: gStorage.displayMonSpecies,
+    inPartyMenu: sInPartyMenu,
+    box2: sInPartyMenu ? K.TOTAL_BOXES_COUNT : state.storage.getCurrentBox(),
+    species2: sInPartyMenu
+      ? SpeciesOrEgg(gPlayerParty[pos])
+      : SpeciesOrEgg(state.storage.getBoxedMon(state.storage.getCurrentBox(), pos)), // GetCurrentBoxMonData
+    depositBoxId: sDepositBoxId,
+  });
+  if (ev) SetQuestLogEvent(ev.eventId, { ...ev.data });
 }
 
 function UpdateBoxToSendMons(): void {

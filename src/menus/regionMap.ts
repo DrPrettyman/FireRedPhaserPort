@@ -139,7 +139,7 @@ import { ReturnToFieldFromFlyMapSelect, SetWarpDestinationToHealLocation, SetWar
 import { encodeRaw, text } from './common';
 import { menusData } from './data';
 import { CB2_ReturnToField } from './fieldCallbacks';
-import { CB2_ReturnToPartyMenuFromFlyMap } from './partyMenu';
+import { CB2_ReturnToPartyMenuFromFlyMap, SetUsedFlyQuestLogEvent } from './partyMenu';
 
 // ------------------------------------------------------------------ data
 
@@ -2934,7 +2934,7 @@ function SetFlyWarpDestination(mapsec: number): void {
   const dest = data().flyDestinations[mapsec - K.KANTO_MAPSEC_START];
   if (dest && dest[1]) {
     SetWarpDestinationToHealLocation(dest[1]);
-    // (SetUsedFlyQuestLogEvent: no quest log)
+    SetUsedFlyQuestLogEvent(dest[0]);
   } else {
     SetWarpDestinationToMapWarp(dest?.[0] ?? 'MAP_PALLET_TOWN', -1);
   }

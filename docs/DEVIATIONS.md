@@ -50,7 +50,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     past the set (heap memory); the roof's result changes nothing. The e-Reader sets are never read (link content). The
     battle records' link page (menus/battleRecords.ts) reads five cleared records: gSaveBlock2Ptr->linkBattleRecords
     isn't in the save, since only a link battle writes it (UpdatePlayerLinkBattleRecords isn't ported).
-  - VS Seeker (world/vsSeeker.ts): no quest log item event (ItemUse_SetQuestLogEvent: QUEST_LOG_PLAN.md QL4). Task_VsSeeker_0
+  - VS Seeker (world/vsSeeker.ts): Task_VsSeeker_0
     takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for
     the Escape Rope). The movement scripts (Wait48, the trainers' emotes and step in place) run as MovementRunners
     in their own field tasks; a frozen trainer still finishes them, so UnfreezeObjectEvent has nothing to do.
@@ -113,6 +113,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Party menu: Union Room and minigames are not ported (the Pokédude's battle tasks are); the PC mailbox's GIVE
     (PARTY_ACTION_GIVE_MAILBOX_MAIL) waits for W-mail unit 2. No
     field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
+    (PARTY_ACTION_GIVE_MAILBOX_MAIL) waits for W-mail unit 2.
+  - Party menu: Union Room, minigames, Pokédude/Teachy TV demos are not ported.
   - Move relearner (menus/learnMove.ts): the MUS_LEVEL_UP fanfare after a move is learned holds the screen as on
     the GBA. The C's scroll arrows are kept as they
     are: scrollPositionMaybe never changes, so with more than six entries the down arrow always shows and the up
@@ -131,8 +133,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     banner back. Dig/Escape Rope with no escape warp saved (a dev start in a cave) go to the last heal location.
   - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Mail's CHECK (CB2_CheckMail) reads an
     uninitialised struct Mail with only its item set; the port's has SPECIES_NONE, so Bead / Dream Mail show no icon. Berry
-    powder reads as 0. The Escape Rope's quest log event (ItemUse_SetQuestLogEvent) isn't
-    recorded; ItemUseOnFieldCB_EscapeRope takes the field controls lock itself (on the GBA the start menu's lock is
+    powder reads as 0. ItemUseOnFieldCB_EscapeRope takes the field controls lock itself (on the GBA the start menu's lock is
     still held when the bag returns; here the field's overlay held the controls until then). RemoveUsedItem after
     the bag has closed skips the bag display's item counts (the GBA writes them through a freed NULL pointer). The TM case
     and berry pouch can't be opened to give from (the PC box's GIVE, GoToTMCase_PCBox / GoToBerryPouch_PCBox).
@@ -141,13 +142,19 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     input callback) and then once a frame from a field task of its own, which stops when the task is destroyed;
     the VS Seeker and the Itemfinder destroy it at once and go on in their own field tasks (on the GBA,
     Task_VsSeeker_0 / ItemUseOnFieldCB_Itemfinder carry on as the item's task). ChangeBgY(0, 0, 0) is a no-op (the field's message
-    box isn't on a scrolled BG); InUnionRoom is always FALSE. No quest log events (ItemUse_SetQuestLogEvent).
+    box isn't on a scrolled BG); InUnionRoom is always FALSE.
     The Town Map, TM case, berry pouch and Fame Checker from SELECT start their screen once the map headers the
     region map / party menu read (prepareFieldMoveMenu) and the screen's graphics have loaded, a frame or more after
     the fade instead of in the same frame.
   - TM case (menus/tmCase.ts): no quest log (RecordItemTransaction). Not ported: the Union Room's GIVE / EXIT menu
     (no link play).
   - Teachy TV (menus/teachyTv.ts): no quest log event (ItemUse_SetQuestLogEvent).
+  - TM case (menus/tmCase.ts): no quest log (RecordItemTransaction). Not ported:
+    the Pokédude's Teachy TV demo (TMCASE_POKEDUDE) and the Union Room's GIVE / EXIT menu (no link play).
+  - Teachy TV (menus/teachyTv.ts): the field demos aren't ported (FIELD_ITEMS_PLAN.md W-teachy unit 3): TMS /
+    REGISTER's scripted bag and TM case (the bag's Task_Bag_TeachyTvRegister / _TMs, tm_case.c's TMCASE_POKEDUDE).
+    They go through PokedudeDemoNotPorted, which logs and comes back as from the demo's end (CB2_ReturnToTeachyTV in
+    mode 2: the option's closing text, the walk off, THE END, the list).
   - The Pokédude's battles (battle/controllerPokedude.ts): they run on FieldMenuScene's GBA host (the screen Teachy TV
     is on), not BattleScene: CB2_InitPokedudeBattle sets what BattleScene.create would (a fresh BattleGlobals, no
     trainer, the BattleUi, ReturnFromBattleToOverworld's SetMainCallback2(gMain.savedCallback)), and FieldMenuScene
@@ -162,8 +169,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (RecordItemTransaction). Not ported: Berry Crush (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room context
     menus (GIVE / EXIT, EXIT) and IsHoldingItemAllowed's Enigma Berry check there (always TRUE: neither can be
     entered) and AbortBerryPouchLoading (for a failed Alloc).
-  - Fame Checker (menus/fameChecker.ts): no quest log event (FieldUseFunc_FameChecker's ItemUse_SetQuestLogEvent).
-    Its graphics (incl. every trainer pic and object event its flavor texts use) are preloaded with the bag when the
+  - Fame Checker (menus/fameChecker.ts): its graphics (incl. every trainer pic and object event its flavor texts use) are preloaded with the bag when the
     bag holds it, or before the screen when it's opened with SELECT. FullyUnlockFameChecker is ported but, as in
     the C, nothing calls it.
   - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
@@ -240,15 +246,13 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     DetermineEggSpeciesAndParentSlots leaves parentSlots uninitialised in the C when neither mon is female nor
     Ditto; the port starts them at [0, 1] (no compatible pair gets there).
   - The money box and Safari stats window are Phaser MenuWindows (the field isn't on the GBA layer).
-  - Pokémon Storage System (menus/pokemonStorage*.ts): no
-    quest log events (SetPokeStorageQuestLogEvent). The PPU has no OBJ mosaic, so the mon shown on
+  - Pokémon Storage System (menus/pokemonStorage*.ts): the PPU has no OBJ mosaic, so the mon shown on
     the left changes at once instead of un-pixelating (the effect's timing, which the menus wait for, is kept).
     The screen works on its own six-slot copy of the party (the C keeps empty slots while it runs) and writes it
     back, compacted, when it hands over to another screen; a mon placed after an empty party slot would move up
     early if the summary / naming screen / bag opened while the party box still showed the gap.
     MON_DATA_SANITY_IS_BAD_EGG reads FALSE, so the bad-egg checks never trigger.
-  - Player's PC (ui/PlayerPcMenu.ts, ui/MailboxPc.ts, menus/itemPc.ts): no quest log events (withdrew / deposited
-    / gave from the PC). The mailbox's windows and list are Phaser MenuWindows on the field (the field isn't on the
+  - Player's PC (ui/PlayerPcMenu.ts, ui/MailboxPc.ts, menus/itemPc.ts): the mailbox's windows and list are Phaser MenuWindows on the field (the field isn't on the
     GBA layer); its list redraws every shown row on a scroll (the C scrolls the window's pixels: the same picture).
     Menu_ProcessInput_other's JOY_REPT(DPAD_ANY) == DPAD_UP check is "UP without DOWN" (LEFT / RIGHT held along
     don't block the move).
@@ -348,8 +352,11 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     warp, not the snapshot's graphics. A warp in playback into a disabled location ends the scene once the field has
     faded in, not at once. Task_EndQuestLog's gHelpSystemEnabled = TRUE is HelpSystem_Enable (which also lets R toggle
     the help again). Every QL_EVENT_* has its recorder and loader (QL1: DEPARTED / ARRIVED, QL3a: 3-29, QL3b: 30-40),
-    but the menus, shops, PC, field moves and battles don't send theirs yet (QL4: TrySetQuestLogBattleEvent and the
-    other entry points are called only by unit tests and `__test.questLogEvent`). The link events (12-19) and
+    and the menus send theirs (QL4a: item use, the party menu's held items / order / items / field moves, Fly, the
+    item PC, the boxes), but the shops, the TM case's and berry pouch's transactions, the Pokémon Center, story items,
+    the battles and the Game Corner don't yet (QL4b: TrySetQuestLogBattleEvent and those entry points are called only
+    by unit tests and `__test.questLogEvent`). CB2_UseTMHMAfterForgettingMove's event (PSA_IsCancelDisabled's path)
+    never runs: without the item-use animation the TM's event is Task_ReplaceMoveWithTMHM's, as in the C's other path. The link events (12-19) and
     TrySetQuestLogLinkBattleEvent (which takes gLinkPlayers as an argument) have no callers (no link play). The
     scene's objects snapshot is the player and the current map's objects in the port's order (the C's gObjectEvents
     slots, offScreen, the sprite anim backups and directionSequenceIndex aren't kept: 0); a scene's flags and vars

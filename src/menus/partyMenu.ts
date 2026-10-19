@@ -177,6 +177,11 @@ import { ReadMail } from './mail';
 import { ClearMailStruct, GetMonMailId, GiveMailToMon, GiveMailToMon2, gPlayerPcMenuManager, newMail, TakeMailFromMon, TakeMailFromMon2 } from '../world/mail';
 import { SpecialVar } from './itemMenuState';
 import { CheckIfItemIsTMHMOrEvolutionStone } from './itemUse';
+import { questLogHost } from '../world/questLog';
+import { ItemUse_SetQuestLogEvent, SetQuestLogEvent } from '../world/questLogEvents';
+import type { QuestLogEventSwappedHeldItem, QuestLogEventSwitchedPartyOrder } from '../world/questLogEventCodecs';
+import type { QuestLogEventFieldMove } from '../world/questLogEventCodecs2';
+import { mapSecOf } from '../world/questLogLocations';
 import { InitTMCase, TMCASE_KEEP_PREV, TMCASE_REOPENING } from './tmCase';
 import { BERRYPOUCH_KEEP_PREV, BERRYPOUCH_NA, InitBerryPouch } from './berryPouch';
 import { BeginEvolutionScene, setCB2_AfterEvolution } from './evolutionScene';
@@ -1466,8 +1471,10 @@ function Task_ReturnToChooseMonAfterText(taskId: number): void {
   }
 }
 
-function DisplayGaveHeldItemMessage(mon: Pokemon, item: number, keepOpen: boolean): void {
-  // ItemUse_SetQuestLogEvent: no quest log
+function DisplayGaveHeldItemMessage(mon: Pokemon, item: number, keepOpen: boolean, fromBagMenu: boolean): void {
+  if (!fromBagMenu) ItemUse_SetQuestLogEvent(K.QL_EVENT_GAVE_HELD_ITEM, mon, item, 0xffff); // the party menu's GIVE
+  else if (gPartyMenu.action === K.PARTY_ACTION_GIVE_PC_ITEM) ItemUse_SetQuestLogEvent(K.QL_EVENT_GAVE_HELD_ITEM_PC, mon, item, 0xffff);
+  else ItemUse_SetQuestLogEvent(K.QL_EVENT_GAVE_HELD_ITEM_BAG, mon, item, 0xffff);
   gStringVar1.set(GetMonNickname(mon));
   gStringVar2.set(CopyItemName(item));
   DisplayPartyMenuMessage(ExpandToStringVar4(text('gText_PkmnWasGivenItem')), keepOpen);
@@ -1475,6 +1482,7 @@ function DisplayGaveHeldItemMessage(mon: Pokemon, item: number, keepOpen: boolea
 }
 
 function DisplayTookHeldItemMessage(mon: Pokemon, item: number, keepOpen: boolean): void {
+  ItemUse_SetQuestLogEvent(K.QL_EVENT_TOOK_HELD_ITEM, mon, item, 0xffff);
   gStringVar1.set(GetMonNickname(mon));
   gStringVar2.set(CopyItemName(item));
   DisplayPartyMenuMessage(ExpandToStringVar4(text('gText_ReceivedItemFromPkmn')), keepOpen);
@@ -1489,10 +1497,51 @@ function DisplayAlreadyHoldingItemSwitchMessage(mon: Pokemon, item: number, keep
 }
 
 function DisplaySwitchedHeldItemMessage(item: number, item2: number, keepOpen: boolean): void {
+  SetSwappedHeldItemQuestLogEvent(P(gPartyMenu.slotId), item2, item);
   gStringVar1.set(CopyItemName(item));
   gStringVar2.set(CopyItemName(item2));
   DisplayPartyMenuMessage(ExpandToStringVar4(text('gText_SwitchedPkmnItem')), keepOpen);
   ScheduleBgCopyTilemapToVram(2);
+}
+
+/** SetSwitchedPartyOrderQuestLogEvent */
+function SetSwitchedPartyOrderQuestLogEvent(): void {
+  SetQuestLogEvent(K.QL_EVENT_SWITCHED_PARTY_ORDER, {
+    species1: speciesOrEgg(P(gPartyMenu.slotId)),
+    species2: speciesOrEgg(P(gPartyMenu.slotId2)),
+  } satisfies QuestLogEventSwitchedPartyOrder);
+}
+
+/** SetSwappedHeldItemQuestLogEvent: item, the one taken; item2, the one given (the item PC's GIVE: _PC). */
+function SetSwappedHeldItemQuestLogEvent(mon: Pokemon, item: number, item2: number): void {
+  const data: QuestLogEventSwappedHeldItem = { species: speciesOrEgg(mon), takenItemId: item, givenItemId: item2 };
+  if (gPartyMenu.action === K.PARTY_ACTION_GIVE_PC_ITEM) SetQuestLogEvent(K.QL_EVENT_SWAPPED_HELD_ITEM_PC, { ...data });
+  else SetQuestLogEvent(K.QL_EVENT_SWAPPED_HELD_ITEM, { ...data });
+}
+
+/** SetUsedFieldMoveQuestLogEvent: Teleport keeps the last heal location's map section, Dig the current map's. */
+function SetUsedFieldMoveQuestLogEvent(mon: Pokemon, fieldMove: number): void {
+  let mapSec: number;
+  switch (fieldMove) {
+    case K.FIELD_MOVE_TELEPORT:
+      mapSec = mapSecOf(state.lastHealLocation?.map ?? 'MAP_PALLET_TOWN');
+      break;
+    case K.FIELD_MOVE_DIG:
+      mapSec = questLogHost()?.mapSec() ?? K.MAPSEC_NONE; // gMapHeader.regionMapSectionId
+      break;
+    default:
+      mapSec = 0xff;
+  }
+  SetQuestLogEvent(K.QL_EVENT_USED_FIELD_MOVE, { species: speciesOrEgg(mon), fieldMove, mapSec } satisfies QuestLogEventFieldMove);
+}
+
+/** SetUsedFlyQuestLogEvent (region_map.c's SetFlyWarpDestination): the destination's map (sMapFlyDestinations[idx][0]). */
+export function SetUsedFlyQuestLogEvent(destMapId: string): void {
+  SetQuestLogEvent(K.QL_EVENT_USED_FIELD_MOVE, {
+    species: speciesOrEgg(P(GetCursorSelectionMonId())),
+    fieldMove: K.FIELD_MOVE_FLY,
+    mapSec: mapSecOf(destMapId),
+  } satisfies QuestLogEventFieldMove);
 }
 
 function GiveItemToMon(mon: Pokemon, item: number): void {
@@ -2367,6 +2416,7 @@ function SwitchSelectedMons(taskId: number): void {
     return;
   }
   // Initialize switching party mons slide animation
+  SetSwitchedPartyOrderQuestLogEvent();
   const windowIds = [boxes()[gPartyMenu.slotId].windowId, boxes()[gPartyMenu.slotId2].windowId];
   data[tSlot1Left] = GetWindowAttribute(windowIds[0], 'tilemapLeft');
   data[tSlot1Top] = GetWindowAttribute(windowIds[0], 'tilemapTop');
@@ -2568,7 +2618,7 @@ export function CB2_GiveHoldItem(): void {
 function Task_GiveHoldItem(taskId: number): void {
   if (!gPaletteFade.active) {
     const item = SpecialVar.ItemId;
-    DisplayGaveHeldItemMessage(P(gPartyMenu.slotId), item, false);
+    DisplayGaveHeldItemMessage(P(gPartyMenu.slotId), item, false, false);
     GiveItemToMon(P(gPartyMenu.slotId), item);
     RemoveBagItem(item, 1);
     gTasks[taskId].func = Task_UpdateHeldItemSprite;
@@ -2656,7 +2706,7 @@ function CB2_ReturnToPartyMenuFromWritingMail(): void {
 /** Task_DisplayGaveMailFromPartyMessage: nearly redundant with Task_DisplayGaveMailFromBagMessage. */
 function Task_DisplayGaveMailFromPartyMessage(taskId: number): void {
   if (!gPaletteFade.active) {
-    if (sPartyMenuItemId === K.ITEM_NONE) DisplayGaveHeldItemMessage(P(gPartyMenu.slotId), SpecialVar.ItemId, false);
+    if (sPartyMenuItemId === K.ITEM_NONE) DisplayGaveHeldItemMessage(P(gPartyMenu.slotId), SpecialVar.ItemId, false, false);
     else DisplaySwitchedHeldItemMessage(SpecialVar.ItemId, sPartyMenuItemId, false);
     gTasks[taskId].func = Task_UpdateHeldItemSprite;
   }
@@ -2964,7 +3014,7 @@ function CursorCB_FieldMove(taskId: number): void {
         break;
       default:
         gPartyMenu.exitCallback = CB2_ReturnToField;
-        // (SetUsedFieldMoveQuestLogEvent: no quest log)
+        SetUsedFieldMoveQuestLogEvent(P(GetCursorSelectionMonId()), fieldMove);
         Task_ClosePartyMenu(taskId);
         break;
     }
@@ -3002,6 +3052,7 @@ function Task_HandleFieldMoveExitAreaYesNoInput(taskId: number): void {
   switch (Menu_ProcessInputNoWrapClearOnChoose()) {
     case 0: // Yes
       gPartyMenu.exitCallback = CB2_ReturnToField;
+      SetUsedFieldMoveQuestLogEvent(P(GetCursorSelectionMonId()), internal().data[0]);
       Task_ClosePartyMenu(taskId);
       break;
     case MENU_B_PRESSED:
@@ -3321,6 +3372,7 @@ export function ItemUseCB_Medicine(taskId: number, func: TaskFunc): void {
     ScheduleBgCopyTilemapToVram(2);
     gTasks[taskId].func = func;
   } else {
+    ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, mon, item, 0xffff);
     Task_DoUseItemAnim(taskId);
     gItemUseCB = ItemUseCB_MedicineStep;
   }
@@ -3458,6 +3510,7 @@ function ItemUseCB_RestorePP(taskId: number, _func: TaskFunc): void {
   const mon = P(gPartyMenu.slotId);
   ExecuteTableBasedItemEffect_(gPartyMenu.slotId, SpecialVar.ItemId, gPartyMenu.ppMoveSlot & 0xff);
   gPartyMenuUseExitCallback = true;
+  ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, mon, SpecialVar.ItemId, 0xffff);
   PlaySE(K.SE_USE_ITEM);
   RemoveBagItem(SpecialVar.ItemId, 1);
   const move = mon.moves[gPartyMenu.ppMoveSlot];
@@ -3479,6 +3532,7 @@ function TryUsePPItemInBattle(taskId: number): void {
   } else {
     gPartyMenuUseExitCallback = true;
     const mon = P(gPartyMenu.slotId);
+    ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, mon, item, 0xffff);
     PlaySE(K.SE_USE_ITEM);
     RemoveBagItem(item, 1);
     gStringVar1.set(moveName(mon.moves[gPartyMenu.ppMoveSlot]));
@@ -3540,6 +3594,7 @@ export function ItemUseCB_TMHM(taskId: number, _func: TaskFunc): void {
       return;
   }
   if (giveMoveToMon(mon, gPartyMenu.learnMoveId) !== K.MON_HAS_MAX_MOVES) {
+    ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, mon, item, 0xffff);
     Task_DoUseItemAnim(taskId);
     gItemUseCB = ItemUseCB_LearnedMove;
   } else {
@@ -3644,7 +3699,7 @@ function Task_ReplaceMoveWithTMHM(taskId: number): void {
   const mon = P(gPartyMenu.slotId);
   const moveIdx = GetMoveSlotToReplace();
   const move = mon.moves[moveIdx];
-  // ItemUse_SetQuestLogEvent: no quest log
+  ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, mon, SpecialVar.ItemId, move);
   gStringVar1.set(GetMonNickname(mon));
   gStringVar2.set(moveName(move));
   removeMonPPBonus(mon, moveIdx);
@@ -3743,6 +3798,7 @@ function ItemUseCB_RareCandyStep(taskId: number, _func: TaskFunc): void {
   ExecuteTableBasedItemEffect_(gPartyMenu.slotId, SpecialVar.ItemId, 0);
   arr.set(GetMonLevelUpWindowStats(mon), K.NUM_STATS);
   gPartyMenuUseExitCallback = true;
+  ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, mon, SpecialVar.ItemId, 0xffff);
   PlayFanfareByFanfareNum(K.FANFARE_LEVEL_UP);
   UpdateMonDisplayInfoAfterRareCandy(gPartyMenu.slotId, mon);
   RemoveBagItem(SpecialVar.ItemId, 1);
@@ -3878,6 +3934,9 @@ export function ItemUseCB_SacredAsh(taskId: number, _func: TaskFunc): void {
   UseSacredAsh(taskId);
 }
 
+/** sSacredAshQuestLogMonBackup: the first Pokémon the Sacred Ash revived, for the quest log's event */
+let sSacredAshQuestLogMonBackup: Pokemon | null = null;
+
 function UseSacredAsh(taskId: number): void {
   const mon = partyMon(gPartyMenu.slotId);
   if (!mon || mon.species === K.SPECIES_NONE) {
@@ -3890,6 +3949,7 @@ function UseSacredAsh(taskId: number): void {
     return;
   }
   PlaySE(K.SE_USE_ITEM);
+  if (internal().data[tHadEffect] === 0) sSacredAshQuestLogMonBackup = mon;
   SetPartyMonAilmentGfx(mon, boxes()[gPartyMenu.slotId]);
   if (gSprites[boxes()[gPartyMenu.slotId].statusSpriteId].invisible) DisplayPartyPokemonLevelCheck(mon, boxes()[gPartyMenu.slotId], DRAW_MENU_BOX_AND_TEXT);
   AnimatePartySlot(internal().data[tLastSlotUsed], 0);
@@ -3913,6 +3973,8 @@ function Task_SacredAshLoop(taskId: number): void {
         ScheduleBgCopyTilemapToVram(2);
       } else {
         gPartyMenuUseExitCallback = true;
+        if (gPartyMenu.menuType !== K.PARTY_MENU_TYPE_IN_BATTLE)
+          ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, sSacredAshQuestLogMonBackup, SpecialVar.ItemId, 0xffff);
         RemoveBagItem(SpecialVar.ItemId, 1);
       }
       gTasks[taskId].func = Task_ClosePartyMenuAfterText;
@@ -3947,7 +4009,7 @@ export function ItemUseCB_EvolutionStone(taskId: number, func: TaskFunc): void {
 function CB2_UseEvolutionStone(): void {
   setCB2_AfterEvolution(gPartyMenu.exitCallback);
   ExecuteTableBasedItemEffect_(gPartyMenu.slotId, SpecialVar.ItemId, 0);
-  // ItemUse_SetQuestLogEvent: no quest log
+  ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, P(gPartyMenu.slotId), SpecialVar.ItemId, 0xffff);
   RemoveBagItem(SpecialVar.ItemId, 1);
 }
 
@@ -4060,7 +4122,7 @@ function GiveItemOrMailToSelectedMon(taskId: number): void {
 function GiveItemToSelectedMon(taskId: number): void {
   if (!gPaletteFade.active) {
     const item = gPartyMenu.bagItem;
-    DisplayGaveHeldItemMessage(P(gPartyMenu.slotId), item, false);
+    DisplayGaveHeldItemMessage(P(gPartyMenu.slotId), item, false, true);
     GiveItemToMon(P(gPartyMenu.slotId), item);
     RemoveItemToGiveFromBag(item);
     gTasks[taskId].func = Task_UpdateHeldItemSpriteAndClosePartyMenu;
@@ -4100,7 +4162,7 @@ function CB2_ReturnToPartyOrBagMenuFromWritingMail(): void {
 function Task_DisplayGaveMailFromBagMessage(taskId: number): void {
   if (!gPaletteFade.active) {
     if (sPartyMenuItemId !== K.ITEM_NONE) DisplaySwitchedHeldItemMessage(gPartyMenu.bagItem, sPartyMenuItemId, false);
-    else DisplayGaveHeldItemMessage(P(gPartyMenu.slotId), gPartyMenu.bagItem, false);
+    else DisplayGaveHeldItemMessage(P(gPartyMenu.slotId), gPartyMenu.bagItem, false, true);
     gTasks[taskId].func = Task_UpdateHeldItemSpriteAndClosePartyMenu;
   }
 }
