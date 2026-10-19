@@ -144,3 +144,35 @@ test('a disabled location records nothing, and walking into one cuts the recordi
   const saved = await savedGame(game);
   expect(saved.questLog.filter((s: { startType: number }) => s.startType !== 0).length).toBe(1);
 });
+
+test("QL3a's events go into the scene's stream as the C lays them out, and the save keeps them", async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown', x: 6, y: 8 });
+  await game.waitIdle();
+  const d = (name: string) => game.eval((t, n) => t.define(n), name);
+  const [DEPOSITED, MOVED, CENTER, POTION, ANTIDOTE, PIDGEY] = await Promise.all(
+    ['QL_EVENT_DEPOSITED_ITEM_PC', 'QL_EVENT_MOVED_MON_BETWEEN_BOXES', 'QL_EVENT_USED_PKMN_CENTER', 'ITEM_POTION', 'ITEM_ANTIDOTE', 'SPECIES_PIDGEY'].map(d),
+  );
+  // (the events SetQuestLogEvent keeps before the Hall of Fame and FLAG_SYS_CAN_LINK_WITH_RS)
+  await game.eval(
+    (t, [potion, antidote, pidgey]) => {
+      t.questLogEvent('QL_EVENT_DEPOSITED_ITEM_PC', { itemId: potion });
+      t.questLogEvent('QL_EVENT_DEPOSITED_ITEM_PC', { itemId: antidote }); // a repeat at the same action index
+      t.questLogEvent('QL_EVENT_MOVED_MON_BETWEEN_BOXES', { species1: pidgey, box1: 0, box2: 3 });
+      t.questLogEvent('QL_EVENT_USED_PKMN_CENTER', null);
+    },
+    [POTION, ANTIDOTE, PIDGEY],
+  );
+  const ql = await QL(game);
+  const events = ql.scenes[0].commands.filter((c) => [DEPOSITED, MOVED, CENTER].includes(c.id));
+  const idx = events[0].words[1];
+  expect(events.map((c) => c.words)).toEqual([
+    [DEPOSITED | (1 << 12), idx, POTION, ANTIDOTE],
+    [MOVED, idx, PIDGEY, 0 | (3 << 8)],
+    [CENTER, idx],
+  ]);
+  await save(game);
+  const saved = await savedGame(game);
+  expect(saved.questLog[0].script).toEqual((await QL(game)).scenes[0].script);
+  const savedEvents = (await QL(game)).scenes[0].commands.filter((c) => [DEPOSITED, MOVED, CENTER].includes(c.id));
+  expect(savedEvents.map((c) => c.words)).toEqual(events.map((c) => c.words));
+});
