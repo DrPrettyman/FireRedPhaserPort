@@ -9,6 +9,7 @@ import type { BattleMsgData } from './controllers';
 import { bdata, charmap, g, gBattleMoves, pokemon, state, textStrings } from './env';
 import { ConvertIntToDecimalStringN, STR_CONV_MODE_LEFT_ALIGN } from './stringUtil';
 import { getBattlerAtPosition, getBattlerSide, setBattleStringEncoder } from './util';
+import { GetTrainerTowerOpponentClass, GetTrainerTowerOpponentLoseText, GetTrainerTowerOpponentName, GetTrainerTowerOpponentWinText } from '../world/trainerTower';
 
 const encoded = new Map<string, number[]>();
 
@@ -297,9 +298,14 @@ export function battleStringExpandPlaceholders(src: number[]): number[] {
           toCpy = abilityName(sBattlerAbilities[g.effectBattler]);
           break;
         case K.B_TXT_TRAINER1_CLASS:
-          toCpy = encodeRaw(bdata.strings.trainerClassNames[trainer().trainerClass]);
+          if (g.battleTypeFlags & K.BATTLE_TYPE_TRAINER_TOWER) toCpy = encodeRaw(bdata.strings.trainerClassNames[GetTrainerTowerOpponentClass()]);
+          else toCpy = encodeRaw(bdata.strings.trainerClassNames[trainer().trainerClass]);
           break;
         case K.B_TXT_TRAINER1_NAME: {
+          if (g.battleTypeFlags & K.BATTLE_TYPE_TRAINER_TOWER) {
+            toCpy = encodeRaw(GetTrainerTowerOpponentName());
+            break;
+          }
           const c = trainer().trainerClass;
           if (c === K.TRAINER_CLASS_RIVAL_EARLY || c === K.TRAINER_CLASS_RIVAL_LATE || c === K.TRAINER_CLASS_CHAMPION)
             toCpy = [...charmap.encodePlain(state.rivalName), EOS]; // GetExpandedPlaceholder(PLACEHOLDER_ID_RIVAL)
@@ -309,11 +315,19 @@ export function battleStringExpandPlaceholders(src: number[]): number[] {
         case K.B_TXT_PLAYER_NAME:
           toCpy = [...charmap.encodePlain(state.playerName), EOS];
           break;
-        case K.B_TXT_TRAINER1_LOSE_TEXT: // GetTrainerALoseText
-          toCpy = expandPlaceholders(g.trainerADefeatSpeech ?? [EOS], charmap, state);
+        case K.B_TXT_TRAINER1_LOSE_TEXT:
+          if (g.battleTypeFlags & K.BATTLE_TYPE_TRAINER_TOWER) toCpy = GetTrainerTowerOpponentLoseText(state, 0); // gStringVar4
+          else toCpy = expandPlaceholders(g.trainerADefeatSpeech ?? [EOS], charmap, state); // GetTrainerALoseText
           break;
-        case K.B_TXT_TRAINER1_WIN_TEXT: // GetTrainerWonSpeech
-          toCpy = expandPlaceholders(g.trainerVictorySpeech ?? [EOS], charmap, state);
+        case K.B_TXT_TRAINER1_WIN_TEXT:
+          if (g.battleTypeFlags & K.BATTLE_TYPE_TRAINER_TOWER) toCpy = GetTrainerTowerOpponentWinText(state, 0); // gStringVar4
+          else toCpy = expandPlaceholders(g.trainerVictorySpeech ?? [EOS], charmap, state); // GetTrainerWonSpeech
+          break;
+        case K.B_TXT_TRAINER2_LOSE_TEXT: // only the Trainer Tower's doubles reach these
+          toCpy = GetTrainerTowerOpponentLoseText(state, 1);
+          break;
+        case K.B_TXT_TRAINER2_WIN_TEXT:
+          toCpy = GetTrainerTowerOpponentWinText(state, 1);
           break;
         case K.B_TXT_26:
           toCpy = nicknameWithPrefix(g.battleScripting.battler, g.battleStruct.scriptPartyIdx, dst);
