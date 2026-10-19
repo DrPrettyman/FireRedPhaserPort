@@ -1512,12 +1512,13 @@ def main():
     print("maps + tilesets")
     extract_maps(decomp, out, parse_tileset_symbols(decomp))
     print("field objects + doors")
-    from extract_field import extract_doors, extract_field_effect_objects, extract_league_lighting
+    from extract_field import extract_doors, extract_field_effect_objects, extract_league_lighting, extract_weather
 
     defines = parse_defines(decomp)
     extract_field_effect_objects(decomp, out, defines)
     extract_doors(decomp, out, defines)
     extract_league_lighting(decomp, out)
+    extract_weather(decomp, out)
     print("audio songs")
     from extract_audio import extract_audio
 

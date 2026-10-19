@@ -54,6 +54,7 @@ import { diplomaProbe } from '../menus/diploma';
 import { easyChatProbe } from '../menus/easyChatScreen';
 import { seagallopProbe } from '../menus/seagallop';
 import type { SSAnneProbe } from '../world/ssAnne';
+import type { WeatherProbe } from '../world/weather';
 import { gMPlayTable, gPokemonCryMusicPlayers, gSongTable } from '../audio/m4a';
 import { MPT_FLG_EXIST, MUSICPLAYER_STATUS_PAUSE, MUSICPLAYER_STATUS_TRACK, type MusicPlayerInfo } from '../audio/m4aInternal';
 import { m4aSongNumStart, musicPlayerName, setSoundEventListener, songName, soundProbe, type SoundEvent } from '../gba/sound';
@@ -327,6 +328,13 @@ interface OverworldLike extends Phaser.Scene {
     pixel: { rgb: number[]; colorIndex: number } | undefined;
   };
   testSSAnne(): SSAnneProbe | undefined;
+  testWeather(slot?: number, colorIndex?: number, texture?: string): WeatherProbe & {
+    unfaded: number[] | undefined;
+    palette: number[] | undefined;
+    pixel: { rgb: number[]; colorIndex: number } | undefined;
+    sprite: { now: number[]; original: number[]; index: number } | undefined;
+    fading: boolean;
+  };
   state: GameState;
   startWildBattle(mon: Pokemon): void;
   useFlash(): void;
@@ -638,6 +646,12 @@ function createApi(game: Phaser.Game) {
      * `colorIndex` if given; read back from the canvas).
      */
     leagueLighting: (colorIndex?: number) => overworld()?.testLeagueLighting(colorIndex),
+    /**
+     * The field weather (world/weather.ts): current / next / saved weather, gamma index and target, palette
+     * processing state, BG palette `slot` (default 7) unfaded and as shown, a pixel the map's atlas drew with it (of
+     * colour index `colorIndex`; from the canvas), and a pixel of the sprite sheet `texture` now and as loaded.
+     */
+    weather: (slot?: number, colorIndex?: number, texture?: string) => overworld()?.testWeather(slot, colorIndex, texture),
     /**
      * Put the player in an avatar state the way the game does it (SetPlayerAvatarTransitionFlags with
      * PLAYER_AVATAR_FLAG_<state>): 'MACH_BIKE' gets on the bike, 'SURFING' onto a surfing mon, 'ON_FOOT' off.

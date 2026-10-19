@@ -9,13 +9,25 @@ export interface FadeModes {
   FADE_TO_WHITE: number;
 }
 
+/**
+ * The field weather's side of FadeScreen (world/weather.ts): on the field, FadeScreen hands a fade in to the weather
+ * when the weather's palettes fade in themselves (FadeInScreen_RainShowShade), instead of a palette fade.
+ */
+export interface WeatherFade {
+  /** FadeScreen's weather part; true when the weather fades the screen in itself. */
+  fadeScreen(mode: number): boolean;
+  /** While it does: the fade colour's share of the screen (16 = all of it), else undefined (done). */
+  fadeInBlend(): number | undefined;
+}
+
 /** Above the map, objects and every window: the fade covers all palettes. */
 export const DEPTH_FADE = DEPTH_UI + 1000;
 
 /**
  * FadeScreen / BeginNormalPaletteFade over all palettes, drawn as a full-screen overlay.
  * Approximation: BlendPalette mixes 5-bit colour channels with integer maths; alpha-blending the fade
- * colour on top gives the same ramp but not bit-identical pixels. Weather palettes are ignored.
+ * colour on top gives the same ramp but not bit-identical pixels. On the field a fade in can be the weather's
+ * (`weather`): the overlay then follows the weather's blend instead.
  *
  * Timing follows UpdateNormalPaletteFade: the blend coefficient moves 2/16 per step, each step takes
  * two frames (BG palettes, then OBJ palettes) plus `delay` frames before the BG half, and the fade
@@ -29,6 +41,10 @@ export class ScreenFade {
   private finishing = -1;
   private delay = 0;
   private delayCounter = 0;
+  /** The weather is fading the screen in (`WeatherFade`): the overlay follows its blend. */
+  private weatherFadeIn = false;
+  /** Set on the field: FadeScreen's weather part. */
+  weather?: WeatherFade;
   active = false;
 
   constructor(
@@ -49,6 +65,13 @@ export class ScreenFade {
     const toWhite = mode === m.FADE_FROM_WHITE || mode === m.FADE_TO_WHITE;
     const fadeOut = mode === m.FADE_TO_BLACK || mode === m.FADE_TO_WHITE;
     this.rect.setFillStyle(toWhite ? 0xffffff : 0x000000);
+    if (this.weather?.fadeScreen(mode) && !fadeOut) {
+      // No palette fade: the weather blends its palettes from the fade colour (16 frames, `delay` unused)
+      this.weatherFadeIn = true;
+      this.active = true;
+      this.rect.setAlpha(1);
+      return true;
+    }
     this.y = fadeOut ? 0 : 16;
     this.targetY = fadeOut ? 16 : 0;
     this.objToggle = false;
@@ -81,6 +104,7 @@ export class ScreenFade {
   /** Drop the overlay at once (the palettes are reloaded). */
   clear(): void {
     this.active = false;
+    this.weatherFadeIn = false;
     this.rect.setAlpha(0);
   }
 
@@ -97,7 +121,20 @@ export class ScreenFade {
 
   /** UpdatePaletteFade, once per frame. */
   tick(): void {
-    if (this.active) this.update();
+    if (this.weatherFadeIn) this.updateWeatherFadeIn();
+    else if (this.active) this.update();
+  }
+
+  /** The weather's fade in (FadeInScreen_RainShowShade): IsWeatherNotFadingIn ends it. */
+  private updateWeatherFadeIn(): void {
+    const blend = this.weather?.fadeInBlend();
+    if (blend === undefined) {
+      this.weatherFadeIn = false;
+      this.active = false;
+      this.rect.setAlpha(0);
+    } else {
+      this.rect.setAlpha(blend / 16);
+    }
   }
 
   private update(): void {

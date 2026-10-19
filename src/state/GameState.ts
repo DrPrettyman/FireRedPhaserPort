@@ -76,6 +76,8 @@ export class GameState {
   registeredItem = 0;
   /** gSaveBlock1Ptr->flashLevel: 0 = lit, up to gMaxFlashLevel (world/flash.ts) in a dark cave. */
   flashLevel = 0;
+  /** gSaveBlock1Ptr->weather: the saved weather (world/weather.ts), WEATHER_NONE = 0. */
+  weather = 0;
   /**
    * gSaveBlock1Ptr->savedMusic: a song that overrides the map's music on map loads (gba/overworldMusic.ts:
    * MUS_CYCLING on the bike, `savebgm`'s songs); 0 = none. Cleared by every map load.
