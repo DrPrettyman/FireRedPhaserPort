@@ -2198,8 +2198,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const brain = new NpcBrain(obj, data, (o, d) => this.canMove(o, d));
     const { mapGroup, mapNum } = mapGroupAndNum(chunk.data.id);
     // ObjectEventSetSingleMovement: QuestLogRecordNPCStep while recording
+    // (only the current map's: the GBA has no objects of the neighbouring maps, and playback goes by local id alone)
     brain.onSingleMovement = (action) => {
-      if (gQL.playbackState === K.QL_PLAYBACK_STATE_RECORDING) QuestLogRecordNPCStep(localId, mapNum, mapGroup, action);
+      if (gQL.playbackState === K.QL_PLAYBACK_STATE_RECORDING && chunk === this.world.current) QuestLogRecordNPCStep(localId, mapNum, mapGroup, action);
     };
     // CopyObjectGraphicsInfoToSpriteTemplate: made while playback runs (and no script), it moves only as recorded
     if (!this.scripts.running && QL_GetPlaybackState() === K.QL_PLAYBACK_STATE_RUNNING) brain.questLogUpdate = () => QL_UpdateObject(obj, localId, false);
