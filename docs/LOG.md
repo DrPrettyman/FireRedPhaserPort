@@ -3130,7 +3130,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 
 - **Send-out cries** (`battle/gfx.ts`, pokeball.c): SpriteCB_ReleaseMonFromBall starts Task_PlayCryWhenReleasedFromBall
   (pan 25 for the opponent's side, -25 for the player's; CRY_MODE_NORMAL, or CRY_MODE_WEAK when
-  ShouldPlayNormalMonCry says no) 4 task runs after the ball opens. In a double battle's intro the left mons' cries
+  ShouldPlayNormalMonCry says no) in the task's fifth run after the ball opens. In a double battle's intro the left mons' cries
   are PlayCry_ReleaseDouble(CRY_MODE_DOUBLES / _WEAK_DOUBLES) after StopCryAndClearCrySongs, the right ones' wait 6
   frames, then for !IsCryPlayingOrClearCrySongs, then 3 more, and play CRY_MODE_NORMAL / _WEAK; the left ones also set
   the BGM to volume 128 (a multi battle stops it). The task keeps the mon as its side and party index where the C
