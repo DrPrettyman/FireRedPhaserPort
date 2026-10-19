@@ -3772,7 +3772,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   ended). Fixed by starting inside a chamber; the file rerun alone: 6 passed. tests/README.md item 10 names the
   pattern.
 
-## W-intro 1: the copyright screen, the intro's framework and the Game Freak scene (batch 11)
+### W-intro 1: the copyright screen, the intro's framework and the Game Freak scene (batch 11)
 
 - `menus/intro.ts` ports intro.c up to the end of the Game Freak scene: CB2_InitCopyrightScreenAfterBootup /
   AfterTitleScreen, SetUpCopyrightScreen, LoadCopyrightGraphics, CB2_WaitFadeBeforeSetUpIntro, CB2_SetUpIntro,
