@@ -4,7 +4,7 @@
 import { CopyBgTilemapBufferToVram, CopyToBgTilemapBufferRect_ChangePalette, IsDma3ManagerBusyWithBgCopy } from '../gba/bg';
 import { gfx16 } from '../gba/gfx';
 import { PALETTES_ALL, RGB_BLACK, RGB_WHITE } from '../gba/hw';
-import { BeginNormalPaletteFade, BG_PLTT_ID, gPaletteFade, gPlttBufferFaded, gPlttBufferUnfaded, ResetPaletteFadeControl } from '../gba/palette';
+import { BeginFastPaletteFade, BeginNormalPaletteFade, BG_PLTT_ID, gPaletteFade, gPlttBufferFaded, gPlttBufferUnfaded, ResetPaletteFadeControl } from '../gba/palette';
 import {
   CreateSprite,
   DestroySprite,
@@ -19,7 +19,10 @@ import {
   StoreSpriteCallbackInData6,
   type Sprite,
 } from '../gba/sprite';
+import { FadeOutMapMusic, IsCryPlayingOrClearCrySongs, PlayBGM, PlayCry_ByMode, PlayFanfare, PlaySE, PlaySE12WithPanning } from '../gba/sound';
 import { CreateTask, DestroyTask, gTasks, TaskDummy } from '../gba/task';
+import { gMPlayInfo_BGM, m4aMPlayContinue, m4aMPlayVolumeControl } from '../audio/m4a';
+import { TRACKS_ALL } from '../audio/m4aInternal';
 import { FreeAllWindowBuffers, IsTextPrinterActive } from '../gba/window';
 import { gMain } from '../gba/main';
 import { CB2_BagMenuFromBattle } from '../menus/itemMenu';
@@ -128,13 +131,13 @@ export function makeHandleInputChooseAction(complete: () => void): () => void {
     DoBounceEffect(a, K.BOUNCE_MON, 7, 1);
     const cur = g.actionSelectionCursor;
     const move = (xor: number) => {
-      ui.playSE(K.SE_SELECT);
+      PlaySE(K.SE_SELECT);
       ActionSelectionDestroyCursorAt(cur[a]);
       cur[a] ^= xor;
       ActionSelectionCreateCursorAt(cur[a], 0);
     };
     if (ui.joyNew('A')) {
-      ui.playSE(K.SE_SELECT);
+      PlaySE(K.SE_SELECT);
       const actions = [K.B_ACTION_USE_MOVE, K.B_ACTION_USE_ITEM, K.B_ACTION_SWITCH, K.B_ACTION_RUN];
       emitTwoReturnValues(K.BUFFER_B, actions[cur[a]], 0);
       complete();
@@ -158,7 +161,7 @@ export function makeHandleInputChooseAction(complete: () => void): () => void {
           if (itemId <= K.ITEM_PREMIER_BALL) ui.addBagItem(itemId, 1);
           else return;
         }
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         emitTwoReturnValues(K.BUFFER_B, K.B_ACTION_CANCEL_PARTNER, 0);
         complete();
       }
@@ -181,13 +184,13 @@ function HandleInputChooseTarget(): void {
   for (let i = 0; i < g.battlersCount; i++) if (i !== g.multiUsePlayerCursor) EndBounceEffect(i, K.BOUNCE_HEALTHBOX);
   const targetSprite = () => gSprites[g.battlerSpriteIds[g.multiUsePlayerCursor]];
   if (ui.joyNew('A')) {
-    ui.playSE(K.SE_SELECT);
+    PlaySE(K.SE_SELECT);
     targetSprite().callback = SpriteCB_HideAsMoveTarget;
     emitTwoReturnValues(K.BUFFER_B, 10, g.moveSelectionCursor[a] | (g.multiUsePlayerCursor << 8));
     EndBounceEffect(g.multiUsePlayerCursor, K.BOUNCE_HEALTHBOX);
     PlayerBufferExecCompleted();
   } else if (ui.joyNew('B')) {
-    ui.playSE(K.SE_SELECT);
+    PlaySE(K.SE_SELECT);
     targetSprite().callback = SpriteCB_HideAsMoveTarget;
     g.battlerControllerFuncs[a] = HandleInputChooseMove;
     DoBounceEffect(a, K.BOUNCE_HEALTHBOX, 7, 1);
@@ -195,7 +198,7 @@ function HandleInputChooseTarget(): void {
     EndBounceEffect(g.multiUsePlayerCursor, K.BOUNCE_HEALTHBOX);
   } else if (ui.joyNew('LEFT') || ui.joyNew('UP') || ui.joyNew('RIGHT') || ui.joyNew('DOWN')) {
     const back = ui.joyNew('LEFT') || ui.joyNew('UP');
-    ui.playSE(K.SE_SELECT);
+    PlaySE(K.SE_SELECT);
     targetSprite().callback = SpriteCB_HideAsMoveTarget;
     let ok = 0;
     do {
@@ -236,14 +239,14 @@ export function HandleInputChooseMove(): void {
   const moveCursor = (xor: number) => {
     MoveSelectionDestroyCursorAt(cur[a]);
     cur[a] ^= xor;
-    ui.playSE(K.SE_SELECT);
+    PlaySE(K.SE_SELECT);
     MoveSelectionCreateCursorAt(cur[a], 0);
     MoveSelectionDisplayPpNumber();
     MoveSelectionDisplayMoveType();
     BeginNormalPaletteFade(0xf0000, 0, 0, 0, RGB_WHITE);
   };
   if (ui.joyNew('A')) {
-    ui.playSE(K.SE_SELECT);
+    PlaySE(K.SE_SELECT);
     let moveTarget: number;
     if (info.moves[cur[a]] === K.MOVE_CURSE) moveTarget = info.monType1 !== K.TYPE_GHOST && info.monType2 !== K.TYPE_GHOST ? K.MOVE_TARGET_USER : K.MOVE_TARGET_SELECTED;
     else moveTarget = gBattleMoves[info.moves[cur[a]]].target;
@@ -276,7 +279,7 @@ export function HandleInputChooseMove(): void {
       gSprites[g.battlerSpriteIds[g.multiUsePlayerCursor]].callback = SpriteCB_ShowAsMoveTarget;
     }
   } else if (ui.joyNew('B')) {
-    ui.playSE(K.SE_SELECT);
+    PlaySE(K.SE_SELECT);
     emitTwoReturnValues(K.BUFFER_B, 10, 0xffff);
     PlayerBufferExecCompleted();
     ResetPaletteFadeControl();
@@ -311,7 +314,7 @@ function HandleMoveSwitching(): void {
   const cur = g.moveSelectionCursor;
   const back = () => (g.battleTypeFlags & K.BATTLE_TYPE_FIRST_BATTLE ? oakOldManHandleInputChooseMove : HandleInputChooseMove);
   if (ui.joyNew('A') || ui.joyNew('SELECT')) {
-    ui.playSE(K.SE_SELECT);
+    PlaySE(K.SE_SELECT);
     if (cur[a] !== g.multiUsePlayerCursor) {
       const info = moveInfo();
       const x = cur[a];
@@ -352,7 +355,7 @@ function HandleMoveSwitching(): void {
     MoveSelectionDisplayMoveType();
   }
   if (ui.joyNew('B')) {
-    ui.playSE(K.SE_SELECT);
+    PlaySE(K.SE_SELECT);
     MoveSelectionDestroyCursorAt(g.multiUsePlayerCursor);
     MoveSelectionCreateCursorAt(cur[a], 0);
     g.battlerControllerFuncs[a] = back();
@@ -364,7 +367,7 @@ function HandleMoveSwitching(): void {
     if (g.multiUsePlayerCursor === cur[a]) MoveSelectionCreateCursorAt(cur[a], 29);
     else MoveSelectionDestroyCursorAt(g.multiUsePlayerCursor);
     g.multiUsePlayerCursor ^= xor;
-    ui.playSE(K.SE_SELECT);
+    PlaySE(K.SE_SELECT);
     MoveSelectionCreateCursorAt(g.multiUsePlayerCursor, g.multiUsePlayerCursor === cur[a] ? 0 : 27);
   };
   if (ui.joyNew('LEFT') && g.multiUsePlayerCursor & 1) moveSwitchCursor(1);
@@ -529,9 +532,12 @@ function Intro_WaitForShinyAnimAndHealthbox(): void {
   } else if (gSprites[g.healthboxSpriteIds[a]].callback === SpriteCallbackDummy && gSprites[g.healthboxSpriteIds[a ^ K.BIT_FLANK]].callback === SpriteCallbackDummy) {
     v = true;
   }
+  if (IsCryPlayingOrClearCrySongs()) v = false;
   if (v && h[a].finishedShinyMonAnim && h[a ^ K.BIT_FLANK].finishedShinyMonAnim) {
     h[a].triedShinyMonAnim = h[a].finishedShinyMonAnim = 0;
     h[a ^ K.BIT_FLANK].triedShinyMonAnim = h[a ^ K.BIT_FLANK].finishedShinyMonAnim = 0;
+    if (g.battleTypeFlags & K.BATTLE_TYPE_MULTI) m4aMPlayContinue(gMPlayInfo_BGM);
+    else m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 256);
     HandleLowHpMusicChange(monOf(a), a);
     if (isDoubleBattle()) HandleLowHpMusicChange(monOf(a ^ K.BIT_FLANK), a ^ K.BIT_FLANK);
     h[a].introEndDelay = 3;
@@ -578,9 +584,18 @@ function SwitchIn_CleanShinyAnimShowSubstitute(): void {
 
 function SwitchIn_HandleSoundAndEnd(): void {
   const a = ab();
-  if (!sbd().healthBoxesData[a].specialAnimActive) {
+  if (!sbd().healthBoxesData[a].specialAnimActive && !IsCryPlayingOrClearCrySongs()) {
+    m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 0x100);
     HandleLowHpMusicChange(monOf(a), a);
     PlayerBufferExecCompleted();
+  }
+}
+
+/** Task_PlayerController_RestoreBgmAfterCry (the Oak/Old Man controller creates it at the end of its intro) */
+export function Task_PlayerController_RestoreBgmAfterCry(taskId: number): void {
+  if (!IsCryPlayingOrClearCrySongs()) {
+    m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 0x100);
+    DestroyTask(taskId);
   }
 }
 
@@ -821,7 +836,7 @@ function PlayerHandleFaintAnimation(): void {
   } else if (!h.specialAnimActive) {
     h.animationState = 0;
     HandleLowHpMusicChange(monOf(a), a);
-    ui.playSE(K.SE_FAINT);
+    PlaySE12WithPanning(K.SE_FAINT, K.SOUND_PAN_ATTACKER);
     const s = gSprites[g.battlerSpriteIds[a]];
     s.data[1] = 0;
     s.data[2] = 5;
@@ -1033,7 +1048,7 @@ function PlayerHandleStatusXor(): void {
 }
 
 function PlayerHandlePlayBGM(): void {
-  ui.playBGM(bufA()[1] | (bufA()[2] << 8));
+  PlayBGM(bufA()[1] | (bufA()[2] << 8));
   PlayerBufferExecCompleted();
 }
 
@@ -1070,17 +1085,18 @@ function PlayerHandleHitAnimation(): void {
 }
 
 function PlayerHandlePlaySE(): void {
-  ui.playSE(bufA()[1] | (bufA()[2] << 8));
+  const pan = getBattlerSide(ab()) === K.B_SIDE_PLAYER ? K.SOUND_PAN_ATTACKER : K.SOUND_PAN_TARGET;
+  PlaySE12WithPanning(bufA()[1] | (bufA()[2] << 8), pan);
   PlayerBufferExecCompleted();
 }
 
 function PlayerHandlePlayFanfare(): void {
-  ui.playFanfare(bufA()[1] | (bufA()[2] << 8));
+  PlayFanfare(bufA()[1] | (bufA()[2] << 8));
   PlayerBufferExecCompleted();
 }
 
 function PlayerHandleFaintingCry(): void {
-  ui.playCry(monOf(ab()).species);
+  PlayCry_ByMode(monOf(ab()).species, -25, K.CRY_MODE_FAINT);
   PlayerBufferExecCompleted();
 }
 
@@ -1227,8 +1243,11 @@ function PlayerHandleResetActionMoveSelection(): void {
   PlayerBufferExecCompleted();
 }
 
+/** PlayerHandleCmd55: only link battles send it to this controller; their SetBattleEndCallbacks isn't ported */
 function PlayerHandleCmd55(): void {
   g.battleOutcome = bufA()[1];
+  FadeOutMapMusic(5);
+  BeginFastPaletteFade(3);
   PlayerBufferExecCompleted();
 }
 

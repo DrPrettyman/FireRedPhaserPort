@@ -2,15 +2,18 @@
 // party they read: CopyXMonData / SetXMonData (the REQUEST_* switch), the hit-blink effect and
 // the exp-bar tasks of the player-side controllers.
 
+import { m4aSongNumStop } from '../audio/m4a';
+import { PlaySE } from '../gba/sound';
 import { gSprites } from '../gba/sprite';
 import { CreateTask, DestroyTask, gTasks, type TaskFunc } from '../gba/task';
+import { IsTextPrinterActive } from '../gba/window';
 import type { Pokemon, Stat } from '../pokemon/Pokemon';
 import { MoveBattleBar, SetBattleBarStruct, SetHealthboxSpriteVisible, UpdateHealthboxAttribute, UpdateHpTextInHealthbox } from './battleInterface';
-import { ui } from './battleUi';
+import { MoveBattlerSpriteToBG, ResetBattleAnimBg } from './anim/battleAnim';
 import { K } from './constants';
 import { emitDataTransfer, emitTwoReturnValues, u16, u32 } from './controllers';
 import { g, gSpeciesInfo, pokemon } from './env';
-import { HandleLowHpMusicChange, InitAndLaunchSpecialAnimation, LoadBattleBarGfx } from './gfx';
+import { GetBattlerSpriteBGPriorityRank, HandleLowHpMusicChange, InitAndLaunchSpecialAnimation, IsBattlerSpriteVisible, LoadBattleBarGfx } from './gfx';
 import { calculateMonStats, getAbilityBySpecies } from './pokemonBattle';
 import { BattlePokemon } from './structs';
 
@@ -237,7 +240,7 @@ const isDouble = () => (g.battleTypeFlags & K.BATTLE_TYPE_DOUBLE) !== 0;
 
 /**
  * The Task_GiveExpToMon chain. `onDone(battlerId)` sets the controller to its
- * CompleteOnInactiveTextPrinter; `levelUpEffects` is the player's vertical-stripe effect (the
+ * CompleteOnInactiveTextPrinter; `levelUpEffects` is the player's Task_CreateLevelUpVerticalStripes (the
  * Oak/Old Man controller skips it).
  */
 export function startExpTask(monId: number, gainedExp: number, battlerId: number, onDone: (battlerId: number) => void, levelUpEffects: boolean): void {
@@ -249,12 +252,75 @@ export function startExpTask(monId: number, gainedExp: number, battlerId: number
 }
 
 function makeGiveExpToMon(onDone: (b: number) => void, levelUpEffects: boolean): TaskFunc {
+  const createLevelUpVerticalStripes: TaskFunc = (taskId) => {
+    // Task_CreateLevelUpVerticalStripes (battle_controller_player.c)
+    const data = gTasks[taskId].data;
+    const battlerId = data[tExpTask_battler];
+    const isOnBg2 = (GetBattlerSpriteBGPriorityRank(battlerId) ^ 1) !== 0;
+    const sprite = gSprites[g.battlerSpriteIds[battlerId]];
+    switch (data[15]) {
+      case 0:
+        if (!IsTextPrinterActive(0)) {
+          if (!isOnBg2) {
+            data[14] = g.battle_BG1_X;
+            data[13] = g.battle_BG1_Y;
+            g.battle_BG1_X = -(sprite.x + sprite.x2) + 32;
+            g.battle_BG1_Y = -(sprite.y + sprite.y2) + 32;
+          } else {
+            data[14] = g.battle_BG2_X;
+            data[13] = g.battle_BG2_Y;
+            g.battle_BG2_X = -(sprite.x + sprite.x2) + 32;
+            g.battle_BG2_Y = -(sprite.y + sprite.y2) + 32;
+          }
+          ++data[15];
+        }
+        break;
+      case 1:
+        MoveBattlerSpriteToBG(battlerId, isOnBg2);
+        ++data[15];
+        break;
+      case 2:
+        PlaySE(K.SE_RS_SHOP);
+        // if (IsMonGettingExpSentOut()) CreateLevelUpVerticalSpritesTask(...): pokemon_special_anim_scene.c's
+        // stripes aren't ported (docs/DEVIATIONS.md), so LevelUpVerticalSpritesTaskIsRunning is FALSE at once.
+        ++data[15];
+        break;
+      case 3:
+        // if (!LevelUpVerticalSpritesTaskIsRunning())
+        sprite.invisible = false;
+        ++data[15];
+        break;
+      case 5:
+        ResetBattleAnimBg(isOnBg2);
+        ++data[15];
+        break;
+      case 4:
+        ++data[15];
+        break;
+      case 6:
+        if (!isOnBg2) {
+          g.battle_BG1_X = data[14];
+          g.battle_BG1_Y = data[13];
+        } else {
+          g.battle_BG2_X = data[14];
+          g.battle_BG2_Y = data[13];
+        }
+        onDone(battlerId);
+        DestroyTask(taskId);
+        break;
+    }
+  };
   const destroyExpTaskAndComplete: TaskFunc = (taskId) => {
-    // DestroyExpTaskAndCompleteOnInactiveTextPrinter (the player's version would first run
-    // Task_CreateLevelUpVerticalStripes, a battle anim effect that isn't implemented)
-    void levelUpEffects;
-    onDone(gTasks[taskId].data[tExpTask_battler]);
-    DestroyTask(taskId);
+    // DestroyExpTaskAndCompleteOnInactiveTextPrinter: the player's runs Task_CreateLevelUpVerticalStripes first
+    // when its battler's sprite is visible; the Oak/Old Man controller's completes at once
+    const battlerId = gTasks[taskId].data[tExpTask_battler];
+    if (levelUpEffects && IsBattlerSpriteVisible(battlerId)) {
+      gTasks[taskId].func = createLevelUpVerticalStripes;
+      gTasks[taskId].data[15] = 0;
+    } else {
+      onDone(battlerId);
+      DestroyTask(taskId);
+    }
   };
   const updateLvlInHealthbox: TaskFunc = (taskId) => {
     const d = gTasks[taskId].data;
@@ -296,6 +362,7 @@ function makeGiveExpToMon(onDone: (b: number) => void, levelUpEffects: boolean):
     SetHealthboxSpriteVisible(g.healthboxSpriteIds[battlerId]);
     if (newExpPoints === -1) {
       // The bar has been filled with given exp points.
+      m4aSongNumStop(K.SE_EXP);
       const mon = g.playerParty[monId]!;
       const expOnNextLvl = expTable(mon)[mon.level + 1];
       if (mon.exp + gainedExp >= expOnNextLvl) {
@@ -314,7 +381,7 @@ function makeGiveExpToMon(onDone: (b: number) => void, levelUpEffects: boolean):
     const table = expTable(mon);
     const currLvlExp = table[mon.level];
     SetBattleBarStruct(d[tExpTask_battler], g.healthboxSpriteIds[d[tExpTask_battler]], table[mon.level + 1] - currLvlExp, mon.exp - currLvlExp, -d[tExpTask_gainedExp]);
-    ui.playSE(K.SE_EXP);
+    PlaySE(K.SE_EXP);
     gTasks[taskId].func = giveExpWithExpBar;
   };
   return (taskId) => {
