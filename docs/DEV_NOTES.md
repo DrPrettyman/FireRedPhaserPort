@@ -1418,7 +1418,7 @@ or extend them:
 - **Doors:** `FieldDoors.getDoorSoundEffect(x, y)` (world coords) is GetDoorSoundEffect; `opendoor` plays it via
   the ScriptHost's `doorSoundEffect` (map-local); the warps' door SEs (Task_DoorWarp, Task_ExitDoor) use it too.
 - **Not here:** the warp tasks' sounds (Escape Rope, Dig, Teleport, the fall arrival, Fly's music) and map music
-  ("Map music"), the cries' timing (W-sound 2), the bike bell (item_use.c, W-sound 7). Not in the port: escalators,
+  ("Map music"), the cries' timing (W-sound 2), the bike bell (item_use.c: menus/itemUse.ts). Not in the port: escalators,
   the Lavaridge warps, FldEff_NpcFlyOut, Birth Island's rock (SE_THUNDER), ShakeScreen, LoopWingFlapSound, the
   Acro Bike and secret base mats (field_player_avatar.c's SE_BIKE_HOP / SE_WARP_IN), the mailbox, field weather.
 - **Tests:** `tests/e2e/fieldSounds.test.ts` (a bump's SE_WALL_HIT, a ledge's SE_LEDGE, talking's SE_SELECT, Bill's
@@ -1426,7 +1426,7 @@ or extend them:
   SE_SELECTs, the save dialog closing SE_SAVE's length + 60 frames after it, the heal machine's SE_BALLs 25 frames
   apart, MUS_HEAL 32 frames after the last, the effect running until the fanfare task resumes the BGM).
 
-### Scene sounds (W-sound 7a)
+### Scene sounds (W-sound 7a, 7b)
 
 - **Where:** each C call at its port function, through `gba/sound.ts` with the C's arguments.
   `menus/evolutionScene.ts` (evolution_scene.c): m4aMPlayAllStop on entry (EvolutionScene) and on a cancel, the
@@ -1448,11 +1448,36 @@ or extend them:
   machine; the diploma's FieldCB_WarpExitFadeFromBlack; RunFieldCallback's FieldCB_DefaultWarpExit). The ones that
   set their own (the party menu's CB2_FadeFromPartyMenu, Easy Chat's FieldCB_ContinueScript, the move deleter's)
   play none.
+- **Hall of Fame, credits, Pokédex, title (W-sound 7b):** `menus/hallOfFame.ts` (hall_of_fame.c, hof_pc.c):
+  PlayBGM(MUS_HALL_OF_FAME) when the screen has faded in, SE_SAVE, PlayCry_Normal per mon (not eggs) in the frame its
+  info prints (nothing waits for it: the 120-frame timer runs alongside, the BGM ducks), SE_APPLAUSE, FadeOutBGM(4)
+  on A. SetWarpsToRollCredits sets MUSIC_DISABLE_KEEP (so PlaySE is silent until the credits clear it) and runs
+  DoWarp under the screen's CB2: TryFadeOutOldMapMusic (the room's MUS_SLOW_PALLET → Indigo Plateau's
+  MUS_VICTORY_ROAD: FadeOutMapMusic(4)), the skipped SE_EXIT, then Task_Teleport2Warp waits for the fade and
+  BGMusicStopped before `hofEnv.doWarp`; `hofEnv.loadMapHeader` (FieldMenuScene) gives it the destination's header.
+  Indigo Plateau's ON_TRANSITION `playbgm MUS_CREDITS` starts the credits' music; `menus/credits.ts` plays the mon
+  scenes' PlayCry_NormalNoDucking (GetCreditsMonSpecies, CRY_VOLUME_RS). The Hall of Fame PC: StopCryAndClearCrySongs
+  + PlayCry_Normal per mon shown, and on leaving IsCryPlayingOrClearCrySongs → StopCryAndClearCrySongs +
+  m4aMPlayVolumeControl(BGM, 0x100); its return (OverworldScene.openHallOfFamePc) runs
+  ReshowPCMenuAfterHallOfFamePC's Overworld_PlaySpecialMapMusic. `menus/pokedexScreen.ts`: DexScreen_LoadResources'
+  SetBGMVolume_SuppressHelpSystemReduction(0x80) and DoClosePokedex's BGMVolumeMax_EnableHelpSystemReduction around
+  the SE_SELECTs, SE_BALL_TRAY_ENTER and the NoDucking cries (FRLG's Pokédex has no SE_DEX_* sounds). The title
+  screen (MUS_TITLE, the Charizard cry, FadeOutMapMusic(10) / FadeOutBGM(4)), the trainer card (SE_CARD_*, the
+  opening's IsSEPlaying wait), the bag and item use (item_menu.c's calls but Teachy TV's, the bike bell, the Poké
+  Flute's fanfare and WaitFanfare, SE_REPEL's wait) and the main menu were live already; MainMenuScene's stand-in
+  BattleUi plays Oak's speech's ball-open SE_BALL_OPEN through PlaySE. Not ported: Task_MysteryGiftError's SE_SELECT
+  (no Mystery Gift), the berry fix program's m4aMPlayAllStop (REVISION 0), Teachy TV's bag tutorials.
 - **Tests:** `tests/e2e/audioScenes.test.ts`: a Rare Candy evolution (the scene's stop of MUS_ROUTE1, Charmander's
   cry, MUS_EVOLUTION_INTRO, MUS_EVOLUTION exactly the intro's length later, the four sparkle SEs, SE_EXP and the stop
   one frame later, Charmeleon's cry, MUS_EVOLVED, MUS_ROUTE1 again); an egg hatching (MUS_DUMMY, MUS_EVOLUTION_INTRO a
   frame later, MUS_EVOLUTION 60 after, SE_EGG_HATCH, the cry, MUS_EVOLVED, MUS_PALLET on the field); Reyley's trade
   (MUS_EVOLUTION, both cries, MUS_EVOLVED, MUS_PEWTER again).
+  `tests/e2e/audioScenes2.test.ts`: the Hall of Fame (MUS_HALL_OF_FAME, SE_SAVE in the save's frame, each cry in
+  its mon's frame and ≥ 121 frames apart, the BGM ducked to 85 and back, SE_APPLAUSE, both speed-4 fade-outs, no SE
+  after them, MUS_CREDITS, the credits' Charizard cry without ducking); the Hall of Fame PC (a cry per mon, the stop
+  before the next, B during a cry stops it, the BGM volume back at full); the Pokédex (the BGM at 0x80 while open,
+  the mon page's and START's cries, full volume after); the title screen (MUS_TITLE, the cry, FadeOutBGM(4) ≥ 90
+  frames later).
 
 ## Game state
 

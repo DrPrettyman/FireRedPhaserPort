@@ -161,7 +161,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Cable club (cable_club.c): there is no link play. TryBattleLinkup / TryTradeLinkup run as if nothing were on
     the other end of the cable (Task_LinkupAwaitConnection until B, then LINKUP_FAILED), IsWirelessAdapterConnected
     and ValidateSavedWonderCard are FALSE, IsBadEggInParty is FALSE (no bad eggs), CloseLink is a no-op.
-  - Player avatar (world/playerAvatar.ts, world/bike.ts): the bike bell is item_use.c's (W-sound 7). Not ported: the warp arrow sprite on arrow mats
+  - Player avatar (world/playerAvatar.ts, world/bike.ts): the bike bell is item_use.c's (menus/itemUse.ts). Not ported: the warp arrow sprite on arrow mats
     (HandleWarpArrowSpriteHideShow), DoStairWarp's 12-frame delay when a stair warp takes the player off the
     bike, the teleport spin, the quest log's recordings, and the help context. Movement scripts
     (applymovement) still run through MovementRunner rather than the player's held-movement actions, so `lock`
@@ -226,10 +226,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     copyright screen and intro.c's Game Freak / Nidorino movie before it aren't ported. Dev starts (`?start=`,
     `?map=`) skip the title screen and the main menu; dev `?skipIntro` (the e2e harness's default) skips the title
     screen and Oak's speech: the main menu with a save, the new game without. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
-    before CONTINUE, no SE_SELECT. SAVE_STATUS_ERROR ("the previous save file will be loaded") can't happen: one
+    before CONTINUE. SAVE_STATUS_ERROR ("the previous save file will be loaded") can't happen: one
     slot, no backup; an unreadable slot is SAVE_STATUS_INVALID ("The save file has been deleted...").
-  - Title screen (menus/titleScreen.ts): silent until the mixer (the Charizard cry plays, inaudibly; the cry scene
-    waits its 90 frames as on the GBA), no help system (HELPCONTEXT_TITLE_SCREEN: L/R do nothing). When its 2700-frame timer runs out it goes
+  - Title screen (menus/titleScreen.ts): no help system (HELPCONTEXT_TITLE_SCREEN: L/R do nothing). When its 2700-frame timer runs out it goes
     straight back to the title screen (CB2_InitCopyrightScreenAfterTitleScreen would replay the copyright screen
     and the intro). StartTimer1 / SeedRngAndSetTrainerId don't seed the RNG from the time spent on the title
     screen: the port seeds it at load. B+SELECT (REVISION 0's berry fix program, a multiboot program for Ruby and
@@ -262,28 +261,25 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Field ListMenu (ui/FieldListMenu.ts): the quest log's QL_AvoidDisplay is ignored.
   - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu.
   - Interaction metatiles whose scripts need unported screens/specials (Trainer Tower clock, cable club
-  - Hall of Fame (menus/hallOfFame.ts): no audio (MUS_HALL_OF_FAME, the cries, SE_SAVE, SE_APPLAUSE); no Champion
+  - Hall of Fame (menus/hallOfFame.ts): no Champion
     Ribbons (mons have no ribbons; REVISION 0 gives no event tickets either); the help system isn't toggled and the
     quest log isn't saved; a failed save carries on (no DoSaveFailedScreen / gGameContinueCallback).
     Other game stats than GAME_STAT_ENTERED_HOF and
     GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted.
-  - Pokédex screen (menus/pokedexScreen.ts, menus/pokedexArea.ts): no audio (SE_SELECT, the SE_DEX_* sounds, the
-    mon page's cries and START = CRY, the page turn's SE_BALL_TRAY_ENTER and the cry after registering a catch; the
-    BGM volume calls are no-ops); no help system context. The mon page and the habitat pages load the shown mons'
+  - Pokédex screen (menus/pokedexScreen.ts, menus/pokedexArea.ts): no help system context. The mon page and the habitat pages load the shown mons'
     pics, palettes, footprints and icons (for the area page) when they're first drawn (fetched on demand, not
     preloaded; the battle preloads the registered page's), so the first view of a mon or a page can take a frame or
     two longer. Unown and Spinda are drawn with personality 0 (the save's unownPersonality / spindaPersonality
     aren't kept; Spinda's spots aren't drawn anywhere). The anticheat's second and third copies of the seen flags
     aren't kept (one `dexSeen` set), so "caught" just needs "seen" too. The Pokédex keeps the field's DISPCNT,
     which the port sets in FieldMenuScene since the field isn't on the GBA layer.
-  - Trainer card (menus/trainerCard.ts): no audio (SE_CARD_OPEN / SE_CARD_FLIP / SE_CARD_FLIPPING); no help system
-    context. The berry picking and Pokémon Jump records (a star for 200 of each) and the link stats are always 0 (no
+  - Trainer card (menus/trainerCard.ts): no help system context. The berry picking and Pokémon Jump records (a star for 200 of each) and the link stats are always 0 (no
     link minigames), so the back never shows its link battle / trade / Berry Crush / Union Room lines (the easy chat
     profile is saved since save version 5, but only a link card prints it). The flip's per-line BG0VOFS gives line L buffer[L] (the PPU's
     HBlank convention), where the GBA's HBlank interrupt sets it for the line after, a one-line shift of the squash.
     LoadMonIconGfx's 96 colours read 48 past gMonIconPalettes on the GBA; those palettes (BG 8-10) are zeros here and
     no icon uses them.
-  - Credits (menus/credits.ts): no audio (MUS_CREDITS, the cries). A map scene loads asynchronously, so it can start
+  - Credits (menus/credits.ts): a map scene loads asynchronously, so it can start
     a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
     GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.
     SoftReset (BootScene's `softReset`) restarts the boot flow (the title screen) with a fresh Overworld scene and
@@ -315,9 +311,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     usually the same frame). The warps' PlayRainStoppingSoundEffect isn't ported (no field weather). DoStairWarp
     runs as DoWarp (no stair walk: its TryFadeOutOldMapMusic and SE_EXIT come at once rather than after the
     player's step and delay). `warpdoor` (unused in FRLG) goes straight to Task_DoorWarp's warp: no door SE or
-    animation. The Hall of Fame's SetWarpsToRollCredits sets gDisableMapMusicChangeOnMapLoad but its DoWarp leaves the
-    screen without TryFadeOutOldMapMusic and the BGMusicStopped wait (the field loads Indigo Plateau at once; with
-    MUSIC_DISABLE_KEEP the music stays anyway). Of the screens that come back through FieldCB_ContinueScriptHandleMusic,
+    animation. The Hall of Fame's DoWarp (SetWarpsToRollCredits, menus/hallOfFame.ts) loads the
+    destination's header before its TryFadeOutOldMapMusic (a frame or two later than on the GBA, behind the black
+    screen) and has no WarpFadeOutScreen (the screen is black already). Of the screens that come back through FieldCB_ContinueScriptHandleMusic,
     SelectMoveDeleterMove's field callback (menus/partyMenuSpecials.ts) plays no Overworld_PlaySpecialMapMusic (the
     deleter never changes the map music, so nothing is missed). The ambient cries (ChooseAmbientCrySpecies,
     UpdateAmbientCry, PlayAmbientCry) aren't ported. Cable club /
