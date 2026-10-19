@@ -1,9 +1,11 @@
-// The Trainer Tower (POSTGAME_PLAN.md W-ttower units 1 and 2; trainer_tower.c in world/trainerTower.ts): the lobby's
+// The Trainer Tower (POSTGAME_PLAN.md W-ttower units 1-3; trainer_tower.c in world/trainerTower.ts): the lobby's
 // receptionist starts a challenge (TrainerTower_Lobby_EventScript_EntryTrigger), the timer counts, 1F's layout and
 // trainers are the challenge's (TrainerTower_OnTransition: ttower_initfloor), a trainer's trigger runs up to
 // `ttower_dobattle`: the battle (DoTrainerTowerBattle: BATTLE_TYPE_TRAINER_TOWER, BuildEnemyParty at the party's top
 // level, the opponent's class / name / pic / texts from sTrainerTowerOpponent), the floor is cleared, and a loss sends
 // the player back out of the challenge at the lobby (TrainerTower_EventScript_WarpToLobbyLost, ..._LostChallenge).
+// Unit 3: battle_records.c's records screen (the lobby's TIME BOARD, the Pokémon Center's link records) and a full
+// climb: eight floors, the roof's owner and prize, the record time, the elevator down, a slower climb.
 
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';

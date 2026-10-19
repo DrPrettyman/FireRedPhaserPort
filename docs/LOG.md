@@ -3631,3 +3631,30 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   GBA layer at BLDALPHA (12, 8) and back after the battle; the Lost Cave fogged), pokemonTower.test.ts and
   transitions.test.ts (15 passed with weather), battleAnims "a ghost dodges the ball" (3F). Screenshots of 3F on the
   field and mid-transition show the fog.
+
+### W-ttower 3: records and the full climb (POSTGAME_PLAN.md batch 10)
+
+- `menus/battleRecords.ts` (new): battle_records.c's screen. `special ShowBattleRecords` (script/trainerTowerSpecials.ts:
+  `host.runScreenFromScript(ShowBattleRecords, BATTLE_RECORDS_GFX)`) after the script's `fadescreen`: MainCB2_SetUp's
+  states 0-7 (ResetGpu, StopAllRunningTasks, BG0 / BG3 from sBgTemplates, the frame on BG3, the text window
+  palette, the window, the fade in), Task_WaitFadeIn / Task_WaitButton (A or B: SE_SELECT) / Task_FadeOut /
+  Task_DestroyAndReturnToField (CB2_ReturnToFieldContinueScriptPlayMapMusic; the script's `waitstate` ends with the
+  field's fade in). VAR_0x8004 1: PrintTrainerTowerRecords (world/trainerTower.ts, trainer_tower.c's: TIME BOARD and
+  each challenge type's record through PRINT_TOWER_TIME, the current record validated first). VAR_0x8004 0: the link
+  page came for free (PrintBattleRecords / PrintTotalRecord / PrintOpponentBattleRecord: the GAME_STAT_LINK_BATTLE_*
+  totals and five cleared records, since no link battle writes gSaveBlock2Ptr->linkBattleRecords; DEVIATIONS).
+  ShowBattleRecords is off tests/unit/scriptCoverageGaps.ts.
+- Extractor: `graphics/battle_records/` in extract_gfx.py's prefixes (`battle_records.sTiles`: help_system_util.c has
+  an sTiles too, so the plain name is now battle_records.c's, which sorts first; nothing used it; `sPalette`,
+  `sTilemap`); extract_battle.py's pointer tables gained gTrainerTowerChallengeTypeTexts. Rerun `npm run extract`.
+- The roof's owner, GiveChallengePrize and CheckFinalTime were ported in unit 1; nothing in them needed fixing once
+  played through.
+- Probe `__test.battleRecords()`: what the screen printed (decoded, with x / y) while it runs.
+- Verified: typecheck; unit (tests/unit/trainerTower.test.ts: PrintTrainerTowerRecords' nine lines and positions, a
+  record of another set starting over, a kept record " 3MIN. 25.75SEC."); e2e tests/e2e/trainerTower.test.ts (9: unit
+  1-2's six, plus the link records machine in Viridian's Pokémon Center 2F (the totals, five rows of dashes, SE_SELECT),
+  a new game's TIME BOARD (59MIN. 59.99SEC. four times), and a full Single climb: eight floors' battles won (the party
+  healed before each floor in the test, speed 16, battle scene off), the roof's layout, the owner (GetOwnerState stops
+  the timer, the UP-GRADE, "Stupendous!", the record = the timer), the owner again (only the farewell), the roof's
+  elevator to the lobby, the TIME BOARD with the record; out and back in, a second challenge with its floors counted
+  cleared and its clock 10 s past the record: "taken your sweet time", no prize, the record kept on the board).
