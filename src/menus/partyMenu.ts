@@ -5,7 +5,12 @@
 // move (registerFieldMoveSetUp) and hands over to the field through gFieldCallback2 / gPostMenuFieldCallback;
 // Soft-Boiled / Milk Drink (fldeff_softboiled.c) stay in this menu.
 //
-// Not ported because their screens or systems don't exist yet: the item-use animation (pokemon_special_anim.c), mail,
+// Mail (W-mail): giving mail from the bag or the party menu's GIVE writes it on the Easy Chat screen
+// (EASY_CHAT_TYPE_MAIL), MAIL → READ shows it (menus/mail.ts), MAIL → TAKE sends it to the PC mailbox or loses the
+// message; the data is world/mail.ts (mail_data.c). The PC mailbox's GIVE (PARTY_ACTION_GIVE_MAILBOX_MAIL) is W-mail
+// unit 2.
+//
+// Not ported because their screens or systems don't exist yet: the item-use animation (pokemon_special_anim.c),
 // link/multi battles, the Union Room, minigames and the Pokédude/Teachy TV demos.
 
 import { K } from '../battle/constants';
@@ -164,6 +169,9 @@ import { gFieldEffectArguments } from '../world/fieldEffectScripts';
 import { avatarField, GetXYCoordsOneStepInFrontOfPlayer, PLAYER_AVATAR_FLAG, TestPlayerAvatarFlags } from '../world/playerAvatar';
 import { GetMapName, GetMapSectionOfMap } from '../world/regionMap';
 import { CB2_BagMenuFromBattle, CB2_SetUpReshowBattleScreenAfterMenu, GoToBagMenu } from './itemMenu';
+import { DoEasyChatScreen } from './easyChatScreen';
+import { ReadMail } from './mail';
+import { GetMonMailId, GiveMailToMon, newMail, TakeMailFromMon, TakeMailFromMon2 } from '../world/mail';
 import { SpecialVar } from './itemMenuState';
 import { CheckIfItemIsTMHMOrEvolutionStone } from './itemUse';
 import { InitTMCase, TMCASE_KEEP_PREV, TMCASE_REOPENING } from './tmCase';
@@ -1487,8 +1495,7 @@ function DisplaySwitchedHeldItemMessage(item: number, item2: number, keepOpen: b
 
 function GiveItemToMon(mon: Pokemon, item: number): void {
   if (ItemIsMail(item)) {
-    console.warn('[party_menu] mail is not implemented');
-    return;
+    if (GiveMailToMon(state, mon, item) === 0xff) return;
   }
   mon.heldItem = item;
 }
@@ -2545,9 +2552,10 @@ export function CB2_GiveHoldItem(): void {
     if (sPartyMenuItemId !== K.ITEM_NONE) {
       InitPartyMenu(gPartyMenu.menuType, K.KEEP_PARTY_LAYOUT, gPartyMenu.action, true, K.PARTY_MSG_NONE, Task_SwitchHoldItemsPrompt, gPartyMenu.exitCallback);
     } else if (ItemIsMail(SpecialVar.ItemId)) {
-      // Give mail: the easy chat screen doesn't exist yet
-      console.warn('[party_menu] mail is not implemented');
-      InitPartyMenu(gPartyMenu.menuType, K.KEEP_PARTY_LAYOUT, gPartyMenu.action, true, K.PARTY_MSG_NONE, Task_TryCreateSelectionWindow, gPartyMenu.exitCallback);
+      // Give mail
+      RemoveBagItem(SpecialVar.ItemId, 1);
+      GiveItemToMon(P(gPartyMenu.slotId), SpecialVar.ItemId);
+      CB2_WriteMailToGiveMon();
     } else {
       // Give item
       InitPartyMenu(gPartyMenu.menuType, K.KEEP_PARTY_LAYOUT, gPartyMenu.action, true, K.PARTY_MSG_NONE, Task_GiveHoldItem, gPartyMenu.exitCallback);
@@ -2592,7 +2600,7 @@ function Task_HandleSwitchItemsYesNoInput(taskId: number): void {
       } else if (ItemIsMail(SpecialVar.ItemId)) {
         // Giving mail
         GiveItemToMon(P(gPartyMenu.slotId), SpecialVar.ItemId);
-        gTasks[taskId].func = Task_ReturnToChooseMonAfterText;
+        gTasks[taskId].func = Task_WriteMailToGiveMonAfterText;
       } else {
         // Giving item
         GiveItemToMon(P(gPartyMenu.slotId), SpecialVar.ItemId);
@@ -2606,6 +2614,49 @@ function Task_HandleSwitchItemsYesNoInput(taskId: number): void {
     case 1: // No
       gTasks[taskId].func = Task_ReturnToChooseMonAfterText;
       break;
+  }
+}
+
+function Task_WriteMailToGiveMonAfterText(taskId: number): void {
+  if (!IsPartyMenuTextPrinterActive()) {
+    internal().exitCallback = CB2_WriteMailToGiveMon;
+    Task_ClosePartyMenu(taskId);
+  }
+}
+
+/** CB2_WriteMailToGiveMon: the Easy Chat screen on the mon's new mail's words. */
+function CB2_WriteMailToGiveMon(): void {
+  const mail = GetMonMailId(state.defines, P(gPartyMenu.slotId));
+  DoEasyChatScreen(K.EASY_CHAT_TYPE_MAIL, mailWords(mail), CB2_ReturnToPartyMenuFromWritingMail);
+}
+
+/** gSaveBlock1Ptr->mail[mail].words (a scratch array if GiveMailToMon found no free slot: the C writes past mail[]). */
+function mailWords(mail: number): number[] {
+  return (state.mail[mail] ?? newMail(state.defines)).words;
+}
+
+function CB2_ReturnToPartyMenuFromWritingMail(): void {
+  const mon = P(gPartyMenu.slotId);
+  const item = mon.heldItem;
+  if (state.getVar('VAR_RESULT') === 0) {
+    // Canceled writing mail
+    TakeMailFromMon(state, mon);
+    mon.heldItem = sPartyMenuItemId;
+    RemoveBagItem(sPartyMenuItemId, 1);
+    AddBagItem(item, 1);
+    InitPartyMenu(gPartyMenu.menuType, K.KEEP_PARTY_LAYOUT, gPartyMenu.action, true, K.PARTY_MSG_CHOOSE_MON, Task_TryCreateSelectionWindow, gPartyMenu.exitCallback);
+  } else {
+    // Wrote mail
+    InitPartyMenu(gPartyMenu.menuType, K.KEEP_PARTY_LAYOUT, gPartyMenu.action, true, K.PARTY_MSG_CHOOSE_MON, Task_DisplayGaveMailFromPartyMessage, gPartyMenu.exitCallback);
+  }
+}
+
+/** Task_DisplayGaveMailFromPartyMessage: nearly redundant with Task_DisplayGaveMailFromBagMessage. */
+function Task_DisplayGaveMailFromPartyMessage(taskId: number): void {
+  if (!gPaletteFade.active) {
+    if (sPartyMenuItemId === K.ITEM_NONE) DisplayGaveHeldItemMessage(P(gPartyMenu.slotId), SpecialVar.ItemId, false);
+    else DisplaySwitchedHeldItemMessage(SpecialVar.ItemId, sPartyMenuItemId, false);
+    gTasks[taskId].func = Task_UpdateHeldItemSprite;
   }
 }
 
@@ -2652,13 +2703,89 @@ function CursorCB_Mail(taskId: number): void {
 }
 
 function CursorCB_Read(taskId: number): void {
-  console.warn('[party_menu] reading mail is not implemented');
-  CursorCB_Cancel2(taskId);
+  PlaySE(K.SE_SELECT);
+  internal().exitCallback = CB2_ReadHeldMail;
+  Task_ClosePartyMenu(taskId);
+}
+
+/** CB2_ReadHeldMail (a mail item without a slot, e.g. the traded Jynx's until W-mail unit 2, reads as a blank one) */
+function CB2_ReadHeldMail(): void {
+  const mail = state.mail[GetMonMailId(state.defines, P(gPartyMenu.slotId))] ?? newMail(state.defines);
+  ReadMail(mail, CB2_ReturnToPartyMenuFromReadingMail, true);
+}
+
+function CB2_ReturnToPartyMenuFromReadingMail(): void {
+  gPaletteFade.bufferTransferDisabled = true;
+  InitPartyMenu(gPartyMenu.menuType, K.KEEP_PARTY_LAYOUT, gPartyMenu.action, true, K.PARTY_MSG_DO_WHAT_WITH_MON, Task_TryCreateSelectionWindow, gPartyMenu.exitCallback);
 }
 
 function CursorCB_TakeMail(taskId: number): void {
-  console.warn('[party_menu] taking mail is not implemented');
-  CursorCB_Cancel2(taskId);
+  PlaySE(K.SE_SELECT);
+  PartyMenuRemoveWindow(1);
+  PartyMenuRemoveWindow(0);
+  DisplayPartyMenuMessage(text('gText_SendMailToPC'), true);
+  gTasks[taskId].func = Task_SendMailToPCYesNo;
+}
+
+function Task_SendMailToPCYesNo(taskId: number): void {
+  if (!IsPartyMenuTextPrinterActive()) {
+    PartyMenuDisplayYesNoMenu();
+    gTasks[taskId].func = Task_HandleSendMailToPCYesNoInput;
+  }
+}
+
+/** Task_HandleSendMailToPCYesNoInput: YES moves the mail into the PC mailbox's slots (its screen is W-mail unit 2). */
+function Task_HandleSendMailToPCYesNoInput(taskId: number): void {
+  switch (Menu_ProcessInputNoWrapClearOnChoose()) {
+    case 0: // Yes, send to PC
+      if (TakeMailFromMon2(state, P(gPartyMenu.slotId)) !== 0xff) {
+        DisplayPartyMenuMessage(text('gText_MailSentToPC'), false);
+        gTasks[taskId].func = Task_UpdateHeldItemSprite;
+      } else {
+        DisplayPartyMenuMessage(text('gText_PCMailboxFull'), false);
+        gTasks[taskId].func = Task_ReturnToChooseMonAfterText;
+      }
+      break;
+    case MENU_B_PRESSED:
+      PlaySE(K.SE_SELECT);
+    // fallthrough
+    case 1:
+      DisplayPartyMenuMessage(text('gText_MailMessageWillBeLost'), true);
+      gTasks[taskId].func = Task_LoseMailMessageYesNo;
+      break;
+  }
+}
+
+function Task_LoseMailMessageYesNo(taskId: number): void {
+  if (!IsPartyMenuTextPrinterActive()) {
+    PartyMenuDisplayYesNoMenu();
+    gTasks[taskId].func = Task_HandleLoseMailMessageYesNoInput;
+  }
+}
+
+function Task_HandleLoseMailMessageYesNoInput(taskId: number): void {
+  switch (Menu_ProcessInputNoWrapClearOnChoose()) {
+    case 0: {
+      // Yes, lose mail message
+      const item = P(gPartyMenu.slotId).heldItem;
+      if (AddBagItem(item, 1) === true) {
+        TakeMailFromMon(state, P(gPartyMenu.slotId));
+        DisplayPartyMenuMessage(text('gText_MailTakenFromPkmn'), false);
+        gTasks[taskId].func = Task_UpdateHeldItemSprite;
+      } else {
+        BufferBagFullCantTakeItemMessage(item);
+        DisplayPartyMenuMessage(gStringVar4, false);
+        gTasks[taskId].func = Task_ReturnToChooseMonAfterText;
+      }
+      break;
+    }
+    case MENU_B_PRESSED:
+      PlaySE(K.SE_SELECT);
+    // fallthrough
+    case 1:
+      gTasks[taskId].func = Task_ReturnToChooseMonAfterText;
+      break;
+  }
 }
 
 function CursorCB_Cancel2(taskId: number): void {
@@ -3920,7 +4047,8 @@ function TryGiveItemOrMailToSelectedMon(taskId: number): void {
 
 function GiveItemOrMailToSelectedMon(taskId: number): void {
   if (ItemIsMail(gPartyMenu.bagItem)) {
-    console.warn('[party_menu] mail is not implemented');
+    RemoveItemToGiveFromBag(gPartyMenu.bagItem);
+    internal().exitCallback = CB2_WriteMailToGiveMonFromBag;
     Task_ClosePartyMenu(taskId);
   } else {
     GiveItemToSelectedMon(taskId);
@@ -3945,6 +4073,36 @@ function Task_UpdateHeldItemSpriteAndClosePartyMenu(taskId: number): void {
   }
 }
 
+function CB2_WriteMailToGiveMonFromBag(): void {
+  GiveItemToMon(P(gPartyMenu.slotId), gPartyMenu.bagItem);
+  const mail = GetMonMailId(state.defines, P(gPartyMenu.slotId));
+  DoEasyChatScreen(K.EASY_CHAT_TYPE_MAIL, mailWords(mail), CB2_ReturnToPartyOrBagMenuFromWritingMail);
+}
+
+function CB2_ReturnToPartyOrBagMenuFromWritingMail(): void {
+  const mon = P(gPartyMenu.slotId);
+  const item = mon.heldItem;
+  if (state.getVar('VAR_RESULT') === 0) {
+    // Canceled writing mail
+    TakeMailFromMon(state, mon);
+    mon.heldItem = sPartyMenuItemId;
+    RemoveBagItem(sPartyMenuItemId, 1);
+    ReturnGiveItemToBagOrPC(item);
+    SetMainCallback2(gPartyMenu.exitCallback);
+  } else {
+    // Wrote mail
+    InitPartyMenu(gPartyMenu.menuType, K.KEEP_PARTY_LAYOUT, gPartyMenu.action, true, K.PARTY_MSG_NONE, Task_DisplayGaveMailFromBagMessage, gPartyMenu.exitCallback);
+  }
+}
+
+function Task_DisplayGaveMailFromBagMessage(taskId: number): void {
+  if (!gPaletteFade.active) {
+    if (sPartyMenuItemId !== K.ITEM_NONE) DisplaySwitchedHeldItemMessage(gPartyMenu.bagItem, sPartyMenuItemId, false);
+    else DisplayGaveHeldItemMessage(P(gPartyMenu.slotId), gPartyMenu.bagItem, false);
+    gTasks[taskId].func = Task_UpdateHeldItemSpriteAndClosePartyMenu;
+  }
+}
+
 function Task_SwitchItemsFromBagYesNo(taskId: number): void {
   if (!IsPartyMenuTextPrinterActive()) {
     PartyMenuDisplayYesNoMenu();
@@ -3964,7 +4122,7 @@ function Task_HandleSwitchItemsFromBagYesNoInput(taskId: number): void {
         DisplayPartyMenuMessage(gStringVar4, false);
         gTasks[taskId].func = Task_UpdateHeldItemSpriteAndClosePartyMenu;
       } else if (ItemIsMail(item)) {
-        console.warn('[party_menu] mail is not implemented');
+        internal().exitCallback = CB2_WriteMailToGiveMonFromBag;
         Task_ClosePartyMenu(taskId);
       } else {
         GiveItemToMon(P(gPartyMenu.slotId), item);

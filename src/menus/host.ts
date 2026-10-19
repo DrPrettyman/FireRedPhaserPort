@@ -19,6 +19,9 @@ import { GetIconSpecies, monIconSymbol } from './pokemonIcon';
 import { SUMMARY_SCREEN_GFX } from './summaryScreen';
 import { TM_CASE_GFX } from './tmCase';
 import { BERRY_POUCH_GFX } from './berryPouch';
+import { EASY_CHAT_GFX } from './easyChatScreen';
+import { ItemIsMail } from './common';
+import { mailGfxSymbols } from './mail';
 
 const PARTY_MENU_GFX = [
   'gPartyMenuBg_Gfx',
@@ -93,6 +96,12 @@ export function menuGfxSymbols(state: GameState): string[] {
   // InitOldManBag's demo bag (the old man's tutorial battle)
   items.add(K.ITEM_POTION).add(K.ITEM_POKE_BALL);
   for (const s of itemIconSymbols(items)) syms.add(s);
+  // Mail (W-mail): giving one writes it on the Easy Chat screen; READ / CHECK show the mail screen (with the icon of
+  // the party's held mails' species).
+  if ([...items].some((item) => ItemIsMail(item))) {
+    for (const s of EASY_CHAT_GFX) syms.add(s);
+    for (const s of mailGfxSymbols(state.mail.slice(0, K.PARTY_SIZE))) syms.add(s);
+  }
   return [...syms];
 }
 

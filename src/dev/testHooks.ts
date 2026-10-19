@@ -57,6 +57,7 @@ import { daycareLevelMenuProbe } from '../ui/DaycareLevelMenu';
 import { battleRecordsProbe } from '../menus/battleRecords';
 import { diplomaProbe } from '../menus/diploma';
 import { easyChatProbe } from '../menus/easyChatScreen';
+import { mailProbe } from '../menus/mail';
 import { seagallopProbe } from '../menus/seagallop';
 import type { SSAnneProbe } from '../world/ssAnne';
 import type { WeatherProbe } from '../world/weather';
@@ -654,6 +655,8 @@ function createApi(game: Phaser.Game) {
     battleRecords: () => battleRecordsProbe()?.map((p) => ({ x: p.x, y: p.y, text: decode(p.str) })),
     /** The Easy Chat screen (menus/easyChatScreen.ts): the live model, the last command, the triangle cursor. */
     easyChat: () => easyChatProbe(),
+    /** The mail screen (menus/mail.ts, W-mail): its type, the message lines and the name as encoded bytes, the icon. */
+    mail: () => mailProbe(),
     /** The Seagallop ferry scene (menus/seagallop.ts) while it's up: setup state, frames, BG3's x, the ferry, wakes. */
     seagallop: () => seagallopProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */
