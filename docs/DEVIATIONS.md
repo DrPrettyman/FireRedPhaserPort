@@ -397,6 +397,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     shifted colours toward the fade colour (ApplyGammaShiftWithBlend). In the fog it's FadeInScreen_FogHorizontal's
     16 frames the same way (ApplyFogBlend), with the fog's sprites under the overlay too.
   - `showmonpic`: the sprite appears when its PNG has loaded.
+  - Dynamic-graphics objects (OBJ_EVENT_GFX_VAR_*): an `addobject` whose sheet is still loading (a VAR_OBJ_GFX_ID_*
+    just set to one the map didn't preload) holds the field's frame mid-script until it's in, then runs the frame
+    on, so the object comes out in the C's frame; while held, the screen keeps the last frame and the sound engine
+    waits (the load's few milliseconds). A camera step's spawn (TrySpawnObjectEvents) that finds the sheet loading
+    spawns it at the start of the next frame instead (no FRLG script gets there: they all set the vars in
+    ON_TRANSITION). A map script run with RunScriptImmediately can't hold, so its `addobject` of such an object
+    spawns nothing (none does). A VAR_OBJ_GFX_ID_* past NUM_OBJ_EVENT_GFX draws LITTLE_BOY as the C does, but the
+    text colour is LITTLE_BOY's too, where the C's GetColorFromTextColorTable(raw id) says neutral (no FRLG var
+    holds one).
   - The Pewter Museum's fossil pics (ui/MuseumFossilPic.ts): a Phaser image over a MenuWindow, like `showmonpic`,
     not an OBJ in palette 13 over BG0 (the field isn't on the GBA layer); the graphics and positions are the C's.
   - Prof. Oak's Pokédex rating: `waitfanfare` holds the script for MUS_DEX_RATING / MUS_EVOLVED's sFanfares counts,

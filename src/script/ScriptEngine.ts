@@ -70,8 +70,11 @@ export interface ScriptHost {
   objectByLocalId(localId: number): ObjectEvent | undefined;
   /** removeobject: set the object's hide flag and despawn it. */
   removeObject(localId: number): void;
-  /** addobject: spawn the object from the map template. */
-  addObject(localId: number): void;
+  /**
+   * addobject: spawn the object from the map template. FALSE while its sprite sheet is still loading (a dynamic
+   * object whose VAR_OBJ_GFX_ID_* names a sheet the map didn't preload): nothing spawned yet, try again.
+   */
+  addObject(localId: number): boolean;
   /** gSelectedObjectEvent = the current map's object with this local id (SetMapVarsToTrainer). */
   selectObject(localId: number): void;
   /** SetTrainerMovementType: switch a live object to another MOVEMENT_TYPE_*. */
@@ -303,6 +306,12 @@ export class ScriptEngine {
   private registeredInputIsDpad = false;
   /** ScriptContext_Enable was called for a script a field effect stopped (`dofieldeffect` + `waitstate`). */
   private enableRequested = false;
+  /**
+   * The script stopped mid-frame for a sprite sheet still loading (`addobject` of a dynamic-graphics object): the
+   * field holds the rest of the frame (no input, no logic, no VBlank) until it's in, then calls `tick` again to run
+   * the frame on from the script, so the object comes out in the frame SpawnObjectEventInternal spawns it in.
+   */
+  frameHeld = false;
 
   constructor(
     private data: ScriptsData,
@@ -354,6 +363,7 @@ export class ScriptEngine {
   /** ScriptContext_Init: no script runs (the quest log's playback map loads drop what a scene started). */
   init(): void {
     this.ctx = undefined;
+    this.frameHeld = false;
   }
 
   /** The label the running script was started from (dev/test probes). */
@@ -365,6 +375,12 @@ export class ScriptEngine {
     return label in this.data.labels;
   }
 
+  /** Dev / tests: add a script of raw commands ([op, ...args], as the extractor writes them) under `label`. */
+  defineScript(label: string, code: Instruction[]): void {
+    this.data.labels[label] = this.data.code.length;
+    this.data.code.push(...code, ['end']);
+  }
+
   /** ScriptContext_SetupScript: start a script in the global context. */
   start(label: string): boolean {
     const pc = this.data.labels[label];
@@ -373,6 +389,7 @@ export class ScriptEngine {
       return false;
     }
     this.ctx = new ScriptContext(pc, label);
+    this.frameHeld = false;
     // A `dofieldeffect` whose script ended without its `waitstate` (EventScript_DeepWater: FLDEFF_USE_DIVE runs on
     // after the script) leaves no wait for the next script's `waitstate`.
     this.waitState = undefined;
@@ -396,6 +413,7 @@ export class ScriptEngine {
     const pc = this.data.labels[label];
     if (pc === undefined) return;
     const ctx = new ScriptContext(pc, label);
+    const frameHeld = this.frameHeld; // (an `addobject` here can't hold the frame: the field's own script's state)
     for (let i = 0; i < MAX_STEPS_PER_TICK && !ctx.done; i++) {
       this.step(ctx);
       if (ctx.wait) {
@@ -403,12 +421,16 @@ export class ScriptEngine {
         break;
       }
     }
+    this.frameHeld = frameHeld;
   }
 
   /** Advance scripts, movements and the message box by one frame. */
   tick(): void {
-    for (const m of this.movements) m.tick();
-    this.movements = this.movements.filter((m) => !m.done);
+    // (a held frame's movements ran before the script stopped)
+    if (!this.frameHeld) {
+      for (const m of this.movements) m.tick();
+      this.movements = this.movements.filter((m) => !m.done);
+    }
 
     const ctx = this.ctx;
     if (!ctx) return;
@@ -984,8 +1006,17 @@ export class ScriptEngine {
     removeobject(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       this.host.removeObject(this.localId(a[0]));
     },
-    addobject(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
-      this.host.addObject(this.localId(a[0]));
+    addobject(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      const localId = this.localId(a[0]);
+      // SpawnObjectEventInternal loads the graphics from ROM in this frame. A sheet still loading (a VAR_OBJ_GFX_ID_*
+      // just set to one the map didn't preload) holds the frame here until it's in (frameHeld); the object then
+      // comes out and the script runs on, in the same frame.
+      if (this.host.addObject(localId)) return;
+      this.frameHeld = true;
+      ctx.wait = () => {
+        this.frameHeld = !this.host.addObject(localId);
+        return !this.frameHeld;
+      };
     },
     setobjectxy(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       this.host.setObjectPosition(this.localId(a[0]), this.state.value(a[1]), this.state.value(a[2]));

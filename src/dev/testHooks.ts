@@ -333,6 +333,8 @@ export interface FieldObjectProbe {
   movementType: string;
   /** The sprite sheet frame shown */
   frame: number;
+  /** The sprite's texture key (its sheet: spr_<key>) */
+  texture: string;
   /** sprite->x2 / y2 of the raise-hand movement types */
   x2: number;
   y2: number;
@@ -344,6 +346,8 @@ interface OverworldLike extends Phaser.Scene {
   testFindPath(worldX: number, worldY: number): Direction[] | undefined;
   testPushWarpDirection(): Direction | undefined;
   testObjects(): FieldObjectProbe[];
+  testRunScript(label: string, code: string[][]): boolean;
+  testTextColor(): string;
   testLeagueLighting(colorIndex?: number): {
     tasks: { func: string; timer: number; index: number; count: number }[];
     palette7: number[] | undefined;
@@ -691,6 +695,13 @@ function createApi(game: Phaser.Game) {
     idle,
     /** The current map's objects: local id, graphics and map-local position. */
     objects: () => overworld()?.testObjects() ?? [],
+    /**
+     * Start a script of raw commands as a field script, e.g. [['setvar', 'VAR_OBJ_GFX_ID_0', 'OBJ_EVENT_GFX_SNORLAX'],
+     * ['addobject', '1']] (an `end` is added). FALSE if no field.
+     */
+    runScript: (label: string, code: string[][]) => overworld()?.testRunScript(label, code) ?? false,
+    /** ContextNpcGetTextColor for the running script: 'male' / 'female' / 'neutral'. */
+    textColor: () => overworld()?.testTextColor(),
     /**
      * The Elite Four / Champion rooms' lighting (world/leagueLighting.ts): its tasks (func, timer, palette index,
      * count), BG palette 7 as the field holds it, and a pixel the map's atlas drew with palette 7 (of colour index

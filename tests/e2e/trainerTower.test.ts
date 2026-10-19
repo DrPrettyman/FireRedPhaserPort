@@ -352,6 +352,14 @@ test('a Knockout challenge: three battles in a row on 1F, one mon each at the pa
   const game = await lobby();
   await startChallenge(game, 2);
   await takeWarp(game, 9, 2, 'TrainerTower_1F');
+  // SetTrainerTowerNPCGraphics: VAR_OBJ_GFX_ID_2 / _0 / _1 from the three trainers' facility classes (BIKER,
+  // BIKER, CUE_BALL: sSingleBattleTrainerInfo's OBJ_EVENT_GFX_BIKER for each), at SetObjectsKnockout's places
+  const objects = await game.eval((t) => t.objects().map((o) => ({ id: o.localId, x: o.x, y: o.y, gfx: o.graphicsId })));
+  expect(objects.sort((a, b) => a.id - b.id)).toEqual([
+    { id: 2, x: 10, y: 10, gfx: 'OBJ_EVENT_GFX_BIKER' },
+    { id: 3, x: 14, y: 13, gfx: 'OBJ_EVENT_GFX_BIKER' },
+    { id: 4, x: 10, y: 16, gfx: 'OBJ_EVENT_GFX_BIKER' },
+  ]);
   const watching = await watchBattles(game);
   await fightFloor(game, [10, 13], 3);
   const battles = await stopWatching(game, watching);
