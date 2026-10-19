@@ -14,8 +14,6 @@ import { resolve } from 'node:path';
 const mon = (t: TestGame, species: string, opts: { personality?: number; iv?: number } = {}) =>
   t.pokemon.createMon(t.d(species), 10, { otId: 1, otName: 'RED', otGender: 'male', metLocation: 'MAPSEC_PALLET_TOWN', ...opts });
 
-const str = (t: TestGame, bytes: number[]) => t.charmap.decodePlain(bytes);
-
 describe("Daisy's friendship rating", () => {
   test('GetLeadMonFriendship by the first mon that is not an egg', () => {
     const t = newGame();
