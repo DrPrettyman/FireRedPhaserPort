@@ -12,7 +12,7 @@ FireRed rebuilt in Phaser 3 + TypeScript (Vite). See README.md for setup and arc
 - Verify with `npm run typecheck`, `npm test` (unit) and `npm run test:e2e` (headless playthroughs; see tests/README.md).
   **The full e2e suite (~20 min) runs once per batch, at the end, not per change or per PR.** For a change, run only
   the e2e files that cover it (`npx vitest run tests/e2e/<file>.test.ts`); for docs-only
-  changes, none. docs/WORKFLOW.md "Tests" has the rule.
+  changes, none. docs/WORKFLOW.md sections 3-4 have the rule.
   When you check a mechanic at runtime, prefer writing it as an e2e test (tests/e2e/) over a one-off script, so it keeps
   being checked. For quick looks: `?map=Name&x=&y=`, `?start=after-rival` (story preset), `window.game` / `window.__test`
   in dev, and `tools/browser-test.mjs`.
@@ -40,7 +40,7 @@ Big pieces of work run as parallel batches (a coordinator, up to four workers, a
   - Merge open PRs one at a time, smallest first (unless one depends on another).
   - For each: in a worktree, merge the latest `origin/master` into the PR branch, resolve conflicts (STATUS.md
     and docs/*.md use merge=union: tidy any duplicated lines), run typecheck, unit tests and the PR's own e2e
-    files (not the full suite: docs/WORKFLOW.md "Tests"), push, then `gh pr merge --squash`. If a conflict needs a
+    files (not the full suite: docs/WORKFLOW.md section 4), push, then `gh pr merge --squash`. If a conflict needs a
     judgement call or tests fail, skip that PR and report it.
   - If the PR branch contains another PR's commits that master already has squashed, git can silently restore
     lines the PR deleted. After merging master in, check `git diff <PR head before the merge>` shows only master's
