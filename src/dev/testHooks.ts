@@ -800,7 +800,10 @@ function createApi(game: Phaser.Game) {
     /** The berry pouch while it's open (menus/berryPouch.ts): BERRYPOUCH_* type, task, scroll/row and the pocket's berries in list order. */
     berryPouch: () => (gMain.callback2?.name === 'CB2_BerryPouchIdle' ? berryPouchProbe() : undefined),
     /** The Fame Checker while it's up (menus/fameChecker.ts): its task, the list, the icons, the pic, the message. */
-    fameChecker: () => fameCheckerProbe(),
+    fameChecker: () => {
+      const p = fameCheckerProbe();
+      return p && { ...p, list: p.list.map(decode), message: decode(p.message) };
+    },
     /** The map name popup while Task_MapNamePopup runs: its text, decoded, and how many px of it are on screen. */
     mapNamePopup: () => {
       const f = field();

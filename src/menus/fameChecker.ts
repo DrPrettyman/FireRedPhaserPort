@@ -14,7 +14,7 @@
 // graphics: graphics/fame_checker/ (gfx/).
 
 import { K } from '../battle/constants';
-import { bdata, charmap, state } from '../battle/env';
+import { bdata, state } from '../battle/env';
 import {
   ChangeBgX,
   ChangeBgY,
@@ -1194,19 +1194,19 @@ function PlaceListMenuCursor(isActive: boolean): void {
  * Dev: the screen's state for the e2e tests: the input task, the list (decoded labels, the cursor, the persons by
  * FAMECHECKER_*), the six icons (an OBJ_EVENT_GFX_* name or "?"; dimmed = OBJ blending; hidden over CANCEL), the
  * person's pic in pick mode (silhouette or colour, slid in), the selector cursor's slot, the message box's last
- * string (decoded) and whether its printer is still running.
+ * string (testHooks decodes the strings) and whether its printer is still running.
  */
 export function fameCheckerProbe():
   | {
       task: string | undefined;
-      list: string[];
+      list: number[][];
       cursor: number;
       persons: number[];
       inPickMode: boolean;
       icons: { kind: string; dimmed: boolean; hidden: boolean }[];
       pic: { silhouette: boolean; x2: number; hidden: boolean } | undefined;
       selector: number | undefined;
-      message: string;
+      message: number[];
       printing: boolean;
       bg1X: number;
     }
@@ -1226,14 +1226,14 @@ export function fameCheckerProbe():
   const picSprite = fc.inPickMode || task?.func === Task_EnterPickMode ? gSprites[task!.data[2]] : undefined;
   return {
     task: task?.func.name,
-    list: sListMenuItems.map((it) => charmap.decodePlain(it.label)),
+    list: sListMenuItems.map((it) => it.label),
     cursor,
     persons: fc.unlockedPersons.slice(0, fc.numUnlockedPersons),
     inPickMode: fc.inPickMode,
     icons,
     pic: picSprite && { silhouette: state.fameChecker[fc.unlockedPersons[Math.min(cursor, fc.numUnlockedPersons - 2)]].pickState === FCPICKSTATE_SILHOUETTE, x2: picSprite.x2, hidden: picSprite.invisible },
     selector: task?.func === Task_FlavorTextDisplayHandleInput ? task.data[1] : undefined,
-    message: charmap.decodePlain(sLastMessage),
+    message: sLastMessage,
     printing: IsTextPrinterActive(FCWINDOWID_MSGBOX),
     bg1X: GetBgX(1),
   };
