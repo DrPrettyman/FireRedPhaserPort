@@ -72,7 +72,8 @@ test('Cerulean Cave from the entrance to B1F; Mewtwo caught with a full party go
   expect((await game.waitForEvent('battleTransition', { since })).transition).toBe(await game.eval((t) => t.define('B_TRANSITION_BLUR')));
   expect(await bgm(game)).toBe('MUS_VS_MEWTWO');
   const sent = await throwFirstBall(game);
-  expect(sent).toMatch(/MEWTWO was transferred to .*PC\. It was placed in BOX “BOX1\.”/);
+  // Text_MonSentToBoxInBillsPC (FLAG_SYS_NOT_SOMEONES_PC): "BILL'S PC"
+  expect(sent).toMatch(/MEWTWO was transferred to BILL’S PC\. It was placed in BOX “BOX1\.”/);
   expect(await outcomeSince(game, since)).toBe('B_OUTCOME_CAUGHT');
   // CB2_EndScriptedWildBattle → CB2_ReturnToFieldContinueScriptPlayMapMusic: ON_RESUME removed Mewtwo
   // (CeruleanCave_B1F_EventScript_TryRemoveMewtwo), the script sets FLAG_FOUGHT_MEWTWO and releases: no message.

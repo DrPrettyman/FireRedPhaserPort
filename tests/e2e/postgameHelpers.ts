@@ -11,7 +11,8 @@ export { MEWTWO, warp } from './seagallopHelpers';
  * (the flags and vars the postgame's scripts read; the trip's side flags, e.g. the shops' stock, are left out):
  *
  * - afterBlaine (badges 1-7, CinnabarIsland_Gym_EventScript_DefeatedBlaine), Giovanni's badge
- *   (ViridianCity_Gym_EventScript_DefeatedGiovanni: FLAG_DEFEATED_LEADER_GIOVANNI, FLAG_BADGE08_GET).
+ *   (ViridianCity_Gym_EventScript_DefeatedGiovanni: FLAG_DEFEATED_LEADER_GIOVANNI, FLAG_BADGE08_GET), Bill met
+ *   (FLAG_SYS_NOT_SOMEONES_PC).
  * - The Hall of Fame: PokemonLeague_HallOfFame_EventScript_EnterRoom → EventScript_SetDefeatedEliteFourFlagsVars
  *   (data/scripts/hall_of_fame.inc: clearflag FLAG_HIDE_POSTGAME_GOSSIPERS, EventScript_ResetEliteFour, and without
  *   the National Dex EventScript_SetReadyTryGiveNationalDexScene: VAR_MAP_SCENE_PALLET_TOWN_OAK 2), then
@@ -35,6 +36,8 @@ export async function afterHallOfFame(game: Game) {
   await game.eval((t) => {
     const s = t.state!;
     for (const f of ['FLAG_DEFEATED_LEADER_GIOVANNI', 'FLAG_BADGE08_GET', 'FLAG_SYS_GAME_CLEAR']) s.setFlag(f, true);
+    // Bill met in the Sea Cottage (Route25_SeaCottage's `setflag FLAG_SYS_NOT_SOMEONES_PC`): "BILL's PC"
+    s.setFlag('FLAG_SYS_NOT_SOMEONES_PC', true);
     // EnterHallOfFame's save (state/save.ts): GAME_STAT_ENTERED_HOF
     s.setGameStat(t.define('GAME_STAT_ENTERED_HOF'), 1);
     // EventScript_SetDefeatedEliteFourFlagsVars
