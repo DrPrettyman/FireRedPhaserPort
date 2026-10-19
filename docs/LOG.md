@@ -3771,3 +3771,28 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   player, and the test's warp carried EventScript_DoTrainerBattleFromApproach into the chamber, where it never
   ended). Fixed by starting inside a chamber; the file rerun alone: 6 passed. tests/README.md item 10 names the
   pattern.
+
+### W-kanto 1: Cerulean Cave and the legendaries' battles to the end (GAPS_PLAN.md batch 11)
+
+- Played headless: Cerulean Cave from Cerulean City's entrance (the guard hidden by FLAG_HIDE_CERULEAN_CAVE_GUARD)
+  through 1F (Surf across the lake), 2F and 1F's north-west corner down to B1F, Surf round to Mewtwo, and Mewtwo's
+  StartLegendaryBattle to its end: caught with a full party (Text_MonSentToBoxInBillsPC, BOX1), ON_RESUME's
+  CeruleanCave_B1F_EventScript_TryRemoveMewtwo, FLAG_FOUGHT_MEWTWO, MUS_ROCKET_HIDEOUT back, gone on the next visit;
+  beaten (CeruleanCave_B1F_EventScript_DefeatedMewtwo → EventScript_RemoveStaticMon's fade, never back); run from
+  (EventScript_MonFlewAway, back on the next visit). Moltres, Articuno and Zapdos caught; Moltres teleported away
+  from (B_OUTCOME_PLAYER_TELEPORTED, back on the next visit); Lugia caught and beaten (FLAG_LUGIA_FLEW_AWAY, stays
+  away); Ho-Oh caught (VAR_TEMP_1 keeps the coord event off) and run from (where Movement_HoOhApproach left it, the
+  script's `setweather 0` kept through the battle, WEATHER_SHADE again on the next visit); Deoxys caught (the
+  triangle's last touch; no Deoxys, no rock on the next visit).
+- Fixed: the field message box stayed up through a scripted battle. Mewtwo's "Mew!", the birds' "Gyaoo!" and the
+  like (`message` + `waitbuttonpress`, then StartLegendaryBattle) were still on screen when the field faded back
+  in after the battle, and through EventScript_RemoveStaticMon's fades, until `release`. On the GBA,
+  CB2_ReturnToField → InitOverworldBgs → InitFieldMessageBox (overworld.c) makes the field's windows anew with the
+  message box hidden; `returnToField` (OverworldScene.runBattle) now hides it. Trainer and wild battles return the
+  same way.
+- Test state: `afterHallOfFame` now sets FLAG_SYS_NOT_SOMEONES_PC (Route25_SeaCottage: Bill met), so the postgame's
+  PC texts say BILL'S PC as they would.
+- Everything else ran as the scripts have it: StartLegendaryBattle's music and BLUR, CB2_EndScriptedWildBattle,
+  every map's ON_RESUME / ON_TRANSITION, the GetBattleOutcome branches.
+- Verified: typecheck; unit 630 passed; e2e postgameKanto.test.ts (3 passed, ~85 s), postgameKantoLegendaries.test.ts
+  (9 passed, ~2.5 min), scriptedBattles.test.ts (6) and trainerBattle.test.ts (3) for the message box change.

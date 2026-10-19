@@ -305,7 +305,16 @@ this is the next level down. When you add or change a subsystem, update its entr
   Postgame e2e helpers: `tests/e2e/postgameHelpers.ts` (`afterHallOfFame` for the story state after the Hall of
   Fame and the Sevii 1-3 trip, `fillPokedex(n)`, `scriptsSince`, `battlesSince`, `rainbowPassState` for the state
   postgame.test.ts ends in, `talk(x, y, dir)`); set OPTIONS' battle style to SET
-  (`state.battleStyleSet`) when mashing trainer battles with two or more in the party.
+  (`state.battleStyleSet`) when mashing trainer battles with two or more in the party. For the legendaries' battles
+  (W-kanto): `foeOf` (the foe's species and level once it's out), `throwFirstBall` (BAG → POKé BALLS → the first
+  ball, NO to the nickname; returns a "transferred to ... PC" message if there was one), `fightToEnd`,
+  `runFromBattle`, `outcomeSince` (B_OUTCOME_*), `finishScript` (mash to a free field; the messages seen),
+  `objectsWith(gfx)`; `followRoute` walks a route that needs Surf (`['to', x, y]`, `['surf', dir]`, `['land', dir]`:
+  waits for the Surf field effects, which the field counts as idle) and `takeWarp(x, y)` walks onto a warp and waits
+  for the next map to be idle (a cave's preview screen may come first). Tests: tests/e2e/postgameKanto.test.ts
+  (Cerulean Cave from the entrance: 1F north shore → Surf → land at (10, 16) → (24, 11) → 2F (5, 6) → 1F (1, 7) →
+  B1F, Surf from (17, 19) to land below Mewtwo; Mewtwo caught / beaten / run from),
+  tests/e2e/postgameKantoLegendaries.test.ts (the birds, Lugia, Ho-Oh, Deoxys).
   **Six Island** (W-sevii 3): the size records are pokemon_size_record.c in `script/pokemonSizeRecord.ts` (the table,
   GetMonSizeHash from the personality and IVs, GetMonSize from the Pokédex height, FormatMonSizeRecord in inches,
   CompareMonSize / GetMonSizeRecordInfo on a record var holding the biggest mon's hash; `withPokedexData` waits for
@@ -583,7 +592,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   `host.wildBattleTransition(mon)` is GetWildBattleTransition. `dowildbattle` (StartScriptedWildBattle) and
   StartLegendaryBattle share `runScriptedWildBattle` (CB2_EndScriptedWildBattle): `returnToField` runs the map's
   ON_RESUME script while FLAG_SYS_SPECIAL_WILD_BATTLE is still set (that's how Snorlax and caught legendaries
-  disappear: `removeobject VAR_LAST_TALKED`), then the script reads `specialvar GetBattleOutcome`
+  disappear: `removeobject VAR_LAST_TALKED`; InitFieldMessageBox: the message box the script left up before the
+  battle is hidden), then the script reads `specialvar GetBattleOutcome`
   (`state.battleOutcome`). `seteventmon` expands to `special CreateEnemyEventMon` (Navel Rock's Lugia and Ho-Oh,
   Birth Island's Deoxys), which leaves its mon in `state.enemyParty` like `setwildbattle`. Every battle start (OverworldScene.runBattle) does Task_BattleStart's
   RestartWildEncounterImmunitySteps. Tests: tests/e2e/pokemonTower.test.ts (walk onto the 6F trigger at 11,15),
