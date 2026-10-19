@@ -3060,3 +3060,10 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   and no `waitfanfare`, so it only pauses the victory music for 80 frames. The one battle script that waits
   (VARIOUS_WAIT_FANFARE) is the Poké Flute's (BattleScript_PokeFluteWakeUp: MUS_POKE_FLUTE, 450 frames). A level-100
   mon gets no MUS_VICTORY_WILD: getexp's music change is in the branch that MAX_LEVEL skips (as in the C).
+- Tick budgets raised: none (no wait in the battle got longer: the level-up fanfare holds nothing, see above).
+- Verified: typecheck; `npm test` (41 files, 544 tests; new tests/unit/battleBgm.test.ts 2); `tests/e2e/audioBattle.test.ts`
+  (6), wildBattle, trainerBattle, scriptedBattles, audio, transitions. transitions.test.ts' "every battle transition"
+  (17 page loads in one test, 120 s wall clock) timed out twice at load averages of 80-140 while another worker's
+  full suite ran (and the tests after it failed on the leftover page), then passed (50 s) on the rerun; master ran it
+  in 59 s at a similar load, and timing each transition alone showed nothing slower. The full suite was not run
+  (the coordinator's checkpoint came while the lock was held by another worker).
