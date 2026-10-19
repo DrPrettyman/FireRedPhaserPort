@@ -4,7 +4,7 @@
 // GBA layer between the fade out and the new map, and RunMapPreviewScreen's cave banner before the flash into a
 // section with an MPS_TYPE_CAVE preview (world/mapPreviewScreen.ts is map_preview_screen.c).
 
-import { gfx, gfx16 } from "../gba/gfx";
+import { gfx, gfx16 } from '../gba/gfx';
 import {
   BG_CHAR_ADDR,
   BG_SCREEN_ADDR,
@@ -38,9 +38,9 @@ import {
   RGB_WHITE,
   SetGpuReg,
   vram,
-} from "../gba/hw";
-import { IsDma3ManagerBusyWithBgCopy } from "../gba/bg";
-import { B_BUTTON, gMain, JOY_HELD, SetVBlankCallback } from "../gba/main";
+} from '../gba/hw';
+import { IsDma3ManagerBusyWithBgCopy } from '../gba/bg';
+import { B_BUTTON, gMain, JOY_HELD, SetVBlankCallback } from '../gba/main';
 import {
   BeginNormalPaletteFade,
   BG_PLTT_ID,
@@ -51,9 +51,9 @@ import {
   ResetPaletteFade,
   TransferPlttBuffer,
   UpdatePaletteFade,
-} from "../gba/palette";
-import { CopyWindowToVram, COPYWIN_FULL } from "../gba/window";
-import { testEvent } from "../dev/testHooks";
+} from '../gba/palette';
+import { CopyWindowToVram, COPYWIN_FULL } from '../gba/window';
+import { testEvent } from '../dev/testHooks';
 import {
   InitFieldBg0AndWindows,
   MapHasPreviewScreen,
@@ -66,14 +66,10 @@ import {
   MapPreview_Unload,
   MPS_TYPE_CAVE,
   MPS_TYPE_FOREST,
-} from "./mapPreviewScreen";
-import {
-  ProcessSpriteCopyRequests,
-  ResetOamRange,
-  ResetSpriteData,
-} from "../gba/sprite";
-import { CreateTask, gTasks, ResetTasks } from "../gba/task";
-import { K } from "../battle/constants";
+} from './mapPreviewScreen';
+import { ProcessSpriteCopyRequests, ResetOamRange, ResetSpriteData } from '../gba/sprite';
+import { CreateTask, gTasks, ResetTasks } from '../gba/task';
+import { constant, K } from '../battle/constants';
 
 /** struct FlashStruct (func2, RunMapPreviewScreen for every entry, is never called through the table) */
 interface FlashStruct {
@@ -89,51 +85,22 @@ let sTransitionTypesTable: FlashStruct[] | undefined;
 /** sTransitionTypes: into MAP_TYPE_UNDERGROUND from every other type, and back out. */
 function sTransitionTypes(): FlashStruct[] {
   if (!sTransitionTypesTable) {
-    const others = [
-      "TOWN",
-      "CITY",
-      "ROUTE",
-      "UNDERWATER",
-      "OCEAN_ROUTE",
-      "UNKNOWN",
-      "INDOOR",
-      "SECRET_BASE",
-    ].map((t) => K[`MAP_TYPE_${t}`]);
+    const others = ['TOWN', 'CITY', 'ROUTE', 'UNDERWATER', 'OCEAN_ROUTE', 'UNKNOWN', 'INDOOR', 'SECRET_BASE'].map((t) => K[`MAP_TYPE_${t}`]);
     const underground = K.MAP_TYPE_UNDERGROUND;
     sTransitionTypesTable = [
-      ...others.map((fromType) => ({
-        fromType,
-        toType: underground,
-        isEnter: true,
-        isExit: false,
-        func1: FlashTransition_Enter,
-      })),
-      ...others.map((toType) => ({
-        fromType: underground,
-        toType,
-        isEnter: false,
-        isExit: true,
-        func1: FlashTransition_Exit,
-      })),
+      ...others.map((fromType) => ({ fromType, toType: underground, isEnter: true, isExit: false, func1: FlashTransition_Enter })),
+      ...others.map((toType) => ({ fromType: underground, toType, isEnter: false, isExit: true, func1: FlashTransition_Exit })),
     ];
   }
   return sTransitionTypesTable;
 }
 
-function findTransitionType(
-  fromType: number,
-  toType: number,
-): FlashStruct | undefined {
-  return sTransitionTypes().find(
-    (t) => t.fromType === fromType && t.toType === toType,
-  );
+function findTransitionType(fromType: number, toType: number): FlashStruct | undefined {
+  return sTransitionTypes().find((t) => t.fromType === fromType && t.toType === toType);
 }
 
 /** MapTransitionIsEnter */
-export function MapTransitionIsEnter(
-  fromType: number,
-  toType: number,
-): boolean {
+export function MapTransitionIsEnter(fromType: number, toType: number): boolean {
   return findTransitionType(fromType, toType)?.isEnter ?? false;
 }
 
@@ -144,18 +111,8 @@ export function MapTransitionIsExit(fromType: number, toType: number): boolean {
 
 /** A region map section's id from its MAPSEC_* name (MAPSEC_NONE if unknown). */
 function mapsecId(name: string): number {
-  return (
-    mapsecIds[name] ??
-    (mapsecIds[name] = (() => {
-      try {
-        return K[name];
-      } catch {
-        return K.MAPSEC_NONE;
-      }
-    })())
-  );
+  return constant(name) ?? K.MAPSEC_NONE;
 }
-const mapsecIds: Record<string, number> = {};
 
 /** MapHasPreviewScreen(mapsec, MPS_TYPE_FOREST), for the map load's MapPreview_StartForestTransition */
 export function MapHasForestPreviewScreen(mapsec: string): boolean {
@@ -222,10 +179,7 @@ export function CB2_DoChangeMap(change: MapChange, fadedTo: number): void {
 
 /** TryDoMapTransition */
 function TryDoMapTransition(change: MapChange): boolean {
-  if (
-    change.fromMapsec !== change.toMapsec &&
-    MapHasPreviewScreen_HandleQLState2(mapsecId(change.toMapsec), MPS_TYPE_CAVE)
-  ) {
+  if (change.fromMapsec !== change.toMapsec && MapHasPreviewScreen_HandleQLState2(mapsecId(change.toMapsec), MPS_TYPE_CAVE)) {
     RunMapPreviewScreen(mapsecId(change.toMapsec));
     return true;
   }
@@ -273,11 +227,7 @@ function Task_MapPreviewScreen_0(taskId: number): void {
     case 3:
       if (!UpdatePaletteFade()) {
         data[2] = MapPreview_GetDuration(data[3]);
-        testEvent("mapPreview", {
-          kind: "cave",
-          mapsec: data[3],
-          duration: data[2],
-        });
+        testEvent('mapPreview', { kind: 'cave', mapsec: data[3], duration: data[2] });
         data[0]++;
       }
       break;
@@ -305,46 +255,23 @@ export function changeMapTaskProbe(): string | undefined {
 }
 
 /** Dev probe: the cave banner's task while it runs (its state, frames shown, duration). */
-export function mapPreviewCaveProbe():
-  | { mapsec: number; state: number; timer: number; duration: number }
-  | undefined {
+export function mapPreviewCaveProbe(): { mapsec: number; state: number; timer: number; duration: number } | undefined {
   for (const t of gTasks) {
-    if (t.isActive && t.func === Task_MapPreviewScreen_0)
-      return {
-        mapsec: t.data[3],
-        state: t.data[0],
-        timer: t.data[1],
-        duration: t.data[2],
-      };
+    if (t.isActive && t.func === Task_MapPreviewScreen_0) return { mapsec: t.data[3], state: t.data[0], timer: t.data[1], duration: t.data[2] };
   }
   return undefined;
 }
 
 function caveTransitionGfx(): void {
-  vram.set(gfx("sCaveTransitionTiles"), BG_CHAR_ADDR(3));
-  vram.set(gfx("sCaveTransitionTilemap"), BG_SCREEN_ADDR(31));
+  vram.set(gfx('sCaveTransitionTiles'), BG_CHAR_ADDR(3));
+  vram.set(gfx('sCaveTransitionTilemap'), BG_SCREEN_ADDR(31));
 }
 
 /** Graphics the flash transitions load (to preload before the warp). */
-export const mapTransitionGfxSymbols = [
-  "sCaveTransitionTiles",
-  "sCaveTransitionTilemap",
-  "sCaveTransitionPalette",
-  "sCaveTransitionPalette_White",
-  "sCaveTransitionPalette_Black",
-];
+export const mapTransitionGfxSymbols = ['sCaveTransitionTiles', 'sCaveTransitionTilemap', 'sCaveTransitionPalette', 'sCaveTransitionPalette_White', 'sCaveTransitionPalette_Black'];
 
-const BG0CNT =
-  /* BGCNT_PRIORITY(0) | BGCNT_CHARBASE(3) | BGCNT_SCREENBASE(31) */ (3 << 2) |
-  (31 << 8);
-const BLEND_BG0_OVER_ALL =
-  BLDCNT_TGT1_BG0 |
-  BLDCNT_EFFECT_BLEND |
-  BLDCNT_TGT2_BG1 |
-  BLDCNT_TGT2_BG2 |
-  BLDCNT_TGT2_BG3 |
-  BLDCNT_TGT2_OBJ |
-  BLDCNT_TGT2_BD;
+const BG0CNT = /* BGCNT_PRIORITY(0) | BGCNT_CHARBASE(3) | BGCNT_SCREENBASE(31) */ (3 << 2) | (31 << 8);
+const BLEND_BG0_OVER_ALL = BLDCNT_TGT1_BG0 | BLDCNT_EFFECT_BLEND | BLDCNT_TGT2_BG1 | BLDCNT_TGT2_BG2 | BLDCNT_TGT2_BG3 | BLDCNT_TGT2_OBJ | BLDCNT_TGT2_BD;
 
 /** SetMainCallback2(gMain.savedCallback) */
 function finishChangeMap(): void {
@@ -362,17 +289,14 @@ function Task_FlashTransition_Exit_0(taskId: number): void {
 function Task_FlashTransition_Exit_1(taskId: number): void {
   SetGpuReg(REG_OFFSET_DISPCNT, 0);
   caveTransitionGfx();
-  const pal = gfx16("sCaveTransitionPalette");
-  LoadPalette(gfx16("sCaveTransitionPalette_White"), BG_PLTT_ID(14), 0x20);
+  const pal = gfx16('sCaveTransitionPalette');
+  LoadPalette(gfx16('sCaveTransitionPalette_White'), BG_PLTT_ID(14), 0x20);
   LoadPalette(pal.subarray(8), BG_PLTT_ID(14), 8 * 2);
   SetGpuReg(REG_OFFSET_BLDCNT, BLEND_BG0_OVER_ALL);
   SetGpuReg(REG_OFFSET_BLDALPHA, 0);
   SetGpuReg(REG_OFFSET_BLDY, 0);
   SetGpuReg(REG_OFFSET_BG0CNT, BG0CNT);
-  SetGpuReg(
-    REG_OFFSET_DISPCNT,
-    DISPCNT_MODE_0 | DISPCNT_OBJ_1D_MAP | DISPCNT_BG0_ON | DISPCNT_OBJ_ON,
-  );
+  SetGpuReg(REG_OFFSET_DISPCNT, DISPCNT_MODE_0 | DISPCNT_OBJ_1D_MAP | DISPCNT_BG0_ON | DISPCNT_OBJ_ON);
   gTasks[taskId].func = Task_FlashTransition_Exit_2;
   gTasks[taskId].data[0] = 16;
   gTasks[taskId].data[1] = 0;
@@ -394,13 +318,9 @@ function Task_FlashTransition_Exit_3(taskId: number): void {
   const count = gTasks[taskId].data[2] & 0xffff;
   if (count < 8) {
     gTasks[taskId].data[2]++;
-    LoadPalette(
-      gfx16("sCaveTransitionPalette").subarray(count + 8),
-      BG_PLTT_ID(14),
-      8 * 2 - count * 2,
-    );
+    LoadPalette(gfx16('sCaveTransitionPalette').subarray(count + 8), BG_PLTT_ID(14), 8 * 2 - count * 2);
   } else {
-    LoadPalette(gfx16("sCaveTransitionPalette_White"), BG_PLTT_ID(0), 0x20);
+    LoadPalette(gfx16('sCaveTransitionPalette_White'), BG_PLTT_ID(0), 0x20);
     gTasks[taskId].func = Task_FlashTransition_Exit_4;
     gTasks[taskId].data[2] = 8;
   }
@@ -426,12 +346,9 @@ function Task_FlashTransition_Enter_1(taskId: number): void {
   SetGpuReg(REG_OFFSET_BLDALPHA, 0);
   SetGpuReg(REG_OFFSET_BLDY, 0);
   SetGpuReg(REG_OFFSET_BG0CNT, BG0CNT);
-  SetGpuReg(
-    REG_OFFSET_DISPCNT,
-    DISPCNT_MODE_0 | DISPCNT_OBJ_1D_MAP | DISPCNT_BG0_ON | DISPCNT_OBJ_ON,
-  );
-  LoadPalette(gfx16("sCaveTransitionPalette_White"), BG_PLTT_ID(14), 0x20);
-  LoadPalette(gfx16("sCaveTransitionPalette_Black"), BG_PLTT_ID(0), 0x20);
+  SetGpuReg(REG_OFFSET_DISPCNT, DISPCNT_MODE_0 | DISPCNT_OBJ_1D_MAP | DISPCNT_BG0_ON | DISPCNT_OBJ_ON);
+  LoadPalette(gfx16('sCaveTransitionPalette_White'), BG_PLTT_ID(14), 0x20);
+  LoadPalette(gfx16('sCaveTransitionPalette_Black'), BG_PLTT_ID(0), 0x20);
   gTasks[taskId].func = Task_FlashTransition_Enter_2;
   gTasks[taskId].data[0] = 16;
   gTasks[taskId].data[1] = 0;
@@ -443,11 +360,7 @@ function Task_FlashTransition_Enter_2(taskId: number): void {
   if (count < 16) {
     gTasks[taskId].data[2]++;
     gTasks[taskId].data[2]++;
-    LoadPalette(
-      gfx16("sCaveTransitionPalette").subarray(15 - count),
-      BG_PLTT_ID(14),
-      (count + 1) * 2,
-    );
+    LoadPalette(gfx16('sCaveTransitionPalette').subarray(15 - count), BG_PLTT_ID(14), (count + 1) * 2);
   } else {
     SetGpuReg(REG_OFFSET_BLDALPHA, (16 << 8) + 16);
     SetGpuReg(REG_OFFSET_BLDCNT, BLEND_BG0_OVER_ALL);
@@ -461,7 +374,7 @@ function Task_FlashTransition_Enter_3(taskId: number): void {
   if (r4 !== 0) {
     gTasks[taskId].data[1]++;
   } else {
-    LoadPalette(gfx16("sCaveTransitionPalette_Black"), BG_PLTT_ID(0), 0x20);
+    LoadPalette(gfx16('sCaveTransitionPalette_Black'), BG_PLTT_ID(0), 0x20);
     finishChangeMap();
   }
 }

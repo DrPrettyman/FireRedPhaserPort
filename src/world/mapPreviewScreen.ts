@@ -14,9 +14,9 @@
 // make the banner shorter on later visits. There's no quest log, so MapHasPreviewScreen_HandleQLState2 never sees
 // QL_STATE_PLAYBACK and is MapHasPreviewScreen.
 
-import { K } from "../battle/constants";
-import { state } from "../battle/env";
-import type { GameState } from "../state/GameState";
+import { K } from '../battle/constants';
+import { state } from '../battle/env';
+import type { GameState } from '../state/GameState';
 import {
   BG_ATTR_PRIORITY,
   CopyBgTilemapBufferToVram,
@@ -31,21 +31,11 @@ import {
   ShowBg,
   UnsetBgTilemapBuffer,
   type BgTemplate,
-} from "../gba/bg";
-import { gfx, gfx16 } from "../gba/gfx";
-import {
-  DISPCNT_BG0_ON,
-  DISPCNT_MODE_0,
-  REG_OFFSET_DISPCNT,
-  resetHardware,
-  SetGpuReg,
-} from "../gba/hw";
-import {
-  DecompressAndCopyTileDataToVram,
-  FreeTempTileDataBuffersIfPossible,
-  ResetTempTileDataBuffers,
-} from "../gba/menu";
-import { BG_PLTT_ID, LoadPalette, PLTT_SIZE_4BPP } from "../gba/palette";
+} from '../gba/bg';
+import { gfx, gfx16 } from '../gba/gfx';
+import { DISPCNT_BG0_ON, DISPCNT_MODE_0, REG_OFFSET_DISPCNT, resetHardware, SetGpuReg } from '../gba/hw';
+import { DecompressAndCopyTileDataToVram, FreeTempTileDataBuffersIfPossible, ResetTempTileDataBuffers } from '../gba/menu';
+import { BG_PLTT_ID, LoadPalette, PLTT_SIZE_4BPP } from '../gba/palette';
 import {
   AddTextPrinterParameterized4,
   AddWindow,
@@ -59,10 +49,10 @@ import {
   PutWindowTilemap,
   RemoveWindow,
   type WindowTemplate,
-} from "../gba/window";
-import { testEvent } from "../dev/testHooks";
-import { menusData } from "../menus/data";
-import { GetMapName } from "./regionMap";
+} from '../gba/window';
+import { testEvent } from '../dev/testHooks';
+import { menusData } from '../menus/data';
+import { GetMapName } from './regionMap';
 
 /** struct MapPreviewScreen (menus.json `mapPreviewScreens`) */
 export interface MapPreviewScreen {
@@ -118,11 +108,7 @@ const sMapPreviewBgTemplate: BgTemplate[] = [
 
 /** The graphics the screens load (preloaded with the field's, so a warp needn't wait for them). */
 export function mapPreviewGfxSymbols(): string[] {
-  return sMapPreviewScreenData().flatMap((s) => [
-    s.tilesptr,
-    s.tilemapptr,
-    s.palptr,
-  ]);
+  return sMapPreviewScreenData().flatMap((s) => [s.tilesptr, s.tilemapptr, s.palptr]);
 }
 
 /** GetMapPreviewScreenIdx: MPS_COUNT if the section has none */
@@ -141,10 +127,7 @@ export function MapHasPreviewScreen(mapsec: number, type: number): boolean {
 }
 
 /** MapHasPreviewScreen_HandleQLState2: FALSE during quest log playback, which the port never runs. */
-export function MapHasPreviewScreen_HandleQLState2(
-  mapsec: number,
-  type: number,
-): boolean {
+export function MapHasPreviewScreen_HandleQLState2(mapsec: number, type: number): boolean {
   return MapHasPreviewScreen(mapsec, type);
 }
 
@@ -202,28 +185,14 @@ export function MapPreview_CreateMapNameWindow(mapsec: number): number {
   const color = [K.TEXT_COLOR_WHITE, K.TEXT_COLOR_RED, K.TEXT_COLOR_LIGHT_GRAY];
   const name = GetMapName(mapsec, 0); // gStringVar4
   const xctr = (104 - GetStringWidth(K.FONT_NORMAL, name, 0)) >>> 0;
-  AddTextPrinterParameterized4(
-    windowId,
-    K.FONT_NORMAL,
-    Math.floor(xctr / 2),
-    2,
-    0,
-    0,
-    color,
-    -1,
-    name,
-  );
+  AddTextPrinterParameterized4(windowId, K.FONT_NORMAL, Math.floor(xctr / 2), 2, 0, 0, color, -1, name);
   return windowId;
 }
 
 /** GetDungeonMapPreviewScreenInfo (the region map's dungeon previews): NULL if the section has none */
-export function GetDungeonMapPreviewScreenInfo(
-  mapsec: number,
-): MapPreviewScreen | null {
+export function GetDungeonMapPreviewScreenInfo(mapsec: number): MapPreviewScreen | null {
   const idx = GetMapPreviewScreenIdx(mapsec);
-  return idx === sMapPreviewScreenData().length
-    ? null
-    : sMapPreviewScreenData()[idx];
+  return idx === sMapPreviewScreenData().length ? null : sMapPreviewScreenData()[idx];
 }
 
 /** MapPreview_GetDuration: frames the banner stays up (120 on the first visit, 40 after). */
@@ -240,10 +209,7 @@ export function MapPreview_GetDuration(mapsec: number): number {
 }
 
 /** MapPreview_SetFlag (ScrCmd_setworldmapflag; `flags` is the script engine's GameState) */
-export function MapPreview_SetFlag(
-  flagId: string,
-  flags: Pick<GameState, "getFlag" | "setFlag"> = state,
-): void {
+export function MapPreview_SetFlag(flagId: string, flags: Pick<GameState, 'getFlag' | 'setFlag'> = state): void {
   sHasVisitedMapBefore = !flags.getFlag(flagId);
   flags.setFlag(flagId, true);
 }
@@ -336,10 +302,7 @@ export function MapPreview_InitFieldBg0(): void {
 }
 
 /** MapPreview_StartForestTransition */
-export function MapPreview_StartForestTransition(
-  mapsec: number,
-  host: ForestPreviewHost,
-): void {
+export function MapPreview_StartForestTransition(mapsec: number, host: ForestPreviewHost): void {
   sForestTask?.layer.destroy();
   const task: ForestTask = {
     mapsec,
@@ -353,7 +316,7 @@ export function MapPreview_StartForestTransition(
     done: false,
   };
   sForestTask = task;
-  testEvent("mapPreview", { kind: "forest", mapsec, duration: task.duration });
+  testEvent('mapPreview', { kind: 'forest', mapsec, duration: task.duration });
   SetBgAttribute(0, BG_ATTR_PRIORITY, 0);
   // BLDCNT: BG0 over BG1-3, OBJ and the backdrop; BLDALPHA_BLEND(16, 0): the layer's blend (data[8], data[9])
   task.windowId = MapPreview_CreateMapNameWindow(mapsec);
@@ -377,10 +340,7 @@ export function MapPreview_AbortForestTransition(): void {
 }
 
 /** Task_RunMapPreviewScreenForest */
-function Task_RunMapPreviewScreenForest(
-  task: ForestTask,
-  host: ForestPreviewHost,
-): void {
+function Task_RunMapPreviewScreenForest(task: ForestTask, host: ForestPreviewHost): void {
   switch (task.state) {
     case 0:
       if (!MapPreview_IsGfxLoadFinished() && !IsDma3ManagerBusyWithBgCopy()) {

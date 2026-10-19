@@ -1,12 +1,12 @@
 // The forest map preview's BG0 (world/mapPreviewScreen.ts, Task_RunMapPreviewScreenForest) over the Phaser field.
 
-import Phaser from "phaser";
-import { DISPLAY_HEIGHT, DISPLAY_WIDTH } from "../gba/hw";
-import { TransferPlttBuffer } from "../gba/palette";
-import { renderFrame } from "../gba/ppu";
-import type { ForestPreviewLayer } from "./mapPreviewScreen";
+import Phaser from 'phaser';
+import { DISPLAY_HEIGHT, DISPLAY_WIDTH } from '../gba/hw';
+import { TransferPlttBuffer } from '../gba/palette';
+import { renderFrame } from '../gba/ppu';
+import type { ForestPreviewLayer } from './mapPreviewScreen';
 
-const TEXTURE = "map_preview_forest";
+const TEXTURE = 'map_preview_forest';
 
 /**
  * BG0 blended over the Phaser field: the PPU renders BG0 (the preview tiles have no transparent pixel, nor does the
@@ -54,17 +54,12 @@ export class MapPreviewLayer implements ForestPreviewLayer {
   draw(eva: number, evb: number): void {
     if (!this.rendered) return;
     const grey = Math.round((255 * Math.min(evb, 16)) / 16);
-    this.multiply
-      .setFillStyle((grey << 16) | (grey << 8) | grey, 1)
-      .setVisible(true);
+    this.multiply.setFillStyle((grey << 16) | (grey << 8) | grey, 1).setVisible(true);
     this.image.setVisible(true);
     eva = Math.min(eva, 16);
     if (eva === this.drawnEva) return;
     this.drawnEva = eva;
-    const out = this.canvas.context.createImageData(
-      DISPLAY_WIDTH,
-      DISPLAY_HEIGHT,
-    );
+    const out = this.canvas.context.createImageData(DISPLAY_WIDTH, DISPLAY_HEIGHT);
     const src = new Uint8Array(this.frame.buffer);
     for (let o = 0; o < out.data.length; o += 4) {
       out.data[o] = Math.round((src[o] * eva) / 16);
