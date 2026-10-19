@@ -1,5 +1,5 @@
 // Dev script: renders songs / SEs with the port's m4a engine headless and writes a WAV to listen to (what the
-// speakers get, without the PSG parts until W-m4a 4). Needs `npm run extract` (public/gen/audio/).
+// speakers get, without the PSG parts until W-m4a 4b). Needs `npm run extract` (public/gen/audio/).
 //
 //   npx vite-node tools/render-audio.ts MUS_TITLE 1200 /path/to/out.wav [mono]
 //

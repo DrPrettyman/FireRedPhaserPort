@@ -13,7 +13,7 @@
 //
 // Mono (soundInfo->mode bit 0, SetPokemonCryStereo) isn't read here: FRLG's mixer always writes FIFO A (right)
 // and FIFO B (left); mono is REG_SOUNDCNT_H routing both FIFOs to both speakers at half volume (the output's DAC,
-// outputCore.ts) and CgbSound's pan (W-m4a 4). No DPCM: the cry samples are PCM already (AUDIO_PLAN.md decision 4).
+// outputCore.ts) and CgbModVol's pan (m4aCgb.ts). No DPCM: the cry samples are PCM already (AUDIO_PLAN.md decision 4).
 
 import {
   SOUND_CHANNEL_SF_ENV,

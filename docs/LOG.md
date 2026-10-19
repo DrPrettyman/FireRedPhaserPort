@@ -3071,3 +3071,30 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the other workers): 410 e2e in 64 files, 408 passed, 27.4 min; the two failures are the races above, both green on
   rerun after the fixes. No tick budgets needed raising (the waits this unit adds are a frame or none: the cries and
   MUS_EVOLUTION_INTRO's wait were live already).
+### W-m4a 4a: CgbSound, the engine side of the PSG (AUDIO_PLAN.md batch D, unit 1)
+
+- `src/audio/m4aCgb.ts` replaces the placeholder with m4a.c's CgbSound (the per-frame software envelope with its
+  attack / decay / sustain / release, the pseudo echo, c15's double step every 15 frames, the NRx0-NRx4 writes, the
+  wave channel's RAM load through NR30's bank switch), CgbModVol / CgbPan (`soundInfo.mode & 1`: mono plays the
+  PSG on both sides), CgbOscOff and MidiKeyToCgbFreq (gCgbScaleTable, gCgbFreqTable, gNoiseTable, gCgb3Vol in
+  m4aTables.ts). CgbSound's gotos are a small state machine named after the C's labels.
+- New `src/audio/soundRegs.ts`: the sound registers 0x4000060-0x400009F as a register file (reads return what was
+  written; wave RAM writes go to the bank NR30 doesn't play), the write log, and `PsgFrame { writes, state }`.
+  SoundInit, MPlayExtender, m4aSoundMode, SetPokemonCryStereo and ply_port write through it as the C does
+  (SOUNDCNT_X, SOUNDCNT_L / NR50 0x77, SOUNDCNT_H, SOUNDBIAS_H 0x42); `gSoundInfo.soundRegs` is gone. m4aSoundInit
+  resets it to the power-on state first.
+- `m4aPcmFrame()` now carries `psg`; AgbMainFrameEnd takes it every frame (so the log can't pile up headless) and
+  pushes it with the frame; output.ts posts `psg` and `psgState` to the worklet (`FrameMessage`), which ignores them
+  until W-m4a 4b's synth. docs/DEV_NOTES.md "PSG frames" says what the frame holds and when, for W-m4a 4b.
+- Lifetimes: a CGB channel now lives through its release and echo (SE_SELECT's square 1 goes off in frame 15, SE_DOOR
+  22, SE_EXIT 36, SE_PC_ON 68, SE_WALL_HIT 14, SE_FLEE 39). No wait moved: IsSEPlaying and the other waits read the
+  tracks (m4a, m4aRom, m4aChannels unchanged and green).
+- Found on the way: audioCries.test.ts's Meowth `waitmoncry` test raced (a `press('A')` from Node then a mash: under
+  load the message closed ~40 frames after the cry, and the script with it; 71 instead of 31). It now talks and
+  mashes in one in-page mash; the script's end is checked to be 3 to 9 frames after the cry (the mash's cycle can
+  close the message just after the cry ends).
+- Tests: `tests/unit/m4aCgb.test.ts` (18): MidiKeyToCgbFreq against the tables, the init writes in order, wave RAM
+  banking, CgbModVol stereo / mono, and square, sweep, square 2, wave and noise notes frame by frame against m4a.c
+  (worked by hand), START with STOP, TrackStop's CgbOscOff, the echo; on the extracted songs SE_SELECT, MUS_ROUTE1's
+  four channels and the PSG-only SEs' off frames. Typecheck clean, unit 560 in 41 files; e2e audio, audioCries,
+  audioOutput, mapMusic, fieldSounds: 20 passed.

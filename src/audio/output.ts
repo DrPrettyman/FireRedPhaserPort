@@ -14,6 +14,7 @@
 // audioOutputWantsFrames, for the mixer to skip its sample arithmetic (not its bookkeeping) when nobody listens.
 
 import workletUrl from './worklet.ts?worker&url';
+import type { PsgFrame } from './soundRegs';
 import {
   decideOutput,
   isHeadlessBrowser,
@@ -29,16 +30,8 @@ import {
   type ToWorklet,
 } from './outputCore';
 
-/**
- * The PSG part of a frame: TODO W-m4a 4 (the shape is a proposal; W-m4a 4 owns it). The sound register writes
- * CgbSound, CgbOscOff and ply_port made during the frame, in order, each `offset << 8 | value` with the offset
- * from REG_SOUND1CNT_L (0x4000060, as gSoundInfo.soundRegs), covering NR10-NR52, SOUNDCNT_L / SOUNDCNT_X and the
- * wave RAM. Writes rather than a snapshot because a trigger (NRx4 bit 7) is an event: the worklet applies them
- * at the frame's start and runs the channels (envelopes, length counters, sweep, the noise LFSR) for the frame.
- */
-export interface PsgFrame {
-  writes: Uint16Array;
-}
+/** The PSG part of a frame (soundRegs.ts): the sound register writes in order and the register state before them. */
+export type { PsgFrame } from './soundRegs';
 
 /**
  * One frame of sound, what SoundMainRAM leaves in the DMA buffer for the next VBlank: `pcmSamplesPerVBlank` (224)
@@ -51,7 +44,7 @@ export interface SoundFrame {
   fifoB: Int8Array;
   /** REG_SOUNDCNT_H: the FIFOs' routing and volumes (SOUNDCNT_H_STEREO, the default, or SOUNDCNT_H_MONO). */
   soundcntH?: number;
-  /** TODO W-m4a 4: the frame's PSG register writes. */
+  /** The PSG's register writes since the previous frame, and the register state before them (soundRegs.ts). */
   psg?: PsgFrame;
 }
 
@@ -183,7 +176,8 @@ function postFrame(frame: SoundFrame): void {
   const transfer: Transferable[] = [pcm];
   if (frame.psg) {
     msg.psg = frame.psg.writes.slice().buffer;
-    transfer.push(msg.psg);
+    msg.psgState = frame.psg.state.slice().buffer;
+    transfer.push(msg.psg, msg.psgState);
   }
   post(msg, transfer);
 }

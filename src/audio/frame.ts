@@ -14,8 +14,9 @@ import { MapMusicMain, ResetSoundState, RunSoundTasks } from '../gba/sound';
  * Once per frame, after the frame's callbacks: the sound tasks (Task_Fanfare: gTasks in the C, run by the screen's
  * RunTasks; here from the hook, AUDIO_PLAN.md decision 5), MapMusicMain (the end of AgbMain's loop, main.c:215),
  * m4aSoundVSync (VCountIntr, main.c:439: the DMA's slot counter), then m4aSoundMain (VBlankIntr, main.c:406: the
- * music players' sequencers and the mixer), whose frame goes to the output (it plays during the next frame, as on
- * the GBA).
+ * music players' sequencers, CgbSound and the mixer), whose frame goes to the output: the DirectSound mix plays
+ * during the next frame, as on the GBA; the PSG register writes take effect at once on the GBA (see PsgFrame in
+ * soundRegs.ts).
  */
 export function AgbMainFrameEnd(): void {
   RunSoundTasks();
@@ -24,7 +25,10 @@ export function AgbMainFrameEnd(): void {
   const wanted = audioOutputWantsFrames();
   m4aSetMixing(wanted);
   m4aSoundMain();
-  if (wanted) pushFrame(m4aPcmFrame());
+  // Taken every frame: it also takes the frame's PSG register writes (soundRegs.ts), which mustn't pile up while
+  // nothing listens. The output gets the register state with each frame, so it can pick up mid-song.
+  const frame = m4aPcmFrame();
+  if (wanted) pushFrame(frame);
 }
 
 /** AgbMain's m4aSoundInit and InitMapMusic, at boot and on a soft reset (which clears sound.c's statics). The song
