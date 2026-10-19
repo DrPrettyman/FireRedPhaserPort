@@ -46,6 +46,8 @@ import {
 } from './itemMenu';
 import { SpecialVar } from './itemMenuState';
 import { ReadMail } from './mail';
+import { questLogHost } from '../world/questLog';
+import { ItemUse_SetQuestLogEvent } from '../world/questLogEvents';
 import { newMail } from '../world/mail';
 import { InitRegionMapWithExitCB, REGIONMAP_TYPE_NORMAL, regionMapGfxSymbols } from './regionMap';
 import { InitTMCase, TMCASE_FIELD } from './tmCase';
@@ -340,12 +342,10 @@ function ItemUseOnFieldCB_Rod(taskId: number): void {
   DestroyItemUseTask(taskId);
 }
 
-/**
- * ItemUseOutOfBattle_EscapeRope: only where gMapHeader.allowEscaping. (ItemUse_SetQuestLogEvent: no quest
- * log.)
- */
+/** ItemUseOutOfBattle_EscapeRope: only where gMapHeader.allowEscaping; the quest log keeps the map section. */
 function ItemUseOutOfBattle_EscapeRope(taskId: number): void {
   if (fieldFuncs().CanUseEscapeRopeOnCurrMap()) {
+    ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, null, SpecialVar.ItemId, questLogHost()?.mapSec() ?? K.MAPSEC_NONE);
     sItemUseOnFieldCB = ItemUseOnFieldCB_EscapeRope;
     SetUpItemUseOnFieldCallback(taskId);
   } else {
@@ -472,10 +472,10 @@ function InitBerryPouchFromBag(): void {
 /**
  * FieldUseFunc_TeachyTv: from the bag, Teachy TV, which returns to the bag; with SELECT, Teachy TV from the field
  * (Task_InitTeachyTvFromField), which SELECT closes too and which returns to the field. Its graphics (and Route 1's
- * layout) are loaded with the bag's when the bag has it (prepareTeachyTv). No quest log event
- * (ItemUse_SetQuestLogEvent).
+ * layout) are loaded with the bag's when the bag has it (prepareTeachyTv).
  */
 function FieldUseFunc_TeachyTv(taskId: number): void {
+  ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, null, SpecialVar.ItemId, 0xffff);
   if (!inField(taskId)) {
     ItemMenu_SetExitCallback(InitTeachyTvFromBag);
     ItemMenu_StartFadeToExitCallback(taskId);
@@ -507,10 +507,10 @@ function InitBerryPouchFromBattle(): void {
 
 /**
  * FieldUseFunc_FameChecker: from the bag, the Fame Checker, which returns to the bag; with SELECT, the Fame Checker
- * from the field (Task_UseFameCheckerFromField), which SELECT closes too and which returns to the field. (No quest
- * log: ItemUse_SetQuestLogEvent.)
+ * from the field (Task_UseFameCheckerFromField), which SELECT closes too and which returns to the field.
  */
 function FieldUseFunc_FameChecker(taskId: number): void {
+  ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, null, SpecialVar.ItemId, 0xffff);
   if (gTasks[taskId].data[3] === 0) {
     ItemMenu_SetExitCallback(UseFameCheckerFromBag);
     ItemMenu_StartFadeToExitCallback(taskId);
@@ -532,6 +532,7 @@ function Task_UseFameCheckerFromField(taskId: number): void {
 function FieldUseFunc_CoinCase(taskId: number): void {
   gStringVar1.set(ConvertIntToDecimalStringN(state.coins, STR_CONV_MODE_LEFT_ALIGN, 4)); // GetCoins
   ExpandToStringVar4(text('gText_CoinCase'));
+  ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, null, SpecialVar.ItemId, 0xffff);
   if (!inField(taskId)) DisplayItemMessageInBag(taskId, K.FONT_NORMAL, gStringVar4, Task_ReturnToBagFromContextMenu);
   else DisplayItemMessageOnField(taskId, K.FONT_NORMAL, gStringVar4, Task_ItemUse_CloseMessageBoxAndReturnToField);
 }
@@ -540,6 +541,7 @@ function FieldUseFunc_PowderJar(taskId: number): void {
   // GetBerryPowder: berry powder isn't tracked yet (it comes from Berry Crush)
   gStringVar1.set(ConvertIntToDecimalStringN(0, STR_CONV_MODE_LEFT_ALIGN, 5));
   ExpandToStringVar4(text('gText_PowderQty'));
+  ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, null, SpecialVar.ItemId, 0xffff);
   if (!inField(taskId)) DisplayItemMessageInBag(taskId, K.FONT_NORMAL, gStringVar4, Task_ReturnToBagFromContextMenu);
   else DisplayItemMessageOnField(taskId, K.FONT_NORMAL, gStringVar4, Task_ItemUse_CloseMessageBoxAndReturnToField);
 }
@@ -549,8 +551,8 @@ function FieldUseFunc_PokeFlute(taskId: number): void {
   for (let i = 0; i < CalculatePlayerPartyCount(); i++) {
     if (!ExecuteTableBasedItemEffect(state.party[i], K.ITEM_AWAKENING, i, 0)) wokeSomeoneUp = true;
   }
-  // (ItemUse_SetQuestLogEvent: no quest log)
   if (wokeSomeoneUp) {
+    ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, null, SpecialVar.ItemId, 0xffff);
     if (!inField(taskId)) DisplayItemMessageInBag(taskId, K.FONT_NORMAL, text('gText_PlayedPokeFlute'), Task_PlayPokeFlute);
     else DisplayItemMessageOnField(taskId, K.FONT_NORMAL, ExpandToStringVar4(text('gText_PlayedPokeFlute')), Task_PlayPokeFlute);
   } else {
@@ -613,6 +615,7 @@ function FieldUseFunc_Repel(taskId: number): void {
 
 function Task_UseRepel(taskId: number): void {
   if (!IsSEPlaying()) {
+    ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, null, SpecialVar.ItemId, 0xffff);
     state.setVar('VAR_REPEL_STEP_COUNT', ItemId_GetHoldEffectParam(SpecialVar.ItemId));
     RemoveUsedItem();
     DisplayItemMessageInBag(taskId, K.FONT_NORMAL, gStringVar4, Task_ReturnToBagFromContextMenu);
@@ -628,6 +631,7 @@ function RemoveUsedItem(): void {
 }
 
 function FieldUseFunc_BlackWhiteFlute(taskId: number): void {
+  ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, null, SpecialVar.ItemId, 0xffff);
   if (SpecialVar.ItemId === K.ITEM_WHITE_FLUTE) {
     state.setFlag('FLAG_SYS_WHITE_FLUTE_ACTIVE', true);
     state.setFlag('FLAG_SYS_BLACK_FLUTE_ACTIVE', false);
@@ -722,6 +726,7 @@ function BattleUseFunc_Ether(taskId: number): void {
 function BattleUseFunc_PokeDoll(taskId: number): void {
   if (!(g.battleTypeFlags & K.BATTLE_TYPE_TRAINER)) {
     RemoveUsedItem();
+    ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, null, SpecialVar.ItemId, 0xffff);
     DisplayItemMessageInBag(taskId, K.FONT_NORMAL, gStringVar4, ItemMenu_StartFadeToExitCallback);
   } else {
     PrintNotTheTimeToUseThat(taskId, false);

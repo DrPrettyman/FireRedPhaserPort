@@ -1,7 +1,6 @@
 // item_pc.c: the player's PC item storage list (WITHDRAW ITEM): the PC's items with their quantities and
 // descriptions, moving an item within the list (SELECT), and each item's WITHDRAW / GIVE / CANCEL menu.
-// GIVE hands over to the party menu (PARTY_ACTION_GIVE_PC_ITEM), which comes back here. The quest log
-// event (ItemUse_SetQuestLogEvent), the help context and SEs aren't ported.
+// GIVE hands over to the party menu (PARTY_ACTION_GIVE_PC_ITEM), which comes back here.
 
 import { K } from '../battle/constants';
 import { state } from '../battle/env';
@@ -94,6 +93,7 @@ import { AddScrollIndicatorArrowPairParameterized, RemoveScrollIndicatorArrowPai
 import { gPartyMenu, InitPartyMenu, ItemIdToBattleMoveId, Task_HandleChooseMonInput } from './partyMenu';
 import { BeginPCScreenEffect_TurnOff, BeginPCScreenEffect_TurnOn, IsPCScreenEffectRunning_TurnOff, IsPCScreenEffectRunning_TurnOn } from './pcScreenEffect';
 import { SetHelpContext } from '../ui/helpSystemContext';
+import { ItemUse_SetQuestLogEvent } from '../world/questLogEvents';
 
 /** struct ItemPcResources */
 interface ItemPcResources {
@@ -694,7 +694,7 @@ function ItemPc_DoWithdraw(taskId: number): void {
   const data = gTasks[taskId].data;
   const itemId = ItemPc_GetItemIdBySlotId(data[1]);
   if (AddBagItem(itemId, data[8])) {
-    // ItemUse_SetQuestLogEvent(QL_EVENT_WITHDREW_ITEM_PC, ...): the quest log isn't ported
+    ItemUse_SetQuestLogEvent(K.QL_EVENT_WITHDREW_ITEM_PC, null, itemId, 0xffff);
     gStringVar1.set(CopyItemName(itemId));
     gStringVar2.set(ConvertIntToDecimalStringN(data[8], STR_CONV_MODE_LEFT_ALIGN, 3));
     const windowId = ItemPc_GetOrCreateSubwindow(2);

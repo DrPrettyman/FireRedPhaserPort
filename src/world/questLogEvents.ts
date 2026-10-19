@@ -199,6 +199,22 @@ export function SetQuestLogEvent(eventId: number, data: QuestLogEventData): void
   QL_FinishRecordingScene();
 }
 
+/**
+ * ItemUse_SetQuestLogEvent (item_use.c): a QuestLogEvent_Item for an item used / given / taken / moved through the
+ * item PC. `mon` null for an item used on no Pokémon (species 0xFFFF); param: the Escape Rope's map section or a
+ * TM's forgotten move, 0xFFFF for none.
+ */
+export function ItemUse_SetQuestLogEvent(
+  eventId: number,
+  mon: { species: number; isEgg: boolean } | null,
+  itemId: number,
+  param: number,
+): void {
+  let species = 0xffff;
+  if (mon !== null) species = !mon.species ? K.SPECIES_NONE : mon.isEgg ? K.SPECIES_EGG : mon.species; // MON_DATA_SPECIES_OR_EGG
+  SetQuestLogEvent(eventId, { itemId, itemParam: param, species });
+}
+
 /** InQuestLogDisabledLocation: the Trainer Tower, the trainer fan club, the e-Reader house, the elevators. */
 export function InQuestLogDisabledLocation(): boolean {
   const host = questLogHost();
