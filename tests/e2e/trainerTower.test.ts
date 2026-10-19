@@ -134,6 +134,25 @@ test('the receptionist starts a Single challenge; 1F has its trainer; the battle
   const after = await game.mashUntil((t) => t.message(), { what: 'the after speech', maxFrames: 2000 });
   expect(after).toBe(await stringVar4(game));
   expect(after).not.toBe(intro);
+  await game.mashUntil((t) => t.idle() && !t.field()!.script, { what: 'the speech closed' });
+
+  // The floor's clock (MB_TRAINER_TOWER_MONITOR: TrainerTower_EventScript_ShowTime, ttower_gettime)
+  const monitor = await game.eval((t) => {
+    const s = (window as any).game.scene.getScene('Overworld');
+    const f = t.field()!;
+    const mb = s.assets.behaviorIds.MB_TRAINER_TOWER_MONITOR;
+    for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) if (s.world.tileAt(f.worldX - f.x + x, f.worldY - f.y + y)?.behavior === mb) return { x, y };
+    return undefined;
+  });
+  expect(monitor).toBeDefined();
+  await game.eval((t, x, y) => t.walkTo(x, y + 1), monitor!.x, monitor!.y);
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  const time = await game.mashUntil((t) => t.message(), { what: 'the clock', maxFrames: 2000 });
+  const [, min, sec] = /(\d+) ?min\. ?(\d+)\.\d\d ?sec/i.exec(time!) ?? [];
+  const frames = (await record(game)).timer;
+  expect(Number(min) * 60 + Number(sec)).toBeLessThanOrEqual(Math.floor(frames / 60));
+  expect(Number(min) * 60 + Number(sec)).toBeGreaterThan(0);
 });
 
 test('a Double challenge swaps in 1F_DOUBLES and the pair\'s graphics; their trigger reaches the battle', async () => {
@@ -180,5 +199,19 @@ test('a lost challenge: back in the lobby the receptionist ends it; leaving the 
   await game.eval((t) => t.walkTo(9, 9));
   await startChallenge(game, 0);
   await takeWarp(game, 9, 15, 'SevenIsland_TrainerTower');
+  expect(await game.eval((t) => t.var('VAR_MAP_SCENE_TRAINER_TOWER'))).toBe(0);
+});
+
+test('whiting out during a challenge: back to the lobby (SetWhiteoutRespawnWarpAndHealerNpc), the challenge over', async () => {
+  const game = await lobby([{ species: 'MAGIKARP', level: 2, moves: ['SPLASH'] }]);
+  await startChallenge(game, 0);
+  await takeWarp(game, 9, 2, 'TrainerTower_1F');
+  // Any lost battle will do until the tower's own are in (unit 2): spokeToOwner is FALSE, so the challenge ends
+  const since = await game.mark();
+  await game.eval((t) => t.startWildBattle({ species: 'MEWTWO', level: 100, moves: ['PSYCHIC'] }));
+  await game.eval((_t, since) => ((window as any).__ttSince = since), since);
+  await game.mashUntil((t) => t.events((window as any).__ttSince).some((e) => e.type === 'whiteOut'), { what: 'the white-out', timeout: 240_000 });
+  await game.mashUntil((t) => t.field()?.map === 'TrainerTower_Lobby' && t.idle(), { what: 'the lobby' });
+  expect(await game.eval((t) => t.field())).toMatchObject({ map: 'TrainerTower_Lobby', x: 4, y: 11 });
   expect(await game.eval((t) => t.var('VAR_MAP_SCENE_TRAINER_TOWER'))).toBe(0);
 });
