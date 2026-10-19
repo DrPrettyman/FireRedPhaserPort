@@ -199,6 +199,7 @@ function FldEff_DestroyDeoxysRock(): boolean {
   // Task_DeoxysRockCameraShake's data[0] (delay), [1] (up/down), [5] (shake), [6] (end delay), [7] (ending)
   let shakeTask: number[] | undefined;
   const fragments: FieldEffectSprite[] = [];
+  let fragmentsCreated = false;
   const probe: DestroyProbe = { state: 0, timer: 0, shake: 0, ending: false, fragments: [], done: false };
   lastDestroy = probe;
 
@@ -260,6 +261,7 @@ function FldEff_DestroyDeoxysRock(): boolean {
   };
 
   let done = false;
+  let fragmentsReported = false;
   CreateTask(() => {
     if (!done) {
       // Task_DestroyDeoxysRock: InstallCameraPanAheadCallback(); SetCameraPanningCallback(NULL)
@@ -275,6 +277,7 @@ function FldEff_DestroyDeoxysRock(): boolean {
             obj.setVisible(false); // gObjectEvents[tObjectEventId].invisible = TRUE
             h.bgWhiteFlash();
             createFragments();
+            fragmentsCreated = true;
             PlaySE(K.SE_THUNDER);
             if (shakeTask) shakeTask[7] = 1; // StartEndingDeoxysRockCameraShake
             tTimer = 0;
@@ -308,6 +311,10 @@ function FldEff_DestroyDeoxysRock(): boolean {
       s.render(h.cameraTop());
       s.x = x;
       s.y = y;
+    }
+    if (fragmentsCreated && !fragmentsReported) {
+      fragmentsReported = true;
+      testEvent('deoxysRockFragments', { fragments: fragments.map((s) => ({ x: s.x, y: s.y })) }); // as first drawn
     }
     for (let i = fragments.length - 1; i >= 0; i--) if (!fragments[i].inUse) fragments.splice(i, 1);
     probe.state = tState;
