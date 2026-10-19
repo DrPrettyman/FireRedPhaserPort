@@ -3066,3 +3066,30 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   (worked by hand), START with STOP, TrackStop's CgbOscOff, the echo; on the extracted songs SE_SELECT, MUS_ROUTE1's
   four channels and the PSG-only SEs' off frames. Typecheck clean, unit 560 in 41 files; e2e audio, audioCries,
   audioOutput, mapMusic, fieldSounds: 20 passed.
+
+### W-m4a 4b: the PSG synth, music complete (AUDIO_PLAN.md batch D, unit 2)
+
+- New `src/audio/psgSynth.ts` (`PsgSynth`): the GBA's four PSG channels driven by the engine's register writes
+  (W-m4a 4a's PsgFrame): squares with duty, square 1's sweep (overflow check, down / up), the hardware envelope and
+  length counters on a 512 Hz frame sequencer, the wave channel (both banks, NR30's bank switch and 64-sample mode,
+  the RAM rotating as it plays, NR32's shifts and 75%), noise (15 / 7-bit LFSR, NR43's divisor and shift), restart
+  and DAC semantics, NR52, NR50 / NR51 / SOUNDCNT_H's mix into the 10-bit sum (mGBA's GBA scale: a channel at 15 adds
+  240). Each output sample is the channels' average over its cycles (a box filter).
+- `src/audio/outputCore.ts`: `SoundCircuit` mixes it with the FIFOs as the GBA does: 896 samples a frame (4 per FIFO
+  sample), the FIFO samples held back a frame (the PSG writes take effect in VBlank, the DirectSound mix plays the
+  frame after), all writes applied in order at the frame's start, `state` loaded on the first frame, after a flush
+  and whenever the writes so far don't match it (missed frames). `dacOutput` takes SOUNDBIAS (bias, resolution).
+  The worklet plays it at 53,760 Hz through the same resampler; `tests/audioRender.ts` gains `speakers()`,
+  `speakerRms()` and a 53,516 Hz `toWav`; `tools/render-audio.ts` prints the RMS with and without the PSG (`nopsg`,
+  `mono` flags).
+- docs/DEVIATIONS.md: the m4a engine's "PSG silent" entry and the "no PSG parts until W-m4a 4" clauses are gone; a
+  PSG synth entry says what it approximates (the box filter at 53.76 kHz, writes at the frame's start, mGBA's choices
+  where the documents are open, a stopped channel at 0, mid-song pickup).
+- Checked: the PSG-only SEs are heard from the frame they start to the frame before their CgbOscOff (SE_SELECT 0-13,
+  SE_DOOR 0-20, SE_EXIT 0-34, SE_PC_ON 0-66, SE_WALL_HIT 0-12, SE_FLEE 0-37); MUS_PALLET's speakers' RMS goes
+  0.067 → 0.081 with the PSG (MUS_ROUTE1 0.051 → 0.077); mono is identical on both sides. 60 s of MUS_ROUTE1
+  through the circuit takes ~0.8 s in Node.
+- Tests: `tests/unit/psgSynth.test.ts` (17: hand-worked duty / box averages / envelope / DAC / length / sweep /
+  LFSR / noise clock / wave samples, volumes, banks / mixing / the circuit's timing and resync, then the extracted
+  SEs and songs); `tests/e2e/audioOutput.test.ts` + 1 (SE_SELECT alone reaches the worklet's speakers; checked to
+  fail with the PSG switched off). Typecheck clean; unit 577 in 42 files; e2e audioOutput 5, audio 2.
