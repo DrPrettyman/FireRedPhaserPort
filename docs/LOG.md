@@ -3968,3 +3968,29 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
     for the field (or a trainer's script) first; the test passed again alone. What held the field for those ticks
     wasn't pinned down.
 - Typecheck clean, 646 unit tests.
+
+### W-qlog 1: the quest log's recording and the scenes in the save (QUEST_LOG_PLAN.md QL1, batch 12)
+
+- New `world/questLog.ts` (quest_log.c's recording half), `questLogEvents.ts` (quest_log_events.c: the u16 command
+  stream as the C lays it out, RecordEventHeader's repeats, SetQuestLogEvent with its filters, the deferred trainer /
+  link events, QL_EVENT_DEPARTED and QL_EVENT_ARRIVED), `questLogLocations.ts` (field_specials.c's departed
+  locations), `questLogObjects.ts` (QL_RecordObjects), `questLogPlayer.ts` (the gfx transition records); data from
+  the new `tools/extract_quest_log.py` (public/gen/questLog.json: MAP_* group / number / MAPSEC, the location and
+  flag tables, the command sizes). The field's hooks record what the C records: the player's steps
+  (PlayerSetAnimId), the gfx transitions, getting off Surf, Strength, fishing, the VS Seeker, NPC faces and steps
+  (NpcBrain's `onSingleMovement`), the field input that took the controls (gFieldInputRecord), and the frames
+  between actions (QL_TryRunActions while the controls are free). Scenes start at an event (here: leaving one of
+  the 51 buildings / caves / gates, entering a town for the first time) and end when the 128-u16 script or the
+  32-action buffer is full, on a cut (`special QuestLog_CutRecording`, ShowTownMap, ShowDiploma, a white-out, a
+  Victory Road switch, walking into a disabled location), on a rematch, or on a save (SaveQuestLogData from the save
+  dialog and the Hall of Fame, which also sorts the scenes oldest first). GetQuestLogState writes the real state.
+  The save keeps the four scenes: SAVE_VERSION 10 (upgradeSave gives a version 9 save none).
+- Found on the way: the after-rival start preset now sets VAR_QLBAK_MAP_LAYOUT as leaving the house does (BackUpMapLayout
+  at the departure's scene start); newGame.test.ts compares the preset against a real playthrough and caught it.
+- Not done (QL2-QL5): playback on CONTINUE (QL_ResetForContinue stands in: the next scene goes after the saved ones),
+  the other events' recorders and texts, the menus' call sites, QL_AvoidDisplay and `goto_if_questlog`.
+- Tests: tests/unit/questLog.test.ts (19: the codecs against the C's byte layout, a scene's head, the frames
+  between actions, the stream filling up after 30 steps, repeats past MAX_CMD_REPEAT, the ring of four and the
+  save's sort, the filters, the departed locations, the save round trip), tests/e2e/questLog.test.ts (3: leave the
+  house, walk, save; Daisy's cut; the fan club). Ran field, playerAvatar, saveContinue, hallOfFame, trainerBattle
+  and newGame e2e files: all pass, nothing in the field changed.
