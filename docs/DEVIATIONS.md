@@ -12,8 +12,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Pokémon Center nurse: SetUsedPkmnCenterQuestLogEvent is a no-op (no quest log) and BufferUnionRoomPlayerName always says no wireless
     player was seen.
   - In-game trades (script/tradeSpecials.ts): the traded mon's contest conditions and sheen aren't kept (Pokémon
-    have no contest stats), and DONTAE's Jynx holds its Fab Mail without the message (mail isn't modelled:
-    GetInGameTradeMail / gLinkPartnerMail / MON_DATA_MAIL). The trade scene (menus/tradeScene.ts) skips
+    have no contest stats), and DONTAE's Jynx holds its Fab Mail without a mail slot (GetInGameTradeMail /
+    gLinkPartnerMail aren't ported until W-mail unit 2), so its MAIL → READ shows a blank Fab Mail. The trade scene (menus/tradeScene.ts) skips
     CheckPartnersMonForRibbons (no ribbons; no in-game trade mon has any) and TradeEvolutionScene (no FRLG
     in-game trade evolves). Only the in-game (wireless) path is ported: DoTradeAnim_Cable is a link trade's, and so
     are CB2_SaveAndEndTrade's FadeOutBGM / IsBGMStopped wait.
@@ -31,10 +31,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     plain fade from black rather than FieldCB_WarpExitFadeFromBlack's Task_ExitNonDoor (same look).
   - Easy Chat (menus/easyChat.ts, menus/easyChatScreen.ts, SIDE_PLAN.md W-easychat): ShowEasyChatScreen: on the GBA the script's `fadescreen FADE_FROM_BLACK` after the special
     runs unseen before the screen takes over and FieldCB_ContinueScript fades the field in; here the script waits
-    at the special and that `fadescreen` does the fade in (as the move deleter; same on screen). The mail type isn't
-    modelled (the special does nothing for it). ShowEasyChatMessage shows
+    at the special and that `fadescreen` does the fade in (as the move deleter; same on screen). ShowEasyChatMessage shows
     its text like `messageautoscroll` does, as a plain field message (no auto-scroll; the profile's two lines fit one
-    box). InitEasyChatPhrases doesn't clear the mail words (mail isn't modelled) and clears additionalPhrases only
+    box). InitEasyChatPhrases clears additionalPhrases only
     (the C's non-UBFIX loop clears 64 bytes, into the Mauville old man's data that's re-initialized right after).
   - Seagallop ferry (menus/seagallop.ts, script/ferrySpecials.ts): no PlayRainStoppingSoundEffect (it only
     sounds in rain, which isn't ported: POSTGAME_PLAN.md decision 1); no quest log (DrawSeagallopDestinationMenu's
@@ -103,14 +102,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     Overworld_PlaySpecialMapMusic is skipped: the BGM stays stopped. GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
     from the field uses fresh battle globals, so the backdrop follows the map's battle scene (gyms etc.) but not the
     last battle's type flags, which the GBA keeps (e.g. a Rare Candy right after a gym leader would draw the
-    Leader terrain there). Mons have no language, markings, ribbons or mail, so EvolutionRenameMon always treats
-    them as English and Shedinja doesn't clear those fields.
+    Leader terrain there). Mons have no language or ribbons, so EvolutionRenameMon always treats
+    them as English and Shedinja doesn't clear the ribbons.
   - Summary screen: no trade-screen view or multi-battle party order; the struct Pokemon fields the port doesn't
     store read as defaults (met game FireRed, no fateful-encounter flag, English).
   - Move deleter (SelectMoveDeleterMove): on the GBA the script's `fadescreen FADE_FROM_BLACK` after the special
     runs (unseen) before the summary screen takes over, and FieldCB_ContinueScriptHandleMusic fades the field in
     afterwards. Here the script waits at the special and that `fadescreen` does the fade in (same on screen).
-  - Party menu: mail, Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
+  - Party menu: Union Room, minigames, Pokédude/Teachy TV demos are not ported; the PC mailbox's GIVE
+    (PARTY_ACTION_GIVE_MAILBOX_MAIL) waits for W-mail unit 2. No
     field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
   - Move relearner (menus/learnMove.ts): the MUS_LEVEL_UP fanfare after a move is learned holds the screen as on
     the GBA. The C's scroll arrows are kept as they
@@ -129,7 +129,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     follows. The show-mon banner's graphics load while the player's pose plays, so a very slow load would hold the
     banner back. Dig/Escape Rope with no escape warp saved (a dev start in a cave) go to the last heal location.
   - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Bag uses that need overworld systems
-    (Fame Checker, Teachy TV, mail) log "not implemented" and return to the bag. Berry
+    (Fame Checker, Teachy TV) log "not implemented" and return to the bag. Mail's CHECK (CB2_CheckMail) reads an
+    uninitialised struct Mail with only its item set; the port's has SPECIES_NONE, so Bead / Dream Mail show no icon. Berry
     powder reads as 0. The Escape Rope's quest log event (ItemUse_SetQuestLogEvent) isn't
     recorded; ItemUseOnFieldCB_EscapeRope takes the field controls lock itself (on the GBA the start menu's lock is
     still held when the bag returns; here the field's overlay held the controls until then). RemoveUsedItem after
@@ -218,9 +219,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     with the field's message box palette, which the GBA field leaves there. The mon sprite buffers are freed on
     the NO path too (the C leaks them). The hatched mon's language, met game and fateful-encounter bit aren't
     modelled.
-  - Daycare (world/daycare.ts): mail isn't modelled, so a mon left holding mail doesn't have it moved into
-    struct DayCareMail (StorePokemonInDaycare's MonHasMail branch) and back (and DaycareMonReceivedMail isn't
-    ported). Eggs: MON_DATA_LANGUAGE isn't modelled, so CreateEgg / SetInitialEggData's LANGUAGE_JAPANESE isn't
+  - Daycare (world/daycare.ts): struct DayCareMail waits for W-mail unit 2, so a mon left holding mail doesn't have
+    it moved into it (StorePokemonInDaycare's MonHasMail branch) and back (and DaycareMonReceivedMail isn't
+    ported): the mon keeps the mail item but loses its slot (boxMonFromMon drops `mail`; READ shows a blank mail),
+    and the slot stays taken. Eggs: MON_DATA_LANGUAGE isn't modelled, so CreateEgg / SetInitialEggData's LANGUAGE_JAPANESE isn't
     kept (the nickname is タマゴ). The level menu's 1 px letter spacing is dropped, as for all latin text.
     DetermineEggSpeciesAndParentSlots leaves parentSlots uninitialised in the C when neither mon is female nor
     Ditto; the port starts them at [0, 1] (no compatible pair gets there).
@@ -231,14 +233,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     The screen works on its own six-slot copy of the party (the C keeps empty slots while it runs) and writes it
     back, compacted, when it hands over to another screen; a mon placed after an empty party slot would move up
     early if the summary / naming screen / bag opened while the party box still showed the gap.
-    MON_DATA_SANITY_IS_BAD_EGG reads FALSE and mail isn't modelled, so the bad-egg and mail checks never trigger.
-  - Player's PC (ui/PlayerPcMenu.ts, menus/itemPc.ts): the mailbox is always empty (mail isn't modelled); no quest
+    MON_DATA_SANITY_IS_BAD_EGG reads FALSE, so the bad-egg checks never trigger.
+  - Player's PC (ui/PlayerPcMenu.ts, menus/itemPc.ts): the mailbox is always empty (its screen is W-mail unit 2:
+    mail the party menu sends to the PC sits in gSaveBlock1Ptr->mail's PC slots unseen until then); no quest
     log events (withdrew / deposited / gave from the PC).
   - Save data (state/saveData.ts): one JSON save in browser localStorage instead of the flash's two 14-sector
     save slots, so there are no sector checksums, no alternating slots / save counter, no backup of the previous
     save and no encryption of money, coins and bag quantities (gSaveBlock2Ptr->encryptionKey). The save holds
     what the port keeps; left out because the port doesn't keep them: the current map's object events and object
-    templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail,
+    templates (NPC positions, setobjectxyperm changes), game stats, the quest log,
     Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, the fame
     checker, minigame records, the enigma berry, mystery gift, link records and
     the region map zoom option. The player's position is stored only when the field writes it before
@@ -275,7 +278,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     start menu (and its help window) goes away as soon as an item that leaves the field is chosen, before the fade
     (on the GBA both stay up under the fade).
   - The help system (ui/helpSystem*.ts): the screens the port doesn't have don't set their contexts or toggle it
-    (mail's HELPCONTEXT_*_MAILBOX: the mailbox is always empty; Teachy TV; the main menu's MYSTERY GIFT; the link
+    (Teachy TV; the main menu's MYSTERY GIFT; the link
     and wireless screens' HelpSystem_Enable / _DisableToggleWithRButton: link.c, link_rfu_2.c, union_room_chat.c,
     trade_scene.c's link trades, the e-Reader; the berry fix program; the quest log's playback). HelpSystem_Enable
     has no quest log check; HelpSystem_IsSinglePlayer is always TRUE (no link play: GAPS_PLAN.md decision 4). The

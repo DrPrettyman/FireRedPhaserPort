@@ -848,6 +848,40 @@ this is the next level down. When you add or change a subsystem, update its entr
   WITH ALL typed). Its `step(game, button, cmds, state)` presses and waits in the page for a new command (by
   `commandCount`) and the input state; `typeByGroup` / `typeByKeyboard` type a word from the field selection.
   Don't wait for a fixed number of frames.
+- **Mail (mail_data.c, mail.c; FIELD_ITEMS_PLAN.md W-mail):** the data is `world/mail.ts` (no Phaser):
+  struct Mail (`words` 9 easy chat words, `playerName` 8 encoded bytes padded with spaces to 6 chars, `trainerId`
+  4 bytes, `species` a mail species, `itemId`), `GameState.mail` = gSaveBlock1Ptr->mail[MAIL_COUNT] (slots 0-5 the
+  party's held mail, 6-15 the PC mailbox; ClearMailData in the constructor, InitEasyChatPhrases clears the words), a
+  party mon's `mail` = MON_DATA_MAIL (its slot; absent = MAIL_NONE; a party-only field, so boxMonFromMon drops it and
+  BoxMonToMon / CreateMon leave it absent). Functions take the state or its Defines (they run in unit tests):
+  MonHasMail, GiveMailToMon / GiveMailToMon2, TakeMailFromMon (the message is lost) / TakeMailFromMon2 (into the
+  first free PC slot), ClearMailStruct, SpeciesToMailSpecies / MailSpeciesToSpecies (Unown as 30000 + its letter:
+  the Game Corner's photo vars use them too), MailSpeciesToIconSpecies (pokemon_icon.c's; the trainer card's photo),
+  `gPlayerPcMenuManager.notInRoom` (set by ui/PlayerPcMenu.ts). ItemIsMail stays in menus/common.ts. Saved as
+  SaveData `mail` since version 10, and each party mon's `mail`. The screen is `menus/mail.ts`: ReadMail(mail,
+  savedCallback, messageExists) → CB2_InitMailView (DoInitMailView, one step a frame: BG1 the mail type's picture
+  from `graphics/mail/` (extract_gfx.py GFX_PREFIXES), BG2 a tile-1 fill, BG0 the message window and the "From"
+  window; the type's text colours into BG palette 15 colours 10 / 11, the gender colours into palette 0's) →
+  CB2_RunShowMailCB (fade in, A / B, fade out, `savedCallback`). FRLG uses the 5x2 arrangement
+  (sMessageLayouts_5x2); Bead and Dream Mail draw the mail species' icon (CreateMonIcon_HandleDeoxys /
+  LoadMonIconPalette in menus/pokemonIcon.ts). The help context is HELPCONTEXT_BEDROOM_PC_MAILBOX or
+  _PLAYERS_PC_MAILBOX by notInRoom. Graphics: MAIL_GFX / mailGfxSymbols, preloaded with the menus (menus/host.ts,
+  with EASY_CHAT_GFX) whenever the bag or the party holds a mail. Callers: the party menu (menus/partyMenu.ts):
+  giving a mail from the bag (GiveItemOrMailToSelectedMon → CB2_WriteMailToGiveMonFromBag) or from the party menu's
+  ITEM → GIVE (CB2_GiveHoldItem → CB2_WriteMailToGiveMon), also as a swap for a held item, writes it on the Easy Chat
+  screen (DoEasyChatScreen(EASY_CHAT_TYPE_MAIL, the slot's words)); VAR_RESULT FALSE (B → YES, "Stop giving POKéMON
+  MAIL?") takes it back; MAIL → READ (CB2_ReadHeldMail; a mail item without a slot reads as a blank mail), MAIL →
+  TAKE → YES (TakeMailFromMon2: "sent to your PC") or NO → YES (into the bag, the message lost); the bag's CHECK
+  (FieldUseFunc_Mail → CB2_CheckMail, menus/itemUse.ts: a blank mail of the item's type, no message). The special
+  ShowEasyChatScreen's EASY_CHAT_TYPE_MAIL edits VAR_0x8005's slot (easyChatWordsForType). Not yet (W-mail unit 2):
+  the PC mailbox (player_pc.c / mailbox_pc.c, PARTY_ACTION_GIVE_MAILBOX_MAIL), daycare.c's DayCareMail, the in-game
+  trade's mail. Probe: `__test.mail()` (mailType = ITEM_TO_MAIL, messageExists, monIconType / iconSpecies,
+  waitingForButton, the message `lines` and `authorName` decoded, nameX). Tests: tests/unit/mail.test.ts (the slots,
+  give / take, the mail species, the save), tests/e2e/mail.test.ts (a Retro Mail bought at the Celadon Dept. Store
+  4F from (3, 11) facing down, given from the bag with HI AWESOME typed, read and taken; the party menu's GIVE
+  cancelled and written, Bead Mail's icon, TAKE → YES to the PC slots; CHECK; a held mail through SAVE and
+  CONTINUE). tests/e2e/easyChatHelpers.ts holds the Easy Chat screen's helpers (step, typeByGroup, typeByKeyboard)
+  both e2e files use.
 - **Party selection from scripts, tutors, the move deleter:** `menus/partyMenuSpecials.ts` is
   party_menu_specials.c (ChoosePartyMon, ChooseMonForMoveRelearner, SelectMoveDeleterMove, the deleter's
   helpers) plus the ChooseMonForMoveTutor special; `PARTY_MENU_SPECIALS` is spread into SPECIALS. A special that
@@ -1900,7 +1934,7 @@ or extend them:
   saved anyway since the Safari start menu has no SAVE, and the roamer's location). Other optional warps the save
   keeps: `continueGameWarp` + `specialSaveWarpFlags` (CONTINUE_GAME_WARP), `escapeWarp`. Game stats
   (`state.gameStats`, Get/Set/IncrementGameStat; only GAME_STAT_ENTERED_HOF and _FIRST_HOF_PLAY_TIME are counted so
-  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8, `gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) since version 9. The Hall of Fame records live apart from the save, like their own flash
+  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8, `gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) since version 9. The mail slots (`mail`, world/mail.ts) and a party mon's `mail` since version 10. The Hall of Fame records live apart from the save, like their own flash
   sectors: `state/hallOfFame.ts` (key `HOF_STORAGE_KEY`, versioned), read into `gHofBuffer` (gDecompressionBuffer)
   by LoadHallOfFameSave, written by TrySavingData(SAVE_HALL_OF_FAME) (which also counts GAME_STAT_ENTERED_HOF) and
   erased by SAVE_OVERWRITE_DIFFERENT_FILE.

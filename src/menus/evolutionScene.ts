@@ -377,8 +377,9 @@ function CreateShedinja(preEvoSpecies: number, mon: Pokemon): void {
     shedinja.species = target;
     shedinja.nickname = [...pokemon.speciesName(target)];
     shedinja.heldItem = 0;
-    // MON_DATA_MARKINGS, ribbons and mail aren't modelled
+    delete shedinja.markings; // MON_DATA_MARKINGS 0 (ribbons aren't modelled)
     shedinja.status = 0;
+    delete shedinja.mail; // MON_DATA_MAIL = MAIL_NONE
     calculateMonStats(shedinja);
     state.party.push(shedinja); // CalculatePlayerPartyCount
 

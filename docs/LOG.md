@@ -3968,3 +3968,30 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
     for the field (or a trainer's script) first; the test passed again alone. What held the field for those ticks
     wasn't pinned down.
 - Typecheck clean, 646 unit tests.
+
+### W-mail 1: mail's data, the mail screen, the party menu's mail actions (FIELD_ITEMS_PLAN.md, batch 12)
+
+- mail_data.c whole in `world/mail.ts` (no Phaser): struct Mail, ClearMailData / ClearMailStruct, MonHasMail,
+  GiveMailToMon / GiveMailToMon2, TakeMailFromMon / TakeMailFromMon2, ClearMailItemId, SpeciesToMailSpecies /
+  MailSpeciesToSpecies, plus pokemon_icon.c's MailSpeciesToIconSpecies; the Game Corner's photo special and the
+  trainer card now use these instead of their own copies. `GameState.mail` (gSaveBlock1Ptr->mail[16], ClearMailData
+  in the constructor; InitEasyChatPhrases clears the words), MON_DATA_MAIL as the party-only `Pokemon.mail` (absent =
+  MAIL_NONE). Save version 10: `mail` and each party mon's `mail` (a version-9 save keeps the new-game slots).
+- mail.c whole in `menus/mail.ts`: ReadMail, DoInitMailView's 19 steps, every mail type's graphics (graphics/mail/
+  through extract_gfx.py) and textpals, sMessageLayouts_5x2 (and the unused 3x3), the gender colours, Bead / Dream
+  Mail's icon (new CreateMonIcon_HandleDeoxys / LoadMonIconPalette / FreeMonIconPalette in menus/pokemonIcon.ts: the
+  Unown letters' icon species are past NUM_SPECIES, which CreateMonIcon maps to SPECIES_NONE), BufferMailMessage
+  (ConvertInternationalString for names under 6 chars), the help context by gPlayerPcMenuManager.notInRoom (now set
+  by ui/PlayerPcMenu.ts). The menus preload the mail and Easy Chat graphics when the bag or the party holds mail.
+- The party menu: give a mail from the bag or from ITEM → GIVE (also swapped for a held item), written on the Easy
+  Chat screen (EASY_CHAT_TYPE_MAIL) and taken back on cancel; MAIL → READ; MAIL → TAKE → YES into the PC slots
+  (TakeMailFromMon2; the mailbox screen is unit 2) or NO → YES into the bag. The bag's CHECK on a mail
+  (FieldUseFunc_Mail: a blank mail). `special ShowEasyChatScreen` with EASY_CHAT_TYPE_MAIL edits VAR_0x8005's slot.
+- On the way: CreateShedinja now clears the copy's mail and markings (both modelled now; the comment said neither
+  was). The Easy Chat e2e helpers moved to tests/e2e/easyChatHelpers.ts for mail.test.ts.
+- Left for W-mail unit 2: the PC mailbox (player_pc.c's mailbox, mailbox_pc.c, PARTY_ACTION_GIVE_MAILBOX_MAIL),
+  daycare.c's DayCareMail, the in-game trade's mail (DONTAE's Jynx's Fab Mail reads as blank until then).
+- Tests: tests/unit/mail.test.ts (8); tests/e2e/mail.test.ts (4: a Retro Mail bought at Celadon Dept. Store 4F,
+  given from the bag with HI AWESOME typed, read, taken into the bag; ITEM → GIVE cancelled and written, Bead Mail's
+  icon, TAKE → YES to the PC slots; CHECK; a held mail through SAVE and CONTINUE), passed three times in a row;
+  easyChat.test.ts, fieldItems.test.ts, trainerCard.test.ts and gameCorner.test.ts's photo printer pass.
