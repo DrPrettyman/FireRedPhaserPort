@@ -9,7 +9,10 @@
 // Where the documents leave the GBA's behaviour open, this follows mGBA's GB_AUDIO_GBA style (src/gb/audio.c),
 // which is what W-ref 2 compares with: the PSG adds unsigned levels (no DC offset), a square's duty position and
 // the wave channel's position survive a restart, the wave RAM rotates as it plays, noise starts its LFSR at 0
-// with XNOR feedback. Times are in GBA cycles (2^24 Hz); a GBA frame is 280,896 of them.
+// with XNOR feedback. Where the hardware is documented and mGBA takes a shortcut, this follows the hardware: a new
+// square or noise rate from the timer's next reload, a stopped channel at 0, NR32 changing only the volume
+// (W-ref 2b: the port equals such a model at every DAC tick; docs/DEVIATIONS.md). Times are in GBA cycles (2^24 Hz);
+// a GBA frame is 280,896 of them.
 
 import {
   PSG_NR10,

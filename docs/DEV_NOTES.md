@@ -1177,8 +1177,9 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   after a `reset()`, or frames missed) `loadState(state)` (registers latched, every channel off); then each write
   in order at the frame's start (`PsgSynth.write`: NRx4 bit 7 restarts, NRx2 bits 3-7 are the DAC, NR30's bank and
   64-sample mode, NR52 bit 7 resets NR10-NR51); then `render` plays 280,896 cycles as 896 samples. Each sample:
-  the frame sequencer's steps due (512 Hz: lengths at 0/2/4/6, square 1's sweep at 2/6, envelopes at 7), then the
-  DAC's point samples (every 0x200 >> SOUNDBIAS's resolution = 256 cycles, 65,536 Hz, as the GBA and mGBA: each
+  the frame sequencer's steps (512 Hz: lengths at 0/2/4/6, square 1's sweep at 2/6, envelopes at 7; through the DAC
+  each on its own cycle, a step on a tick's cycle before the tick; the box filter steps at the sample boundaries)
+  and the DAC's point samples (every 0x200 >> SOUNDBIAS's resolution = 256 cycles, 65,536 Hz, as the GBA and mGBA: each
   channel's level at that cycle, held to the next tick; `dacInterval`, set by SoundCircuit) averaged over the
   sample's 313.5 cycles (channel levels 0-15: squares 16 × (2048 − f) cycles a duty step, the wave 8 × (2048 − f) a
   sample, noise 32 or 64r << s cycles an LFSR clock), routed by NR51, × 8 × (NR50 + 1), / 4, 8 or 16 by SOUNDCNT_H's
@@ -1189,7 +1190,8 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
 - **Behaviour worth knowing:** PSG levels are unsigned (a sounding channel adds DC, as on the GBA); a square's duty
   position free-runs (a restart doesn't move it; from power-on its timer counts 16 × 2048 cycles); the wave RAM
   rotates as it plays and a restart keeps the position (fresh RAM written by CgbSound starts at its first sample);
-  the sample after a restart is the one that was playing; noise restarts its LFSR at 0 (XNOR feedback, output = the
+  the sample after a restart is the one that was playing, for a period + 24 cycles (`WAVE_RESTART_DELAY`: mGBA,
+  SameBoy); noise restarts its LFSR at 0 (XNOR feedback, output = the
   feedback bit); a stopped channel outputs 0. docs/DEVIATIONS.md has what is approximated.
 - **Hooking in:** nothing to do for new sounds: everything the engine writes is played. To render: `speakers(render(
   frames, before), { psg })` (tests/audioRender.ts), `speakerRms` (AC RMS: the DC taken out), `toWav`.
@@ -1198,7 +1200,8 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
 - **Tests:** `tests/unit/psgSynth.test.ts`: duty patterns and the free-running position, box averages, the envelope
   up / down / held, the DAC bits, the length counter and its reload, square 1's sweep (up, overflow, down, the
   restart check), the LFSR's first values (15 and 7 bits) and its clock, the wave's samples, volumes, banks and
-  restarts, NR50 / NR51 / SOUNDCNT_H / NR52, the circuit (the FIFOs a frame late, resync after a missed frame, no
+  restarts and the restart's 24-cycle delay, the sequencer's steps on their own cycle through the DAC, NR50 / NR51 /
+  SOUNDCNT_H / NR52, the circuit (the FIFOs a frame late, resync after a missed frame, no
   PSG part); on public/gen/audio: the PSG-only SEs heard from their first frame to the one before CgbOscOff
   (SE_SELECT 0-13 ... SE_FLEE 0-37), MUS_PALLET / MUS_TITLE's PSG part, mono (L = R) and stereo.
   `tests/e2e/audioOutput.test.ts`: SE_SELECT alone reaches the worklet's speakers.
@@ -1261,6 +1264,21 @@ or extend them:
   its level, the writes ~14,000 cycles into the frame) driven by the port's PSG writes; `analyze.py` compares it
   with the port's WAV after a 20 Hz DC blocker and a 20 kHz band limit; `make_page.py` builds `index.html`.
   Nothing from the ROM goes into the repo: only pass / fail facts and dB numbers the port computes itself.
+- **W-ref 2b: making the listening comparison like for like** (same directory; AUDIO_PLAN.md "W-ref" has the
+  numbers). The PSG's sound depends on phases nothing on the ROM shows (the frame sequencer's against the frames,
+  the squares' duty positions), and with DirectSound playing related pitches a frame's RMS swings ±2 dB with them,
+  so both sides must start from the same: `port_capture.ts` renders each job's WAV with a circuit reset at the job
+  (its first frame's state loaded; a second circuit that runs on gives the records' NR52 bits, as the ROM's PSG
+  runs on), and `mgba_model.render(label, write_at, seq_phase=32768, hw)` starts the sequencer 32,768 cycles in as
+  the port's loadState. `hw=True` swaps mGBA's shortcuts for the documented hardware (the list is in
+  docs/DEVIATIONS.md's PSG entry); with `write_at=0` it is what the port should be, and it equals the port at every
+  DAC tick (`wref-scratch/wref2b/`: `port_tick.ts` records the port's channel levels at its ticks, `points.py` the
+  model's, and compares them channel by channel; per-channel renders with NR51 masked: `port_chan.ts`, `exp.py`).
+  `ref_all.py` renders both references (`ref/`: mGBA as is, `ref_hw/`), `analyze2.py <refdir>` compares through
+  the port's output stage (the held 65,536 Hz reference averaged over each 313.5-cycle sample: brightness and
+  level then measure the synth, not the output rate) and adds a sample-by-sample residual; `make_page.py` reads
+  both. To check a synth change: rerun `port_capture.ts`, `analyze2.py ref_hw ...` (r ≥ 0.9998 and the PSG-only
+  SEs' residual ≤ −32 dB today).
 ### Audio output
 
 - **Where:** `src/audio/output.ts` (the AudioContext, the worklet node, autoplay, visibility, mute, `pushFrame`, the

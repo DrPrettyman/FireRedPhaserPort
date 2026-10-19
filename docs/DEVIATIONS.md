@@ -78,15 +78,24 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     after the GBA's DAC isn't modelled (sample-and-hold straight to the speakers, AUDIO_PLAN.md decision 8).
   - The PSG synth (audio/psgSynth.ts, outputCore.ts's SoundCircuit): the sound circuit makes 896 samples per frame
     (4 per FIFO sample: 53,760 Hz, 53,516 Hz at the GBA's speed); the PSG is point-sampled at 65,536 Hz as the
-    GBA's DAC does (SOUNDBIAS's 8-bit resolution) and held, then averaged over each output sample's 313.5 cycles,
-    so the squares' top harmonics come out ~6% darker (spectral centroid) than mGBA's 65,536 Hz output (W-ref 2); the
-    8-bit rounding of the sum is kept. The frame sequencer's steps (512 Hz) land on those sample boundaries (within
-    19 µs). A frame's register writes all apply at its start, in order (CgbSound writes them in VBlank's first
+    GBA's DAC does (SOUNDBIAS's 8-bit resolution) and held, then averaged over each output sample's 313.5 cycles (a
+    box: −0.5 dB at 10 kHz, −2 dB at 20 kHz), so the PSG comes out darker (spectral centroid) than mGBA's 65,536 Hz
+    samples: ~6% for the squares, 10-14% for the noise drums (W-ref 2b: through the same averaging the two are
+    equally bright); the 8-bit rounding of the sum is kept. The DirectSound samples change exactly every 1,254
+    cycles (4 output samples), where the GBA's DAC picks the FIFO's current sample at its 65,536 Hz ticks (a jitter of
+    up to 256 cycles, 15 µs). A frame's register writes all apply at its start, in order (CgbSound writes them in VBlank's first
     lines, ~14,000 cycles = 0.8 ms after the DMA's slot starts at VCount 150; the game logic's CgbOscOff came a
     little earlier in the frame); the FIFO samples are held back a frame
     so the PSG leads them as on the GBA. Where GBATEK and Pan Docs leave the GBA open, it follows mGBA's GBA mode
     (unsigned PSG levels, so a sounding channel adds DC; positions kept across restarts; the wave RAM rotating as it
-    plays), except that a stopped channel outputs 0 (mGBA holds its last level). Not modelled: obscure DMG quirks
+    plays; the wave's first sample after a restart 24 cycles late), but not mGBA's shortcuts where the hardware is
+    documented (W-ref 2b: the port equals a model with these at every DAC tick): a new square or noise rate takes
+    effect at the timer's next reload (mGBA: lastUpdate + the new period), a stopped channel outputs 0 (mGBA holds
+    its last level), NR32 changes only the volume (mGBA jumps to the next nibble), the noise plays at the envelope's
+    current volume (mGBA: its last clock's) and NR34 without a restart leaves the wave's timer alone (mGBA restarts
+    it). The frame sequencer's phase against the frames is the GBA's boot's (unknown): the port starts it 32,768
+    cycles after NR52's switch-on or a state load, so a hardware envelope's steps can land a 64 Hz clock earlier or
+    later than on a given GBA (W-ref 2b: SE_SAVE's level moves by up to 1 dB with that phase). Not modelled: obscure DMG quirks
     (the envelope's "zombie" writes, the length counter's and sweep's rarer edge cases beyond mGBA's), the analog
     output's DC blocking. When the output starts mid-song (the first key press) or misses frames (a hidden tab),
     channels started before stay silent until their next restart (CgbSound restarts on every volume change, so it

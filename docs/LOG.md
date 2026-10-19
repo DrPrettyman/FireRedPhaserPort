@@ -3152,3 +3152,36 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the box's cancelled average); the circuit tests skip each frame's first sample (it can hold the previous frame's
   last DAC tick) and get 30 s timeouts (they're CPU-heavy; the machine's load ran them past 5 s). Typecheck clean;
   unit 578 in 42 files; e2e audio, audioOutput, audioCries, audioScenes 13 passed.
+
+### W-ref 2b: W-ref 2's leftovers were the comparison's (AUDIO_PLAN.md batch D, W-ref 2's continuation)
+
+- Split W-ref 2's listening comparison per PSG channel (NR51 masked in both renders, the FIFOs silent) and then
+  tick by tick (each channel's level at every DAC tick, port vs model). Findings: (1) the ±2 dB per-frame wander
+  of the BGMs is interference between the squares and the DirectSound voices playing related pitches, whose
+  relative phase three things moved: the frame sequencer's phase (W-ref 2's `port_capture.ts` ran one circuit
+  through all the jobs, so each job inherited the last one's; the model started each at 0), mGBA's shortcuts
+  (a square's new frequency from lastUpdate + the new period, a stopped channel holding its level, NR32 jumping to
+  the next nibble, the noise at its last clock's volume, NR34 restarting the wave's timer) and the 0.8 ms write
+  offset; each alone gives r ≈ 0.9. (2) "10-14% darker" was the reference's rate: its 65,536 Hz point samples were
+  analysed as they are, the port's 53,516 Hz samples average the DAC's held signal (a box, −2 dB at 20 kHz), which
+  takes the most off the noise drums; through the same averaging the two are as bright, and the noise is identical
+  tick by tick.
+- Fixed in the port (one commit each, a unit test each): the wave channel's first sample after a restart comes
+  24 cycles after a period (mGBA's GBAudioWriteNR34, SameBoy's 3 ticks of the 2 MHz clock); through the DAC, the
+  frame sequencer's steps land on their own cycle, not on the next output sample's boundary (up to 313 cycles
+  late: an envelope step one tick late now and then).
+- Comparison made like for like (scripts in `wref-scratch/wref2/` and `wref2b/`, DEV_NOTES "ROM reference
+  measurements"): each job's WAV from a circuit reset at the job, the model's sequencer starting 32,768 cycles in
+  as the port's, a second reference with mGBA's shortcuts swapped for the documented hardware and the port's write
+  timing (the port equals it at every DAC tick), the references put through the port's output stage. Against
+  that: r ≥ 0.9998 and within 0.05 dB on every item (SE_M_SCRATCH +0.37 dB, a FIFO-only SE: the FIFO's tick
+  jitter in the reference), residual −32 to −54 dB on the PSG-only SEs. Against mGBA as is the music stays at
+  r 0.86-0.99 (the interference again), and SE_SAVE's level depends on the sequencer's phase (−1.04 dB here,
+  +0.12 dB at W-ref 2's): nothing readable gives the ROM's. Results table in AUDIO_PLAN.md "W-ref"; the page
+  (`wref2/index.html`) has both references and W-ref 2's numbers. The exact per-frame check is still identical on
+  all 31 items.
+- Left: the writes' 0.8 ms offset within the frame; the FIFO's samples step exactly every 1,254 cycles where the
+  GBA's DAC takes them at its 65,536 Hz ticks (≤ 15 µs); the output rate's box (docs/DEVIATIONS.md).
+- Tests: `tests/unit/psgSynth.test.ts` + 2 (the wave restart's delay; a sequencer step inside an output sample
+  through the DAC, checked to fail before the fix). Typecheck clean; unit 580 in 42 files; e2e audioOutput +
+  audio 7 passed.
