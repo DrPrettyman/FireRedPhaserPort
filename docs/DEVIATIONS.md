@@ -7,8 +7,8 @@ Where the port differs from the decomp: by necessity or for now (known deviation
 Things that are placeholders or approximations, so they aren't mistaken for ports. Remove entries as they get done properly.
 
 - **Placeholders (not in the decomp):**
-  - Naming screen: the help context, SeedRngAndSetTrainerId after naming the player and the REVISION >= 0xA
-    bad-word check aren't ported.
+  - Naming screen: SeedRngAndSetTrainerId after naming the player and the REVISION >= 0xA bad-word check aren't
+    ported.
   - Pokémon Center nurse: SetUsedPkmnCenterQuestLogEvent is a no-op (no quest log) and BufferUnionRoomPlayerName always says no wireless
     player was seen.
   - In-game trades (script/tradeSpecials.ts): the traded mon's contest conditions and sheen aren't kept (Pokémon
@@ -29,7 +29,6 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     Magikarp and the Heracross) load pokedex.json for the heights the first time one is measured or read (the script
     waits for it). The diploma returns through the field's
     plain fade from black rather than FieldCB_WarpExitFadeFromBlack's Task_ExitNonDoor (same look).
-  - Fall warps (world/fallWarp.ts): no help context while surfing on Seafoam B4F.
   - Easy Chat (menus/easyChat.ts, menus/easyChatScreen.ts, SIDE_PLAN.md W-easychat): ShowEasyChatScreen: on the GBA the script's `fadescreen FADE_FROM_BLACK` after the special
     runs unseen before the screen takes over and FieldCB_ContinueScript fades the field in; here the script waits
     at the special and that `fadescreen` does the fade in (as the move deleter; same on screen). The mail type isn't
@@ -38,7 +37,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     box). InitEasyChatPhrases doesn't clear the mail words (mail isn't modelled) and clears additionalPhrases only
     (the C's non-UBFIX loop clears 64 bytes, into the Mauville old man's data that's re-initialized right after).
   - Seagallop ferry (menus/seagallop.ts, script/ferrySpecials.ts): no PlayRainStoppingSoundEffect (it only
-    sounds in rain, which isn't ported: POSTGAME_PLAN.md decision 1); no help system (HelpSystem_Disable / Enable) and no quest log (DrawSeagallopDestinationMenu's
+    sounds in rain, which isn't ported: POSTGAME_PLAN.md decision 1); no quest log (DrawSeagallopDestinationMenu's
     QL_AvoidDisplay). The script that ran DoSeagallopFerryScene stays in its `waitstate` until the scene warps, then
     runs on to its `end` (in C, CB2_LoadMap's ScriptContext_Init drops it). The scene's WarpFadeOutScreen is a plain palette fade to
     black (FadeScreen's white fade is for underwater maps, and no harbor is one).
@@ -101,7 +100,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     channels started before stay silent until their next restart (CgbSound restarts on every volume change, so it
     is usually a few frames).
   - Evolution scene: on battle-test.html (no field) EVOSTATE_END's
-    Overworld_PlaySpecialMapMusic is skipped: the BGM stays stopped. The help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
+    Overworld_PlaySpecialMapMusic is skipped: the BGM stays stopped. GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
     from the field uses fresh battle globals, so the backdrop follows the map's battle scene (gyms etc.) but not the
     last battle's type flags, which the GBA keeps (e.g. a Rare Candy right after a gym leader would draw the
     Leader terrain there). Mons have no language, markings, ribbons or mail, so EvolutionRenameMon always treats
@@ -179,7 +178,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     and ValidateSavedWonderCard are FALSE, IsBadEggInParty is FALSE (no bad eggs), CloseLink is a no-op.
   - Player avatar (world/playerAvatar.ts, world/bike.ts): the bike bell is item_use.c's (menus/itemUse.ts). Not ported: the warp arrow sprite on arrow mats
     (HandleWarpArrowSpriteHideShow), DoStairWarp's 12-frame delay when a stair warp takes the player off the
-    bike, the teleport spin, the quest log's recordings, and the help context. Movement scripts
+    bike, the teleport spin and the quest log's recordings. Movement scripts
     (applymovement) still run through MovementRunner rather than the player's held-movement actions, so `lock`
     waits for a scripted step to end by `isMoving`.
   - Fishing (world/fishing.ts): no quest log (QuestLogTryRecordPlayerAvatarGfxTransition, QL_PLAYER_GFX_FISH's
@@ -189,7 +188,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     same frame, but Fishing11 / Fishing16 see a finished message a frame later than RunTextPrinters would. The
     player's sprite anim (AnimateSprites) is run by the fishing task after its state functions, as the GBA's sprite
     pass would after the tasks.
-  - Surf and Waterfall (world/surf.ts): no HELPCONTEXT_SURFING, no quest log (`goto_if_questlog` never branches). FldEff_UseSurf takes the
+  - Surf and Waterfall (world/surf.ts): no quest log (`goto_if_questlog` never branches). FldEff_UseSurf takes the
     field controls lock at once: the C holds FieldCallback_PrepareFadeInFromMenu's (or the script's) lock until
     the task takes it, which the port's hand-offs don't. Like CreateFieldEffectShowMon, the banner waits for its
     graphics to load (UseSurfEffect_3, waterfall_1). The surf blob is the player's only `fieldEffectSpriteId`
@@ -220,14 +219,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     Ditto; the port starts them at [0, 1] (no compatible pair gets there).
   - The money box and Safari stats window are Phaser MenuWindows (the field isn't on the GBA layer).
   - Pokémon Storage System (menus/pokemonStorage*.ts): no
-    quest log events (SetPokeStorageQuestLogEvent) or help context. The PPU has no OBJ mosaic, so the mon shown on
+    quest log events (SetPokeStorageQuestLogEvent). The PPU has no OBJ mosaic, so the mon shown on
     the left changes at once instead of un-pixelating (the effect's timing, which the menus wait for, is kept).
     The screen works on its own six-slot copy of the party (the C keeps empty slots while it runs) and writes it
     back, compacted, when it hands over to another screen; a mon placed after an empty party slot would move up
     early if the summary / naming screen / bag opened while the party box still showed the gap.
     MON_DATA_SANITY_IS_BAD_EGG reads FALSE and mail isn't modelled, so the bad-egg and mail checks never trigger.
   - Player's PC (ui/PlayerPcMenu.ts, menus/itemPc.ts): the mailbox is always empty (mail isn't modelled); no quest
-    log events (withdrew / deposited / gave from the PC) or help contexts.
+    log events (withdrew / deposited / gave from the PC).
   - Save data (state/saveData.ts): one JSON save in browser localStorage instead of the flash's two 14-sector
     save slots, so there are no sector checksums, no alternating slots / save counter, no backup of the previous
     save and no encryption of money, coins and bag quantities (gSaveBlock2Ptr->encryptionKey). The save holds
@@ -250,36 +249,33 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     on) aren't ported yet (W-intro unit 2), so IntroCB_Scene1 goes straight to IntroCB_ExitToTitleScreen.
     LoadSpritePalettes(sFightSceneSpritePalettes) reads past the array's end without BUGFIX (no {0} entry); the
     port loads its five palettes only.
-  - Title screen (menus/titleScreen.ts): no help system (HELPCONTEXT_TITLE_SCREEN: L/R do nothing). StartTimer1 / SeedRngAndSetTrainerId don't seed the RNG from the time spent on the title
+  - Title screen (menus/titleScreen.ts): StartTimer1 / SeedRngAndSetTrainerId don't seed the RNG from the time spent on the title
     screen: the port seeds it at load. B+SELECT (REVISION 0's berry fix program, a multiboot program for Ruby and
     Sapphire's berry clock) does nothing. The clear save data screen (B+SELECT+UP) empties the one localStorage
     slot (ClearSaveData erases every flash sector, incl. the Hall of Fame) and its soft reset (DoSoftReset) is
     `softReset` in scenes/BootScene.ts: the scenes restart, the extracted data stays loaded.
-  - Oak's speech (menus/oakSpeech.ts): no help context (HELPCONTEXT_NEW_GAME). After the naming screen the C loads 48
+  - Oak's speech (menus/oakSpeech.ts): after the naming screen the C loads 48
     colours past the background palette (out of the tiles after it) into palettes the player / rival pic overwrite
     anyway; the port loads just the palette. The trainer id is still rolled when the game state is created (see the
     RNG approximation), not by the naming screen's SeedRngAndSetTrainerId. CB2_NewGame hands only the names and the
     gender to the field, whose new GameState is NewGameInitData's.
-  - Save dialog (ui/SaveDialog.ts): no help context, no
-    GAME_STAT_SAVED_GAME, no quest log data. A failed write shows the save error message without
+  - Save dialog (ui/SaveDialog.ts): no GAME_STAT_SAVED_GAME, no quest log data. A failed write shows the save error message without
     DoSaveFailedScreen. SaveMapView isn't ported: the map view isn't saved, so CONTINUE rebuilds the map from its
-    header and ON_LOAD script (metatiles a script changed later aren't restored). `special Field_AskSaveTheGame`
-    (task50_save_game) doesn't switch to HELPCONTEXT_SAVE.
-  - Option menu (menus/optionMenu.ts): no help context (HELPCONTEXT_OPTIONS). The L=A button mode applies on the GBA-layer
+    header and ON_LOAD script (metatiles a script changed later aren't restored).
+  - Option menu (menus/optionMenu.ts): the L=A button mode applies on the GBA-layer
     screens (GbaHostScene's ReadKeys) but not on the field, whose input reads the buttons directly (on the GBA,
     ReadKeys turns L into A everywhere). The field isn't on the GBA layer, so FieldMenuScene sets the backdrop
     (BG palette 0 colour 0, black as LoadTilesetPalette leaves it) the option menu doesn't load itself.
   - Start menu help window (ui/HelpMessageWindow.ts): a Phaser window like the start menu, not a BG0 window; the
     start menu (and its help window) goes away as soon as an item that leaves the field is chosen, before the fade
     (on the GBA both stay up under the fade).
-  - The help system (ui/helpSystem*.ts): only the field sets a context so far (SetHelpContextForMap on warps,
-    CONTINUE and returns to the field); the other screens' SetHelpContext calls, HelpSystem_Enable / _Disable and
-    the help specials are W-help unit 2's (GAPS_PLAN.md), so the field's context stays on them. gHelpSystemEnabled
-    starts TRUE (main.c clears it at boot and the title screen's HelpSystem_Enable sets it), a soft reset doesn't
-    clear the context or the welcome page's sSeenHelpSystemIntro, and Surf's dismount doesn't call
-    SetHelpContextForMap. It opens only once the field has loaded (it needs the field's fonts and graphics), so
-    not on the title screen or the main menu of a fresh boot. HelpSystem_Enable has no quest log check;
-    HelpSystem_IsSinglePlayer is always TRUE (no link play: GAPS_PLAN.md decision 4).
+  - The help system (ui/helpSystem*.ts): the screens the port doesn't have don't set their contexts or toggle it
+    (mail's HELPCONTEXT_*_MAILBOX: the mailbox is always empty; Teachy TV; the main menu's MYSTERY GIFT; the link
+    and wireless screens' HelpSystem_Enable / _DisableToggleWithRButton: link.c, link_rfu_2.c, union_room_chat.c,
+    trade_scene.c's link trades, the e-Reader; the berry fix program; the quest log's playback). HelpSystem_Enable
+    has no quest log check; HelpSystem_IsSinglePlayer is always TRUE (no link play: GAPS_PLAN.md decision 4). The
+    title screen sets up its own GameState from the save (LoadGameSave's gSaveBlock1/2) for the help's flags and
+    button mode.
   - CONTINUE (OverworldScene.continueSavedGame): the map's objects spawn from its templates (object events aren't
     saved, see Save data); gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
@@ -288,18 +284,18 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Field ListMenu (ui/FieldListMenu.ts): the quest log's QL_AvoidDisplay is ignored.
   - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu.
   - Hall of Fame (menus/hallOfFame.ts): no Champion
-    Ribbons (mons have no ribbons; the event tickets come anyway: see "Deliberate QOL changes"); the help system isn't toggled and the
+    Ribbons (mons have no ribbons; the event tickets come anyway: see "Deliberate QOL changes"); the
     quest log isn't saved; a failed save carries on (no DoSaveFailedScreen / gGameContinueCallback).
     Other game stats than GAME_STAT_ENTERED_HOF and
     GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted.
-  - Pokédex screen (menus/pokedexScreen.ts, menus/pokedexArea.ts): no help system context. The mon page and the habitat pages load the shown mons'
+  - Pokédex screen (menus/pokedexScreen.ts, menus/pokedexArea.ts): the mon page and the habitat pages load the shown mons'
     pics, palettes, footprints and icons (for the area page) when they're first drawn (fetched on demand, not
     preloaded; the battle preloads the registered page's), so the first view of a mon or a page can take a frame or
     two longer. Unown and Spinda are drawn with personality 0 (the save's unownPersonality / spindaPersonality
     aren't kept; Spinda's spots aren't drawn anywhere). The anticheat's second and third copies of the seen flags
     aren't kept (one `dexSeen` set), so "caught" just needs "seen" too. The Pokédex keeps the field's DISPCNT,
     which the port sets in FieldMenuScene since the field isn't on the GBA layer.
-  - Trainer card (menus/trainerCard.ts): no help system context. The berry picking and Pokémon Jump records (a star for 200 of each) and the link stats are always 0 (no
+  - Trainer card (menus/trainerCard.ts): the berry picking and Pokémon Jump records (a star for 200 of each) and the link stats are always 0 (no
     link minigames), so the back never shows its link battle / trade / Berry Crush / Union Room lines (the easy chat
     profile is saved since save version 5, but only a link card prints it). The flip's per-line BG0VOFS gives line L buffer[L] (the PPU's
     HBlank convention), where the GBA's HBlank interrupt sets it for the line after, a one-line shift of the squash.
@@ -312,10 +308,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     with a fresh Overworld scene and GameState; other module-level state isn't reset.
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, cable club monitors) start their scripts and hit the unimplemented-special warnings.
-  - No-op specials (`NO_OP` in `script/specials.ts`): quest log, help system, fame checker, GameCube link flags,
-    CloseLink.
-  - Player names are "PLAYER"/"RIVAL" until Oak's intro exists.
-  - No-op specials (`NO_OP` in `script/specials.ts`): quest log, help system, fame checker, GameCube link flags.
+  - No-op specials (`NO_OP` in `script/specials.ts`): the quest log, the fame checker, InitUnionRoom and CloseLink.
   - Player names are "PLAYER"/"RIVAL" in dev starts and with `?skipIntro` (the e2e harness), which skip Oak's speech.
 - **Approximations:**
   - sound.c (gba/sound.ts, audio/frame.ts): the engine's logic runs every frame, output or not, so fanfare, `waitse`, `fadeoutbgm` and IsSEPlaying waits time like the GBA. Task_Fanfare is a
@@ -361,7 +354,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - The Pewter Museum's fossil pics (ui/MuseumFossilPic.ts): a Phaser image over a MenuWindow, like `showmonpic`,
     not an OBJ in palette 13 over BG0 (the field isn't on the GBA layer); the graphics and positions are the C's.
   - Prof. Oak's Pokédex rating: `waitfanfare` holds the script for MUS_DEX_RATING / MUS_EVOLVED's sFanfares counts,
-    as on the GBA; BackupHelpContext / RestoreHelpContext are no-ops (no help system).
+    as on the GBA.
   - Text colour is reset to NPC_TEXT_COLOR_DEFAULT when a script starts, not in ProcessPlayerFieldInput.
   - The RNG (`random.c` formula) is seeded from `Math.random` (or `?seed=` in dev); the trainer id is rolled when the game state is created instead of in Oak's intro.
   - A mon's met location is the MAPSEC_* name, not the numeric id.

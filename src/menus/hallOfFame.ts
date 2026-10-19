@@ -129,6 +129,7 @@ import {
   StopCryAndClearCrySongs,
 } from '../gba/sound';
 import { TryFadeOutOldMapMusic, type MapMusicHeader } from '../gba/overworldMusic';
+import { HelpSystem_Disable } from '../ui/helpSystemContext';
 
 const PARTY_SIZE = 6;
 const HALL_OF_FAME_BG_PAL = RGB(22, 24, 29);
@@ -305,6 +306,7 @@ function CB2_HofIdle(): void {
 function InitHallOfFameScreen(): boolean {
   switch (gMain.state) {
     case 0:
+      HelpSystem_Disable(); // gHelpSystemEnabled = FALSE (until the credits' SoftReset and the title screen)
       SetVBlankCallback(null);
       ClearVramOamPltt_LoadHofPal();
       sHofGfxPtr = { state: 0, tilemap1: new Uint16Array(0x800), tilemap2: new Uint16Array(0x800) };

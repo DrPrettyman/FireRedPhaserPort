@@ -3821,3 +3821,31 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   screen; audioOutput.test.ts's headless check boots with `intro: true` (only needs the page up). The frame counts
   showed BeginNormalPaletteFade doing the fade's first step itself and the intro task first running the frame
   after CB2_SetUpIntro creates it, as in the C.
+
+### W-help 2: the help system's contexts at every screen (batch 11)
+
+- The contexts: every SetHelpContext / BackupHelpContext / RestoreHelpContext / HelpSystem_Disable / _Enable call
+  site the port has a counterpart for, as one- or two-line hooks: title_screen.c (HELPCONTEXT_TITLE_SCREEN and
+  HelpSystem_Enable in SetTitleScreenScene_Run, Disable on the timeout), oak_speech.c, naming_screen.c,
+  start_menu.c's save (StartCB_Save1 / Field_AskSaveTheGame → SaveDialog's constructor, the restore on every way
+  out of RunSaveDialogCB), option_menu.c, pokedex_screen.c, party_menu.c, pokemon_summary_screen.c (its local
+  no-op SetHelpContext replaced), item_menu.c (the item PC's deposit context), item_pc.c, player_pc.c (the
+  bedroom PC's contexts through PlayerPcMenu's `notInRoom`), pokemon_storage_system_menu.c / _tasks.c,
+  trainer_card.c, battle_main.c / reshow_battle_screen.c (SetHelpContextForBattle), battle_setup.c's
+  Task_BattleStart, field_effect.c (FldEff_UseSurf's end, the Seafoam fall warp), field_specials.c's
+  ForcePlayerToStartSurfing, field_player_avatar.c's Task_WaitStopSurfing (SetHelpContextForMap), daycare.c's egg
+  hatch, evolution_scene.c, trade_scene.c's in-game trade, seagallop.c, hall_of_fame.c. Skipped (no port): mail,
+  Teachy TV, the main menu's Mystery Gift, the link / wireless screens, the e-Reader, the berry fix program, the
+  quest log.
+- The help specials out of NO_OP (specials.ts HELP_SPECIALS; sideSpecials.ts's no-op Backup / Restore pair gone).
+  The duplicated "No-op specials" lines in DEVIATIONS.md (a union-merge leftover) are one line now.
+- Boot: gHelpSystemEnabled starts FALSE (main.c); the title screen enables it, and BootScene does for the dev
+  starts that skip the title screen. softReset calls ResetHelpSystemState. MainMenuScene hands the help its fonts
+  and loads its graphics, and builds a GameState from the save on each LoadGameSave (the help reads the flags and
+  the button mode), so the help opens on the title screen and the main menu of a fresh boot.
+- Tests: helpSystem.test.ts grows checkHelpContext (the context, then L, the topics against helpSystem.json's
+  sHelpSystemContextTopicFlags / order, B) on the title screen, a Pokémon Center, the save dialog (and the
+  restore after NO), the Pokédex, the party menu, the summary (and the skills page's context), the bag, Bill's
+  PC, a wild battle (and the bag in it keeping the battle's context), plus Surf's context on and off the water.
+  Unit: SetHelpContextForBattle by battle type, the help specials. Ran helpSystem, titleScreen, intro, surf and
+  inGameTrades e2e files.

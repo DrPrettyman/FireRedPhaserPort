@@ -1052,12 +1052,26 @@ this is the next level down. When you add or change a subsystem, update its entr
   gDisableHelpSystemVolumeReduce: SetBGMVolume_SuppressHelpSystemReduction, the Pokédex); SE_HELP_OPEN /
   _CLOSE / _ERROR. Only OPTIONS_BUTTON_MODE_HELP opens it, R not after HelpSystem_DisableToggleWithRButton.
   The field calls SetHelpContextForMap where overworld.c does (OverworldScene.onMapLoaded for warps and CONTINUE,
-  resumeMap for returns to the field). It opens once the field has handed over its fonts and loaded
-  `helpSystemGfxSymbols` (OverworldScene.create). Probe: `t.helpSystem()` (videoState: 0 closed, 5 up; menuState:
+  resumeMap for returns to the field). It opens once a scene has handed over its fonts (InitHelpSystemFonts) and
+  loaded `helpSystemGfxSymbols`: OverworldScene.create, and MainMenuScene.create for the title screen and the main
+  menu (which also builds a GameState from the save, LoadGameSave's gSaveBlock1/2, for the help's flags and button
+  mode). **The contexts:** every screen the port has calls SetHelpContext / BackupHelpContext / RestoreHelpContext
+  / HelpSystem_Disable / _Enable where its C does (one-line hooks: the title screen, Oak's speech, the naming
+  screen, the save dialog, the option menu, the Pokédex, the party menu, the summary, the bag, the item PC, the
+  player's PC (PlayerPcMenu: `notInRoom` for the bedroom PC's contexts), Bill's PC and the box screen, the trainer
+  card, the battle (SetHelpContextForBattle: CB2_InitBattle's and ReshowBattleScreenAfterMenu's inline switch),
+  Task_BattleStart's Disable / Enable around the transition, Surf (FldEff_UseSurf, ForcePlayerToStartSurfing,
+  fall warps; SetHelpContextForMap after Task_WaitStopSurfing), the egg hatch, the evolution scene, in-game
+  trades, the Seagallop ferry, the Hall of Fame). The help specials (Script_SetHelpContext with VAR_0x8004,
+  BackupHelpContext, RestoreHelpContext, SetHelpContextForMap, HelpSystem_Disable / _Enable) are specials.ts's
+  HELP_SPECIALS. **Boot:** gHelpSystemEnabled is FALSE at boot (BootScene, as main.c) until the title screen's
+  HelpSystem_Enable; the dev starts that skip the title screen (`?skipIntro`, `?start=`, `?map=`) enable it in
+  BootScene. `softReset` calls ResetHelpSystemState (the welcome page again, HELPCONTEXT_NONE). Probe: `t.helpSystem()` (videoState: 0 closed, 5 up; menuState:
   9 welcome, 0 topics, 3 submenu, 6 item; level, topic, context, the list with decoded labels). Tests:
   `tests/unit/helpSystem.test.ts` (contexts, SetHelpContextForMap, the topics and submenus by flags),
   `tests/e2e/helpSystem.test.ts` (the field: welcome once, a topic, an item, back out, BGM and SEs; LR mode; the
-  bag paused under it). A screen that wants its own context calls SetHelpContext from helpSystemContext.ts where
+  bag paused under it; checkHelpContext's context and topics on the title screen, a Pokémon Center, the save
+  dialog, the Pokédex, the party menu, the summary, the bag, Bill's PC, a wild battle and the bag in it; Surf). A screen that wants its own context calls SetHelpContext from helpSystemContext.ts where
   its C does.
 - **Trainer card:** `menus/trainerCard.ts` is trainer_card.c, CARD_TYPE_FRLG for the player only (the Hoenn and link
   cards wait for link play). START → PLAYER (StartMenuPlayerCallback) fades out and runs ShowPlayerTrainerCard in
