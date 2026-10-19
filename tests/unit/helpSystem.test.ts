@@ -18,6 +18,7 @@ import {
   RestoreHelpContext,
   SetHelpContext,
   SetHelpContextDontCheckBattle,
+  SetHelpContextForBattle,
   SetHelpContextForMap,
   SetHelpSystemFieldQuery,
   SetHelpSystemSubmenuItems,
@@ -25,6 +26,7 @@ import {
   type HelpSystemData,
   type HelpSystemListMenu,
 } from '../../src/ui/helpSystemContext';
+import { SPECIALS } from '../../src/script/specials';
 import { newBattleEnv, readGen, type TestGame } from './gameData';
 
 let game: TestGame;
@@ -75,6 +77,31 @@ describe('contexts', () => {
     SetHelpContextDontCheckBattle(ctx('SAFARI_BATTLE'));
     SetHelpContextDontCheckBattle(ctx('BAG'));
     expect(GetHelpContext()).toBe(ctx('BAG'));
+  });
+
+  test("the battle's context from gBattleTypeFlags (CB2_InitBattle, ReshowBattleScreenAfterMenu)", () => {
+    const f = (...names: string[]) => names.reduce((acc, n) => acc | game.d(`BATTLE_TYPE_${n}`), 0);
+    const at = (flags: number) => {
+      SetHelpContextDontCheckBattle(ctx('OVERWORLD'));
+      SetHelpContextForBattle(flags);
+      return GetHelpContext();
+    };
+    expect(at(0)).toBe(ctx('WILD_BATTLE'));
+    expect(at(f('TRAINER'))).toBe(ctx('TRAINER_BATTLE_SINGLE'));
+    expect(at(f('TRAINER', 'DOUBLE'))).toBe(ctx('TRAINER_BATTLE_DOUBLE'));
+    expect(at(f('SAFARI'))).toBe(ctx('SAFARI_BATTLE'));
+    expect(at(f('LINK', 'TRAINER'))).toBe(ctx('OVERWORLD'));
+  });
+
+  test('the help specials: Script_SetHelpContext (VAR_0x8004), BackupHelpContext / RestoreHelpContext', () => {
+    const env = { state: game.state } as unknown as Parameters<(typeof SPECIALS)[string]>[0];
+    SetHelpContext(ctx('INDOORS'));
+    SPECIALS.BackupHelpContext(env);
+    game.state.setVar('VAR_0x8004', ctx('PC'));
+    SPECIALS.Script_SetHelpContext(env);
+    expect(GetHelpContext()).toBe(ctx('PC'));
+    SPECIALS.RestoreHelpContext(env);
+    expect(GetHelpContext()).toBe(ctx('INDOORS'));
   });
 
   test('BackupHelpContext / RestoreHelpContext', () => {
