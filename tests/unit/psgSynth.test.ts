@@ -9,7 +9,7 @@
 import { describe, expect, test } from 'vitest';
 import { m4aSongNumStart, SetPokemonCryStereo } from '../../src/audio/m4a';
 import { dacOutput, SoundCircuit } from '../../src/audio/outputCore';
-import { clockLfsr, noisePeriod, PsgSynth, type Noise } from '../../src/audio/psgSynth';
+import { clockLfsr, noisePeriod, PsgSynth, WAVE_RESTART_DELAY, type Noise } from '../../src/audio/psgSynth';
 import {
   PSG_NR10,
   PSG_NR11,
@@ -288,7 +288,12 @@ describe('the wave channel', () => {
     s.write(PSG_NR32, nr32);
     s.write(PSG_NR30, 0x80);
     s.write(PSG_NR33, 0xe0);
-    s.write(PSG_NR34, 0x87); // 2016: a sample every 8 × 32 = 256 cycles
+    restart(s); // 2016: a sample every 8 × 32 = 256 cycles
+  }
+  /** NR34's restart, then the 24 cycles its first sample comes late (so the samples below line up). */
+  function restart(s: PsgSynth): void {
+    s.write(PSG_NR34, 0x87);
+    levels(s, 1, WAVE_RESTART_DELAY);
   }
   const RAMP = [0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef];
 
@@ -315,11 +320,27 @@ describe('the wave channel', () => {
     }
   });
 
+  test("a restart's first sample comes 24 cycles after a period (mGBA, SameBoy: 3 ticks of the 2 MHz clock)", () => {
+    const s = psg();
+    s.write(PSG_NR30, 0x40);
+    s.write(PSG_WAVE_RAM, 0x8f);
+    s.write(PSG_NR30, 0x00);
+    s.write(PSG_NR32, 0x20);
+    s.write(PSG_NR30, 0x80);
+    s.write(PSG_NR33, 0xe0);
+    s.write(PSG_NR34, 0x87);
+    // The sample that was playing (0) for 256 + 24 cycles, then 8, 15 every 256.
+    expect(levels(s, 1, 279)).toEqual([0]);
+    expect(levels(s, 1, 1)).toEqual([0]);
+    expect(levels(s, 1, 1)).toEqual([8]);
+    expect(levels(s, 2, 255)).toEqual([8, 15]);
+  });
+
   test('a restart keeps the position; NR30 bit 7 clear stops it; the other bank', () => {
     const s = psg();
     loadWave(s, RAMP);
     levels(s, 5, 256); // played 0, 0, 1, 2, 3; 4 rotated out at the end
-    s.write(PSG_NR34, 0x87);
+    restart(s);
     expect(levels(s, 3, 256)).toEqual([4, 5, 6]); // the sample playing (4) goes on for a whole step
     s.write(PSG_NR30, 0x00);
     expect(s.wave.on).toBe(false);
@@ -327,16 +348,30 @@ describe('the wave channel', () => {
     // NR30 0x00 lets the CPU reach bank 1; NR30 0xC0 plays it.
     for (let i = 0; i < 16; i++) s.write(PSG_WAVE_RAM + i, 0xff);
     s.write(PSG_NR30, 0xc0);
-    s.write(PSG_NR34, 0x87);
+    restart(s);
     expect(levels(s, 3, 256)).toEqual([7, 15, 15]); // 7 was playing when it stopped
     // Back to bank 0: it goes on where it stopped (sample 8 next), its rotation kept.
     s.write(PSG_NR30, 0x80);
-    s.write(PSG_NR34, 0x87);
+    restart(s);
     expect(levels(s, 3, 256)).toEqual([15, 8, 9]);
   });
 });
 
 describe('mixing', () => {
+  test("through the DAC, the frame sequencer steps on its own cycle, not the output sample's boundary (W-ref 2b)", () => {
+    // Square 2 at 50% duty, frequency 0 (a duty step every 32,768 cycles from power-on): high from 229,376 to
+    // 294,912. Its envelope (15, down, a step per clock) steps at the sequencer's first step 7: 262,144 cycles.
+    // The output's sample 836 covers 262,086-262,399.5: the tick at 261,888 (15) holds for 58 cycles, the one at
+    // 262,144 (= 1,024 × 256) already sees 14.
+    const s = psg();
+    s.dacInterval = 256;
+    square2(s, 0x80, 0xf1, 0, 0, false);
+    const out = levels(s, 838, 313.5);
+    expect(out[835]).toBe(15);
+    expect(out[836]).toBeCloseTo((15 * 58 + 14 * 255.5) / 313.5, 6);
+    expect(out[837]).toBe(14);
+  });
+
   test('NR51 routes, NR50 scales each side (×1-8), SOUNDCNT_H bits 0-1 the PSG share', () => {
     const s = psg();
     s.write(PSG_NR51, 0x02); // square 2 right only

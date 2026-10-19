@@ -9,7 +9,10 @@
 // Where the documents leave the GBA's behaviour open, this follows mGBA's GB_AUDIO_GBA style (src/gb/audio.c),
 // which is what W-ref 2 compares with: the PSG adds unsigned levels (no DC offset), a square's duty position and
 // the wave channel's position survive a restart, the wave RAM rotates as it plays, noise starts its LFSR at 0
-// with XNOR feedback. Times are in GBA cycles (2^24 Hz); a GBA frame is 280,896 of them.
+// with XNOR feedback. Where the hardware is documented and mGBA takes a shortcut, this follows the hardware: a new
+// square or noise rate from the timer's next reload, a stopped channel at 0, NR32 changing only the volume
+// (W-ref 2b: the port equals such a model at every DAC tick; docs/DEVIATIONS.md). Times are in GBA cycles (2^24 Hz);
+// a GBA frame is 280,896 of them.
 
 import {
   PSG_NR10,
@@ -51,6 +54,9 @@ export const GBA_CYCLES_PER_FRAME = 280896;
 /** The frame sequencer's period (512 Hz): length at steps 0, 2, 4, 6 (256 Hz), sweep at 2 and 6 (128 Hz), the
  *  envelopes at 7 (64 Hz). */
 export const FRAME_SEQUENCER_CYCLES = 32768;
+
+/** The wave channel's first sample after a restart comes this many cycles later than a sample period. */
+export const WAVE_RESTART_DELAY = 24;
 
 /** The duty patterns (NRx1 bits 6-7: 12.5%, 25%, 50%, 75%), one bit per step of the square's 8. */
 export const SQUARE_DUTY: readonly (readonly number[])[] = [
@@ -452,8 +458,10 @@ export class PsgSynth {
         if (value & 0x80) {
           w.on = w.dac;
           this.reloadLength(w, 256, seqEven);
-          // The position isn't reset on the GBA (its wave RAM rotates); the sample timer starts over.
-          w.timer = 8 * (2048 - w.freq);
+          // The position isn't reset on the GBA (its wave RAM rotates); the sample timer starts over, 3 ticks of
+          // the wave's 2 MHz clock late (6 GB cycles, 24 GBA cycles: mGBA's GBAudioWriteNR34, SameBoy's
+          // sample_countdown + 3), so the sample that was playing goes on that much longer.
+          w.timer = 8 * (2048 - w.freq) + WAVE_RESTART_DELAY;
         }
         break;
       }
@@ -712,8 +720,9 @@ export class PsgSynth {
         this.pending = 0;
         this.clockSequencer();
       }
-      this.seqCountdown -= cyclesPerSample;
       if (interval === 0) {
+        // The box filter: the steps land on the samples' boundaries.
+        this.seqCountdown -= cyclesPerSample;
         this.mix(
           this.squareAverage(this.sq1, cyclesPerSample),
           this.squareAverage(this.sq2, cyclesPerSample),
@@ -724,25 +733,40 @@ export class PsgSynth {
         outR[i] = this.heldR;
         continue;
       }
-      // The held level changes only at the DAC's ticks, so the channels are moved on only there (and before the
-      // frame sequencer's steps, and at the end): `pending` is how far they lag.
+      // The held level changes only at the DAC's ticks, so the channels are moved on only there and at the frame
+      // sequencer's steps, each on its own cycle (a step on a tick's cycle first), and at the end: `pending` is how
+      // far they lag.
       let rem = cyclesPerSample;
       let accL = 0;
       let accR = 0;
-      while (this.dacCountdown <= rem) {
-        const c = this.dacCountdown;
-        accL += this.heldL * c;
-        accR += this.heldR * c;
-        this.advance(this.pending + c);
-        this.pending = 0;
-        rem -= c;
-        this.samplePoint();
-        this.dacCountdown = interval;
+      for (;;) {
+        const seq = this.seqCountdown;
+        const dac = this.dacCountdown;
+        if (seq <= rem && seq <= dac) {
+          this.advance(this.pending + seq);
+          this.pending = 0;
+          accL += this.heldL * seq;
+          accR += this.heldR * seq;
+          rem -= seq;
+          this.dacCountdown -= seq;
+          this.seqCountdown = FRAME_SEQUENCER_CYCLES;
+          this.clockSequencer();
+        } else if (dac <= rem) {
+          accL += this.heldL * dac;
+          accR += this.heldR * dac;
+          this.advance(this.pending + dac);
+          this.pending = 0;
+          rem -= dac;
+          this.seqCountdown -= dac;
+          this.samplePoint();
+          this.dacCountdown = interval;
+        } else break;
       }
       accL += this.heldL * rem;
       accR += this.heldR * rem;
       this.pending += rem;
       this.dacCountdown -= rem;
+      this.seqCountdown -= rem;
       outL[i] = accL / cyclesPerSample;
       outR[i] = accR / cyclesPerSample;
     }

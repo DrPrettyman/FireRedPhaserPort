@@ -38,10 +38,12 @@ test('a wild battle: MUS_VS_WILD with the transition, MUS_VICTORY_WILD, the leve
   await game.mashUntil((t) => t.idle(), { what: 'the field after the battle' });
   const events = await audioEvents(game, mark);
 
-  // PlayMapChosenOrBattleBGM(0) in CreateBattleStartTask: before Task_BattleStart starts the transition.
+  // PlayMapChosenOrBattleBGM(0) in CreateBattleStartTask: PlayNewMapMusic, which MapMusicMain starts at the end of
+  // that frame. The hook starts the battle between ticks, so with the transition's graphics cached the transition
+  // can start earlier in the same tick: compare frames, not seqs (a race under load in batch 9's merge).
   const vs = events.find((e) => e.type === 'bgm' && e.name === 'MUS_VS_WILD')!;
   expect(vs).toMatchObject({ player: 'BGM', started: true });
-  expect(vs.seq).toBeLessThan(transition.seq);
+  expect(vs.frame).toBeLessThanOrEqual(transition.frame);
 
   // getexp: the foe fainted with the player's mon standing, so BattleStopLowHpSound + PlayBGM(MUS_VICTORY_WILD).
   const victory = events.find((e) => e.type === 'bgm' && e.name === 'MUS_VICTORY_WILD')!;

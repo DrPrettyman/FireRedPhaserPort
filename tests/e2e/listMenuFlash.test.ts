@@ -109,14 +109,20 @@ test('Rock Tunnel is dark until Flash lights it', async () => {
   expect(dark.dark).toBeLessThan(0.97);
 
   // FldEff_UseFlash: FLAG_SYS_FLASH_ACTIVE, then EventScript_FldEffFlash (animateflash 0, setflashlevel 0).
-  await game.eval((t) => t.useFlash());
-  expect(await game.eval((t) => t.flag('FLAG_SYS_FLASH_ACTIVE'))).toBe(true);
-  // The circle grows 2 px every other frame: part way, the darkness is smaller but still there.
-  const midway = await game.waitFor((t) => {
-    const f = t.field()!.flash;
-    return f.dark < 0.85 && f.dark > 0.1 && f;
+  // The circle grows 2 px every other frame: part way, the darkness is smaller but still there. Watched in the page
+  // from the tick Flash starts: polled from Node, the animation could be over first under load (batch 9's merge).
+  const midway = await game.eval(async (t) => {
+    t.useFlash();
+    let seen: { level: number; dark: number } | undefined;
+    await t.until(() => {
+      const f = t.field()!.flash;
+      if (f.dark < 0.85 && f.dark > 0.1) seen = { ...f };
+      return seen;
+    }, 600);
+    return seen;
   });
-  expect(midway.level).toBe(4); // setflashlevel only runs once animateflash is done
+  expect(await game.eval((t) => t.flag('FLAG_SYS_FLASH_ACTIVE'))).toBe(true);
+  expect(midway?.level).toBe(4); // setflashlevel only runs once animateflash is done
   await game.waitIdle();
   expect(await game.eval((t) => t.field()?.flash)).toEqual({ level: 0, dark: 0 });
 
@@ -152,18 +158,19 @@ test('a wild battle in a dark cave opens with the Flash transition (Blur), a lit
 
   // TRANSITION_TYPE_FLASH with a weaker wild mon: B_TRANSITION_BLUR.
   mark = await game.mark();
-  await game.eval((t) => t.startWildBattle({ species: 'ZUBAT', level: 15 }));
-  const begin = await game.waitForEvent('battleTransition', { since: mark });
-  expect(await game.eval((t, id) => t.nameOf('B_TRANSITION_', id), begin.transition as number)).toBe('B_TRANSITION_BLUR');
   // The circle stays on the GBA layer's WIN0 (InitCurrentFlashLevelScanlineEffect) through the transition.
-  // (After the intro's blinks, which leave nothing pure black, the blur shows the circle: ~95% black.)
-  await game.waitFor(
-    (t) => {
+  // (After the intro's blinks, which leave nothing pure black, the blur shows the circle: ~95% black.) Watched in
+  // the page from the battle's start: polled from Node, the transition could be over first under load (batch 9).
+  const darkField = await game.eval(async (t) => {
+    void t.startWildBattle({ species: 'ZUBAT', level: 15 });
+    return t.until(() => {
       const black = t.field()?.gbaScreenBlack;
       return black !== undefined && black > 0.9 && black < 0.99;
-    },
-    { what: 'the dark field on the GBA layer' },
-  );
+    }, 1200);
+  });
+  expect(darkField, 'the dark field on the GBA layer').toBe(true);
+  const begin = await game.waitForEvent('battleTransition', { since: mark });
+  expect(await game.eval((t, id) => t.nameOf('B_TRANSITION_', id), begin.transition as number)).toBe('B_TRANSITION_BLUR');
   await game.waitForEvent('battleStart', { since: mark, timeout: 60_000 });
   await game.mashUntil((t) => t.events().some((e) => e.type === 'battleEnd'), { what: 'the battle to end' });
   await game.waitIdle({ timeout: 60_000 });

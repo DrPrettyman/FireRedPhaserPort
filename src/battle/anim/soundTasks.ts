@@ -1,13 +1,13 @@
-// battle_anim_sound_tasks.c: sound effects and cries panned across the battle. There's no audio yet, so
-// the SE/cry calls are the sound.ts no-ops; the tasks keep their timing (cries count as finished at once).
+// battle_anim_sound_tasks.c: sound effects and cries panned across the battle (gba/sound.ts's PlaySE*WithPanning
+// and PlayCry_ByMode with the C's modes; the cry waits poll IsCryPlaying).
 
-import { IsCryPlaying, PlayCry_ByMode } from '../../gba/sound';
 import { gTasks, type TaskFunc } from '../../gba/task';
 import { K } from '../constants';
 import { g } from '../env';
 import { getBattlerSide } from '../util';
 import { BATTLE_PARTNER, IsBattlerSpriteVisible } from './animMons';
-import { BattleAnimAdjustPanning, CalculatePanIncrement, KeepPanInRange, PlaySE12WithPanning } from './battleAnim';
+import { IsCryPlaying, PlayCry_ByMode, PlaySE1WithPanning, PlaySE2WithPanning, PlaySE12WithPanning } from '../../gba/sound';
+import { BattleAnimAdjustPanning, CalculatePanIncrement, KeepPanInRange } from './battleAnim';
 import { anim, DestroyAnimSoundTask, DestroyAnimVisualTask, gBattleAnimArgs } from './state';
 
 const s8 = (v: number) => (v << 24) >> 24;
@@ -186,12 +186,12 @@ const SoundTask_PlayCryWithEcho_Step: TaskFunc = (taskId) => {
 };
 
 const SoundTask_PlaySE1WithPanning: TaskFunc = (taskId) => {
-  PlaySE12WithPanning(gBattleAnimArgs[0] & 0xffff, BattleAnimAdjustPanning(s8(gBattleAnimArgs[1])));
+  PlaySE1WithPanning(gBattleAnimArgs[0] & 0xffff, BattleAnimAdjustPanning(s8(gBattleAnimArgs[1])));
   DestroyAnimVisualTask(taskId);
 };
 
 const SoundTask_PlaySE2WithPanning: TaskFunc = (taskId) => {
-  PlaySE12WithPanning(gBattleAnimArgs[0] & 0xffff, BattleAnimAdjustPanning(s8(gBattleAnimArgs[1])));
+  PlaySE2WithPanning(gBattleAnimArgs[0] & 0xffff, BattleAnimAdjustPanning(s8(gBattleAnimArgs[1])));
   DestroyAnimVisualTask(taskId);
 };
 

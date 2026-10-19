@@ -115,10 +115,11 @@ test('Smoke Ball: fleeing plays General_SmokeballEscape', async () => {
 test('Snatch: stealing the foe\'s Swords Dance plays General_SnatchMove (a copy of the attacker runs past)', async () => {
   const game = await session.start({ ...ROUTE1, party: [{ species: 'RATTATA', level: 10, moves: ['SNATCH'] }] });
   await game.eval((t) => t.startWildBattle({ species: 'SNORLAX', level: 100, moves: ['SWORDS_DANCE'] }));
+  // CreateAdditionalMonSpriteForMoveAnim's copy (up for ~40 ticks: watched in the page), freed again afterwards
+  const copy = game.watch((t) => t.gbaSprites().some((s) => s.tileTag === 55125), { what: 'the copy of the attacker' });
   const since = await useFirstMove(game);
   expect(await animEvent(game, 'battleAnim', 'General_SnatchMove', since)).toMatchObject({ ran: true });
-  // CreateAdditionalMonSpriteForMoveAnim's copy, freed again afterwards
-  await poll(game, () => spritesWithTileTag(game, 55125), 'the copy of the attacker');
+  await copy;
   await animEvent(game, 'battleAnimEnd', 'General_SnatchMove', since);
   await game.waitForActionMenu();
   expect(await spritesWithTileTag(game, 55125)).toBe(0);

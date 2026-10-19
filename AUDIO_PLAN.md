@@ -821,32 +821,57 @@ whole mix.
    loudness (dB of the RMS), the per-frame RMS envelope (correlation r, worst sounding frame), the frames that sound,
    brightness (spectral centroid) and the strongest pitch. Neither side normalized.
 
-   | Item | Exact (frames) | Audio vs the mGBA model | Fixed / left |
-   | --- | --- | --- | --- |
-   | MUS_TITLE | identical (900) | +0.04 dB, r 0.989, centroid 690 / 684 Hz, pitch equal | matches |
-   | MUS_PALLET | identical (900) | +0.17 dB, r 0.89 (±2 dB per frame), strongest peak 220 / 247 Hz | left: the per-frame wander (not the squares' duty phase: tried) |
-   | MUS_PALLET mono | identical (400; SOUNDCNT_H, CgbModVol's both-sides NR51) | +0.12 dB, r 0.86, L = R | as stereo |
-   | MUS_ROUTE1 | identical (900) | −0.15 dB, r 0.94, centroid 738 / 763 | left: as MUS_PALLET |
-   | MUS_POKE_CENTER | identical (900) | +0.02 dB, r 0.992 | matches |
-   | MUS_VS_WILD | identical (900) | +0.03 dB, r 0.95, centroid 645 / 751 Hz (port 14% darker) | left: darker (noise drums?) |
-   | MUS_VS_TRAINER | identical (900) | −0.01 dB, r 0.92, centroid 840 / 932 Hz (10% darker) | left: as MUS_VS_WILD |
-   | MUS_LEVEL_UP, MUS_OBTAIN_ITEM | identical (90, 200) | −0.45 / +0.06 dB, r 0.990 / 0.999, frames 7-66 / 12-132 both | matches |
-   | SE_SELECT, SE_DOOR, SE_PC_ON (PSG) | identical (120 each) | −0.21 / −0.15 / −0.14 dB, r ≥ 0.998, same frames, ~7% darker | matches (darker: the output rate) |
-   | SE_EXIT (PSG, noise) | identical | −0.33 dB, r 0.997 (box filter: 0.989) | fixed: DAC point sampling |
-   | SE_FLEE (PSG, noise at NR43 0x00) | identical | −0.49 dB, r 0.996; box filter: −1.62 dB, r 0.947, noise frames ~10 dB down | fixed: DAC point sampling |
-   | SE_WALL_HIT (PSG) | identical | −0.05 dB, r 0.996, the reference rings 1 frame longer | left: writes at the frame start (0.8 ms early) |
-   | SE_SAVE, SE_EXP, SE_BALL_OPEN | identical | +0.12 / +0.01 / +0.17 dB, r 0.985 / 1.0 / 0.998 | matches (SE_BALL_OPEN's noise brighter with the fix) |
-   | SE_M_THUNDERBOLT, _FLAMETHROWER, _GUST, _SCRATCH | identical | within 0.1 dB, r ≥ 0.97 | matches |
-   | Cries: Pidgey, Pikachu, Charizard, Jynx NORMAL; Pikachu FAINT; Charizard ENCOUNTER; Pikachu mono | identical (DPCM decode = the WAVs) | within 0.01 dB, r 1.0 | matches |
-   | Reversed cries: Pikachu GROWL_1, Charizard ECHO_START | identical (60 each) | 0.00 dB, r 1.0 | matches |
+   | Item | Exact (frames) | W-ref 2: vs the mGBA model | W-ref 2b: vs the mGBA model | W-ref 2b: vs the hardware model |
+   | --- | --- | --- | --- | --- |
+   | MUS_TITLE | identical (900) | +0.04 dB, r 0.989, centroid 690 / 684 Hz | +0.05 dB, r 0.991, 691 / 646 (raw 684) | +0.02 dB, r 1.0 |
+   | MUS_PALLET | identical (900) | +0.17 dB, r 0.89 (±2 dB per frame) | +0.17 dB, r 0.886, 773 / 779 (raw 825) | +0.02 dB, r 0.9998 |
+   | MUS_PALLET mono | identical (400; SOUNDCNT_H, CgbModVol's both-sides NR51) | +0.12 dB, r 0.86, L = R | +0.05 dB, r 0.856 | +0.02 dB, r 0.9998, L = R |
+   | MUS_ROUTE1 | identical (900) | −0.15 dB, r 0.94, centroid 738 / 763 | −0.03 dB, r 0.934, 745 / 713 (raw 764) | +0.01 dB, r 1.0 |
+   | MUS_POKE_CENTER | identical (900) | +0.02 dB, r 0.992 | +0.01 dB, r 0.993 | +0.02 dB, r 1.0 |
+   | MUS_VS_WILD | identical (900) | +0.03 dB, r 0.95, centroid 645 / 751 Hz ("14% darker") | +0.07 dB, r 0.939, 641 / 628 (raw 753) | +0.01 dB, r 0.9999 |
+   | MUS_VS_TRAINER | identical (900) | −0.01 dB, r 0.92, centroid 840 / 932 Hz ("10% darker") | +0.05 dB, r 0.919, 830 / 817 (raw 932) | +0.02 dB, r 0.9999 |
+   | MUS_LEVEL_UP, MUS_OBTAIN_ITEM | identical (90, 200) | −0.45 / +0.06 dB, r 0.990 / 0.999 | −0.13 / +0.05 dB, r 0.993 / 0.997 | +0.03 / +0.03 dB, r 1.0 |
+   | SE_SELECT, SE_DOOR, SE_PC_ON (PSG) | identical (120 each) | −0.21 / −0.15 / −0.14 dB, r ≥ 0.998, ~7% darker | −0.06 / 0.00 / +0.01 dB, r 1.0, centroid equal | 0.00 dB, r 1.0, residual −36 / −40 / −41 dB |
+   | SE_EXIT (PSG, noise) | identical | −0.33 dB, r 0.997 (box filter: 0.989) | +0.07 dB, r 1.0 | +0.01 dB, r 1.0, residual −38 dB |
+   | SE_FLEE (PSG, noise at NR43 0x00) | identical | −0.49 dB, r 0.996 (box filter: −1.62 dB, r 0.947) | +0.03 dB, r 0.999 | +0.01 dB, r 1.0, residual −32 dB |
+   | SE_WALL_HIT (PSG) | identical | −0.05 dB, r 0.996 | +0.12 dB, r 0.998 | 0.00 dB, r 1.0, residual −54 dB |
+   | SE_SAVE (PSG, hardware envelope) | identical | +0.12 dB, r 0.985 | −1.04 dB, r 0.924: the sequencer's phase (below) | +0.04 dB, r 1.0 |
+   | SE_EXP, SE_BALL_OPEN | identical | +0.01 / +0.17 dB, r 1.0 / 0.998 | +0.05 / −0.19 dB, r 1.0 / 0.996 | +0.05 / +0.01 dB, r 1.0 |
+   | SE_M_THUNDERBOLT, _FLAMETHROWER, _GUST, _SCRATCH | identical | within 0.1 dB, r ≥ 0.97 | within 0.1 dB (_SCRATCH +0.37), r ≥ 0.97 | as mGBA, r ≥ 0.9999 |
+   | Cries: Pidgey, Pikachu, Charizard, Jynx NORMAL; Pikachu FAINT; Charizard ENCOUNTER; Pikachu mono | identical (DPCM decode = the WAVs) | within 0.01 dB, r 1.0 | +0.02-0.06 dB, r 1.0 | (no PSG) |
+   | Reversed cries: Pikachu GROWL_1, Charizard ECHO_START | identical (60 each) | 0.00 dB, r 1.0 | +0.02 / +0.03 dB, r 1.0 | (no PSG) |
 
    The engine (sequencer, mixer, CgbSound, the cry setters, the mono bit) is exact on every item (31 items, ~9,100
-   frames); what differs is the synth's rendering of the PSG, and only slightly. The reversed cries end before the
-   read reaches the sample's first byte, so docs/DEVIATIONS.md's reverse-interpolation exception wasn't exercised.
-   Left for W-ref 2b: the music's per-frame envelope wander (±2 dB, r 0.86-0.95 on MUS_PALLET, MUS_ROUTE1,
-   MUS_VS_*) and MUS_VS_WILD / MUS_VS_TRAINER 10-14% darker: split the comparison per PSG channel (mute a channel's
-   writes in both renders) to find which channel and whether it's the port's synth or the model; the writes'
-   0.8 ms offset within the frame (small).
+   frames). The reversed cries end before the read reaches the sample's first byte, so docs/DEVIATIONS.md's
+   reverse-interpolation exception wasn't exercised.
+
+   **W-ref 2b** (the same recordings; scripts `ref_all.py`, `analyze2.py` next to W-ref 2's): W-ref 2's two leftovers
+   were the comparison's, not the port's. (1) The ±2 dB per-frame wander is interference: the squares and the
+   DirectSound voices play related pitches, so a frame's RMS depends on their sub-millisecond relative phase, and
+   three things moved it between the port and the model: the frame sequencer's phase (W-ref 2's port render ran
+   one circuit through all the jobs, so each job inherited the previous one's; the model started at 0), mGBA's
+   shortcuts (below) and the 0.8 ms write offset. Each alone gives r ≈ 0.9 on MUS_PALLET / MUS_VS_TRAINER, while the
+   PSG alone (no DirectSound to interfere with) is at r 0.97-0.99 even against the mGBA model. (2) "Darker" was the reference's rate: the model's 65,536 Hz point
+   samples were analysed as they are, while the port averages the DAC's held signal over its 53,516 Hz samples (a
+   box: −0.5 dB at 10 kHz, −2 dB at 20 kHz), which takes the most off the noise drums. Through the same output stage
+   the reference is as bright as the port (the "brightness" above: port / reference through the port's output stage,
+   raw reference in brackets), and the noise is identical at every DAC tick. Now both renders start each item from
+   its first frame's state with the sequencer's first step 32,768 cycles in, and there are two references: the
+   **mGBA model** (mGBA's PSG as is, writes ~14,000 cycles into the frame) and the **hardware model**, the same with
+   mGBA's shortcuts replaced by the documented hardware the port follows (a new square or noise rate takes effect
+   at the timer's next reload, not at lastUpdate + the new period; a stopped channel outputs 0, not its last
+   level; NR32 changes only the volume, not the sample to the next nibble; the noise plays at the envelope's
+   current volume, not its last clock's; NR34 without a restart leaves the wave's timer alone) and the port's write
+   timing. **The port's PSG equals the hardware model at every DAC tick** (checked tick by tick on MUS_VS_WILD /
+   MUS_VS_TRAINER after two fixes: the wave's first sample after a restart 24 cycles late, and the frame
+   sequencer's steps on their own cycle instead of the output sample's boundary), r ≥ 0.9998 and within 0.05 dB on
+   every item, residual −32 to −54 dB on the PSG-only SEs (the 8-bit rounding); about −20 dB where DirectSound
+   plays, because the GBA's DAC takes the FIFO's sample at its 65,536 Hz ticks while the port steps it exactly
+   every 1,254 cycles (≤ 15 µs: docs/DEVIATIONS.md). Against the mGBA model the music stays at r 0.86-0.99:
+   that's mGBA's shortcuts and the write offset moving the interference, not a level or timbre difference. The
+   comparison against the ROM's real PSG needs the frame sequencer's phase, which nothing readable gives (the
+   hardware envelope's volume isn't readable): SE_SAVE (square 1's hardware envelope from each restart) is +0.12 dB
+   against the model at W-ref 2's phase and −1.04 dB at this one. Left: the writes' 0.8 ms offset (small).
 
 Details for both. Input: the ROM path, which the user gave as
    `/Users/joshua/Coding/PokemonProjects/pret/PokemonFireRed.gba` (outside both git repos). Its SHA-1

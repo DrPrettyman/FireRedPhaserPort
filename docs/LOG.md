@@ -3127,6 +3127,37 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   four channels and the PSG-only SEs' off frames. Typecheck clean, unit 560 in 41 files; e2e audio, audioCries,
   audioOutput, mapMusic, fieldSounds: 20 passed.
 
+### W-sound 5b: the battle controllers' sounds (AUDIO_PLAN.md batch D, unit 4)
+
+- Every sound call of battle_controller_player.c, _opponent.c, _oak_old_man.c and _safari.c now calls gba/sound.ts
+  (or audio/m4a.ts) with the C's arguments instead of BattleScene's `ui.play*`: the menus' SE_SELECT (action, move,
+  target, move switching, the Old Man's simulated input, Safari's menu), SE_FAINT panned by side (PlaySE12WithPanning
+  SOUND_PAN_ATTACKER / _TARGET), CONTROLLER_PLAYSE (panned by side; the Oak/Old Man controller's plain PlaySE),
+  PLAYFANFARE, the player's PLAYBGM, FAINTINGCRY (PlayCry_ByMode(species, ∓25, CRY_MODE_FAINT) for the player and
+  opponent, PlayCry_Normal(species, 25) for Oak/Old Man and Safari), Cmd55's FadeOutMapMusic(5) (Oak/Old Man,
+  Safari, and the player's link-only one with its BeginFastPaletteFade), SE_EXP and its m4aSongNumStop when the
+  exp bar is full (controllerCommon.ts).
+- Waits: Intro_WaitForShinyAnimAndHealthbox (player, opponent) and SwitchIn_HandleSoundAndEnd hold until
+  !IsCryPlayingOrClearCrySongs() and then set the BGM volume back to 256 (m4aMPlayContinue in multi battles);
+  Task_PlayerController_RestoreBgmAfterCry (exported from controllerPlayer.ts) runs after the Oak/Old Man intro.
+- Found on the way: Task_CreateLevelUpVerticalStripes wasn't ported (the player's DestroyExpTask... went straight
+  to CompleteOnInactiveTextPrinter): it now runs with its BG move and SE_RS_SHOP; the stripes themselves
+  (pokemon_special_anim_scene.c's CreateLevelUpVerticalSpritesTask) are a DEVIATIONS entry. The player's
+  PlayerHandleCmd55 had dropped FadeOutMapMusic(5) / BeginFastPaletteFade(3) (link battles only).
+- The cries the waits wait on come from gfx.ts (pokeball.c / battle_main.c: W-sound 6a), through W-sound 5a's
+  `ui.playCry` pass-through until then. W-sound 5a's pass-through commit was cherry-picked to run the tests and
+  reverted before the PR.
+- Verified: typecheck; `npm test`; `tests/e2e/audioBattleControllers.test.ts` (4: the wild intro leaves
+  Intro_WaitForShinyAnimAndHealthbox only after MEWTWO's send-out cry stops, and fails with the wait taken out; 4
+  SE_SELECTs from the menus; SE_FAINT at SOUND_PAN_TARGET and the CRY_MODE_FAINT cry; SE_EXP stopped well before its
+  100 frames; the Old Man's SE_SELECTs 64 frames apart and the catch's speed-5 fade), wildBattle, trainerBattle,
+  scriptedBattles, battleAnims, newGame (39 passed); the full e2e suite once (below).
+- Full e2e suite (with 5a's pass-through cherry-picked, so the send-out cries play; load up to ~300 from another
+  worker's run): 411 tests in 64 files, 408 passed, 26.6 min. Failures, none in the controllers: listMenuFlash's
+  dark-cave Blur transition (fails on the base commit 2fbcf54 too), battleAnims.2d's Teleport (reads `t.battle()`
+  from Node after the anim ended: the battle can be over by then, tests/README.md rule 5) and battleAnims.3e3b's
+  Snatch (polls a short-lived sprite from Node; timed out under load; on the rerun Memento timed out instead).
+  Tick budgets raised: none.
 ### W-m4a 4b: the PSG synth, music complete (AUDIO_PLAN.md batch D, unit 2)
 
 - New `src/audio/psgSynth.ts` (`PsgSynth`): the GBA's four PSG channels driven by the engine's register writes
@@ -3153,6 +3184,41 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   LFSR / noise clock / wave samples, volumes, banks / mixing / the circuit's timing and resync, then the extracted
   SEs and songs); `tests/e2e/audioOutput.test.ts` + 1 (SE_SELECT alone reaches the worklet's speakers; checked to
   fail with the PSG switched off). Typecheck clean; unit 577 in 42 files; e2e audioOutput 5, audio 2.
+### W-sound 6b: the battle anim engine's sounds (AUDIO_PLAN.md batch D)
+
+- `src/battle/anim/` calls `gba/sound.ts` directly, with the C's arguments; battleAnim.ts's PlaySE12WithPanning
+  wrapper (→ BattleScene's no-op `ui.playSE`, pan dropped) is gone, and so are ghost.ts's and special.ts's
+  `ui.playSE` stand-ins. battle_anim.c: `playse` (PlaySE), `playsewithpan` / `loopsewithpan` / `waitplaysewithpan`
+  / the three `panse` commands (PlaySE12WithPanning with BattleAnimAdjustPanning's / _2's pan), `setpan` and
+  Task_PanFromInitialToTarget (SE12PanpotControl; the last step now lands on the target pan, as the C), `stopsound`
+  (m4aMPlayStop of SE1 and SE2), Cmd_end and Cmd_waitsound's IsSEPlaying wait (sSoundAnimFramesToWait: up to 90
+  frames, then SE1 / SE2 stopped), gMovesWithQuietBGM (read from the anim ROM image: Sing, Perish Song, Grass
+  Whistle set the BGM to 128 at launch; Cmd_end sets 256). battle_anim_sound_tasks.c: SoundTask_PlaySE1WithPanning
+  / _PlaySE2WithPanning now play on their own player (PlaySE1 / PlaySE2WithPanning, they were both PlaySE12); the
+  cries (PlayCry_ByMode with the species and CRY_MODE_HIGH_PITCH / GROWL_1-2 / ROAR_1-2 / ECHO_START-END) and their
+  IsCryPlaying waits were already live (W-sound 2). effects3.ts's Encore SE is PlaySE1WithPanning, as in the C.
+  battle_anim_special.c: the ball SEs (SE_BALL_THROW panned 0, SE_BALL_OPEN, SE_BALL_TRADE, the four bounces,
+  SE_BALL, SE_BALL_CLICK, SE_SHINY panned to the battler's side) and the click's m4aMPlayAllStop +
+  PlaySE(MUS_CAUGHT_INTRO). The 27 PlaySE12WithPanning / PlaySE1WithPanning / PlaySE calls in the type files were
+  checked against the C: all pass the C's pan (BattleAnimAdjustPanning(...), gAnimCustomPanning, or the task's
+  stored pan).
+- Waits that now take their GBA length: every anim whose SE outlasts its visuals ends in the frame after the SE's
+  last tick (Tackle: SE_M_COMET_PUNCH, 26 frames from its start), up to 90 frames; `waitsound` the same.
+- Races fixed on the way (both read something short-lived from Node): battleAnims.2d's Teleport read the
+  attacker's sprite after the anim's end, when the battle (ending ~150 ticks later) could already be gone; it now
+  reads it in the page in the tick after the end. battleAnims.3e3b's Snatch polled for the attacker's copy
+  (up ~40 ticks) from Node and missed it under load; now watched in the page.
+- Found on the way: after merging master (W-sound 7a), special.ts uses sound.ts's `m4aMPlayAllStop` (it reports a
+  `stop` per live player). The first version of the pan test had the foe use Tackle, which can miss (no anim):
+  it uses Shadow Punch now, which never does.
+- Tick budgets raised: none (the full suite passed with only the two races above fixed).
+- Verified: typecheck; `npm test` (42 files, 577 tests, after merging master); new `tests/e2e/audioBattleAnims.test.ts`
+  (4: Tackle's SE pan from the player's side and its anim ending exactly SE_M_COMET_PUNCH's 26 frames after the
+  SE's start, Shadow Punch's pans from the opponent's side; Growl's two Rattata cries in CRY_MODE_GROWL_1 / _2 at
+  SOUND_PAN_ATTACKER, no cry playing at the anim's end; Perish Song's BGM at volume 32 of 64 from its launch to its
+  end, 64 after; a Master Ball's twelve SEs in order and MUS_CAUGHT_INTRO with the BGM and SE1 stopped); every
+  battleAnims*.test.ts and wildBattle.test.ts; **the full e2e suite once (before merging master): 64 files, 411
+  tests, all passed, 26 min**; after the merge audioBattleAnims (twice), battleAnims, wildBattle, audio.
 
 ### W-sound 6a: pokeball.c's, battle_gfx_sfx_util.c's and battle_interface.c's sounds (AUDIO_PLAN.md batch D, unit 5)
 
@@ -3210,3 +3276,41 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   and the victory music, a double battle's intro cries and BGM volume on Victory Road 3F), audioBattle 6, wildBattle,
   trainerBattle, battleAnims, berryPouch, scriptedBattles green. The full suite wasn't run (the lock was held; the
   coordinator runs it at the end of the batch), so no tick budgets were raised.
+- After merging master with W-sound 5a (#104: the controllers' cries are real): audioBattleAnims' Growl test counts
+  only the CRY_MODE_GROWL_1 / _2 cries (the send-out and intro cries come first now), and its Perish Song test
+  waits for the intro cry's BGM ducking to end before its mark. battleAnims.2d's Memento polled for the shadow
+  from Node, importing gba/hw.ts on every poll (600 of them past the 120 s test timeout under load): the module is
+  now loaded once and the shadow watched in the page.
+
+### W-ref 2b: W-ref 2's leftovers were the comparison's (AUDIO_PLAN.md batch D, W-ref 2's continuation)
+
+- Split W-ref 2's listening comparison per PSG channel (NR51 masked in both renders, the FIFOs silent) and then
+  tick by tick (each channel's level at every DAC tick, port vs model). Findings: (1) the ±2 dB per-frame wander
+  of the BGMs is interference between the squares and the DirectSound voices playing related pitches, whose
+  relative phase three things moved: the frame sequencer's phase (W-ref 2's `port_capture.ts` ran one circuit
+  through all the jobs, so each job inherited the last one's; the model started each at 0), mGBA's shortcuts
+  (a square's new frequency from lastUpdate + the new period, a stopped channel holding its level, NR32 jumping to
+  the next nibble, the noise at its last clock's volume, NR34 restarting the wave's timer) and the 0.8 ms write
+  offset; each alone gives r ≈ 0.9. (2) "10-14% darker" was the reference's rate: its 65,536 Hz point samples were
+  analysed as they are, the port's 53,516 Hz samples average the DAC's held signal (a box, −2 dB at 20 kHz), which
+  takes the most off the noise drums; through the same averaging the two are as bright, and the noise is identical
+  tick by tick.
+- Fixed in the port (one commit each, a unit test each): the wave channel's first sample after a restart comes
+  24 cycles after a period (mGBA's GBAudioWriteNR34, SameBoy's 3 ticks of the 2 MHz clock); through the DAC, the
+  frame sequencer's steps land on their own cycle, not on the next output sample's boundary (up to 313 cycles
+  late: an envelope step one tick late now and then).
+- Comparison made like for like (scripts in `wref-scratch/wref2/` and `wref2b/`, DEV_NOTES "ROM reference
+  measurements"): each job's WAV from a circuit reset at the job, the model's sequencer starting 32,768 cycles in
+  as the port's, a second reference with mGBA's shortcuts swapped for the documented hardware and the port's write
+  timing (the port equals it at every DAC tick), the references put through the port's output stage. Against
+  that: r ≥ 0.9998 and within 0.05 dB on every item (SE_M_SCRATCH +0.37 dB, a FIFO-only SE: the FIFO's tick
+  jitter in the reference), residual −32 to −54 dB on the PSG-only SEs. Against mGBA as is the music stays at
+  r 0.86-0.99 (the interference again), and SE_SAVE's level depends on the sequencer's phase (−1.04 dB here,
+  +0.12 dB at W-ref 2's): nothing readable gives the ROM's. Results table in AUDIO_PLAN.md "W-ref"; the page
+  (`wref2/index.html`) has both references and W-ref 2's numbers. The exact per-frame check is still identical on
+  all 31 items.
+- Left: the writes' 0.8 ms offset within the frame; the FIFO's samples step exactly every 1,254 cycles where the
+  GBA's DAC takes them at its 65,536 Hz ticks (≤ 15 µs); the output rate's box (docs/DEVIATIONS.md).
+- Tests: `tests/unit/psgSynth.test.ts` + 2 (the wave restart's delay; a sequencer step inside an output sample
+  through the DAC, checked to fail before the fix). Typecheck clean; unit 580 in 42 files; e2e audioOutput +
+  audio 7 passed.
