@@ -387,3 +387,152 @@ test("QL3b's events: a field move ends the preset's scene, a story item starts o
   expect(await line(storyScene, 'QL_EVENT_OBTAINED_STORY_ITEM')).toMatch(/^Here in VIRIDIAN CITY, \S+ obtained the item TOWN MAP\.$/);
   expect(await line(storyScene, 'QL_EVENT_BOUGHT_ITEM')).toBe('Went to the POKéMON MART in VIRIDIAN CITY and spent ¥1200 for items including POTION(s).');
 });
+
+// ------------------------------------------------------------------ QL4a: the menus' calls
+
+/** In the page: gStringVar4 (menus/common.ts) up to its EOS. */
+const stringVar4 = (game: Game) =>
+  game.eval(async () => {
+    const m = await new Function("return import('/src/menus/common.ts')")();
+    const s = m.gStringVar4 as number[];
+    return s.slice(0, s.indexOf(0xff) + 1);
+  });
+
+/** The index of the first scene with an `event` command (or -1). */
+const sceneWith = async (game: Game, event: string) => {
+  const [ql, id] = await Promise.all([QL(game), game.eval((t, e) => t.define(e), event)]);
+  return ql.scenes.findIndex((s) => s.commands.some((c) => c.id === id));
+};
+
+/** The line `event` plays back (QL_LoadEvent → gStringVar4) and its encoded bytes; the event must be recorded. */
+async function eventLine(game: Game, event: string): Promise<{ line: string; bytes: number[] }> {
+  const scene = await sceneWith(game, event);
+  expect(scene, `${event} in a scene`).toBeGreaterThanOrEqual(0);
+  const line = await game.eval((t, [s, e]) => t.questLogEventLine(s, e), [scene, event] as [number, string]);
+  return { line: line!, bytes: await stringVar4(game) };
+}
+
+/** The party / item events count only after the Hall of Fame and once linking with R/S is allowed. */
+const allowPartyEvents = (game: Game) =>
+  game.eval((t) => {
+    t.state!.setFlag('FLAG_SYS_GAME_CLEAR');
+    t.state!.setFlag('FLAG_SYS_CAN_LINK_WITH_RS');
+  });
+
+/** Wait (in the page) until the GBA task `name` runs with no fade. */
+async function waitForTask(game: Game, name: string): Promise<void> {
+  expect(await game.eval((t, n) => t.until(() => t.gbaTasks().includes(n) && !t.paletteFadeActive(), 20000), name), name).toBe(true);
+}
+
+/** START, then the start menu's `item`. */
+async function startMenu(game: Game, item: string): Promise<void> {
+  await game.waitIdle();
+  await game.press('START');
+  const menu = await game.waitFor((t) => t.startMenu(), { what: 'the start menu' });
+  const to = menu.items.indexOf(item as (typeof menu.items)[number]);
+  for (let i = menu.cursor; i !== to; i += Math.sign(to - i)) await game.press(to > i ? 'DOWN' : 'UP');
+  await game.press('A');
+}
+
+/** In the party menu (choosing a mon): A on the cursor's mon, then down `downs` rows of its action menu and A. */
+async function partyAction(game: Game, downs: number): Promise<void> {
+  await game.press('A');
+  await waitForTask(game, 'Task_HandleSelectionMenuInput');
+  await game.pressTimes('DOWN', downs);
+  await game.press('A');
+}
+
+test("QL4a: the party menu's GIVE / TAKE / SWITCH and a Potion used from the bag each record their event, which plays back on CONTINUE", async () => {
+  const game = await session.start({
+    start: 'after-rival',
+    map: 'Route1',
+    x: 11,
+    y: 30,
+    party: [
+      { species: 'RATTATA', level: 5 },
+      { species: 'PIDGEY', level: 3 },
+    ],
+  });
+  await game.waitIdle();
+  await allowPartyEvents(game);
+  await game.eval((t) => {
+    t.state!.bag.pockets[0].forEach((s) => ((s.itemId = 0), (s.quantity = 0)));
+    t.state!.bag.add(t.define('ITEM_POTION'), 1);
+    t.state!.bag.add(t.define('ITEM_SILK_SCARF'), 1);
+    t.state!.party[0].hp = 1;
+  });
+
+  // RATTATA: SUMMARY / SWITCH / ITEM / CANCEL → ITEM: GIVE / TAKE / CANCEL → GIVE → the bag's SILK SCARF (second)
+  await startMenu(game, 'POKEMON');
+  await game.waitForPartyMenu();
+  await partyAction(game, 2);
+  await waitForTask(game, 'Task_HandleSelectionMenuInput');
+  await game.press('A');
+  await game.waitForBag();
+  await game.press('DOWN');
+  await game.press('A');
+  await game.mashUntil((t) => t.state!.party[0].heldItem !== 0 && t.gbaTasks().includes('Task_HandleChooseMonInput'), { button: 'B', what: 'the scarf given' });
+  // ITEM → TAKE: "Received the SILK SCARF from RATTATA."
+  await partyAction(game, 2);
+  await waitForTask(game, 'Task_HandleSelectionMenuInput');
+  await game.press('DOWN');
+  await game.press('A');
+  await game.mashUntil((t) => t.state!.party[0].heldItem === 0 && t.gbaTasks().includes('Task_HandleChooseMonInput'), { button: 'B', what: 'the scarf taken' });
+  // SWITCH with PIDGEY
+  await partyAction(game, 1);
+  await waitForTask(game, 'Task_HandleChooseMonInput');
+  await game.press('DOWN');
+  await game.press('A');
+  await game.waitFor((t) => t.party()[0].species === 'PIDGEY' && t.gbaTasks().includes('Task_HandleChooseMonInput'), { what: 'the switch' });
+  await game.mashUntil((t) => !t.gbaScreen() && t.idle(), { button: 'B', what: 'the field' });
+
+  // BAG → POTION → USE → RATTATA (now second)
+  await startMenu(game, 'BAG');
+  await game.waitForBag();
+  await game.press('UP'); // (the bag kept its cursor on the scarf)
+  await game.press('A');
+  await waitForTask(game, 'Task_FieldItemContextMenuHandleInput');
+  await game.press('A');
+  await game.waitForPartyMenu();
+  await game.press('DOWN');
+  await game.press('A');
+  await game.waitFor((t) => t.itemCount('POTION') === 0, { what: 'the Potion used' });
+  await game.mashUntil((t) => !t.gbaScreen() && t.idle(), { button: 'B', what: 'the field again' });
+
+  const lines = {
+    gave: await eventLine(game, 'QL_EVENT_GAVE_HELD_ITEM'),
+    took: await eventLine(game, 'QL_EVENT_TOOK_HELD_ITEM'),
+    switched: await eventLine(game, 'QL_EVENT_SWITCHED_PARTY_ORDER'),
+    used: await eventLine(game, 'QL_EVENT_USED_ITEM'),
+  };
+  expect(Object.values(lines).map((l) => l.line)).toEqual([
+    'Made RATTATA hold the item SILK SCARF.',
+    'Took the item SILK SCARF from RATTATA.',
+    'PLAYER switched the POKéMON RATTATA with PIDGEY.',
+    'Used the item POTION on RATTATA at this location.',
+  ]);
+
+  // Saved, then CONTINUE: the scene plays each event's line (HandleShowQuestLogMessage with gStringVar4)
+  await save(game);
+  await game.load({ keepSave: true, mainMenu: true });
+  const watch = game.eval(async (t) => {
+    const m = await new Function("return import('/src/menus/common.ts')")();
+    const shown: number[][] = [];
+    let last: number[] | undefined;
+    const ok = await t.until(() => {
+      if (!t.field()) return false; // (the main menu)
+      const ql = t.questLog();
+      // a line is up (sPlaybackControl.state 1); the next one can follow in the same frame
+      if (ql.playback.active && ql.playback.control.state === 1 && m.gStringVar4 !== last) {
+        last = m.gStringVar4 as number[];
+        shown.push(last.slice(0, last.indexOf(0xff) + 1));
+      }
+      return shown.length > 0 && !ql.playback.active;
+    }, 60000);
+    return { ok, shown };
+  });
+  await continueGame(game);
+  const seen = await watch;
+  expect(seen.ok).toBe(true);
+  for (const l of Object.values(lines)) expect(seen.shown, l.line).toContainEqual(l.bytes);
+});
