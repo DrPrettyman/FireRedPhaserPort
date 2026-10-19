@@ -3771,3 +3771,30 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   player, and the test's warp carried EventScript_DoTrainerBattleFromApproach into the chamber, where it never
   ended). Fixed by starting inside a chamber; the file rerun alone: 6 passed. tests/README.md item 10 names the
   pattern.
+
+### W-preview: the map preview screens (GAPS_PLAN.md batch 11)
+
+- New `world/mapPreviewScreen.ts`: map_preview_screen.c whole (sMapPreviewScreenData from menus.json
+  `mapPreviewScreens`, MapHasPreviewScreen / _HandleQLState2, MapPreview_InitBgs / LoadGfx / Unload /
+  IsGfxLoadFinished / CreateMapNameWindow, MapPreview_StartForestTransition, Task_RunMapPreviewScreenForest,
+  ForestMapPreviewScreenIsRunning, GetDungeonMapPreviewScreenInfo, MapPreview_GetDuration, MapPreview_SetFlag) and
+  `world/mapPreviewLayer.ts` (the forest banner's BG0 blended over the Phaser field, MULTIPLY / ADD as the fog).
+  `world/mapTransition.ts`: fldeff_flash.c's RunMapPreviewScreen / Task_MapPreviewScreen_0 from TryDoMapTransition,
+  handing over to Task_FlashTransition_Enter_1; its hand-written section table is gone. The forest hook is
+  OverworldScene.showMapNameOnWarpArrival (LoadMapInStepsLocal's state 12); the warp exits wait for
+  FieldFadeTransitionBackgroundEffectIsFinished (the fade and ForestMapPreviewScreenIsRunning). `setworldmapflag`
+  goes through MapPreview_SetFlag. The region map's copy of the table and GetDungeonMapPreviewScreenInfo moved onto
+  the new module. Extractor: `map_preview_screen_data` (menus.json `mapPreviewScreens`, with the type the region
+  map's table lacked) and include/map_preview_screen.h in the defines (MPS_TYPE_*).
+- No quest log, so MapHasPreviewScreen_HandleQLState2 takes the non-playback path (MapHasPreviewScreen).
+- Found on the way: the C's AddWindow keeps the preview's BG0 tilemap only because the field's InitWindows left BG0
+  a window tilemap buffer; the port's GBA side has no field windows, so `InitFieldBg0AndWindows` puts back what
+  InitOverworldBgs / InitStandardTextBoxWindows leave (else AddWindow swaps in an empty tilemap). The cave screen's
+  B check needs gMain's keys: OverworldScene.doChangeMap calls ReadKeys while CB2_DoChangeMap runs.
+- Verified: typecheck; unit (tests/unit/mapPreview.test.ts new); e2e mapPreview.test.ts (new: Mt. Moon's banner held
+  121 frames in state 4 for its 120-frame duration then 41 for 40 on the second visit, the change-map tasks
+  Task_MapPreviewScreen_0 → Task_FlashTransition_Enter_1..3, B cutting it short, Viridian Forest's banner held 121
+  frames after the Shade's fade in and blended out in 47, the field busy meanwhile and no name popup, 41 on the
+  second visit, Icefall Cave's banner, none from Mt. Moon 1F to B1F), transitions, weather, fly, and the story tests
+  that warp into forest sections (storyCeladonSaffron's Game Corner stairs to the Rocket Hideout, storyLeague's
+  Safari Zone gate). Screenshots of both banners checked by eye (the name window and the art as on the GBA).

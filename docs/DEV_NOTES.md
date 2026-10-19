@@ -459,7 +459,30 @@ this is the next level down. When you add or change a subsystem, update its entr
   IsBattleTransitionDone) and has a bare mode for CB2_DoChangeMap's cave flash screens (`world/mapTransition.ts`,
   also MapTransitionIsEnter/IsExit). Warps go WarpFadeOutScreen (with TryFadeOutOldMapMusic and SE_EXIT, waiting
   for BGMusicStopped too: "Map music") → doChangeMap → SetUpWarpExitTask in `OverworldScene.warpTo`. `__test.forceBattleTransition('SWIRL')` makes the next battles use one transition.
-  The map preview screens are the obvious next piece: TryDoMapTransition already knows where they'd run.
+  TryDoMapTransition runs a cave's map preview screen (below) before its flash.
+- **Map preview screens:** `world/mapPreviewScreen.ts` is map_preview_screen.c (no Phaser: unit-testable).
+  sMapPreviewScreenData is menus.json `mapPreviewScreens` (tools/extract_menus.py `map_preview_screen_data`; MPS_TYPE_*
+  from include/map_preview_screen.h in the defines); the region map's dungeon previews read it through
+  GetDungeonMapPreviewScreenInfo / `mapPreviewPalette`. Two kinds, by the destination's region map section when it
+  differs from the warp's origin (MapHasPreviewScreen_HandleQLState2 is MapHasPreviewScreen: no quest log):
+  - MPS_TYPE_CAVE: `world/mapTransition.ts` TryDoMapTransition → RunMapPreviewScreen / Task_MapPreviewScreen_0 on
+    the GBA layer during CB2_DoChangeMap (FieldGbaScreen's bare mode), ending in Task_FlashTransition_Enter_1. B held
+    ends it early (OverworldScene.doChangeMap calls ReadKeys while it waits). CB2_DoChangeMap first puts back what the
+    field's InitOverworldBgs / InitStandardTextBoxWindows leave on the GBA side (`InitFieldBg0AndWindows`).
+  - MPS_TYPE_FOREST: `OverworldScene.showMapNameOnWarpArrival` (LoadMapInStepsLocal's state 12) calls
+    MapPreview_InitFieldBg0, MapPreview_LoadGfx and MapPreview_StartForestTransition instead of the name popup. The
+    task is a field task; `world/mapPreviewLayer.ts` (Phaser) draws BG0 (the PPU's render) over the field at
+    DEPTH_FADE - 10 with the MULTIPLY / ADD blend (as the fog). The warp exits wait for
+    `fieldFadeTransitionBackgroundEffectIsFinished` (no screen fade and ForestMapPreviewScreenIsRunning, which is TRUE
+    once the task is gone), so the field stays `busy` while the banner is up.
+  Durations: MapPreview_GetDuration, 120 frames on the first visit and 40 after: a cave reads its FLAG_WORLD_MAP_*
+  (still clear during CB2_DoChangeMap), a forest sHasVisitedMapBefore, which `setworldmapflag` (ScriptEngine →
+  MapPreview_SetFlag) sets when the flag was clear. The preview graphics are preloaded with the field's
+  (`mapPreviewGfxSymbols`). Probes: `__test.mapPreview()` (kind, mapsec, the task's state, timer, duration, the forest's
+  EVA / EVB), `__test.changeMapTask()` (CB2_DoChangeMap's task by name); event `mapPreview` {kind, mapsec, duration}.
+  Tests: tests/unit/mapPreview.test.ts, tests/e2e/mapPreview.test.ts (Route 4 `?map=Route4&x=19&y=6` up into Mt. Moon;
+  `?map=Route2_ViridianForest_SouthEntrance&x=7&y=2` up into Viridian Forest; `?map=FourIsland&x=38&y=13` after the
+  rival's scene, up into Icefall Cave; `?map=MtMoon_1F&x=5&y=7` up to B1F for none).
 - **Trainer sight:** `world/trainerSee.ts` (checkForTrainersWantingBattle + the TrainerApproach task), run from
   `OverworldScene.tick` on every frame the controls are free (mid-step too, against the step's destination).
   ScriptEngine.setUpTrainerBattleFromApproach is ConfigureAndSetUpOneTrainerBattle; `special EndTrainerApproach`
@@ -887,7 +910,7 @@ this is the next level down. When you add or change a subsystem, update its entr
   their headers) is handed over with `setRegionMapField`, which `prepareFieldMoveMenu` / `prepareRegionMap`
   (world/fieldMoves.ts) fill before the party menu, the bag or a wall map opens. Tables: menus.json `regionMap`
   (tools/extract_menus.py: layouts, section corners/sizes, sSeviiMapsecs, sMapFlyDestinations, sDungeonInfo,
-  sMapPreviewScreenData, MAP_NUMs); graphics: graphics/region_map/ and graphics/map_preview/
+  MAP_NUMs; the previews' table is world/mapPreviewScreen.ts's); graphics: graphics/region_map/ and graphics/map_preview/
   (`regionMapGfxSymbols`, preloaded by FieldMenuScene). The screen re-copies its tilemaps at VBlank (see
   DEVIATIONS: the port's DMA is immediate). Probe `__test.regionMap()` (type, task, `ready`, cursor, `moving`,
   player icon, section and its MAPSECTYPE_*, fly icons, map name, top bar text). Tests: tests/e2e/fly.test.ts.

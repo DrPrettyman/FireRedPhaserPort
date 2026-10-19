@@ -68,6 +68,7 @@ function watchForestPreview(game: Game) {
         idleWhileUp,
         mapsec,
         lastBlend,
+        weatherOnHold,
         idleAfter: t.idle(),
       }));
   });
@@ -160,6 +161,7 @@ test('Viridian Forest’s banner holds over the field as it fades in, then blend
   expect(seen.lastBlend).toEqual([1, 16]);
   expect(seen.idleWhileUp).toBe(false); // the warp's exit task waits for ForestMapPreviewScreenIsRunning
   // State 2 waited for the Shade's fade in (IsWeatherNotFadingIn: not WEATHER_PAL_STATE_SCREEN_FADING_IN)
+  expect(seen.weatherOnHold).toBeDefined();
   expect(seen.weatherOnHold).not.toBe(1);
   expect(await game.waitForEvent('mapPreview', { since: mark })).toMatchObject({
     kind: 'forest',
