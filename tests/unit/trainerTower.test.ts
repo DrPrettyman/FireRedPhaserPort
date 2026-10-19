@@ -18,6 +18,7 @@ import {
   GetTrainerTowerOpponentWinText,
   GetTrainerTowerTrainerFrontSpriteId,
   InitTrainerTowerBattleStruct,
+  PrintTrainerTowerRecords,
   trainerTowerOpponentPicId,
   initTrainerTowerData,
   setTrainerTowerStringWidth,
@@ -26,7 +27,10 @@ import {
   TT_ConvertEasyChatMessageToString,
   type TrainerTowerData,
 } from '../../src/world/trainerTower';
-import { newGame, readGen, type TestGame } from './gameData';
+import { newBattleEnv, newGame, readGen, type TestGame } from './gameData';
+import { setTextStrings } from '../../src/battle/env';
+import { InitBgsFromTemplates, ResetBgsAndClearDma3BusyFlags } from '../../src/gba/bg';
+import { DUMMY_WIN_TEMPLATE, InitWindows } from '../../src/gba/window';
 
 let t: TestGame;
 const warnings: string[] = [];
@@ -408,5 +412,40 @@ describe('the battles (DoTrainerTowerBattle, BuildEnemyParty, the battle\'s oppo
     expect(GetTrainerTowerOpponentLoseText(t.state, 0)).toEqual(text(tr0.speechLose));
     FreeTrainerTowerBattleStruct();
     expect(() => GetTrainerTowerOpponentName()).toThrow();
+  });
+});
+
+describe('battle_records.c\'s Trainer Tower page', () => {
+  test('PrintTrainerTowerRecords: TIME BOARD, each challenge type and its record time; a record of another set starts over', async () => {
+    t = await newBattleEnv(); // gText_TimeBoard / gText_XMinYZSec / gTrainerTowerChallengeTypeTexts (battle/strings.json)
+    setTextStrings(readGen<Record<string, string>>('text/strings.json')); // gOtherText_Single & co. (strings.c)
+    on('LAYOUT_TRAINER_TOWER_LOBBY');
+    ResetBgsAndClearDma3BusyFlags(false);
+    InitBgsFromTemplates(0, [{ bg: 0, charBaseIndex: 0, mapBaseIndex: 31, screenSize: 0, paletteMode: 0, priority: 0, baseTile: 0 }], 1);
+    InitWindows([{ bg: 0, tilemapLeft: 2, tilemapTop: 1, width: 27, height: 18, paletteNum: 15, baseBlock: 0x014 }, DUMMY_WIN_TEMPLATE]);
+    start('SINGLE'); // the set's id in the record
+    t.state.trainerTower[0].bestTime = 3 * 3600 + 25 * 60 + 45; // 3 min. 25 s and 45 frames: .75 (45 * 168 / 100)
+    t.state.trainerTower[2].bestTime = 1000; // a KNOCKOUT time, from another set: the current record is the one checked
+    t.state.trainerTower[0].unk9 = 0; // ... so the SINGLE record, of "another set", starts over
+    const printed: { x: number; y: number; color: number[]; text: string; win: number }[] = [];
+    PrintTrainerTowerRecords(t.state, (win, x, y, color, str) => printed.push({ win, x, y, color, text: t.charmap.decodePlain(str.slice(0, str.indexOf(0xff))) }));
+    expect(t.state.trainerTower[0].bestTime).toBe(t.d('TRAINER_TOWER_MAX_TIME'));
+    expect(printed.map((p) => [p.x, p.y, p.text])).toEqual([
+      [74, 0, 'TIME BOARD'],
+      [24, 36, 'SINGLE'],
+      [96, 36, '59MIN. 59.99SEC.'],
+      [24, 56, 'DOUBLE'],
+      [96, 56, '59MIN. 59.99SEC.'],
+      [24, 76, 'KNOCKOUT'],
+      [96, 76, ' 0MIN. 16.67SEC.'],
+      [24, 96, 'MIXED'],
+      [96, 96, '59MIN. 59.99SEC.'],
+    ]);
+    expect(printed.every((p) => p.win === 0 && p.color.join() === '0,2,3')).toBe(true);
+    // A record of this set is kept
+    t.state.trainerTower[0].bestTime = 3 * 3600 + 25 * 60 + 45;
+    printed.length = 0;
+    PrintTrainerTowerRecords(t.state, (win, x, y, color, str) => printed.push({ win, x, y, color, text: t.charmap.decodePlain(str.slice(0, str.indexOf(0xff))) }));
+    expect(printed[2].text).toBe(' 3MIN. 25.75SEC.');
   });
 });

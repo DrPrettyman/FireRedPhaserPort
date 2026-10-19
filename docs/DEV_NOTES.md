@@ -147,7 +147,18 @@ this is the next level down. When you add or change a subsystem, update its entr
   (`?start=after-rival&map=TrainerTower_Lobby&x=9&y=9`, up onto the entry trigger, YES, the challenge type; the
   stairs at (9, 2), 1F → 2F at (15, 6); every floor's singles / knockout trigger (10, 13), doubles (9, 12); the
   e2e's `watchBattles` records each battle's messages, foes and sprite palette tags tick by tick). Probe:
-  `t.state.trainerTower[t.state.towerChallengeId]`.
+  `t.state.trainerTower[t.state.towerChallengeId]`. **The records board:** `special ShowBattleRecords`
+  (script/trainerTowerSpecials.ts → `host.runScreenFromScript(ShowBattleRecords, BATTLE_RECORDS_GFX)`) is
+  battle_records.c in `menus/battleRecords.ts` (MainCB2_SetUp's 8 states, BG3 the frame from graphics/battle_records:
+  `battle_records.sTiles` / `sPalette` / `sTilemap`, BG0 one window; A or B: SE_SELECT, fade out,
+  CB2_ReturnToFieldContinueScriptPlayMapMusic, the script's `waitstate` ends with the field's fade in). VAR_0x8004 1
+  prints PrintTrainerTowerRecords (world/trainerTower.ts, through a `RecordsPrinter` the screen hands it; the strings
+  gText_TimeBoard / gText_XMinYZSec and the gTrainerTowerChallengeTypeTexts table come from battle/strings.json),
+  0 the link page (PrintBattleRecords: GAME_STAT_LINK_BATTLE_* and five cleared records: no link battles). Probe
+  `__test.battleRecords()` (what the screen printed, decoded, with x / y). Where: the lobby's sign at (8, 10) (stand
+  at (8, 11) facing up); the link machine is the MB_BATTLE_RECORDS metatile at (12, 3) of every Pokémon Center 2F.
+  The full climb (e2e): 1F → 8F's stairs at (15, 6), 8F → the roof; the owner at (9, 7); the roof's elevator (13, 5),
+  its panel at (0, 2) from (0, 3), DOWN once for LOBBY.
 - **Silph Co. card key doors** (data/scripts/silphco_doors.inc) need nothing of their own: ON_LOAD closes them with
   `setmetatile`, the bg events open them (FLAG_HIDE_SILPH_CO_5F_CARD_KEY, `special SetHiddenItemFlag`). Test spot:
   `?map=SilphCo_5F&x=9&y=9`, face left (mark the floor's trainers beaten first).

@@ -47,7 +47,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Trainer Tower (world/trainerTower.ts): ShowResultsBoard / CloseResultsBoard (`ttower_showresults` / `ttower_closeresults`, which no script
     uses) validate the record but draw no window. The record times aren't XORed with an encryption key (no key in
     the port). GetFloorAlreadyCleared on the roof with every floor cleared reads a zeroed floor where the C reads
-    past the set (heap memory); the roof's result changes nothing. The e-Reader sets are never read (link content).
+    past the set (heap memory); the roof's result changes nothing. The e-Reader sets are never read (link content). The
+    battle records' link page (menus/battleRecords.ts) reads five cleared records: gSaveBlock2Ptr->linkBattleRecords
+    isn't in the save, since only a link battle writes it (UpdatePlayerLinkBattleRecords isn't ported).
   - VS Seeker (world/vsSeeker.ts): no quest log event. Task_VsSeeker_0
     takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for
     the Escape Rope). The movement scripts (Wait48, the trainers' emotes and step in place) run as MovementRunners
