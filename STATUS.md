@@ -34,8 +34,9 @@ HP beep, the anims' panned SEs and waits), the scenes (evolution, eggs, trades, 
 title), the ambient cries. Every audio wait times as on the GBA. Deferred: field weather's sounds (no field
 weather), the help system, quest log and link play (AUDIO_PLAN.md "Batch D result").
 
-Next: the postgame (Sevii 4-7, Mt. Ember, Trainer Tower, the event islands; `tests/unit/scriptCoverageGaps.ts`
-lists its 42 gaps), then the open work below (field weather, the intro movie, map previews, the help system).
+Next: the postgame, planned in [POSTGAME_PLAN.md](POSTGAME_PLAN.md) (Sevii 4-7, Mt. Ember, Trainer Tower, the
+event islands, and FRLG's field weather; `tests/unit/scriptCoverageGaps.ts` lists its 42 gaps), then the open work
+below (the intro movie, map previews, the help system).
 
 [SIDE_PLAN.md](SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
 `bufferdecorationname` (and the other decoration commands) and FLDEFF_USE_DIVE with DoDiveWarp, ported as FRLG's C
