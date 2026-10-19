@@ -680,8 +680,8 @@ export function CB2_InitInGameTrade(): void {
       ResetSpriteData();
       FreeAllSpritePalettes();
       SetVBlankCallback(VBlankCB_TradeAnim);
-      // The Poké Balls' open particles (battle_anim_special.c) play their SE (SE_BALL_OPEN) through the battle's hooks
-      if (!ui) setBattleUi({ joyNew: () => false, joyHeld: () => false, anyNewKeys: () => false, playSE: (songId) => PlaySE(songId), playCry() {}, playBGM() {}, playFanfare() {}, addBagItem() {}, playerGender: () => 0 });
+      // The Poké Balls' open particles (battle_anim_special.c) run battle code, which reads the BattleUi
+      if (!ui) setBattleUi({ joyNew: () => false, joyHeld: () => false, anyNewKeys: () => false, addBagItem() {}, playerGender: () => 0 });
       TradeAnimInit_LoadGfx();
       const a = anim();
       a.state = 0;
