@@ -1,5 +1,6 @@
-// quest_log_objects.c: a scene's snapshot of gObjectEvents (QL_RecordObjects). QL_LoadObjects (playback: the
-// objects back in place, their previousCoords from previousMetatileBehavior) and QL_TryStopSurfing are QL2's.
+// quest_log_objects.c: a scene's snapshot of gObjectEvents (QL_RecordObjects) and, in playback, the templates and
+// objects back from it (QL_LoadObjectsAndTemplates' templates here, the objects through the host: OverworldScene's
+// questLogLoadObjects) and QL_TryStopSurfing.
 //
 // The port has no gObjectEvents array: OverworldScene hands over the player and the current map's objects (see
 // `questLogObjectEventFrom`), the player first. Coordinates are the C's map coordinates (map-local + MAP_OFFSET).
@@ -7,7 +8,9 @@
 import { K } from '../battle/constants';
 import type { ObjectEvent } from '../entities/ObjectEvent';
 import type { Direction } from './direction';
-import type { QuestLogScene } from './questLog';
+import type { ObjectEventData } from '../data/types';
+import { PLAYER_AVATAR_FLAG, SetPlayerAvatarTransitionFlags, TestPlayerAvatarFlags, avatarField } from './playerAvatar';
+import { gQL, OBJECT_EVENT_TEMPLATES_COUNT, type QuestLogScene } from './questLog';
 
 /** struct QuestLogObjectEvent (the bitfields as 0 / 1) */
 export interface QuestLogObjectEvent {
@@ -153,4 +156,36 @@ export function questLogObjectEventFrom(obj: ObjectEvent, info: QuestLogObjectIn
     previousMetatileBehavior: obj.previousMetatileBehavior & 0xff,
     animId: obj.playerCopyableMovement & 0xff,
   };
+}
+
+/** A DIR_* as a Direction (DIR_NONE faces down) */
+export function directionOf(dir: number): Direction {
+  if (dir === K.DIR_NORTH) return 'up';
+  if (dir === K.DIR_WEST) return 'left';
+  if (dir === K.DIR_EAST) return 'right';
+  return 'down';
+}
+
+/**
+ * QL_LoadObjectsAndTemplates' templates: the scene's positions, elevations and movement types into
+ * gSaveBlock1Ptr->objectEventTemplates (the current map's templates, as the field spawns from them).
+ */
+export function QL_LoadTemplates(questLog: QuestLogScene, templates: ObjectEventData[], movementTypeName: (id: number) => string | undefined): void {
+  for (let i = 0; i < OBJECT_EVENT_TEMPLATES_COUNT && i < templates.length; i++) {
+    const q = questLog.objectEventTemplates[i];
+    const t = templates[i];
+    t.x = q.negx ? -q.x : q.x;
+    t.y = q.negy ? -q.y : q.y;
+    t.elevation = q.elevation;
+    t.movement_type = movementTypeName(q.movementType) ?? t.movement_type;
+  }
+}
+
+/** QL_TryStopSurfing (LoadMap_QLPlayback): a scene that starts surfing on land starts on foot. */
+export function QL_TryStopSurfing(destSurfable: boolean): void {
+  if (gQL.state !== K.QL_STATE_PLAYBACK) return;
+  if (!destSurfable && TestPlayerAvatarFlags(PLAYER_AVATAR_FLAG.SURFING)) {
+    SetPlayerAvatarTransitionFlags(PLAYER_AVATAR_FLAG.ON_FOOT);
+    avatarField().destroySurfBlob?.(); // DestroySprite(&gSprites[objectEvent->fieldEffectSpriteId])
+  }
 }

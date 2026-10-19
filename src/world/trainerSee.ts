@@ -1,3 +1,4 @@
+import { QL_IsTrainerSightDisabled } from './questLogPlayback';
 import type { ObjectEvent } from '../entities/ObjectEvent';
 import { towards } from '../script/MovementRunner';
 import { DELTA, type Direction } from './direction';
@@ -76,6 +77,7 @@ const EXCLAMATION_MARK = 'FLDEFF_EXCLAMATION_MARK_ICON';
  * (QL_IsTrainerSightDisabled is for quest log playback, which isn't ported.)
  */
 export function checkForTrainersWantingBattle(host: TrainerSeeHost): TrainerApproach | undefined {
+  if (QL_IsTrainerSightDisabled()) return undefined;
   for (const c of host.sightCandidates()) {
     if (c.trainerType !== 'TRAINER_TYPE_NORMAL' && c.trainerType !== 'TRAINER_TYPE_BURIED') continue;
     const approach = checkTrainer(host, c);

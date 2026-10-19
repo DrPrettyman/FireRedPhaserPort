@@ -151,7 +151,9 @@ import { sharedBattleData, type BattleStart } from './BattleScene';
 import { softReset } from './BootScene';
 import { forcedBattleTransition, logicSpeed, testEvent, testHooks, type FieldObjectProbe, type FieldProbe } from '../dev/testHooks';
 import {
+  ClearPlayerHeldMovement,
   GetInitialPlayerAvatarState,
+  GetPlayerAvatarStateTransitionByGraphicsId,
   GetPlayerAvatarGraphicsIdByStateIdAndGender,
   gPlayerAvatar,
   InitPlayerAvatar,
@@ -180,13 +182,19 @@ import { HALL_OF_FAME_RECORD_GFX, setHallOfFameRecordHost } from '../world/hallO
 import { registerSSAnne, setSSAnneHost, SS_ANNE_GFX, ssAnneProbe } from '../world/ssAnne';
 import type { WarpData } from '../state/GameState';
 import {
+  clearQuestLogFieldInput,
   gQL,
   mapGroupAndNum,
+  mapIdOf,
   OBJECT_EVENTS_COUNT,
+  QL_GetPlaybackState,
+  QL_InitSceneActions,
   QL_RecordFieldInput,
   QL_ResetDefeatedWildMonRecord,
-  QL_ResetForContinue,
+  QL_ResetOnSoftReset,
   QL_TryRunActions,
+  QL_UpdateObject,
+  questLogFieldInput,
   QuestLog_CutRecording,
   QuestLogRecordNPCStep,
   ResetQuestLog,
@@ -194,10 +202,26 @@ import {
   setQuestLogHost,
   type QuestLogFieldInput,
   type QuestLogHost,
+  type QuestLogScene,
 } from '../world/questLog';
+import {
+  FieldCB2_FinalScene,
+  QL_CopySaveState,
+  QL_HandleInput,
+  QL_ResetPartyAndPC,
+  QL_ResetPlayback,
+  QL_RestoreMapLayoutId,
+  QL_StartPlaybackScene,
+  QuestLog_AdvancePlayhead_,
+  QuestLogScenePlaybackIsEnding,
+  questLogPlaybackActive,
+  setQuestLogPlaybackHost,
+  TryStartQuestLogPlayback,
+  type QuestLogPlaybackHost,
+} from '../world/questLogPlayback';
 import { QuestLog_ShouldEndSceneOnMapChange, SetQuestLogEvent_Arrived } from '../world/questLogEvents';
 import { QuestLog_CheckDepartingIndoorsMap, QuestLog_TryRecordDepartedLocation } from '../world/questLogLocations';
-import { dirNumber, questLogObjectEventFrom, type QuestLogObjectEvent } from '../world/questLogObjects';
+import { directionOf, dirNumber, QL_LoadTemplates, QL_TryStopSurfing, questLogObjectEventFrom, type QuestLogObjectEvent } from '../world/questLogObjects';
 
 /** GBA runs at ~59.73Hz; we tick game logic at a fixed 60Hz regardless of display refresh. */
 const FRAME_MS = 1000 / 60;
@@ -355,6 +379,20 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private nextArrivalWarpId = -1;
   /** Task_QuestLogPlayback_OpenStartMenu: START cancelled a walked-into sign; open the menu once the controls are free. */
   private startMenuWhenFree = false;
+  /** The save as CONTINUE loaded it: the quest log's final scene loads it again (LoadGameSave). */
+  private savedGame?: SaveData;
+  /** The quest log's LockPlayerFieldControls (a flag, as the C's, held as one count of controlsLocked) */
+  private qlControlsLocked = false;
+  /** LoadMap_QLPlayback's steps inside a map load: the scene's templates (before the objects spawn) and objects (after). */
+  private qlMapLoad?: { templates(): void; objects(): void };
+  /** A quest log scene's map is loading (CB1_Overworld doesn't run). */
+  private qlLoading?: Promise<void>;
+  /** The player object was made while playback ran: QL_UpdateObject moves it. */
+  private playerQuestLog = false;
+  /** MOVEMENT_TYPE_* by number (QL_LoadObjectsAndTemplates) */
+  private movementTypeNames?: Map<number, string>;
+  /** CONTINUE's start (the final scene enters the saved field with it) */
+  private continueStart?: OverworldStart;
   private hud!: Phaser.GameObjects.Text;
 
   constructor() {
@@ -376,7 +414,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   async create(start: OverworldStart): Promise<void> {
-    if (start.continueGame) fromSaveData(start.continueGame, this.state); // LoadSerializedGame & co. (load_save.c)
+    if (start.continueGame) {
+      this.savedGame = structuredClone(start.continueGame); // the save slot, for the quest log's LoadGameSave
+      fromSaveData(start.continueGame, this.state); // LoadSerializedGame & co. (load_save.c)
+    }
     if (start.newGameProfile) Object.assign(this.state, start.newGameProfile);
     const kb = this.input.keyboard!;
     this.buttons = new Input(this);
@@ -552,6 +593,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     await loadGfx(DEOXYS_ROCK_GFX);
     this.cameras.main.startFollow(this.player.anchor, true, 1, 1, 0, CAMERA_FOLLOW_OFFSET_Y);
     setQuestLogHost(this.createQuestLogHost());
+    setQuestLogPlaybackHost(this.createQuestLogPlaybackHost());
 
     if (start.continueGame) {
       await this.continueSavedGame(start);
@@ -559,6 +601,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       // CB2_NewGame: NewGameInitData's gDifferentSaveFile and PlayTimeCounter_Reset, then PlayTimeCounter_Start
       gSave.differentSaveFile = true;
       ResetQuestLog(this.state); // NewGameInitData
+      QL_ResetPlayback();
       PlayTimeCounter_Reset(this.state.playTime);
       PlayTimeCounter_Start(this.state.playTime);
       testHooks.applyTestOptions(this.state);
@@ -597,6 +640,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       overlay: this.overlay !== undefined,
       locked: this.controlsLocked > 0,
       objectsFrozen: this.objectsFrozen,
+      questLogPlayback: questLogPlaybackActive(),
       moving: this.player.isMoving,
       approaching: this.trainerApproach !== undefined,
       fading: this.screenFade.active,
@@ -816,14 +860,17 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     // layer, VBlankCB_Field does the transfer until a battle transition replaces it).
     if (!this.creditsCamera) UpdateTilesetAnimations(); // the credits run them every other frame themselves
     if (!this.screenFade.active && !this.gbaScreen.active) TransferTilesetAnimsBuffer();
-    // FieldGetPlayerInput: QuestLogOverrideJoyVars replays the key that closed the last script's message.
-    if (!this.scripts.running) {
-      const replay = this.scripts.takeRegisteredInput();
-      if (replay) this.buttons.override(replay);
+    // In playback the field input is the recorded one (DoCB1_Overworld_QuestLogPlayback), not the keys
+    if (!this.questLogPlaybackCB1()) {
+      // FieldGetPlayerInput: QuestLogOverrideJoyVars replays the key that closed the last script's message.
+      if (!this.scripts.running) {
+        const replay = this.scripts.takeRegisteredInput();
+        if (replay) this.buttons.override(replay);
+      }
+      // FieldInput_HandleCancelSignpost (pressedStartButton needs the player standing on a tile)
+      const startPressed = this.buttons.pressed('START') && !this.player.isMoving;
+      if (this.scripts.handleCancelSignpost(this.heldDirection(), this.player.facing, startPressed)) this.startMenuWhenFree = true;
     }
-    // FieldInput_HandleCancelSignpost (pressedStartButton needs the player standing on a tile)
-    const startPressed = this.buttons.pressed('START') && !this.player.isMoving;
-    if (this.scripts.handleCancelSignpost(this.heldDirection(), this.player.facing, startPressed)) this.startMenuWhenFree = true;
     // Like the GBA, field input is only considered if the controls were free at the start of the
     // frame (CB1_Overworld checks ArePlayerFieldControlsLocked before tasks run), so the A press that
     // dismisses a message or picks EXIT on the start menu can't also start a new interaction.
@@ -859,14 +906,71 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       n.brain.paused = scripted;
       n.brain.tick();
     }
+    if (this.playerQuestLog) QL_UpdateObject(this.player, 0, true); // the player's sprite callback in playback
     const arrived = this.player.tick();
     this.cameraObject?.tick();
     if (arrived) this.updateObjectsForCamera(); // the camera moved a tile, scripted or not
     if (arrived && !this.scripts.running && this.overlay === undefined) this.onPlayerArrived();
     SetQuestLogEvent_Arrived(); // OverworldBasic, after CameraUpdate
-    // DoCB1_Overworld (next frame's, as the GBA's CB1 sees this frame's sprite updates):
-    // QL_TryRunActions, then UpdatePlayerAvatarTransitionState and FieldGetPlayerInput run whether or not the
-    // controls are locked; RunQuestLogCB last.
+    // CB1_Overworld (next frame's, as the GBA's CB1 sees this frame's sprite updates): in playback
+    // DoCB1_Overworld_QuestLogPlayback (not while CB2 loads a scene's map), else DoCB1_Overworld.
+    if (this.questLogPlaybackCB1()) {
+      if (!this.busy) this.doCB1OverworldQuestLogPlayback(freeAtFrameStart);
+    } else if (this.doCB1Overworld(lockedAtFrameStart, freeAtFrameStart)) {
+      return;
+    }
+
+    // AnimateSprites runs every object's ObjectEventUpdateSubpriority against last frame's camera;
+    // only then do CameraUpdate and UpdateCameraPanning move it.
+    for (const n of this.npcs) n.brain.obj.updateSubpriority();
+    this.player.updateSubpriority();
+    this.fieldEffects.tick(); // created after the objects, so their callbacks run after the objects'
+    this.poisonEffect?.tick();
+    if (this.poisonEffect && !this.poisonEffect.active) this.poisonEffect = undefined;
+    this.updateFieldCamera();
+  }
+
+  /** CB1_Overworld's choice: QL_GetPlaybackState() == RUNNING or gQuestLogState == QL_STATE_PLAYBACK */
+  private questLogPlaybackCB1(): boolean {
+    return QL_GetPlaybackState() === K.QL_PLAYBACK_STATE_RUNNING || gQL.state === K.QL_STATE_PLAYBACK;
+  }
+
+  /**
+   * DoCB1_Overworld_QuestLogPlayback: the recorded actions (QL_TryRunActions), A / B (QL_HandleInput), and the
+   * recorded field input in place of the keys: what it starts takes the controls, else QLogCB_Playback runs (also
+   * while the controls are locked once the scene is ending).
+   */
+  private doCB1OverworldQuestLogPlayback(freeAtFrameStart: boolean): void {
+    QL_TryRunActions();
+    UpdatePlayerAvatarTransitionState();
+    QL_HandleInput();
+    const recorded = questLogFieldInput(); // fieldInput = gQuestLogFieldInput
+    const input: FieldInput = {
+      pressedAButton: recorded.pressedAButton,
+      pressedStartButton: recorded.pressedStartButton,
+      pressedSelectButton: recorded.pressedSelectButton,
+      heldDirection: recorded.heldDirection,
+      heldDirection2: recorded.heldDirection2,
+      tookStep: recorded.tookStep,
+      checkStandardWildEncounter: recorded.checkStandardWildEncounter,
+      dpadDirection: recorded.dpadDirection !== 0 ? directionOf(recorded.dpadDirection) : undefined,
+    };
+    // (FieldInput_HandleCancelSignpost on the recorded input: QL5)
+    const blocked = this.scripts.running || this.overlay !== undefined || this.controlsLocked > 0 || this.warping;
+    if (freeAtFrameStart && !blocked) {
+      if (this.processPlayerFieldInput(input)) this.mapNamePopup?.dismiss(); // LockPlayerFieldControls, DismissMapNamePopup
+      else RunQuestLogCB();
+    } else if (QuestLogScenePlaybackIsEnding()) {
+      RunQuestLogCB();
+    }
+    clearQuestLogFieldInput(); // FieldClearPlayerInput(&gQuestLogFieldInput)
+  }
+
+  /**
+   * DoCB1_Overworld: QL_TryRunActions, then UpdatePlayerAvatarTransitionState and FieldGetPlayerInput run whether
+   * or not the controls are locked; RunQuestLogCB last. True when START opened the menu (the frame ends there).
+   */
+  private doCB1Overworld(lockedAtFrameStart: boolean, freeAtFrameStart: boolean): boolean {
     QL_TryRunActions();
     UpdatePlayerAvatarTransitionState();
     const input = this.fieldGetPlayerInput();
@@ -878,7 +982,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         PlaySE(K.SE_WIN_OPEN);
         this.openStartMenu();
         RunQuestLogCB();
-        return;
+        return true;
       }
       if (this.processPlayerFieldInput(input)) {
         if (gQL.playbackState === K.QL_PLAYBACK_STATE_RECORDING) QL_RecordFieldInput(this.fieldInputRecord);
@@ -892,15 +996,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (freeAtFrameStart && (this.scripts.running || this.overlay !== undefined || this.trainerApproach !== undefined || this.warping)) {
       this.mapNamePopup?.dismiss();
     }
-
-    // AnimateSprites runs every object's ObjectEventUpdateSubpriority against last frame's camera;
-    // only then do CameraUpdate and UpdateCameraPanning move it.
-    for (const n of this.npcs) n.brain.obj.updateSubpriority();
-    this.player.updateSubpriority();
-    this.fieldEffects.tick(); // created after the objects, so their callbacks run after the objects'
-    this.poisonEffect?.tick();
-    if (this.poisonEffect && !this.poisonEffect.active) this.poisonEffect = undefined;
-    this.updateFieldCamera();
+    return false;
   }
 
   /**
@@ -1239,6 +1335,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /** TryRunOnFrameMapScript */
   private tryOnFrameScript(): boolean {
+    if (gQL.state === K.QL_STATE_PLAYBACK_LAST) return false; // TryRunOnFrameMapScript
     const table = this.scripts.mapScript(this.world.current.name, 'MAP_SCRIPT_ON_FRAME_TABLE');
     const script = table && this.scripts.mapScriptTable(table);
     if (!script) return false;
@@ -1693,6 +1790,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       if (resume) this.scripts.runImmediately(resume);
       if (warped) tilesetVram.resetBgPalettes();
     }
+    this.qlMapLoad?.templates(); // LoadMap_QLPlayback: QL_InitSceneObjectsAndActions (the actions, the templates)
     if (warped || continued) this.clearNpcs(); // ResetObjectEvents
     if (warped) this.initPlayerAvatarOnWarp();
     if (continued) {
@@ -1703,14 +1801,19 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       InitPlayerAvatar(continued.facing, this.playerGender(), state);
     }
     if (warped || continued) SetHelpContextForMap(); // LoadMapInStepsLocal's (ReturnToFieldLocal's), after the objects
+    // The player object is made anew: while playback runs, its callback is QL_UpdateObject
+    if (warped || continued) this.playerQuestLog = !this.scripts.running && QL_GetPlaybackState() === K.QL_PLAYBACK_STATE_RUNNING;
     this.syncNpcsWithLoadedMaps();
+    this.qlMapLoad?.objects(); // QL_LoadObjects: the scene's objects where the snapshot has them
     if (warped) {
       const table = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_WARP_INTO_MAP_TABLE');
       const script = table && this.scripts.mapScriptTable(table);
       if (script) this.scripts.runImmediately(script);
       // DoMapLoadLoop's states 3-4: QuestLog_ShouldEndSceneOnMapChange (a disabled location cuts the recording), then
       // after InitObjectEventsLocal, QuestLog_CheckDepartingIndoorsMap and QuestLog_TryRecordDepartedLocation
-      QuestLog_ShouldEndSceneOnMapChange();
+      // In playback, a warp into a disabled location ends the scene (CB2_LoadMap2: QuestLog_AdvancePlayhead_), once the
+      // warp is done
+      if (QuestLog_ShouldEndSceneOnMapChange()) this.fieldTasks.push({ tick: () => !this.busy && !this.screenFade.active && (QuestLog_AdvancePlayhead_(), true) });
       if (gQL.state !== K.QL_STATE_PLAYBACK) {
         QuestLog_CheckDepartingIndoorsMap();
         QuestLog_TryRecordDepartedLocation();
@@ -1747,9 +1850,25 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * (InitMapFromSavedGame, CB2_ReturnToField's ResumeMap and return-to-field scripts, FieldCB_ShowMapNameOnContinue).
    */
   private async continueSavedGame(start: OverworldStart): Promise<void> {
-    const s = this.state;
     gSave.differentSaveFile = false;
-    QL_ResetForContinue(s); // TryStartQuestLogPlayback's (QL2 plays the scenes back first)
+    // main.c's soft reset left the quest log's EWRAM cleared; main_menu.c's CONTINUE then runs
+    // TryStartQuestLogPlayback: with saved scenes they play first, and the final scene enters the saved field
+    QL_ResetOnSoftReset();
+    QL_ResetPlayback();
+    this.continueStart = start;
+    if (TryStartQuestLogPlayback(this.state)) {
+      await this.qlLoading; // the first scene's map
+      return;
+    }
+    await this.enterSavedField(start, false);
+  }
+
+  /**
+   * CB2_ContinueSavedGame, or (`fromQuestLog`) CB2_EnterFieldFromQuestLog after the quest log reloaded the save:
+   * the same steps, with FieldCB2_FinalScene in place of FieldCB_ShowMapNameOnContinue / the warp exit.
+   */
+  private async enterSavedField(start: OverworldStart, fromQuestLog: boolean): Promise<void> {
+    const s = this.state;
     StopMapMusic(); // CB2_ContinueSavedGame
     // A save always has a location (the save dialog stores it); `start` is only a fallback.
     const loc = s.location ?? { mapId: '', x: start.x, y: start.y, facing: start.facing ?? 'down', avatarFlags: PLAYER_AVATAR_FLAG.ON_FOOT };
@@ -1770,6 +1889,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       ResetInitialPlayerAvatarState();
       this.nextArrivalWarpId = w.warpId;
       await this.enterMap(name, dest.x, dest.y, undefined, true);
+      if (fromQuestLog) {
+        Overworld_PlaySpecialMapMusic(); // (the quest log's music: QL2b)
+        FieldCB2_FinalScene();
+        return;
+      }
       this.showMapNameOnWarpArrival(undefined);
       // FieldCB_DefaultWarpExit → SetUpWarpExitTask(FALSE)
       Overworld_PlaySpecialMapMusic();
@@ -1779,13 +1903,180 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       const name = this.assets.mapNameForId(loc.mapId) ?? start.map;
       await this.enterMap(name, loc.x, loc.y, loc.facing, false, loc);
       this.resumeMap(); // ResumeMap's RunOnResumeMapScript, ReloadObjectsAndRunReturnToFieldMapScript
+      Overworld_PlaySpecialMapMusic();
+      if (fromQuestLog) {
+        FieldCB2_FinalScene();
+        return;
+      }
       // FieldCB_ShowMapNameOnContinue, then FieldCB_WarpExitFadeFromBlack → SetUpWarpExitTask(TRUE): FadeInFromBlack
       if (this.world.current.data.showMapName) this.showMapNamePopup();
-      Overworld_PlaySpecialMapMusic();
       this.warpFadeInScreen(false);
     }
     // Task_ExitNonDoor: the controls stay locked until the fade is done
     if (!this.overlay) this.overlay = { tick: () => this.fieldFadeTransitionBackgroundEffectIsFinished() };
+  }
+
+  // ------------------------------------------------------------------ the quest log's playback
+
+  /** The quest log's LockPlayerFieldControls / UnlockPlayerFieldControls: a flag, held as one count of controlsLocked. */
+  private qlLock(): void {
+    if (this.qlControlsLocked) return;
+    this.qlControlsLocked = true;
+    this.controlsLocked++;
+  }
+
+  private qlUnlock(): void {
+    if (!this.qlControlsLocked) return;
+    this.qlControlsLocked = false;
+    this.controlsLocked = Math.max(0, this.controlsLocked - 1);
+  }
+
+  /** What quest_log.c's playback asks of the field (world/questLogPlayback.ts). */
+  private createQuestLogPlaybackHost(): QuestLogPlaybackHost {
+    return {
+      setUpOverworldForQLPlayback: (scene, isWarp) => {
+        this.qlLoading = this.loadQuestLogScene(scene, isWarp);
+      },
+      enterFieldFromQuestLog: () => {
+        this.qlLoading = this.enterFieldFromQuestLog();
+      },
+      fadeScreenToBlack: (delay) => this.screenFade.begin(this.defines.require('FADE_TO_BLACK'), delay),
+      paletteFadeActive: () => this.screenFade.active,
+      warpExitFadeFromBlack: () => {
+        // FieldCB_WarpExitFadeFromBlack: LockPlayerFieldControls, FadeInFromBlack, Task_ExitNonDoor unlocks after it
+        this.qlLock();
+        this.warpFadeInScreen(false);
+        this.overlay = {
+          tick: () => {
+            if (!this.fieldFadeTransitionBackgroundEffectIsFinished()) return false;
+            this.qlUnlock();
+            return true;
+          },
+        };
+      },
+      lockPlayerFieldControls: () => this.qlLock(),
+      unlockPlayerFieldControls: () => this.qlUnlock(),
+      createTask: (tick) => this.fieldTasks.push({ tick }),
+      freezeObjectEvents: () => (this.objectsFrozen = true),
+      clearPlayerHeldMovementAndUnfreezeObjectEvents: () => {
+        ClearPlayerHeldMovement();
+        this.objectsFrozen = false;
+      },
+      disableWildEncounters: (disabled) => (this.wild.disabled = disabled),
+      showMapNamePopup: () => this.showMapNamePopup(),
+      newKeys: () => ({ a: this.buttons.pressed('A'), b: this.buttons.pressed('B') }),
+    };
+  }
+
+  /**
+   * QLPlayback_SetInitialPlayerPosition, CB2_SetUpOverworldForQLPlayback(WithWarpExit) and LoadMap_QLPlayback: the
+   * scene's flags, vars and mon counts, its map (through its warp, or standing in place as QL_LoadMapNormal with the
+   * scene's layout), the actions and templates before the objects spawn and the snapshot's positions after,
+   * QL_TryStopSurfing, then FieldCB2_QuestLogStartPlayback*: playback state and the warp exit or the fade in.
+   */
+  private async loadQuestLogScene(scene: QuestLogScene, isWarp: boolean): Promise<void> {
+    this.busy = true;
+    const s = this.state;
+    // ScriptContext_Init, UnlockPlayerFieldControls, SetMainCallback1(NULL)
+    this.scripts.init();
+    this.messageBox.hide();
+    this.overlay = undefined;
+    this.startMenuWhenFree = false;
+    this.qlUnlock();
+    QL_CopySaveState(s);
+    QL_ResetPartyAndPC(s);
+    const mapId = mapIdOf(scene.mapGroup, scene.mapNum) ?? '';
+    const name = this.assets.mapNameForId(mapId) ?? this.world.current.name;
+    const data = await this.assets.loadMap(name);
+    const player = scene.objectEvents.find((o) => o.active && o.isPlayer);
+    const facing = player ? directionOf(player.facingDirection) : 'down';
+    this.qlMapLoad = {
+      templates: () => {
+        // QL_InitSceneObjectsAndActions: ReadQuestLogScriptFromSav1, ResetActions(RUNNING), the templates
+        QL_InitSceneActions();
+        QL_LoadTemplates(scene, this.templatesFor(this.world.current), (id) => this.movementTypeName(id));
+      },
+      objects: () => this.questLogLoadObjects(scene),
+    };
+    try {
+      ResetInitialPlayerAvatarState();
+      if (isWarp) {
+        // WarpIntoMap with the scene's warp, LoadMapFromWarp
+        const warpId = scene.warpId === 0xff ? -1 : scene.warpId;
+        const dest = warpDestCoords(data, warpId, scene.x, scene.y);
+        this.nextArrivalWarpId = warpId;
+        await this.enterMap(name, dest.x, dest.y, undefined, true);
+      } else {
+        // QL_LoadMapNormal: LoadSaveblockMapHeader with QL_RestoreMapLayoutId; ReloadObjectsAndRunReturnToFieldMapScript
+        const mapLayoutId = QL_RestoreMapLayoutId(s, this.defines.require(data.layoutId));
+        const gfx = player ? (this.graphicsIdNames.get(player.graphicsId) ?? '') : '';
+        const avatarFlags = GetPlayerAvatarStateTransitionByGraphicsId(gfx, this.playerGender());
+        this.nextArrivalWarpId = scene.warpId === 0xff ? -1 : scene.warpId;
+        await this.enterMap(name, scene.x, scene.y, facing, false, { mapId, x: scene.x, y: scene.y, facing, avatarFlags, mapLayoutId });
+        this.resumeMap();
+      }
+    } finally {
+      this.qlMapLoad = undefined;
+    }
+    const { x, y } = this.player.current; // PlayerGetDestCoords
+    QL_TryStopSurfing(this.behaviors.isSurfable(this.world.tileAt(x, y).behavior));
+    // FieldCB2_QuestLogStartPlaybackWithWarpExit / _StandingInPlace
+    QL_StartPlaybackScene();
+    if (isWarp && this.behaviors.isDoor(this.world.tileAt(x, y).behavior)) {
+      this.exitDoor(false); // FieldCB_DefaultWarpExit
+    } else {
+      this.warpFadeInScreen(false); // FieldCB_WarpExitFadeFromBlack
+      if (!this.overlay) this.overlay = { tick: () => this.fieldFadeTransitionBackgroundEffectIsFinished() };
+    }
+    this.busy = false;
+  }
+
+  /** QL_LoadObjects: the player and the current map's objects where (and facing how) the scene's snapshot has them. */
+  private questLogLoadObjects(scene: QuestLogScene): void {
+    const cur = this.world.current;
+    const { mapGroup, mapNum } = mapGroupAndNum(cur.data.id);
+    for (const o of scene.objectEvents) {
+      if (!o.active) continue;
+      const x = cur.originX + o.x - 7; // MAP_OFFSET
+      const y = cur.originY + o.y - 7;
+      if (o.isPlayer) {
+        this.player.setPosition(x, y);
+        this.player.face(directionOf(o.facingDirection));
+        this.updateFieldCamera();
+        continue;
+      }
+      if (o.mapGroup !== mapGroup || o.mapNum !== mapNum) continue;
+      const n = this.npcByLocalId(o.localId);
+      if (!n) continue;
+      n.brain.obj.setPosition(x, y);
+      n.brain.obj.face(directionOf(o.facingDirection));
+    }
+  }
+
+  /**
+   * QuestLog_StartFinalScene's LoadGameSave(SAVE_NORMAL) (the save slot as CONTINUE read it: nothing playback
+   * changed survives), then CB2_EnterFieldFromQuestLog.
+   */
+  private async enterFieldFromQuestLog(): Promise<void> {
+    this.busy = true;
+    this.scripts.init(); // ScriptContext_Init
+    this.messageBox.hide();
+    this.overlay = undefined;
+    if (this.savedGame) fromSaveData(structuredClone(this.savedGame), this.state);
+    this.objectsFrozen = false; // UnfreezeObjectEvents
+    await this.enterSavedField(this.continueStart ?? { map: this.world.current.name, x: 0, y: 0 }, true);
+    this.busy = false;
+  }
+
+  /** MOVEMENT_TYPE_* by number */
+  private movementTypeName(id: number): string | undefined {
+    if (!this.movementTypeNames) {
+      this.movementTypeNames = new Map();
+      for (const [k, v] of Object.entries(this.assets.scripts.defines)) {
+        if (k.startsWith('MOVEMENT_TYPE_') && !this.movementTypeNames.has(v)) this.movementTypeNames.set(v, k);
+      }
+    }
+    return this.movementTypeNames.get(id);
   }
 
   /** A loaded map's templates; a neighbour that was never current starts from its header. */
@@ -1907,9 +2198,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const brain = new NpcBrain(obj, data, (o, d) => this.canMove(o, d));
     const { mapGroup, mapNum } = mapGroupAndNum(chunk.data.id);
     // ObjectEventSetSingleMovement: QuestLogRecordNPCStep while recording
+    // (only the current map's: the GBA has no objects of the neighbouring maps, and playback goes by local id alone)
     brain.onSingleMovement = (action) => {
-      if (gQL.playbackState === K.QL_PLAYBACK_STATE_RECORDING) QuestLogRecordNPCStep(localId, mapNum, mapGroup, action);
+      if (gQL.playbackState === K.QL_PLAYBACK_STATE_RECORDING && chunk === this.world.current) QuestLogRecordNPCStep(localId, mapNum, mapGroup, action);
     };
+    // CopyObjectGraphicsInfoToSpriteTemplate: made while playback runs (and no script), it moves only as recorded
+    if (!this.scripts.running && QL_GetPlaybackState() === K.QL_PLAYBACK_STATE_RUNNING) brain.questLogUpdate = () => QL_UpdateObject(obj, localId, false);
     return { localId, chunk, spawnedAs: data, graphicsId, stale: false, brain };
   }
 

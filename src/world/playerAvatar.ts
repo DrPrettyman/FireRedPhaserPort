@@ -25,6 +25,10 @@ import { QL_GetPlaybackState, QuestLogRecordPlayerStep } from './questLog';
 import {
   QL_PLAYER_GFX_BIKE,
   QL_PLAYER_GFX_NORMAL,
+  QL_PLAYER_GFX_STOP_SURF_E,
+  QL_PLAYER_GFX_STOP_SURF_N,
+  QL_PLAYER_GFX_STOP_SURF_S,
+  QL_PLAYER_GFX_STOP_SURF_W,
   QL_PLAYER_GFX_SURF,
   QL_TryRecordNPCStepWithDuration32,
   QL_TryRecordPlayerStepWithDuration0,
@@ -492,6 +496,33 @@ function PlayerAvatarTransition_Surfing(): void {
 
 function PlayerAvatarTransition_ReturnToField(): void {
   gPlayerAvatar.flags |= F.CONTROLLABLE;
+}
+
+/**
+ * QuestLogUpdatePlayerSprite (quest_log_player.c's sQLGfxTransitions, QL_UpdateObject in playback): the recorded
+ * gfx change. Normal, bike and surf as the avatar transitions do it (nothing is recorded in playback); getting off
+ * a mon is CreateStopSurfingTask (the C's _NoMusicChange: the playback's music is QL2b's). The fishing rod and the
+ * VS Seeker (Task_QLFishMovement, Task_QLVSSeekerMovement) are QUEST_LOG_PLAN.md's QL5.
+ */
+export function QuestLogUpdatePlayerSprite(state: number): void {
+  switch (state) {
+    case QL_PLAYER_GFX_NORMAL:
+      return PlayerAvatarTransition_Normal();
+    case QL_PLAYER_GFX_BIKE:
+      return PlayerAvatarTransition_Bike();
+    case QL_PLAYER_GFX_SURF:
+      return PlayerAvatarTransition_Surfing();
+    case QL_PLAYER_GFX_STOP_SURF_S:
+      return CreateStopSurfingTask('down');
+    case QL_PLAYER_GFX_STOP_SURF_N:
+      return CreateStopSurfingTask('up');
+    case QL_PLAYER_GFX_STOP_SURF_W:
+      return CreateStopSurfingTask('left');
+    case QL_PLAYER_GFX_STOP_SURF_E:
+      return CreateStopSurfingTask('right');
+    default:
+      console.debug('[quest log] unported player gfx change in playback', state); // FISH, VSSEEKER: QL5
+  }
 }
 
 /** ObjectEventSetGraphicsId on the player */

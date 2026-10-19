@@ -41,6 +41,8 @@ export class ScreenFade {
   private finishing = -1;
   private delay = 0;
   private delayCounter = 0;
+  /** gPaletteFade.deltaY: 2, plus -delay for a negative delay (a faster fade) */
+  private deltaY = 2;
   /** The weather is fading the screen in (`WeatherFade`): the overlay follows its blend. */
   private weatherFadeIn = false;
   /** Set on the field: FadeScreen's weather part. */
@@ -76,6 +78,9 @@ export class ScreenFade {
     this.targetY = fadeOut ? 16 : 0;
     this.objToggle = false;
     this.finishing = -1;
+    // BeginNormalPaletteFade: a negative delay steps faster instead (deltaY += -delay, delay 0)
+    this.deltaY = delay < 0 ? 2 - delay : 2;
+    delay = Math.max(0, delay);
     this.delay = delay;
     this.delayCounter = delay; // so BeginNormalPaletteFade's own update applies the first step at once
     this.active = true;
@@ -94,6 +99,8 @@ export class ScreenFade {
     this.targetY = targetY;
     this.objToggle = false;
     this.finishing = -1;
+    this.deltaY = delay < 0 ? 2 - delay : 2;
+    delay = Math.max(0, delay);
     this.delay = delay;
     this.delayCounter = delay;
     this.active = true;
@@ -157,6 +164,6 @@ export class ScreenFade {
       this.finishing = 0;
       return;
     }
-    this.y = this.y < this.targetY ? Math.min(this.y + 2, this.targetY) : Math.max(this.y - 2, this.targetY);
+    this.y = this.y < this.targetY ? Math.min(this.y + this.deltaY, this.targetY) : Math.max(this.y - this.deltaY, this.targetY);
   }
 }

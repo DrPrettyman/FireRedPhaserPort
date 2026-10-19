@@ -705,7 +705,7 @@ this is the next level down. When you add or change a subsystem, update its entr
     UpdatePlayerAvatarTransitionState and RunQuestLogCB after the input (QL_RecordFieldInput with
     `fieldInputRecord`, which processPlayerFieldInput fills like gFieldInputRecord), SetQuestLogEvent_Arrived after
     the objects, and after a warp's map load (onMapLoaded, after ON_WARP_INTO) QuestLog_ShouldEndSceneOnMapChange and
-    the departed check; ResetQuestLog on a new game, QL_ResetForContinue on CONTINUE, QuestLog_CutRecording after a
+    the departed check; ResetQuestLog on a new game, QL_ResetOnSoftReset and TryStartQuestLogPlayback on CONTINUE, QuestLog_CutRecording after a
     white-out and before a Victory Road switch's script. playerAvatar.ts records the steps (PlayerSetAnimId), the gfx
     transitions, getting off Surf and Strength; NpcBrain's `onSingleMovement` records NPC faces and steps; fishing and
     the VS Seeker record their gfx changes. ScriptEngine: a rematch's trainerbattle ends the scene, CB2_EndTrainerBattle
@@ -713,19 +713,53 @@ this is the next level down. When you add or change a subsystem, update its entr
     specials GetQuestLogState, QuestLog_CutRecording (also ShowTownMap, ShowDiploma) and
     QuestLog_StartRecordingInputsAfterDeferredEvent are real. The save keeps the scenes since version 12
     (`questLogScenesSave` / `loadQuestLogScenes`: inactive objects as null, trailing empty templates left out).
-  - **For QL2 (playback):** a scene's `startType` (QL_START_NORMAL / _WARP), `mapGroup` / `mapNum` (`mapIdOf`),
-    `warpId` (u8, 0xFF = none), `x` / `y` (map-local), `objectEvents` (map coordinates, + 7), `objectEventTemplates`
-    (|x|, negx, ...), `flags` / `vars` (as SaveData's) and `script` are what QLPlayback_InitOverworldState,
-    QL_CopySaveState, QL_LoadObjectsAndTemplates and ReadQuestLogScriptFromSav1 read; the codecs and QL_SkipCommand /
-    QL_UpdateLastDepartedLocation / QL_LoadEvent are ported; `fieldInputFromU32` turns an INPUT action back into a
-    field input. Not ported: ResetActions' RUNNING case, QL_TryRunActions' RUNNING case, QL_UpdateObject,
-    sMovementScripts, QL_LoadObjects, QLogCB_Playback.
+  - **Playback** reads a scene's `startType`, `mapGroup` / `mapNum` (`mapIdOf`), `warpId` (u8, 0xFF = none), `x` /
+    `y` (map-local), `objectEvents` (map coordinates, + 7), `objectEventTemplates`, `flags` / `vars` and `script`:
+    see "Quest log, playback" below.
   - **Tests:** tests/unit/questLog.test.ts (the codecs against the C's layout, a scene's head, the frames between
     actions, the stream filling up after 30 steps, repeats, the ring of four and the save's sort, the filters, the
     departed locations incl. Rock Tunnel and the Rocket Hideout, the save round trip), tests/e2e/questLog.test.ts
     (leaving the house at (4, 8) of PalletTown_PlayersHouse_1F, three steps, the save; Daisy's grooming cut in
     PalletTown_RivalsHouse from (6, 4); the fan club door at (47, 21) of Saffron City). Probes: `__test.questLog()`
     (the state and the scenes with their commands decoded), `__test.questLogEvent(name, data)` (SetQuestLogEvent).
+
+- **Quest log, playback (QUEST_LOG_PLAN.md QL2a):** `world/questLogPlayback.ts` is quest_log.c's playback flow,
+  `world/questLog.ts` its action half; no Phaser (OverworldScene implements `QuestLogPlaybackHost`).
+  - **Flow:** OverworldScene.continueSavedGame runs QL_ResetOnSoftReset (EWRAM after a soft reset) and
+    TryStartQuestLogPlayback; with scenes, Task_BeginQuestLogPlayback → QLPlayback_InitOverworldState (playback
+    state, ResetSpecialVars, ClearBag, ClearPCItemSlots) → the host's `setUpOverworldForQLPlayback` =
+    OverworldScene.loadQuestLogScene (CB2_SetUpOverworldForQLPlayback(WithWarpExit) + LoadMap_QLPlayback:
+    QL_CopySaveState with RestoreTrainerRematches, QL_ResetPartyAndPC, the map through the scene's warp or standing
+    in place as QL_LoadMapNormal with QL_RestoreMapLayoutId, then FieldCB2_QuestLogStartPlayback*: QL_StartPlaybackScene
+    and the warp exit / fade in). onMapLoaded calls `qlMapLoad.templates()` before the objects spawn
+    (QL_InitSceneActions: ReadQuestLogScriptFromSav1 + ResetActions(RUNNING); QL_LoadTemplates) and
+    `qlMapLoad.objects()` after (QL_LoadObjects: the snapshot's positions and facings).
+  - **Driving the field:** tickField's CB1 part is DoCB1_Overworld_QuestLogPlayback while QL_GetPlaybackState() is
+    RUNNING or gQuestLogState PLAYBACK (not while `busy`): QL_TryRunActions RUNNING hands movement / gfx actions
+    to sMovementScripts and inputs to gQuestLogFieldInput, QL_HandleInput (A: DoSceneEndTransition, B:
+    DoSkipToEndTransition), the recorded input through processPlayerFieldInput, then RunQuestLogCB → QLogCB_Playback
+    (the events: QL_LoadEvent / QL_TryRepeatEvent, HandleShowQuestLogMessage pauses the actions for
+    GetQuestLogTextDisplayDuration frames; when nothing is left, the scene ends). Objects made while playback runs
+    (no script) move only through QL_UpdateObject: NpcBrain's `questLogUpdate`, `playerQuestLog` for the player;
+    ObjectEvent.setHeldMovement replaces a held action in playback (as ObjectEventSetHeldMovement). The keys don't
+    reach the player; QL_IsTrainerSightDisabled gates CheckForTrainersWantingBattle; wild encounters are off.
+  - **The end:** QuestLog_AdvancePlayhead / QuestLog_WaitFadeAndCancelPlayback → QuestLog_StartFinalScene: the host's
+    `enterFieldFromQuestLog` reloads the save slot as CONTINUE read it (`savedGame`, cloned in create: decision 3)
+    and runs enterSavedField(…, true) (CB2_EnterFieldFromQuestLog = CB2_ContinueSavedGame's steps) with
+    FieldCB2_FinalScene; then field tasks Task_FinalScene_WaitFade → Task_QuestLogScene_SavedGame →
+    Task_WaitAtEndOfQuestLog (gQuestLogState 0) → Task_EndQuestLog (the controls, wild encounters, the help system
+    back). TryRunOnFrameMapScript is skipped in PLAYBACK_LAST. The quest log's Lock/UnlockPlayerFieldControls is a
+    flag held as one count of `controlsLocked` (qlLock / qlUnlock).
+  - **QL2b's seams:** `questLogScreen` in questLogPlayback.ts (setGlobalFieldTintMode, drawPreviouslyOnQuestHeader,
+    drawSceneDescription, closeTextWindow, drawSavedGameText, beginEnd, restoreScreenAfterPlayback(timer),
+    finishEnd, disableMapMusicChange): assign them; `setQuestLogDescriptionText` is gStringVar4 for the event
+    loaders (GetQuestLogTextDisplayDuration counts it); `questLogScenesLeft()` is DrawPreviouslyOnQuestHeader's
+    number; QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode is there for QL5's field effects.
+  - **Tests:** tests/unit/questLog.test.ts ("playback": the actions at their recorded frames, the NPC by local id,
+    the input; locked controls hold them), tests/e2e/questLog.test.ts (two scenes recorded in Pallet Town, then
+    CONTINUE: each scene's flags / empty bag / placeholder Rattata, the player and NPCs end where they were
+    recorded, the field afterwards equals the save; A and B). Probes: `__test.questLog().playback` (active,
+    numScenes, sPlaybackControl, the seam calls), `__test.field().questLogPlayback` (and `idle()` waits for the end).
 
 ## GBA screens and menus
 

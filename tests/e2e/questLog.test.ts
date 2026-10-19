@@ -1,7 +1,9 @@
 // The quest log's recording (world/questLog*.ts, QUEST_LOG_PLAN.md QL1): leaving a building starts a scene
 // (QL_EVENT_DEPARTED), the field records the player's steps, saving closes the scene into the save; a script's
 // `special QuestLog_CutRecording` ends a scene; nothing is recorded in a disabled location (the trainer fan club),
-// and walking into one cuts the recording.
+// and walking into one cuts the recording. Its playback (world/questLogPlayback.ts, QL2a): CONTINUE plays the saved
+// scenes (the player and the NPCs move as recorded, the scene's flags, empty bag and party count in effect), A skips
+// a scene, B skips to the end, and afterwards the field is the saved one.
 
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
@@ -143,6 +145,170 @@ test('a disabled location records nothing, and walking into one cuts the recordi
   await save(game);
   const saved = await savedGame(game);
   expect(saved.questLog.filter((s: { startType: number }) => s.startType !== 0).length).toBe(1);
+});
+
+// ------------------------------------------------------------------ playback
+
+const SAVE_KEY = 'firered-phaser:save';
+/** The save the first playback test records (two scenes), reused by the skip test. */
+let twoScenesSave: string | undefined;
+/** Where the scenes ended when they were recorded: the player and the objects, map-local. */
+let recordedEnds: { player: { x: number; y: number }; objects: { localId: number; x: number; y: number }[] }[] = [];
+
+const cutRecording = (game: Game) =>
+  game.eval(async (t) => {
+    const m = await new Function("return import('/src/world/questLog.ts')")();
+    m.QuestLog_CutRecording();
+    const f = t.field()!;
+    return { player: { x: f.x, y: f.y }, objects: t.objects().map((o) => ({ localId: o.localId, x: o.x, y: o.y })) };
+  });
+
+/** What the field holds that playback must not keep. */
+const fieldState = (game: Game) =>
+  game.eval((t) => ({
+    field: { map: t.field()!.map, x: t.field()!.x, y: t.field()!.y, facing: t.field()!.facing },
+    party: t.party().map((m) => m.species),
+    potions: t.itemCount('POTION'),
+    flags: t.snapshot().flags,
+    badge: t.flag('FLAG_BADGE01_GET'),
+  }));
+
+/** The main menu up, then CONTINUE. */
+async function continueGame(game: Game): Promise<void> {
+  await game.waitFor((t) => t.mainMenu() && !t.mainMenu()!.fading, { what: 'the main menu' });
+  await game.press('A');
+}
+
+test('CONTINUE plays the saved scenes back, then the field is the saved one', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown_PlayersHouse_1F', x: 4, y: 8 });
+  await game.waitIdle();
+  await game.eval((t) => t.setParty([{ species: 'BULBASAUR', level: 5 }, { species: 'PIDGEY', level: 3 }]));
+  // Scene 0 (QL_START_WARP): leave the house, three steps right; Pallet Town's people wander meanwhile
+  await game.eval((t) => t.enterWarp());
+  await game.waitIdle();
+  await game.walk('right', 3);
+  const LOCALID_PLAYER = await game.eval((t) => t.define('LOCALID_PLAYER'));
+  const MOVEMENT = await game.eval((t) => t.define('QL_EVENT_MOVEMENT'));
+  // wait for an NPC's recorded step (or the scene filling up and ending itself)
+  const npcStep = await game.eval(
+    (t, MOVEMENT) =>
+      t.until(() => t.questLog().state === 0 || t.questLog().scenes[0].commands.some((c) => c.id === MOVEMENT && (c.words[2] & 0xff) !== 0), 3000),
+    MOVEMENT,
+  );
+  expect(npcStep).toBe(true);
+  const end0 = await cutRecording(game);
+  let ql = await QL(game);
+  expect(ql.scenes[0].commands.some((c) => c.id === MOVEMENT && (c.words[2] & 0xff) !== 0 && (c.words[2] & 0xff) !== LOCALID_PLAYER)).toBe(true);
+  expect(ql.currentSceneNum).toBe(1);
+  // Scene 1 (QL_START_NORMAL, standing in place) with the first badge set, two steps left
+  await game.eval((t) => t.state!.setFlag('FLAG_BADGE01_GET'));
+  await game.eval((t) => t.questLogEvent('QL_EVENT_ARRIVED', { mapSec: t.define('MAPSEC_PALLET_TOWN') }));
+  ql = await QL(game);
+  expect(ql.scenes[1]).toMatchObject({ startType: await game.eval((t) => t.define('QL_START_NORMAL')), map: 'MAP_PALLET_TOWN' });
+  await game.walk('left', 2);
+  // What the save holds differs from the scenes: no badge, three potions, one mon
+  await game.eval((t) => {
+    t.state!.setFlag('FLAG_BADGE01_GET', false);
+    t.state!.bag.add(t.define('ITEM_POTION'), 3);
+  });
+  await game.eval((t) => t.setParty([{ species: 'BULBASAUR', level: 5 }]));
+  await save(game);
+  const end1 = (await game.eval((t) => ({ player: { x: t.field()!.x, y: t.field()!.y } }))) as (typeof recordedEnds)[number];
+  const saved = await fieldState(game);
+  expect(saved.party.length).toBe(1);
+  twoScenesSave = await game.eval((_t, key) => localStorage.getItem(key)!, SAVE_KEY);
+  recordedEnds = [end0, end1];
+  expect(JSON.parse(twoScenesSave).questLog.filter((sc: { startType: number }) => sc.startType !== 0).length).toBe(2);
+
+  await game.load({ keepSave: true, mainMenu: true });
+  const [PLAYBACK, PLAYBACK_LAST] = await game.eval((t) => [t.define('QL_STATE_PLAYBACK'), t.define('QL_STATE_PLAYBACK_LAST')]);
+  // Watch the whole playback in the page: each scene's start (its flags, bag, party) and end (the positions)
+  type Seen = { flag: boolean; potions: number; party: string[]; map: string };
+  type End = { player: { x: number; y: number }; objects: { localId: number; x: number; y: number }[] };
+  const watch = game.eval(
+    async (t, PLAYBACK, PLAYBACK_LAST) => {
+      const start: Record<number, Seen> = {};
+      const end: Record<number, End> = {};
+      let last = false;
+      const ok = await t.until(() => {
+        const f = t.field();
+        if (!f) return false; // (the main menu)
+        const ql = t.questLog();
+        const n = ql.currentSceneNum;
+        if (ql.state === PLAYBACK && !f.busy && ql.playback.control.state === 0 && ql.playback.control.endMode === 0 && !start[n]) {
+          start[n] = { flag: t.flag('FLAG_BADGE01_GET'), potions: t.itemCount('POTION'), party: t.party().map((m) => m.species ?? ''), map: f.map };
+        }
+        // (AdvancePlayhead moves on to the next scene with endMode still SCENE, as its map starts loading)
+        if (ql.state === PLAYBACK && ql.playback.control.endMode === 2 && !f.busy && !end[n]) {
+          end[n] = { player: { x: f.x, y: f.y }, objects: t.objects().map((o) => ({ localId: o.localId, x: o.x, y: o.y })) };
+        }
+        if (ql.state === PLAYBACK_LAST) last = true;
+        return last && !ql.playback.active;
+      }, 30000);
+      return { ok, start, end };
+    },
+    PLAYBACK,
+    PLAYBACK_LAST,
+  );
+  await continueGame(game);
+  const seen = await watch;
+  expect(seen.ok).toBe(true);
+  // The scenes' state: the badge only in scene 1, the bag empty, the party as many as when recorded (two: a
+  // placeholder Rattata for the missing one, QL_ResetPartyAndPC)
+  const party = [...saved.party, 'RATTATA'];
+  expect(seen.start[0]).toEqual({ flag: false, potions: 0, party, map: 'PalletTown' });
+  expect(seen.start[1]).toEqual({ flag: true, potions: 0, party, map: 'PalletTown' });
+  // The player and the people end each scene where they were when it was recorded
+  expect(seen.end[0].player).toEqual(end0.player);
+  const byId = (objs: { localId: number; x: number; y: number }[]) => Object.fromEntries(objs.map((o) => [o.localId, [o.x, o.y]]));
+  expect(byId(seen.end[0].objects)).toEqual(byId(end0.objects));
+  expect(seen.end[1].player).toEqual(end1.player);
+  // "saved the game at" (QL2b draws it) was asked for, then the field is the player's again
+  expect((await QL(game)).playback.screenCalls).toContain('drawSavedGameText');
+  await game.waitIdle();
+  expect(await fieldState(game)).toEqual(saved);
+  expect((await QL(game)).state).toBe(0);
+  // The next scene goes after the two saved ones (sCurrentSceneNum as QuestLog_AdvancePlayhead left it)
+  expect((await QL(game)).currentSceneNum).toBe(2);
+});
+
+test('during playback, A skips to the next scene and B to the end', async () => {
+  expect(twoScenesSave).toBeDefined();
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown', x: 6, y: 8 });
+  await game.eval((_t, key, json) => localStorage.setItem(key, json), SAVE_KEY, twoScenesSave!);
+  await game.load({ keepSave: true, mainMenu: true });
+  const PLAYBACK = await game.eval((t) => t.define('QL_STATE_PLAYBACK'));
+  const running = async (n: number) =>
+    expect(
+      await game.eval(
+        (t, n, PLAYBACK) =>
+          t.until(() => {
+            if (!t.field()) return false; // (the main menu)
+            const ql = t.questLog();
+            return ql.state === PLAYBACK && ql.currentSceneNum === n && !t.field()?.busy && ql.playback.control.state === 0 && ql.playback.control.endMode === 0;
+          }, 20000),
+        n,
+        PLAYBACK,
+      ),
+    ).toBe(true);
+  await continueGame(game);
+  await running(0);
+  // A: the scene ends at once (its actions stop) and scene 1 loads
+  const actionsLeft = await game.eval((t) => t.questLog().curActionIdx);
+  await game.press('A');
+  await running(1);
+  expect(actionsLeft).toBeLessThan(10); // scene 0 hadn't played through
+  // B: straight to the end, without "saved the game at" (Task_QuestLogScene_SavedGame), with the map's name
+  const since = await game.eval((t) => t.events().length);
+  await game.press('B');
+  await game.waitForEvent('mapNamePopupText', { since, timeout: 60_000 });
+  await game.waitIdle();
+  const ql = await QL(game);
+  expect(ql.state).toBe(0);
+  expect(ql.playback.screenCalls).not.toContain('drawSavedGameText');
+  const after = await fieldState(game);
+  expect(after).toMatchObject({ field: { map: 'PalletTown' }, potions: 3, badge: false });
+  expect(after.party.length).toBe(1);
 });
 
 test("QL3a's events go into the scene's stream as the C lays them out, and the save keeps them", async () => {
