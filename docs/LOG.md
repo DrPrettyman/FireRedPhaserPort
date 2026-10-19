@@ -3092,3 +3092,9 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   SE_SELECTs from the menus; SE_FAINT at SOUND_PAN_TARGET and the CRY_MODE_FAINT cry; SE_EXP stopped well before its
   100 frames; the Old Man's SE_SELECTs 64 frames apart and the catch's speed-5 fade), wildBattle, trainerBattle,
   scriptedBattles, battleAnims, newGame (39 passed); the full e2e suite once (below).
+- Full e2e suite (with 5a's pass-through cherry-picked, so the send-out cries play; load up to ~300 from another
+  worker's run): 411 tests in 64 files, 408 passed, 26.6 min. Failures, none in the controllers: listMenuFlash's
+  dark-cave Blur transition (fails on the base commit 2fbcf54 too), battleAnims.2d's Teleport (reads `t.battle()`
+  from Node after the anim ended: the battle can be over by then, tests/README.md rule 5) and battleAnims.3e3b's
+  Snatch (polls a short-lived sprite from Node; timed out under load; on the rerun Memento timed out instead).
+  Tick budgets raised: none.
