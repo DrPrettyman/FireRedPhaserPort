@@ -4194,6 +4194,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   frames, the final scene's "saved the game at this location: PALLET TOWN.", Task_EndQuestLog's frames go from grey
   to the colours, the windows gone, MUS_PALLET the only song after CONTINUE). Ran weather, saveContinue, mapMusic,
   mapNamePopup and leagueLighting e2e files: all pass.
+
 ### W-qlog-events: the quest log's event codecs for QL_EVENT_* 30-40 and quest_log_battle.c (QUEST_LOG_PLAN.md QL3b, batch 12)
 
 - New `world/questLogEventCodecs2.ts`: quest_log_events.c's RecordEvent_* / LoadEvent_* for DEFEATED_GYM_LEADER,
