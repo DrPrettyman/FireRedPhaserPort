@@ -471,3 +471,48 @@ test("QL3a's events go into the scene's stream as the C lays them out, and the s
   const savedEvents = (await QL(game)).scenes[0].commands.filter((c) => [DEPOSITED, MOVED, CENTER].includes(c.id));
   expect(savedEvents.map((c) => c.words)).toEqual(events.map((c) => c.words));
 });
+
+test("QL3b's events: a field move ends the preset's scene, a story item starts one, a shop goes into it; each plays back its line", async () => {
+  const game = await session.start({ start: 'after-rival', map: 'ViridianCity', x: 20, y: 20 });
+  await game.waitIdle();
+  const d = (name: string) => game.eval((t, n) => t.define(n), name);
+  const [STORY, BOUGHT, FIELD_MOVE, SCENE_END, TOWN_MAP, POTION, BULBASAUR, CUT, VIRIDIAN] = await Promise.all(
+    [
+      'QL_EVENT_OBTAINED_STORY_ITEM',
+      'QL_EVENT_BOUGHT_ITEM',
+      'QL_EVENT_USED_FIELD_MOVE',
+      'QL_EVENT_SCENE_END',
+      'ITEM_TOWN_MAP',
+      'ITEM_POTION',
+      'SPECIES_BULBASAUR',
+      'FIELD_MOVE_CUT',
+      'MAPSEC_VIRIDIAN_CITY',
+    ].map(d),
+  );
+  // The preset is recording the scene that leaving the house started.
+  expect((await QL(game)).state).toBe(await d('QL_STATE_RECORDING'));
+  // (all three are kept before the Hall of Fame; a field move only inside a scene, a story item only outside one)
+  await game.eval(
+    (t, [townMap, potion, bulbasaur, cut, viridian]) => {
+      t.questLogEvent('QL_EVENT_USED_FIELD_MOVE', { species: bulbasaur, fieldMove: cut, mapSec: viridian });
+      t.questLogEvent('QL_EVENT_OBTAINED_STORY_ITEM', { itemId: townMap, mapSec: viridian });
+      t.questLogEvent('QL_EVENT_BOUGHT_ITEM', { lastItemId: potion, itemQuantity: 4, totalMoney: 1200, mapSec: viridian, hasMultipleTransactions: false });
+    },
+    [TOWN_MAP, POTION, BULBASAUR, CUT, VIRIDIAN],
+  );
+  const ql = await QL(game);
+  const sceneOf = (id: number) => ql.scenes.findIndex((s) => s.commands.some((c) => c.id === id));
+  const fieldScene = sceneOf(FIELD_MOVE);
+  const storyScene = sceneOf(STORY);
+  expect(fieldScene).toBeGreaterThanOrEqual(0);
+  expect(storyScene).toBe(fieldScene + 1);
+  expect(ql.scenes[fieldScene].commands.at(-1)!.id).toBe(SCENE_END); // the field move ended it (STEP_RECORDING_MODE_DISABLED)
+  const words = (scene: number, id: number) => ql.scenes[scene].commands.find((c) => c.id === id)!.words.slice(2);
+  expect(words(fieldScene, FIELD_MOVE)).toEqual([BULBASAUR, CUT | (VIRIDIAN << 8)]);
+  expect(words(storyScene, STORY)).toEqual([TOWN_MAP, VIRIDIAN]);
+  expect(words(storyScene, BOUGHT)).toEqual([POTION, 4, 0, 1200, VIRIDIAN | (1 << 8)]);
+  const line = (scene: number, event: string) => game.eval((t, [s, e]) => t.questLogEventLine(s, e), [scene, event] as [number, string]);
+  expect(await line(fieldScene, 'QL_EVENT_USED_FIELD_MOVE')).toBe('BULBASAUR used the Hidden Move CUT here.');
+  expect(await line(storyScene, 'QL_EVENT_OBTAINED_STORY_ITEM')).toMatch(/^Here in VIRIDIAN CITY, \S+ obtained the item TOWN MAP\.$/);
+  expect(await line(storyScene, 'QL_EVENT_BOUGHT_ITEM')).toBe('Went to the POKéMON MART in VIRIDIAN CITY and spent ¥1200 for items including POTION(s).');
+});

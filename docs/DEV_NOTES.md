@@ -694,7 +694,20 @@ this is the next level down. When you add or change a subsystem, update its entr
     (all 125, in strings.json through tools/extract.py; `text('gText_QuestLog_...')`). The loaders use the battle
     env's state / strings and menusData (the overworld sets both up). Test: tests/unit/questLogEvents.test.ts
     (record, then QL_LoadEvent / QL_TryRepeatEvent back to the line); `__test.questLogEvent(name, data)` records one
-    in a running game. QL3b adds 30-42 the same way.
+    in a running game.
+  - `world/questLogEventCodecs2.ts` (QL3b) has QL_EVENT_* 30-40 the same way (the trainer battles, DEFEATED_WILD_MON,
+    the field moves, BOUGHT / SOLD_ITEM, OBTAINED_STORY_ITEM; registerQuestLogEventCodecs2). Two don't use
+    RecordEventHeader: DEFEATED_WILD_MON writes into the scene's one wild record (`gQL.defeatedWildMonRecord`, the
+    header only while both counts are 0; the counts and map section at byte 8, agbcc's padded struct size), and
+    DEFEATED_CHAMPION writes a fixed count of 2 that the playback turns into three lines (by the repeat tracker's
+    counter; QL_SkipCommand and decodeQuestLogScript ignore it). The wild and champion loaders check
+    QL_IsRoomToSaveEvent like the C, so playback needs `gQL.currentSceneNum` on the scene being played.
+    `__test.questLogEventLine(scene, event)` loads a recorded event back to its line in a running game.
+  - `world/questLogBattle.ts` is quest_log_battle.c: TrySetQuestLogBattleEvent (the battle's end: the trainer
+    class picks GYM_LEADER / E4_MEMBER / CHAMPION / TRAINER via `questLogTrainerBattleEventId`, the HP fraction from
+    the player's side; a won or caught wild battle) and TrySetQuestLogLinkBattleEvent (gLinkPlayers as an argument).
+    QL4 calls them from battle/main.ts (HandleEndTurn_FinishBattle's comment marks the spot); the trainer events wait
+    in SetQuestLogEvent's deferred slot until CB2_EndTrainerBattle's QuestLogEvents_HandleEndTrainerBattle (wired).
   - `world/questLogLocations.ts` is field_specials.c's QuestLog_CheckDepartingIndoorsMap /
     QuestLog_TryRecordDepartedLocation; `world/questLogObjects.ts` is QL_RecordObjects (and
     `questLogObjectEventFrom`, the port's ObjectEvent as a gObjectEvents entry, map coordinates with MAP_OFFSET);
@@ -911,17 +924,23 @@ this is the next level down. When you add or change a subsystem, update its entr
   TeachyTvPostBattleFadeControl, then the option's script from sWhereToReturnToFromBattle); an option runs its
   TTVcmd list through TeachyTvRenderMsgAndSwitchClusterFuncs (B at any step: TTVcmd_End, the noise, the list).
   BG3 is TeachyTvLoadBg3Map: Route 1's blocks (8..23, 6..14), each metatile's layers merged into four tiles, the
-  bottom layer's palettes from slot 15 down. **The seam for units 2-3** is at the bottom of the file:
-  TeachyTvPrepBattle / TeachyTvPreBattleAnimAndSetBattleCallback (unit 2: SavePlayerParty,
-  InitPokedudePartyAndOpponent, the transition, CB2_InitBattle; TeachyTvRestorePlayerPartyCallback is the way back
-  and already reads `state.battleOutcome` for B_OUTCOME_DREW = B quit) and InitPokedudeBag (unit 3: it belongs in
-  item_menu.c's itemMenu.ts, whose CreateBagInputHandlerTask still logs for the TTVSCR locations); both call
-  PokedudeDemoNotPorted until then. Exported for them: InitTeachyTvController, CB2_ReturnToTeachyTV,
+  bottom layer's palettes from slot 15 down. **The battle demos** (TTVSCR_BATTLE / _STATUS / _MATCHUPS / _CATCHING):
+  TeachyTvPrepBattle (VAR_0x8004 = the option, gMain.savedCallback = TeachyTvRestorePlayerPartyCallback,
+  ResetBattleGlobals, SavePlayerParty, InitPokedudePartyAndOpponent, PlayMapChosenOrBattleBGM(MUS_DUMMY)), then
+  TeachyTvPreBattleAnimAndSetBattleCallback (BattleTransition_StartOnField: WHITE_BARS_FADE for BATTLE, SLICE for
+  the others) and CB2_InitPokedudeBattle, which runs the battle on this same host (FieldMenuScene: see "The Pokédude's
+  battles" under Battle). The way back is TeachyTvRestorePlayerPartyCallback (LoadPlayerParty; gBattleOutcome
+  B_OUTCOME_DREW = B quit → the list, else MUS_FOLLOW_ME and the closing text in mode 2). **The seam for unit 3**
+  is at the bottom of the file: TTVSCR_TMS / _REGISTER's InitPokedudeBag goes through PokedudeDemoNotPorted until
+  itemMenu.ts' InitPokedudeBag gets those locations' tasks (it has the battle ones) and tm_case.c's TMCASE_POKEDUDE.
+  Exported for them: InitTeachyTvController, CB2_ReturnToTeachyTV,
   SetTeachyTvControllerModeToResume, TTVSCR_*. Probe `__test.teachyTv()` (while TeachyTvCallback runs): mode,
   whichScript, scrollOffset / selectedRow, the task and its TTVcmd (`step`, `timer`, `cmd`), `listReady`,
   `listItems`, `arrows`, `text` (the symbol printed last) and `textActive`, the Pokédude's `dude` sprite, the
   `grass` sprites up, BG3's scroll. Test: tests/e2e/teachyTv.test.ts (the Viridian old man's gift, the bag without
-  the TM case, each of the six options' sequences with the TM case, B mid-sequence, SELECT from the field). Quick
+  the TM case, each of the six options' sequences with the TM case (the four battles to their end: voiceovers,
+  outcome, the party and bag given back), B mid-sequence, B quitting the battle / his bag / his party menu, SELECT
+  from the field). Quick
   look: `?start=after-rival&map=PalletTown&x=12&y=14`, add ITEM_TEACHY_TV and register it, SELECT.
 - **Fame Checker:** `menus/fameChecker.ts` is fame_checker.c's screen: `UseFameChecker(savedCallback)` on whichever
   GBA host has the bag (FieldMenuScene). Ways in: the bag's KEY ITEMS → FAME CHECKER → USE (`FieldUseFunc_FameChecker`
@@ -1418,6 +1437,24 @@ this is the next level down. When you add or change a subsystem, update its entr
   launch; `end` sets 256. special.ts: the ball SEs, and the caught click's m4aMPlayAllStop + PlaySE(MUS_CAUGHT_INTRO).
   Tests: tests/e2e/audioBattleAnims.test.ts (`__test.audioEvents`: Tackle's pan from both sides and its end on the
   SE's end, Growl's two cries, Perish Song's BGM volume, a Master Ball's SEs and the jingle).
+
+- **The Pokédude's battles (Teachy TV):** `battle/controllerPokedude.ts` is battle_controller_pokedude.c: one
+  controller for every battler (InitBattleControllers' BATTLE_TYPE_POKEDUDE branch, main.ts), the scripted inputs
+  (sInputScripts_ChooseAction / _ChooseMove, laid out in the ROM's order because the C reads past their ends), the
+  voiceovers (HandlePokedudeVoiceoverEtc runs before each command: the option's next sPokedudeTextScripts header
+  darkens the screen and prints on B_WIN_OAK_OLD_MAN, waiting for A; PrintMessageWithHealthboxPals keeps the
+  player's healthbox lit), InitPokedudePartyAndOpponent (the option's parties; it sets gBattleTypeFlags) and
+  SavePlayerParty / LoadPlayerParty. gPokedudeBattlerStates come with AllocateBattleResources. The bag:
+  itemMenu.ts' InitPokedudeBag (his items over the backed-up bag) with Task_Bag_TeachyTvStatus (ANTIDOTE → his
+  party menu, Pokedude_ChooseMonForInBattleItem) and Task_Bag_TeachyTvCatching (POKé BALL); the party menu:
+  partyMenu.ts' Pokedude_OpenPartyMenuInBattle / Task_PartyMenu_Pokedude (the shift) and
+  Task_PartyMenuFromBag_Pokedude. B quits from all three: BattleMainCB2's JOY_HELD(B_BUTTON) → B_OUTCOME_DREW,
+  CB2_QuitPokedudeBattle (battleCallbacks.ts, with FreeRestoreBattleData), Task_BButtonInterruptTeachyTv,
+  PartyMenuPokedudeIsCancelled. **The host:** the battle runs on FieldMenuScene (Teachy TV's screen), not
+  BattleScene: teachyTv.ts' CB2_InitPokedudeBattle sets the globals BattleScene.create would and calls
+  CB2_InitBattle; FieldMenuScene preloads the demos' battle graphics (BattleScene's pokedudeBattleGfxSymbols) with
+  Teachy TV's; `__test.battle()` works there too (gMain.inBattle) and has `pokedude` (script, message number, the
+  voiceover printed last). Tests: tests/e2e/teachyTv.test.ts.
 
 ## Audio
 

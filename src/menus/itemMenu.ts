@@ -42,7 +42,7 @@ import {
   type ListMenu,
   type ListMenuItem,
 } from '../gba/listMenu';
-import { A_BUTTON, B_BUTTON, DPAD_LEFT, DPAD_RIGHT, gMain, JOY_NEW, SELECT_BUTTON, SetMainCallback2, SetVBlankCallback, type MainCallback } from '../gba/main';
+import { A_BUTTON, B_BUTTON, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT, DPAD_UP, gMain, JOY_NEW, SELECT_BUTTON, SetMainCallback2, SetVBlankCallback, type MainCallback } from '../gba/main';
 import {
   AddItemMenuActionTextPrinters,
   AdjustQuantityAccordingToDPadInput,
@@ -157,7 +157,10 @@ import { TestPlayerAvatarFlags } from '../world/playerAvatar';
 import { BATTLE_USE_FUNCS, FIELD_USE_FUNCS } from './itemUse';
 import { AddScrollIndicatorArrowPair, AddScrollIndicatorArrowPairParameterized, RemoveScrollIndicatorArrowPair, SCROLL_ARROW_LEFT, SCROLL_ARROW_RIGHT, SCROLL_ARROW_UP, type ScrollArrowsTemplate } from './menuIndicators';
 import { PrintMoneyAmount, PrintMoneyAmountInMoneyBox } from './money';
-import { CB2_ChooseMonToGiveItem, CB2_SelectBagItemToGive } from './partyMenu';
+import { CB2_ChooseMonToGiveItem, CB2_SelectBagItemToGive, ItemUseCB_MedicineStep, Pokedude_ChooseMonForInBattleItem, setItemUseCB } from './partyMenu';
+import { CB2_ReturnToTeachyTV, SetTeachyTvControllerModeToResume } from './teachyTv';
+import { FreeRestoreBattleData } from '../battle/battleCallbacks';
+import { LoadPlayerParty } from '../battle/controllerPokedude';
 import { CB2_ReturnToPokeStorage } from './pokemonStorage';
 import { InitTMCase, TMCASE_GIVE_PARTY, TMCASE_GIVE_PC, TMCASE_SELL } from './tmCase';
 import { BERRYPOUCH_FROMMARTSELL, BERRYPOUCH_FROMPARTYGIVE, BERRYPOUCH_FROMPOKEMONSTORAGEPC, InitBerryPouch } from './berryPouch';
@@ -528,10 +531,13 @@ function CreateBagInputHandlerTask(location: number): number {
   switch (location) {
     case K.ITEMMENULOCATION_OLD_MAN:
       return CreateTask(Task_Bag_OldManTutorial, 0);
+    case K.ITEMMENULOCATION_TTVSCR_STATUS:
+      return CreateTask(Task_Bag_TeachyTvStatus, 0);
+    case K.ITEMMENULOCATION_TTVSCR_CATCHING:
+      return CreateTask(Task_Bag_TeachyTvCatching, 0);
     case K.ITEMMENULOCATION_TTVSCR_REGISTER:
     case K.ITEMMENULOCATION_TTVSCR_TMS:
-    case K.ITEMMENULOCATION_TTVSCR_STATUS:
-    case K.ITEMMENULOCATION_TTVSCR_CATCHING:
+      // Task_Bag_TeachyTvRegister / Task_Bag_TeachyTvTMs: FIELD_ITEMS_PLAN.md W-teachy unit 3
       console.warn('[bag] Teachy TV bags are not implemented');
       return CreateTask(Task_BagMenu_HandleInput, 0);
     default:
@@ -1683,6 +1689,137 @@ function Task_Bag_OldManTutorial(taskId: number): void {
 function Task_Pokedude_FadeFromBag(taskId: number): void {
   BeginNormalPaletteFade(PALETTES_ALL, -2, 0, 16, RGB_BLACK);
   gTasks[taskId].func = Task_Pokedude_WaitFadeAndExitBag;
+}
+
+/**
+ * InitPokedudeBag: the Pokédude's own bag (the player's backed up), scripted by the location's task. The battle demos
+ * (TTVSCR_STATUS / _CATCHING, from the Pokédude's controller) go back to the battle; the field ones (TTVSCR_REGISTER /
+ * _TMS, from Teachy TV) to Teachy TV.
+ */
+export function InitPokedudeBag(location: number): void {
+  BackUpPlayerBag();
+  AddBagItem(K.ITEM_POTION, 1);
+  AddBagItem(K.ITEM_ANTIDOTE, 1);
+  AddBagItem(K.ITEM_TEACHY_TV, 1);
+  AddBagItem(K.ITEM_TM_CASE, 1);
+  AddBagItem(K.ITEM_POKE_BALL, 5);
+  AddBagItem(K.ITEM_GREAT_BALL, 1);
+  AddBagItem(K.ITEM_NEST_BALL, 1);
+  let cb2: MainCallback;
+  switch (location) {
+    default:
+      cb2 = CB2_ReturnToTeachyTV;
+      break;
+    case K.ITEMMENULOCATION_TTVSCR_STATUS:
+    case K.ITEMMENULOCATION_TTVSCR_CATCHING:
+      cb2 = SetCB2ToReshowScreenAfterMenu2;
+      break;
+  }
+  GoToBagMenu(location, K.OPEN_BAG_ITEMS, cb2);
+}
+
+/** Task_BButtonInterruptTeachyTv: B stops the demo, back to Teachy TV's list. */
+function Task_BButtonInterruptTeachyTv(taskId: number): boolean {
+  if (JOY_NEW(B_BUTTON)) {
+    RestorePlayerBag();
+    SetTeachyTvControllerModeToResume();
+    disp().exitCB = CB2_ReturnToTeachyTV;
+    gTasks[taskId].func = Task_Pokedude_FadeFromBag;
+    return true;
+  }
+  return false;
+}
+
+/** The scripted presses (ListMenu_ProcessInput reads gMain.newAndRepeatedKeys). */
+function pressListDpad(listTaskId: number, button: number): void {
+  gMain.newKeys = 0;
+  gMain.newAndRepeatedKeys = button;
+  ListMenu_ProcessInput(listTaskId);
+}
+
+/** Task_Bag_TeachyTvCatching: the POKé BALLS pocket, down twice, up twice, POKé BALL → USE. */
+function Task_Bag_TeachyTvCatching(taskId: number): void {
+  const data = gTasks[taskId].data;
+  if (!gPaletteFade.active) {
+    if (Task_BButtonInterruptTeachyTv(taskId)) {
+      FreeRestoreBattleData();
+      LoadPlayerParty();
+      return;
+    }
+    switch (data[8]) {
+      case 102:
+      case 204:
+        PlaySE(K.SE_BAG_POCKET);
+        SwitchPockets(taskId, 1, false);
+        break;
+      case 306:
+      case 408:
+        pressListDpad(data[0], DPAD_DOWN);
+        break;
+      case 510:
+      case 612:
+        pressListDpad(data[0], DPAD_UP);
+        break;
+      case 714:
+        PlaySE(K.SE_SELECT);
+        bag_menu_print_cursor_(data[0], 2);
+        Bag_FillMessageBoxWithPalette(1);
+        SpecialVar.ItemId = K.ITEM_POKE_BALL;
+        OpenContextMenu(taskId);
+        break;
+      case 816:
+        PlaySE(K.SE_SELECT);
+        HideBagWindow(10);
+        HideBagWindow(6);
+        PutWindowTilemap(0);
+        PutWindowTilemap(1);
+        CopyWindowToVram(0, COPYWIN_MAP);
+        DestroyListMenuTask(data[0]);
+        RestorePlayerBag();
+        Bag_BeginCloseWin0Animation();
+        gTasks[taskId].func = Task_Pokedude_FadeFromBag;
+        return;
+    }
+    data[8]++;
+  }
+}
+
+/** Task_Bag_TeachyTvStatus: down to ANTIDOTE → USE, then the party menu (Pokedude_ChooseMonForInBattleItem). */
+function Task_Bag_TeachyTvStatus(taskId: number): void {
+  const data = gTasks[taskId].data;
+  if (!gPaletteFade.active) {
+    if (Task_BButtonInterruptTeachyTv(taskId)) {
+      FreeRestoreBattleData();
+      LoadPlayerParty();
+      return;
+    }
+    switch (data[8]) {
+      case 102:
+        pressListDpad(data[0], DPAD_DOWN);
+        break;
+      case 204:
+        PlaySE(K.SE_SELECT);
+        bag_menu_print_cursor_(data[0], 2);
+        Bag_FillMessageBoxWithPalette(1);
+        SpecialVar.ItemId = K.ITEM_ANTIDOTE;
+        OpenContextMenu(taskId);
+        break;
+      case 306:
+        PlaySE(K.SE_SELECT);
+        HideBagWindow(10);
+        HideBagWindow(6);
+        PutWindowTilemap(0);
+        PutWindowTilemap(1);
+        CopyWindowToVram(0, COPYWIN_MAP);
+        DestroyListMenuTask(data[0]);
+        RestorePlayerBag();
+        setItemUseCB(ItemUseCB_MedicineStep);
+        ItemMenu_SetExitCallback(Pokedude_ChooseMonForInBattleItem);
+        gTasks[taskId].func = Task_Pokedude_FadeFromBag;
+        return;
+    }
+    data[8]++;
+  }
 }
 
 function Task_Pokedude_WaitFadeAndExitBag(taskId: number): void {

@@ -110,6 +110,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Move deleter (SelectMoveDeleterMove): on the GBA the script's `fadescreen FADE_FROM_BLACK` after the special
     runs (unseen) before the summary screen takes over, and FieldCB_ContinueScriptHandleMusic fades the field in
     afterwards. Here the script waits at the special and that `fadescreen` does the fade in (same on screen).
+  - Party menu: Union Room and minigames are not ported (the Pokédude's battle tasks are); the PC mailbox's GIVE
+    (PARTY_ACTION_GIVE_MAILBOX_MAIL) waits for W-mail unit 2. No
   - Party menu: Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
     field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
   - Move relearner (menus/learnMove.ts): the MUS_LEVEL_UP fanfare after a move is learned holds the screen as on
@@ -146,13 +148,21 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     the fade instead of in the same frame.
   - TM case (menus/tmCase.ts): no quest log (RecordItemTransaction). Not ported:
     the Pokédude's Teachy TV demo (TMCASE_POKEDUDE) and the Union Room's GIVE / EXIT menu (no link play).
-  - Teachy TV (menus/teachyTv.ts): the Pokédude's demos aren't ported (FIELD_ITEMS_PLAN.md W-teachy units 2-3):
-    the four battle options' battle (TeachyTvPrepBattle's SavePlayerParty / InitPokedudePartyAndOpponent /
-    PlayMapChosenOrBattleBGM, the battle transition, CB2_InitBattle and battle_controller_pokedude.c) and TMS /
-    REGISTER's scripted bag and TM case (InitPokedudeBag). Each goes through PokedudeDemoNotPorted, which logs and
-    comes back as from the demo's end (CB2_ReturnToTeachyTV in mode 2: the option's closing text, the walk off,
-    THE END, the list); the battle's transition is a plain fade to black meanwhile and its outcome reads as a win.
-    No quest log event (ItemUse_SetQuestLogEvent).
+  - Teachy TV (menus/teachyTv.ts): the field demos aren't ported (FIELD_ITEMS_PLAN.md W-teachy unit 3): TMS /
+    REGISTER's scripted bag and TM case (the bag's Task_Bag_TeachyTvRegister / _TMs, tm_case.c's TMCASE_POKEDUDE).
+    They go through PokedudeDemoNotPorted, which logs and comes back as from the demo's end (CB2_ReturnToTeachyTV in
+    mode 2: the option's closing text, the walk off, THE END, the list). No quest log event
+    (ItemUse_SetQuestLogEvent).
+  - The Pokédude's battles (battle/controllerPokedude.ts): they run on FieldMenuScene's GBA host (the screen Teachy TV
+    is on), not BattleScene: CB2_InitPokedudeBattle sets what BattleScene.create would (a fresh BattleGlobals, no
+    trainer, the BattleUi, ReturnFromBattleToOverworld's SetMainCallback2(gMain.savedCallback)), and FieldMenuScene
+    preloads every demo's graphics with Teachy TV's. After the transition its VBlank callback is cleared a frame
+    before CB2_InitBattle would (on the GBA its last run reads the freed sTransitionData harmlessly). The C reads
+    sInputScripts_ChooseAction_Status / _Matchups / _Catching and sPokedudeTextScripts_* past their ends into the
+    next table: the tables are laid out in the ROM's order, so that reads the same; past the last one (the ROM's
+    pointer tables) the read is a dummy that isn't the restart marker (Catching's third action checks it) and
+    no voiceover. SavePlayerParty / LoadPlayerParty keep the party aside (GameState's party is both gPlayerParty
+    and the save block's copy).
   - Berry pouch (menus/berryPouch.ts): no quest log
     (RecordItemTransaction). Not ported: Berry Crush (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room context
     menus (GIVE / EXIT, EXIT) and IsHoldingItemAllowed's Enigma Berry check there (always TRUE: neither can be
@@ -326,32 +336,29 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, cable club monitors) start their scripts and hit the unimplemented-special warnings.
   - Quest log (world/questLog*.ts; QUEST_LOG_PLAN.md QL1 records, QL2a plays back, QL2b draws the playback's
-    screen, QL3-QL5 to come): the tints (world/questLogScreen.ts) are on the field's palette path, so they cover
-    what the port's palettes are: the current map's BG palettes 0-12 (a connected map drawn with other tilesets, as
-    the port draws them, keeps its colours; the GBA draws connections with the current map's tiles) and the object
-    and field effect sheets (`spr_*`, `fldeff_obj_*`; the S.S. Anne's smoke, the fog and other sprites outside them
-    aren't tinted). QL_SlightlyDarkenSomePals's OBJ slots are the sheets' kinds (the reflections and field effects:
-    OBJ 1, 6-9, 11-15; the objects' own: 0, 2-5, 10). sPalettesBackup is the tileset's palettes (and the sheets as
-    loaded), not what was loaded with BACKUP_GRAYSCALE byte for byte; palettes the C leaves zeroed in it (BG 13-15)
-    aren't touched. The windows are Phaser windows over the field (ui/QuestLogWindows.ts), not BG0 tiles: a window
-    over another doesn't clear its tilemap, so CommitQuestLogWindow1 (the field message box's ClearDialogWindowAndFrame
-    in playback) has nothing to put back and has no caller yet (QL5). In playback, a recorded input that starts a script runs it with the normal message
+    screen, QL3 has the events, QL4-QL5 to come): the tints (world/questLogScreen.ts) are on the field's palette path,
+    so they cover what the port's palettes are: the current map's BG palettes 0-12 (a connected map drawn with other
+    tilesets, as the port draws them, keeps its colours; the GBA draws connections with the current map's tiles) and
+    the object and field effect sheets (`spr_*`, `fldeff_obj_*`; the S.S. Anne's smoke, the fog and other sprites
+    outside them aren't tinted). QL_SlightlyDarkenSomePals's OBJ slots are the sheets' kinds (the reflections and
+    field effects: OBJ 1, 6-9, 11-15; the objects' own: 0, 2-5, 10). sPalettesBackup is the tileset's palettes (and
+    the sheets as loaded), not what was loaded with BACKUP_GRAYSCALE byte for byte; palettes the C leaves zeroed in it
+    (BG 13-15) aren't touched. The windows are Phaser windows over the field (ui/QuestLogWindows.ts), not BG0 tiles: a
+    window over another doesn't clear its tilemap, so CommitQuestLogWindow1 (the field message box's
+    ClearDialogWindowAndFrame in playback) has nothing to put back and has no caller yet (QL5). In playback, a recorded input that starts a script runs it with the normal message
     box, which waits for A (the auto-scroll and waitbuttonpress differences and QL_AvoidDisplay: QL5); the fishing
     rod's and the VS Seeker's gfx changes don't play (QL5), and getting off a mon changes the music. QL_LoadObjects
     sets the snapshot's position and facing on the objects the field spawned from the scene's flags (not each saved
     object's other fields; previousCoords are the current ones); a QL_START_WARP scene's player state comes from the
     warp, not the snapshot's graphics. A warp in playback into a disabled location ends the scene once the field has
     faded in, not at once. Task_EndQuestLog's gHelpSystemEnabled = TRUE is HelpSystem_Enable (which also lets R toggle
-    the help again). Only QL_EVENT_DEPARTED and QL_EVENT_ARRIVED have recorders: SetQuestLogEvent drops the other events (QL3), and the
-    menus, shops, PC and battles don't send theirs yet (QL4). The scene's objects snapshot is the player and the
-  - Quest log (world/questLog*.ts; QUEST_LOG_PLAN.md QL1 records, QL2 plays back, QL3-QL5 to come): QL_EVENT_*
-    3-29 (QL3a), DEPARTED and ARRIVED have recorders and loaders; SetQuestLogEvent drops 30-34, 37, 38 and 40 (the
-    battles, field moves, shops, story items: QL3b), and the menus, shops, PC and battles don't send theirs yet (QL4:
-    events 3-29 are recorded only by unit tests and `__test.questLogEvent`). The link events (12-19) have codecs but
-    no callers (no link play). The scene's objects snapshot is the player and the
-    current map's objects in the port's order (the C's gObjectEvents slots, offScreen, the sprite anim backups and
-    directionSequenceIndex aren't kept: 0); a scene's flags and vars are kept sparse, as the save keeps them,
-    rather than as the C's byte arrays. NPC steps are recorded from NpcBrain's movement types (a face, then a
+    the help again). Every QL_EVENT_* has its recorder and loader (QL1: DEPARTED / ARRIVED, QL3a: 3-29, QL3b: 30-40),
+    but the menus, shops, PC, field moves and battles don't send theirs yet (QL4: TrySetQuestLogBattleEvent and the
+    other entry points are called only by unit tests and `__test.questLogEvent`). The link events (12-19) and
+    TrySetQuestLogLinkBattleEvent (which takes gLinkPlayers as an argument) have no callers (no link play). The
+    scene's objects snapshot is the player and the current map's objects in the port's order (the C's gObjectEvents
+    slots, offScreen, the sprite anim backups and directionSequenceIndex aren't kept: 0); a scene's flags and vars
+    are kept sparse, as the save keeps them, rather than as the C's byte arrays. NPC steps are recorded from NpcBrain's movement types (a face, then a
     WALK_NORMAL step), not each MovementType_*'s own single movements; a blocked pacer that the C has walk in place
     every 16 frames records nothing. ArePlayerFieldControlsLocked (an action's frame count, the field input's
     delay) is the field's busy / warping / script / overlay / lock / trainer approach state. MenuHelpers_IsLinkActive
@@ -365,7 +372,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     the GBA a screen's ResetTasks during a fanfare would drop it and leave the BGM paused; no FRLG screen does that
     mid-fanfare), and a screen task that polls IsFanfareTaskInactive in the frame the counter runs out sees it a
     frame later than a task ordered after Task_Fanfare would. The quest log's playback paths (no fanfare
-    song, the BGM commands skipped, PlaySE skipped) aren't ported. The script engine models SetupNativeScript's frames
+    song, the BGM commands skipped) aren't ported; PlaySE is skipped through gDisableMapMusicChangeOnMapLoad. The script engine models SetupNativeScript's frames
     (a native wait starts checking the next frame, and the script goes on the frame after it holds) only for the
     audio commands; `waitbuttonpress` starts checking the next frame too but goes on in the frame the press holds;
     the port's other waits check in the same frame.

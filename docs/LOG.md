@@ -4194,3 +4194,61 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   frames, the final scene's "saved the game at this location: PALLET TOWN.", Task_EndQuestLog's frames go from grey
   to the colours, the windows gone, MUS_PALLET the only song after CONTINUE). Ran weather, saveContinue, mapMusic,
   mapNamePopup and leagueLighting e2e files: all pass.
+### W-qlog-events: the quest log's event codecs for QL_EVENT_* 30-40 and quest_log_battle.c (QUEST_LOG_PLAN.md QL3b, batch 12)
+
+- New `world/questLogEventCodecs2.ts`: quest_log_events.c's RecordEvent_* / LoadEvent_* for DEFEATED_GYM_LEADER,
+  DEFEATED_E4_MEMBER, DEFEATED_TRAINER (the rival by the player's name for them), DEFEATED_CHAMPION (a fixed count
+  of 2: three lines in playback), DEFEATED_WILD_MON (one record per scene that later wild battles count into, up
+  to 255 each; the last defeated / caught species named; eight texts by the counts), USED_FIELD_MOVE (Teleport's
+  HOME / POKéMON CENTER; Teleport and Dig stop recording steps until the next departure, the others end the
+  scene), BOUGHT_ITEM / SOLD_ITEM (the u32 money in two u16s; "just one", the number, or the money) and
+  OBTAINED_STORY_ITEM, registered by ensureEventTables. Every QL_EVENT_* now has a recorder and a loader.
+- New `world/questLogBattle.ts`: quest_log_battle.c's TrySetQuestLogBattleEvent (the trainer class split, the
+  double battle's victor, the HP fraction) and TrySetQuestLogLinkBattleEvent / GetLinkMultiBattlePlayerIndexes
+  (gLinkPlayers passed in). Not called from battle/ yet (QL4).
+- Found on the way: ShouldRegisterEvent_HandleBeatStoryTrainer read the trainer class from a host hook nobody set,
+  so every trainer counted as a non-story one; it now reads gTrainers (`gTrainerClass`). QL3a's link battle loader
+  read the outcome as B_OUTCOME_* where the C stores gBattleOutcome - 1 (a loss printed "win"); fixed with its
+  test. decodeQuestLogScript (the test probe) counted the champion's 2 as repeats.
+- Tests: tests/unit/questLogEvents2.test.ts (22: every event recorded and loaded back to its line against
+  quest_log.h's string; the gym leader / E4 / champion / trainer split and the deferral to the battle's end; the
+  story-trainer filter before the Hall of Fame; TrySetQuestLogBattleEvent's HP fractions, double battles and the
+  battles it skips; the wild record's counting, its 255 cap, a new record after another event, the special
+  encounters; the champion's three lines; a shop repeat), tests/e2e/questLog.test.ts (+1: a field move ending the
+  preset's scene, a story item starting one, a shop inside it, each loaded back through the new
+  `__test.questLogEventLine`). questLog.test.ts's "no recorder" check went (every event has one now).
+
+### W-teachy 2: the Pokédude's battles (FIELD_ITEMS_PLAN.md batch 12)
+
+- battle_controller_pokedude.c whole in `battle/controllerPokedude.ts` (new): SetControllerToPokedude for every
+  battler (InitBattleControllers' BATTLE_TYPE_POKEDUDE branch), every handler (both sides: the C's gPlayerParty /
+  gEnemyParty by side, and its quirks: LoadMonSprite completes at once, the healthbar's low HP check reads
+  gPlayerParty, saved_bg0y is a u8), the scripted inputs (PokedudeSimulateInputChooseAction / _ChooseMove), the
+  voiceovers (HandlePokedudeVoiceoverEtc, PrintVoiceoverMessage, PrintMessageWithHealthboxPals, MUS_VICTORY_WILD after
+  the exp text), InitPokedudePartyAndOpponent, gPokedudeBattlerStates (AllocateBattleResources). The C reads its input
+  and text scripts past their ends; the tables are laid out in the ROM's order so those reads match.
+- battle_main.c: BattleMainCB2's B (JOY_HELD → B_OUTCOME_DREW, CB2_QuitPokedudeBattle), FreeRestoreBattleData
+  (battleCallbacks.ts). The other BATTLE_TYPE_POKEDUDE checks (accuracy, crits, move effects on the foe, the dex,
+  the ball, the textbox, the background) were already ported. battle_setup.c's StartPokedudeBattle /
+  EndPokedudeBattle are unused in the C and not ported.
+- item_menu.c: InitPokedudeBag (all locations' items and callbacks), Task_Bag_TeachyTvStatus /
+  Task_Bag_TeachyTvCatching, Task_BButtonInterruptTeachyTv. party_menu.c: Pokedude_OpenPartyMenuInBattle,
+  Pokedude_ChooseMonForInBattleItem, Task_PartyMenu_Pokedude(Step), Task_PartyMenuFromBag_Pokedude(Step),
+  PartyMenuPokedudeIsCancelled, PartyMenuHandlePokedudeCancel.
+- teachy_tv.c: TeachyTvPrepBattle's SavePlayerParty / InitPokedudePartyAndOpponent / PlayMapChosenOrBattleBGM, the
+  transition and CB2_InitBattle, TeachyTvRestorePlayerPartyCallback's LoadPlayerParty. The battle runs on
+  FieldMenuScene's host (Teachy TV's screen): CB2_InitPokedudeBattle sets what BattleScene.create would
+  (ResetBattleGlobals, new in battle/env.ts; the BattleUi; ReturnFromBattleToOverworld's gMain.savedCallback), and
+  FieldMenuScene preloads the demos' graphics (BattleScene's pokedudeBattleGfxSymbols, the transitions, his items' and
+  mons' icons) with Teachy TV's. `__test.battle()` works on that host (gMain.inBattle) and has `pokedude`.
+- Found on the way: after IsBattleTransitionDone the transition's VBlank callback ran once more and read the freed
+  sTransitionData (a throw here; harmless on the GBA): cleared before CB2_InitBattle.
+- Left for unit 3: TTVSCR_TMS / _REGISTER (the bag's Task_Bag_TeachyTvRegister / _TMs, tm_case.c's TMCASE_POKEDUDE);
+  they still go through PokedudeDemoNotPorted.
+- Tests: tests/e2e/teachyTv.test.ts, 5 tests: the six options' test now runs the four battles to their end (each one's
+  transition, BATTLE_TYPE_POKEDUDE, his voiceovers in order, B_OUTCOME_WON / _CAUGHT, MUS_VS_WILD then MUS_FOLLOW_ME,
+  the party and bag given back); a new one quits with B from the battle (during a voiceover), his bag (Status) and
+  his party menu (Matchups), each back to the list on the same option with no battle end, then runs Matchups to its
+  end. Screenshots of a voiceover, the healthbox-lit voiceover, his party menu checked by eye. Typecheck, 709 unit
+  tests (after merging master at 4270872); teachyTv (twice), registeredItems, wildBattle, trainerBattle and
+  audioBattleControllers e2e pass.

@@ -138,6 +138,16 @@ function gfxSymbolsFor(data: BattleData, start: BattleStart): string[] {
   return [...syms];
 }
 
+/**
+ * Teachy TV's Pokédude battles (they run on FieldMenuScene's host, menus/teachyTv.ts): what gfxSymbolsFor loads for
+ * every demo's mons (battle/controllerPokedude.ts pokedudeBattleMons: species and moves).
+ */
+export function pokedudeBattleGfxSymbols(data: BattleData, pokemon: PokemonData, mons: { side: number; species: number; personality: number; moves: number[] }[]): string[] {
+  const side = (s: number) => mons.filter((m) => m.side === s) as unknown as Pokemon[];
+  const start = { battleTypeFlags: K.BATTLE_TYPE_POKEDUDE, trainerBattleOpponent_A: 0, enemyParty: side(K.B_SIDE_OPPONENT), pokemon, state: { party: side(K.B_SIDE_PLAYER) } };
+  return gfxSymbolsFor(data, start as unknown as BattleStart);
+}
+
 export class BattleScene extends GbaHostScene implements BattleUi {
   private start!: BattleStart;
 
