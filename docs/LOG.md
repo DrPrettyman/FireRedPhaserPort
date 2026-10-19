@@ -4053,39 +4053,6 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   registeredItems, fieldItems. Screenshots of the list, a flavor text, a silhouette and Brock's pic match the GBA's
   layout.
 
-### W-teachy 2: the Pokédude's battles (FIELD_ITEMS_PLAN.md batch 12)
-
-- battle_controller_pokedude.c whole in `battle/controllerPokedude.ts` (new): SetControllerToPokedude for every
-  battler (InitBattleControllers' BATTLE_TYPE_POKEDUDE branch), every handler (both sides: the C's gPlayerParty /
-  gEnemyParty by side, and its quirks: LoadMonSprite completes at once, the healthbar's low HP check reads
-  gPlayerParty, saved_bg0y is a u8), the scripted inputs (PokedudeSimulateInputChooseAction / _ChooseMove), the
-  voiceovers (HandlePokedudeVoiceoverEtc, PrintVoiceoverMessage, PrintMessageWithHealthboxPals, MUS_VICTORY_WILD after
-  the exp text), InitPokedudePartyAndOpponent, gPokedudeBattlerStates (AllocateBattleResources). The C reads its input
-  and text scripts past their ends; the tables are laid out in the ROM's order so those reads match.
-- battle_main.c: BattleMainCB2's B (JOY_HELD → B_OUTCOME_DREW, CB2_QuitPokedudeBattle), FreeRestoreBattleData
-  (battleCallbacks.ts). The other BATTLE_TYPE_POKEDUDE checks (accuracy, crits, move effects on the foe, the dex,
-  the ball, the textbox, the background) were already ported. battle_setup.c's StartPokedudeBattle /
-  EndPokedudeBattle are unused in the C and not ported.
-- item_menu.c: InitPokedudeBag (all locations' items and callbacks), Task_Bag_TeachyTvStatus /
-  Task_Bag_TeachyTvCatching, Task_BButtonInterruptTeachyTv. party_menu.c: Pokedude_OpenPartyMenuInBattle,
-  Pokedude_ChooseMonForInBattleItem, Task_PartyMenu_Pokedude(Step), Task_PartyMenuFromBag_Pokedude(Step),
-  PartyMenuPokedudeIsCancelled, PartyMenuHandlePokedudeCancel.
-- teachy_tv.c: TeachyTvPrepBattle's SavePlayerParty / InitPokedudePartyAndOpponent / PlayMapChosenOrBattleBGM, the
-  transition and CB2_InitBattle, TeachyTvRestorePlayerPartyCallback's LoadPlayerParty. The battle runs on
-  FieldMenuScene's host (Teachy TV's screen): CB2_InitPokedudeBattle sets what BattleScene.create would
-  (ResetBattleGlobals, new in battle/env.ts; the BattleUi; ReturnFromBattleToOverworld's gMain.savedCallback), and
-  FieldMenuScene preloads the demos' graphics (BattleScene's pokedudeBattleGfxSymbols, the transitions, his items' and
-  mons' icons) with Teachy TV's. `__test.battle()` works on that host (gMain.inBattle) and has `pokedude`.
-- Found on the way: after IsBattleTransitionDone the transition's VBlank callback ran once more and read the freed
-  sTransitionData (a throw here; harmless on the GBA): cleared before CB2_InitBattle.
-- Left for unit 3: TTVSCR_TMS / _REGISTER (the bag's Task_Bag_TeachyTvRegister / _TMs, tm_case.c's TMCASE_POKEDUDE);
-  they still go through PokedudeDemoNotPorted.
-- Tests: tests/e2e/teachyTv.test.ts, 5 tests: the six options' test now runs the four battles to their end (each one's
-  transition, BATTLE_TYPE_POKEDUDE, his voiceovers in order, B_OUTCOME_WON / _CAUGHT, MUS_VS_WILD then MUS_FOLLOW_ME,
-  the party and bag given back); a new one quits with B from the battle (during a voiceover), his bag (Status) and
-  his party menu (Matchups), each back to the list on the same option with no battle end, then runs Matchups to its
-  end. Screenshots of a voiceover, the healthbox-lit voiceover, his party menu checked by eye. Typecheck, 661 unit
-  tests; teachyTv, registeredItems, wildBattle, trainerBattle and audioBattleControllers e2e pass.
 ### W-mail 2: the PC mailbox, the daycare's mail, the in-game trade's mail (FIELD_ITEMS_PLAN.md, batch 12)
 
 - player_pc.c's mailbox in `ui/PlayerPcMenu.ts` and mailbox_pc.c in the new `ui/MailboxPc.ts` (field overlays):
@@ -4199,3 +4166,38 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   with QL_TryRepeatEvent; the Pokémon Center's non-repeat; the Escape Rope's scene end; the link events through the
   deferred path; TranslateLinkPartnersName), tests/e2e/questLog.test.ts (+1: three events through
   `__test.questLogEvent` in a running game, a repeat, the save's stream).
+
+### W-teachy 2: the Pokédude's battles (FIELD_ITEMS_PLAN.md batch 12)
+
+- battle_controller_pokedude.c whole in `battle/controllerPokedude.ts` (new): SetControllerToPokedude for every
+  battler (InitBattleControllers' BATTLE_TYPE_POKEDUDE branch), every handler (both sides: the C's gPlayerParty /
+  gEnemyParty by side, and its quirks: LoadMonSprite completes at once, the healthbar's low HP check reads
+  gPlayerParty, saved_bg0y is a u8), the scripted inputs (PokedudeSimulateInputChooseAction / _ChooseMove), the
+  voiceovers (HandlePokedudeVoiceoverEtc, PrintVoiceoverMessage, PrintMessageWithHealthboxPals, MUS_VICTORY_WILD after
+  the exp text), InitPokedudePartyAndOpponent, gPokedudeBattlerStates (AllocateBattleResources). The C reads its input
+  and text scripts past their ends; the tables are laid out in the ROM's order so those reads match.
+- battle_main.c: BattleMainCB2's B (JOY_HELD → B_OUTCOME_DREW, CB2_QuitPokedudeBattle), FreeRestoreBattleData
+  (battleCallbacks.ts). The other BATTLE_TYPE_POKEDUDE checks (accuracy, crits, move effects on the foe, the dex,
+  the ball, the textbox, the background) were already ported. battle_setup.c's StartPokedudeBattle /
+  EndPokedudeBattle are unused in the C and not ported.
+- item_menu.c: InitPokedudeBag (all locations' items and callbacks), Task_Bag_TeachyTvStatus /
+  Task_Bag_TeachyTvCatching, Task_BButtonInterruptTeachyTv. party_menu.c: Pokedude_OpenPartyMenuInBattle,
+  Pokedude_ChooseMonForInBattleItem, Task_PartyMenu_Pokedude(Step), Task_PartyMenuFromBag_Pokedude(Step),
+  PartyMenuPokedudeIsCancelled, PartyMenuHandlePokedudeCancel.
+- teachy_tv.c: TeachyTvPrepBattle's SavePlayerParty / InitPokedudePartyAndOpponent / PlayMapChosenOrBattleBGM, the
+  transition and CB2_InitBattle, TeachyTvRestorePlayerPartyCallback's LoadPlayerParty. The battle runs on
+  FieldMenuScene's host (Teachy TV's screen): CB2_InitPokedudeBattle sets what BattleScene.create would
+  (ResetBattleGlobals, new in battle/env.ts; the BattleUi; ReturnFromBattleToOverworld's gMain.savedCallback), and
+  FieldMenuScene preloads the demos' graphics (BattleScene's pokedudeBattleGfxSymbols, the transitions, his items' and
+  mons' icons) with Teachy TV's. `__test.battle()` works on that host (gMain.inBattle) and has `pokedude`.
+- Found on the way: after IsBattleTransitionDone the transition's VBlank callback ran once more and read the freed
+  sTransitionData (a throw here; harmless on the GBA): cleared before CB2_InitBattle.
+- Left for unit 3: TTVSCR_TMS / _REGISTER (the bag's Task_Bag_TeachyTvRegister / _TMs, tm_case.c's TMCASE_POKEDUDE);
+  they still go through PokedudeDemoNotPorted.
+- Tests: tests/e2e/teachyTv.test.ts, 5 tests: the six options' test now runs the four battles to their end (each one's
+  transition, BATTLE_TYPE_POKEDUDE, his voiceovers in order, B_OUTCOME_WON / _CAUGHT, MUS_VS_WILD then MUS_FOLLOW_ME,
+  the party and bag given back); a new one quits with B from the battle (during a voiceover), his bag (Status) and
+  his party menu (Matchups), each back to the list on the same option with no battle end, then runs Matchups to its
+  end. Screenshots of a voiceover, the healthbox-lit voiceover, his party menu checked by eye. Typecheck, 709 unit
+  tests (after merging master at 4270872); teachyTv (twice), registeredItems, wildBattle, trainerBattle and
+  audioBattleControllers e2e pass.
