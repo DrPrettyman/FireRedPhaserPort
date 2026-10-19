@@ -1,5 +1,6 @@
 // The postgame's specials (W-sevii, POSTGAME_PLAN.md), spread into SPECIALS: field_specials.c's
-// BrailleCursorToggle (the braille messages' cursor, `braillemessage_wait`). The braille commands themselves
+// BrailleCursorToggle (the braille messages' cursor, `braillemessage_wait`); Six Island's Heracross record
+// (pokemon_size_record.c, in pokemonSizeRecord.ts). The braille commands themselves
 // (`braillemessage`, `getbraillestringwidth`) are in ScriptEngine.ts. No Phaser import here: the cursor is drawn
 // through the field's scene (ScriptHost.listMenuHost()).
 
@@ -7,6 +8,7 @@ import type Phaser from 'phaser';
 import { gfx, gfx16 } from '../gba/gfx';
 import { DEPTH_UI } from '../text/TextWindow';
 import type { FieldTask } from '../world/elevator';
+import { CompareHeracrossSize, GetHeracrossSizeRecordInfo } from './pokemonSizeRecord';
 import type { Special } from './specials';
 
 /** text.c's CURSOR_DELAY: frames between the cursor's bob steps. */
@@ -130,4 +132,8 @@ export const POSTGAME_SPECIALS: Record<string, Special> = {
       DestroyFieldTextCursor(sBrailleTextCursor);
     }
   },
+
+  // W-sevii unit 3, Six Island: the Water Path beauty's Heracross record (pokemon_size_record.c)
+  GetHeracrossSizeRecordInfo,
+  CompareHeracrossSize,
 };

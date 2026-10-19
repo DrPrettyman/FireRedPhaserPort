@@ -134,6 +134,12 @@ export class MovementRunner {
       case 'set_visible':
         obj.setVisible(true);
         return false;
+      case 'disable_anim': // MovementAction_DisableAnimation_Step0: objectEvent->inanimate = TRUE
+        obj.inanimate = true;
+        return false;
+      case 'restore_anim': // MovementAction_RestoreAnimation_Step0: back to the graphics info's (showStepFrame ORs it in)
+        obj.inanimate = false;
+        return false;
       case 'cut_tree': // MovementAction_CutTree_Step0..2 (sAnim_TreeCut)
         this.custom = removeObstacle(obj, 6);
         return true;
