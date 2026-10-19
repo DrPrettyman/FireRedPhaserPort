@@ -65,6 +65,7 @@ import { seagallopProbe } from '../menus/seagallop';
 import type { SSAnneProbe } from '../world/ssAnne';
 import { questLogTestProbe } from '../world/questLog';
 import { questLogPlaybackDebugState } from '../world/questLogPlayback';
+import { questLogEventLineProbe } from '../world/questLogEventCodecs2';
 import { SetQuestLogEvent } from '../world/questLogEvents';
 import type { WeatherProbe } from '../world/weather';
 import { gMPlayTable, gPokemonCryMusicPlayers, gSongTable } from '../audio/m4a';
@@ -818,6 +819,11 @@ function createApi(game: Phaser.Game) {
     questLog: () => ({ ...questLogTestProbe(requireState()), playback: questLogPlaybackDebugState() }),
     /** SetQuestLogEvent(QL_EVENT_* name, data): an event as the C's call sites (QL3-QL4) would send it. */
     questLogEvent: (event: string, data: Record<string, unknown> | null) => SetQuestLogEvent(define(event), data),
+    /** The line scene `scene`'s first QL_EVENT_* `event` plays back (its LoadEvent_*'s gStringVar4), or null. */
+    questLogEventLine: (scene: number, event: string) => {
+      const line = questLogEventLineProbe(requireState().questLog, scene, define(event));
+      return line && decode(line);
+    },
     /** The move relearner while it's up (menus/learnMove.ts): its MENU_STATE_*, the list's moves and selection. */
     moveRelearner: () => (gMain.callback2?.name === 'CB2_MoveRelearner' ? moveRelearnerProbe() : undefined),
     /** The berry pouch while it's open (menus/berryPouch.ts): BERRYPOUCH_* type, task, scroll/row and the pocket's berries in list order. */

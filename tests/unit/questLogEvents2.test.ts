@@ -13,6 +13,7 @@ import { loadMenusData } from '../../src/menus/data';
 import { decodeQuestLogScript, gQL, initQuestLogData, ResetQuestLog, setQuestLogHost, type QuestLogData, type ScriptPtr } from '../../src/world/questLog';
 import { questLogTrainerBattleEventId, TrySetQuestLogBattleEvent, TrySetQuestLogLinkBattleEvent } from '../../src/world/questLogBattle';
 import {
+  QL_EnableRecordingSteps,
   QL_LoadEvent,
   QL_ResetRepeatEventTracker,
   QL_TryRepeatEvent,
@@ -63,6 +64,7 @@ beforeEach(() => {
   ResetQuestLog(t.state);
   QuestLogEvents_HandleEndTrainerBattle(); // (drops a deferred battle a test left behind into the reset log)
   ResetQuestLog(t.state);
+  QL_EnableRecordingSteps(); // (ResetQuestLog leaves a Teleport's STEP_RECORDING_MODE_DISABLED_UNTIL_DEPART, as the C does)
   // the wild battles and the other trainers count only after the Hall of Fame (ShouldRegisterEvent_HandlePartyActions)
   t.state.setFlag('FLAG_SYS_GAME_CLEAR', true);
   t.state.setFlag('FLAG_SYS_CAN_LINK_WITH_RS', true);
@@ -85,9 +87,9 @@ function eventPtr(eventId: string): ScriptPtr {
   throw new Error(`no ${eventId} in the scene`);
 }
 const eventWords = (eventId: string) => commands().find((c) => c.id === d(eventId))!.words;
-const has = (eventId: string) => commands().some((c) => c.id === d(eventId));
 /** QL_LoadEvent at the event (the playback reached its action index), and the line it printed. */
 function load(eventId: string): string {
+  gQL.currentSceneNum = 0; // (playback: sCurrentSceneNum is the scene being played; the wild / champion loaders check it)
   QL_ResetRepeatEventTracker();
   expect(QL_LoadEvent(eventPtr(eventId), 0xffff)).toBe(true);
   return line();

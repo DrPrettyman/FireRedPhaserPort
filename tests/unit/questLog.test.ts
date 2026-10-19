@@ -341,10 +341,9 @@ describe("SetQuestLogEvent's filters", () => {
     expect(gQL.state).toBe(d('QL_STATE_RECORDING'));
   });
 
-  test('field moves and the Pokémon Center never start a scene; events QL3 has no recorder for are left out', () => {
+  test('field moves and the Pokémon Center never start a scene', () => {
     SetQuestLogEvent(d('QL_EVENT_USED_PKMN_CENTER'), null);
     SetQuestLogEvent(d('QL_EVENT_USED_FIELD_MOVE'), { species: 1, fieldMove: 0, mapSec: 1 });
-    SetQuestLogEvent(d('QL_EVENT_BOUGHT_ITEM'), { totalMoney: 200 });
     expect(gQL.state).toBe(0);
     expect(scene(0).startType).toBe(0);
   });

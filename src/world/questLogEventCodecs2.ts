@@ -11,9 +11,9 @@
 
 import { K } from '../battle/constants';
 import { bdata, state } from '../battle/env';
-import { ConvertIntToDecimalStringN, encodeRaw, EOS, gStringVar1, gStringVar2, gStringVar3, ItemId_GetName, STR_CONV_MODE_LEFT_ALIGN, text } from '../menus/common';
+import { ConvertIntToDecimalStringN, encodeRaw, EOS, gStringVar4, gStringVar1, gStringVar2, gStringVar3, ItemId_GetName, STR_CONV_MODE_LEFT_ALIGN, text } from '../menus/common';
 import { DynamicPlaceholderTextUtil_ExpandPlaceholders, DynamicPlaceholderTextUtil_Reset, DynamicPlaceholderTextUtil_SetPlaceholderPtr } from '../menus/dynamicPlaceholderText';
-import { gQL, QL_IsRoomToSaveEvent, type ScriptPtr } from './questLog';
+import { decodeQuestLogScript, gQL, QL_IsRoomToSaveEvent, type ScriptPtr } from './questLog';
 import {
   advance,
   d,
@@ -31,6 +31,8 @@ import {
   gTrainerClass,
   LoadEvent,
   QL_DisableRecordingSteps,
+  QL_LoadEvent,
+  QL_ResetRepeatEventTracker,
   QL_DisableRecordingStepsUntilDepart,
   QL_EventCmdSize,
   RecordEventHeader,
@@ -425,4 +427,25 @@ export function registerQuestLogEventCodecs2(): void {
     ['QL_EVENT_OBTAINED_STORY_ITEM', RecordEvent_ObtainedStoryItem, LoadEvent_ObtainedStoryItem],
   ];
   for (const [name, record, load] of table) registerQuestLogEvent(K[name], record, load);
+}
+
+/**
+ * __test.questLogEventLine: the line scene `sceneNum`'s first `eventId` command plays back (QL_LoadEvent as the
+ * playback runs it: sCurrentSceneNum on that scene), or null. The recording's state is put back afterwards.
+ */
+export function questLogEventLineProbe(scenes: { script: number[] }[], sceneNum: number, eventId: number): number[] | null {
+  let pos = 0;
+  for (const c of decodeQuestLogScript(scenes[sceneNum].script)) {
+    if (c.id === eventId) {
+      const saved = { sceneNum: gQL.currentSceneNum, tracker: { ...gQuestLogRepeatEventTracker } };
+      gQL.currentSceneNum = sceneNum;
+      QL_ResetRepeatEventTracker();
+      QL_LoadEvent({ scene: sceneNum, pos }, 0xffff);
+      gQL.currentSceneNum = saved.sceneNum;
+      Object.assign(gQuestLogRepeatEventTracker, saved.tracker);
+      return [...gStringVar4];
+    }
+    pos += c.words.length;
+  }
+  return null;
 }
