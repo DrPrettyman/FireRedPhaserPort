@@ -79,6 +79,5 @@ export const KNOWN_GAPS: KnownGap[] = [
   { kind: 'special', name: 'StartSpecialBattle', tag: 'link', where: "SevenIsland_House_Room2" },
   { kind: 'special', name: 'TryBecomeLinkLeader', tag: 'link', where: "CeladonCity_PokemonCenter_2F, CeruleanCity_PokemonCenter_2F, CinnabarIsland_PokemonCenter_2F, FiveIsland_PokemonCenter_2F, FourIsland_PokemonCenter_2F, ... (20 in all)" },
   { kind: 'special', name: 'TryJoinLinkGroup', tag: 'link', where: "CeladonCity_PokemonCenter_2F, CeruleanCity_PokemonCenter_2F, CinnabarIsland_PokemonCenter_2F, FiveIsland_PokemonCenter_2F, FourIsland_PokemonCenter_2F, ... (20 in all)" },
-  { kind: 'special', name: 'ValidateEReaderTrainer', tag: 'link', where: "SevenIsland_House_Room1" },
   { kind: 'special', name: 'WonderNews_GetRewardInfo', tag: 'link', where: "CeruleanCity_House4" },
 ];

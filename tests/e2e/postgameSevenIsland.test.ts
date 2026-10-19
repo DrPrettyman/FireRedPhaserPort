@@ -6,10 +6,12 @@
 // afterwards with its Unown (GenerateWildMon's sUnownLetterSlots), and Altering Cave's Zubat. Warps skip the walking
 // between scenes, as postgame.test.ts does.
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
 import { checkRide, sail, talkToHarborSailor, waitForMenu } from './seagallopHelpers';
-import { afterHallOfFame, MEWTWO, rainbowPassState, SCENE, scriptsSince, warp } from './postgameHelpers';
+import { afterHallOfFame, battlesSince, MEWTWO, rainbowPassState, SCENE, scriptsSince, warp } from './postgameHelpers';
 
 const session = useGame();
 
@@ -283,6 +285,40 @@ test('Seven Island: the ferry, a dark Tanoby chamber, the Tanoby Key puzzle and 
   await game.mashUntil((t) => t.idle() && !t.battle() && t.field()?.map === 'SevenIsland_TanobyRuins_LiptooChamber', { what: 'back in the chamber', ...SCENE });
 }, 600_000);
 
+/** sUnownLetterSlots (wild_encounter.c), one row per chamber in map number order: the letter of land slots 0-11. */
+const CHAMBERS: [string, string][] = [
+  ['MoneanChamber', 'AAAAAAAAAAA?'],
+  ['LiptooChamber', 'CCCDDDHHHUUO'],
+  ['WeepthChamber', 'NNNNSSSSIIEE'],
+  ['DilfordChamber', 'PPLLJJRRRQQQ'],
+  ['ScufibChamber', 'YYTTGGGFFFKK'],
+  ['RixyChamber', 'VVVWWWXXMMBB'],
+  ['ViapoisChamber', 'ZZZZZZZZZZZ!'],
+];
+
+test('the seven chambers: dark while the ruins are locked, then lit, each with its own Unown letters by slot', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'SevenIsland_TanobyRuins', x: 120, y: 11, party: [MEWTWO] });
+  for (const unlocked of [false, true]) {
+    await game.eval((t, u) => t.state!.setFlag('FLAG_SYS_UNLOCKED_TANOBY_RUINS', u), unlocked);
+    for (const [chamber, letters] of CHAMBERS) {
+      const map = `SevenIsland_TanobyRuins_${chamber}`;
+      await warp(game, mapJson(map).id, 11, 15);
+      await game.waitFor((t) => t.idle() && t.weather()!.palProcessingState === 3, { what: map });
+      expect(await game.eval((t) => [t.field()!.map, t.weather()!.savedWeather]), map).toEqual([map, unlocked ? WEATHER_NONE : WEATHER_SHADE]);
+      if (!unlocked) continue;
+      // GenerateWildMon for each land slot: the personality's letter (GenerateUnownPersonalityByLetter)
+      const personalities = await game.eval((t) => {
+        const wild = (window as any).game.scene.getScene('Overworld').wild;
+        return Array.from({ length: 12 }, (_, slot) => {
+          wild.generateWildMon(t.define('SPECIES_UNOWN'), 25, slot);
+          return wild.enemy.personality as number;
+        });
+      });
+      expect(personalities.map(unownLetter).join(''), map).toBe(letters);
+    }
+  }
+}, 300_000);
+
 test("Altering Cave: Zubat only (VAR_ALTERING_CAVE_WILD_SET 0's table)", async () => {
   const game = await session.start({ start: 'after-rival', map: 'SixIsland_AlteringCave', x: 18, y: 21, party: [MEWTWO] });
   await game.waitIdle();
@@ -306,3 +342,213 @@ test("Altering Cave: Zubat only (VAR_ALTERING_CAVE_WILD_SET 0's table)", async (
   }
   expect(species).toEqual(['ZUBAT', 'ZUBAT', 'ZUBAT']);
 }, 300_000);
+
+// ---- The sweep: every trainer, item, NPC and sign of Seven Island, Sevault Canyon and its entrance, the Tanoby
+// Ruins and the Trainer Tower's path, against the decomp's map events and texts.
+
+/** Two level-100 Mewtwo with Surf first: nothing out here resists it into a stall (PSYCHIC would leave Dark types). */
+const SWEEPER = { species: 'MEWTWO', level: 100, moves: ['SURF', 'PSYCHIC'] };
+
+interface MapJson {
+  id: string;
+  width: number;
+  height: number;
+  blocks: number[];
+  objectEvents: { x: number; y: number; script: string; graphics_id: string }[];
+}
+const MAPS: Record<string, MapJson> = {};
+function mapJson(name: string): MapJson {
+  return (MAPS[name] ??= JSON.parse(readFileSync(resolve(__dirname, `../../public/gen/maps/${name}.json`), 'utf8')));
+}
+
+/** A free cell next to (x, y) on the map (no collision, no object), and the way to face from it. */
+function standBy(name: string, x: number, y: number): [number, number, Dir] {
+  const m = mapJson(name);
+  const taken = new Set(m.objectEvents.map((o) => `${o.x},${o.y}`));
+  const free = (cx: number, cy: number) => cx >= 0 && cy >= 0 && cx < m.width && cy < m.height && ((m.blocks[cy * m.width + cx] >> 10) & 3) === 0 && !taken.has(`${cx},${cy}`);
+  for (const [dx, dy, dir] of [[0, 1, 'up'], [-1, 0, 'right'], [1, 0, 'left'], [0, -1, 'down']] as const) if (free(x + dx, y + dy)) return [x + dx, y + dy, dir];
+  throw new Error(`nowhere to stand by (${x}, ${y}) on ${name}`);
+}
+
+/**
+ * Warp beside what is at (x, y) on `map` (an object: its local id is its index + 1, and a wandering one is
+ * followed; else a sign or hidden item), face it and press A, then press A until the field is free again (and
+ * `trainer` is defeated, when given). Returns the messages seen and the battles' trainer ids.
+ */
+async function interact(game: Game, map: string, x: number, y: number, trainer?: string, answers: [RegExp, 'B'][] = []) {
+  const m = mapJson(map);
+  const index = m.objectEvents.findIndex((o) => o.x === x && o.y === y);
+  const [sx, sy] = standBy(map, x, y);
+  await warp(game, m.id, sx, sy);
+  const since = await game.mark();
+  await game.eval(
+    async (t, localId, x, y) => {
+      if (t.field()!.script || !t.idle()) return; // a trainer saw the player
+      const target = () => {
+        const o = localId ? t.objects().find((o) => o.localId === localId) : undefined;
+        return o ? [o.x, o.y] : [x, y];
+      };
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const [tx, ty] = target();
+        const f = t.field()!;
+        if (Math.abs(f.x - tx) + Math.abs(f.y - ty) !== 1) {
+          for (const [dx, dy] of [[0, 1], [-1, 0], [1, 0], [0, -1]]) {
+            try {
+              if ((await t.walkTo(tx + dx, ty + dy)).arrived) break;
+            } catch {
+              // no route to that side
+            }
+          }
+          if (t.field()!.script || !t.idle()) return;
+        }
+        const [ox, oy] = target();
+        const g = t.field()!;
+        if (Math.abs(g.x - ox) + Math.abs(g.y - oy) !== 1) continue;
+        await t.face(ox < g.x ? 'left' : ox > g.x ? 'right' : oy < g.y ? 'up' : 'down');
+        await t.press('A');
+        if (await t.until(() => !!t.field()!.script || !t.idle(), 30)) return;
+      }
+      throw new Error(`could not talk to (${x}, ${y})`);
+    },
+    index >= 0 ? index + 1 : 0,
+    x,
+    y,
+  );
+  await game.eval((_t, trainer) => ((window as any).__trainer = trainer), trainer ?? '');
+  const r = await game.eval(
+    (t, answers) =>
+      (t as any).mash((u: any) => u.idle() && !u.field()!.script && !u.battle() && (!(window as any).__trainer || u.trainerDefeated((window as any).__trainer)), 'A', 40000, answers),
+    answers.map(([re, b]) => [re.source, re.flags, b]),
+  );
+  expect(r.value, `${map} (${x}, ${y}): the field free again${trainer ? `, ${trainer} defeated` : ''}`).toBeTruthy();
+  return { messages: (r.messages as string[]).map((s) => s.replace(/\s+/g, ' ')), battles: await battlesSince(game, since) };
+}
+
+async function sweepStart(map: string, x: number, y: number) {
+  const game = await session.start({ start: 'after-rival', map, x, y, party: [SWEEPER, SWEEPER] });
+  await afterHallOfFame(game);
+  await rainbowPassState(game);
+  await game.eval((t) => {
+    t.state!.battleSceneOff = true;
+    t.state!.battleStyleSet = true; // no "Will you change POKéMON?" with two in the party
+  });
+  return game;
+}
+
+/** Fight the trainer at (x, y): one battle against TRAINER_<trainer>, which is then defeated. */
+async function fight(game: Game, map: string, x: number, y: number, trainer: string) {
+  // HealPlayerParty first (Surf's PP last a few battles)
+  await game.eval((t) => {
+    const s = t.state!;
+    for (const mon of s.party) {
+      mon.hp = mon.maxHP;
+      for (let j = 0; j < 4; j++) mon.pp[j] = s.pokemon.ppWithBonus(mon.moves[j], mon.ppBonuses, j);
+      mon.status = 0;
+    }
+  });
+  const { battles } = await interact(game, map, x, y, trainer);
+  expect(battles, `${trainer}'s battle`).toEqual([await game.eval((t, n) => t.define(`TRAINER_${n}`), trainer)]);
+}
+
+/** An item ball or hidden item at (x, y): `item` +1 in the bag and its flag set. */
+async function pickUp(game: Game, map: string, x: number, y: number, item: string, flag: string) {
+  const before = await game.eval((t, i) => t.itemCount(i), item);
+  const { messages } = await interact(game, map, x, y);
+  expect(await game.eval((t, i, f) => [t.itemCount(i), t.flag(f)], item, flag), `${item} at (${x}, ${y})`).toEqual([before + 1, true]);
+  return messages;
+}
+
+/** Talk to (or read) what is at (x, y): the first message matches `text`. */
+async function read(game: Game, map: string, x: number, y: number, text: RegExp) {
+  const { messages } = await interact(game, map, x, y);
+  expect(messages[0], `${map} (${x}, ${y})`).toMatch(text);
+  return messages;
+}
+
+test('Seven Island: the town, its Mart, Pokémon Center and house, the Swords Dance tutor', async () => {
+  const game = await sweepStart('SevenIsland', 12, 10);
+  await read(game, 'SevenIsland', 17, 9, /^SEVEN ISLAND/);
+  await read(game, 'SevenIsland', 9, 7, /^These islands are called the SEVII/);
+  await read(game, 'SevenIsland', 15, 5, /^This island has been left virtually/);
+  // NO to the tutor (B on the YES / NO)
+  const tutor = await interact(game, 'SevenIsland', 7, 18, undefined, [[/It's SWORDS DANCE/, 'B']]);
+  expect(tutor.messages[0]).toMatch(/^Not many people come out here\./);
+  expect(tutor.messages.at(-1)).toMatch(/^Well, that['’]s fine, too\./);
+  expect(await game.eval((t) => t.flag('FLAG_TUTOR_SWORDS_DANCE'))).toBe(false);
+
+  await read(game, 'SevenIsland_Mart', 6, 2, /^POKéMON have personalities of their/);
+  await read(game, 'SevenIsland_Mart', 5, 4, /^Okay, preparations are complete/);
+  await read(game, 'SevenIsland_Mart', 9, 5, /^I need to fish on SEVEN ISLAND\./);
+  await read(game, 'SevenIsland_PokemonCenter_1F', 11, 5, /^On this island, different events/);
+  await read(game, 'SevenIsland_PokemonCenter_1F', 14, 6, /^Did you ride a SEAGALLOP ferry/);
+  await read(game, 'SevenIsland_PokemonCenter_1F', 4, 4, /^If you['’]re confident, you should/);
+  // The house: no e-Reader trainer (ValidateEReaderTrainer fails), so the old woman only reminisces
+  await read(game, 'SevenIsland_House_Room1', 4, 4, /^I may not look like much now,/);
+  // ValidateEReaderTrainer's VAR_RESULT 1 kept the plain layout (no SetTrainerVisitingLayout)
+  expect(await game.eval((t) => [t.var('VAR_TEMP_1'), t.state!.mapLayoutId === t.define('LAYOUT_SEVEN_ISLAND_HOUSE_ROOM1')])).toEqual([0, true]);
+  await read(game, 'SevenIsland_House_Room1', 4, 1, /^There is a slight breeze blowing/);
+}, 300_000);
+
+test("Sevault Canyon and its entrance: the trainers, the items, the Black Belt, the Chansey Dance", async () => {
+  const game = await sweepStart('SevenIsland_SevaultCanyon_Entrance', 9, 10);
+  const E = 'SevenIsland_SevaultCanyon_Entrance';
+  await read(game, E, 14, 26, /^SEVAULT CANYON ENTRANCE/);
+  await fight(game, E, 12, 6, 'AROMA_LADY_MIAH');
+  await fight(game, E, 3, 34, 'YOUNG_COUPLE_EVE_JON');
+  await fight(game, E, 11, 26, 'PKMN_RANGER_NICOLAS');
+  await fight(game, E, 10, 26, 'PKMN_RANGER_MADELINE');
+  await fight(game, E, 11, 17, 'JUGGLER_MASON');
+  await pickUp(game, E, 8, 29, 'RAWST_BERRY', 'FLAG_HIDDEN_ITEM_SEVEN_ISLAND_SEVAULT_CANYON_ENTRANCE_RAWST_BERRY');
+
+  const C = 'SevenIsland_SevaultCanyon';
+  await read(game, C, 16, 71, /^SEVAULT CANYON/);
+  await fight(game, C, 13, 43, 'CRUSH_GIRL_CYNDY');
+  await fight(game, C, 13, 36, 'TAMER_EVAN');
+  await fight(game, C, 3, 35, 'PKMN_RANGER_JACKSON');
+  await fight(game, C, 3, 36, 'PKMN_RANGER_KATELYN');
+  await fight(game, C, 7, 56, 'COOLTRAINER_LEROY');
+  await fight(game, C, 11, 63, 'COOLTRAINER_MICHELLE');
+  await fight(game, C, 14, 13, 'COOL_COUPLE_LEX_NYA');
+  await pickUp(game, C, 18, 45, 'KINGS_ROCK', 'FLAG_HIDE_SEVEN_ISLAND_SEVAULT_CANYON_KINGS_ROCK');
+  await pickUp(game, C, 7, 38, 'MAX_ELIXIR', 'FLAG_HIDE_SEVEN_ISLAND_SEVAULT_CANYON_MAX_ELIXIR');
+  await pickUp(game, C, 17, 23, 'NUGGET', 'FLAG_HIDE_SEVEN_ISLAND_SEVAULT_CANYON_NUGGET');
+  await pickUp(game, C, 15, 66, 'CHERI_BERRY', 'FLAG_HIDDEN_ITEM_SEVEN_ISLAND_SEVAULT_CANYON_CHERI_BERRY');
+  // The Black Belt: famechecker FAMECHECKER_BRUNO, 5
+  await read(game, C, 8, 26, /^Training by oneself is certainly/);
+
+  // The house: the Lucky Punch, the Chansey, the Chansey Dance (YES: the party healed, FLAG_TEMP_2)
+  const H = 'SevenIsland_SevaultCanyon_House';
+  await pickUp(game, H, 6, 4, 'LUCKY_PUNCH', 'FLAG_HIDE_SEVEN_ISLAND_SEVAULT_CANYON_HOUSE_LUCKY_PUNCH');
+  await read(game, H, 4, 2, /^CHANSEY: Chansi! Chansi!/);
+  await game.eval((t) => {
+    const mon = t.state!.party[0];
+    mon.hp = 1;
+  });
+  const dance = await read(game, H, 2, 4, /^Dance, dance!/);
+  expect(dance).toEqual(expect.arrayContaining([expect.stringMatching(/^Would you like to dance\?/), expect.stringMatching(/danced the CHANSEY Dance!/), expect.stringMatching(/^Ahahahaha!/)]));
+  expect(await game.eval((t) => [t.party()[0].hp === t.party()[0].maxHP, t.flag('FLAG_TEMP_2')])).toEqual([true, true]);
+}, 600_000);
+
+test("The Tanoby Ruins and the Trainer Tower's path: the trainers, the hidden items, the signs", async () => {
+  const game = await sweepStart('SevenIsland_TanobyRuins', 120, 11);
+  const R = 'SevenIsland_TanobyRuins';
+  await fight(game, R, 35, 7, 'RUIN_MANIAC_BRANDON');
+  await fight(game, R, 121, 11, 'RUIN_MANIAC_BENJAMIN');
+  await fight(game, R, 85, 8, 'PAINTER_EDNA');
+  await fight(game, R, 85, 5, 'GENTLEMAN_CLIFFORD');
+  await pickUp(game, R, 33, 10, 'HEART_SCALE', 'FLAG_HIDDEN_ITEM_SEVEN_ISLAND_TANOBY_RUINS_HEART_SCALE');
+  await pickUp(game, R, 86, 9, 'HEART_SCALE', 'FLAG_HIDDEN_ITEM_SEVEN_ISLAND_TANOBY_RUINS_HEART_SCALE_2');
+  await pickUp(game, R, 125, 5, 'HEART_SCALE', 'FLAG_HIDDEN_ITEM_SEVEN_ISLAND_TANOBY_RUINS_HEART_SCALE_3');
+  await pickUp(game, R, 8, 2, 'HEART_SCALE', 'FLAG_HIDDEN_ITEM_SEVEN_ISLAND_TANOBY_RUINS_HEART_SCALE_4');
+
+  const T = 'SevenIsland_TrainerTower';
+  await fight(game, T, 56, 26, 'PSYCHIC_DARIO');
+  await fight(game, T, 56, 29, 'PSYCHIC_RODETTE');
+  await pickUp(game, T, 49, 27, 'BIG_PEARL', 'FLAG_HIDDEN_ITEM_SEVEN_ISLAND_TRAINER_TOWER_BIG_PEARL');
+  await pickUp(game, T, 47, 30, 'PEARL', 'FLAG_HIDDEN_ITEM_SEVEN_ISLAND_TRAINER_TOWER_PEARL');
+  await pickUp(game, T, 59, 32, 'NANAB_BERRY', 'FLAG_HIDDEN_ITEM_SEVEN_ISLAND_TRAINER_TOWER_NANAB_BERRY');
+  await read(game, T, 56, 8, /^TRAINER TOWER ENTRANCE/);
+  await read(game, T, 50, 30, /^TRAINER TOWER AHEAD/);
+  // SevenIsland_TrainerTower_OnTransition: VAR_MAP_SCENE_TRAINER_TOWER 0
+  expect(await game.eval((t) => t.var('VAR_MAP_SCENE_TRAINER_TOWER'))).toBe(0);
+}, 600_000);
