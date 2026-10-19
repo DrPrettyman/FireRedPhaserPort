@@ -5,8 +5,12 @@
 // scenes (the player and the NPCs move as recorded, the scene's flags, empty bag and party count in effect), A skips
 // a scene, B skips to the end, and afterwards the field is the saved one.
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
+
+const SPRITES: Record<string, { key: string }> = JSON.parse(readFileSync(resolve(__dirname, '../../public/gen/sprites/manifest.json'), 'utf8'));
 
 const session = useGame();
 
@@ -309,6 +313,131 @@ test('during playback, A skips to the next scene and B to the end', async () => 
   const after = await fieldState(game);
   expect(after).toMatchObject({ field: { map: 'PalletTown' }, potions: 3, badge: false });
   expect(after.party.length).toBe(1);
+});
+
+test('the playback screen: the grey field, the header and its scene number, the event lines, "saved the game at", then the colours and the music back', async () => {
+  expect(twoScenesSave).toBeDefined();
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown', x: 6, y: 8 });
+  await game.eval((_t, key, json) => localStorage.setItem(key, json), SAVE_KEY, twoScenesSave!);
+  await game.load({ keepSave: true, mainMenu: true });
+  const sheet = `spr_${SPRITES.OBJ_EVENT_GFX_RED_NORMAL.key}`;
+  const D = await game.eval((t) => ({
+    PLAYBACK: t.define('QL_STATE_PLAYBACK'),
+    LAST: t.define('QL_STATE_PLAYBACK_LAST'),
+    GRAY: t.define('QL_TINT_GRAYSCALE'),
+    BACKUP: t.define('QL_TINT_BACKUP_GRAYSCALE'),
+  }));
+  const mark = await game.eval((t) => t.lastSeq());
+  type Weather = { unfaded?: number[]; palette?: number[]; pixels?: (number[] | undefined)[]; sprite?: { now: number[]; original: number[] } };
+  // Every tick of the playback, in the page: the tint and the palettes, the windows' texts and how long each
+  // description stays up, the music flag, and Task_EndQuestLog's frames (after "saved the game at")
+  const watch = game.eval(
+    async (t, D, sheet) => {
+      // BG palette 7 and the player's sheet, and a pixel the map's atlas drew with each palette 0-12
+      const probe = () => ({ ...t.weather(7, undefined, sheet)!, pixels: Array.from({ length: 13 }, (_, i) => t.weather(i)!.pixel?.rgb) });
+      const headers: string[] = [];
+      const lines: { text: string; frames: number; scene: number }[] = [];
+      const tints: number[] = [];
+      const music = new Set<number>();
+      const restore: number[][] = [];
+      let scene0: Weather | undefined;
+      let finalScene: Weather | undefined;
+      let line: (typeof lines)[number] | undefined;
+      let seenLast = false;
+      const ok = await t.until(() => {
+        const f = t.field();
+        if (!f) return false; // (the main menu)
+        const ql = t.questLog();
+        const s = t.questLogScreen()!;
+        if (!ql.playback.active) return seenLast;
+        if (!tints.includes(s.tintMode)) tints.push(s.tintMode);
+        music.add(s.musicDisabled);
+        const top = s.windows[0];
+        if (top.shown && top.text && !headers.includes(top.text)) headers.push(top.text);
+        const desc = s.windows[2];
+        if (desc.shown && desc.text) {
+          if (!line || line.text !== desc.text) lines.push((line = { text: desc.text, frames: 0, scene: ql.state === D.LAST ? -1 : ql.currentSceneNum }));
+          line.frames++;
+        } else line = undefined;
+        const running = !f.busy && ql.playback.control.state === 0 && ql.playback.control.endMode === 0;
+        if (ql.state === D.PLAYBACK && running && ql.currentSceneNum === 0 && !scene0) scene0 = probe();
+        if (ql.state === D.LAST) {
+          seenLast = true;
+          if (!f.busy && !finalScene && desc.shown) finalScene = probe(); // (after the fade in)
+        }
+        // Task_EndQuestLog (gQuestLogState 0, the windows still up): BG palette 7 as shown, frame by frame
+        if (seenLast && ql.state === 0 && s.windows[0].added) restore.push(t.weather(7)!.palette!);
+        return false;
+      }, 40000);
+      return { ok, headers, lines, tints, music: [...music], restore, scene0, finalScene };
+    },
+    D,
+    sheet,
+  );
+  await continueGame(game);
+  const seen = await watch;
+  expect(seen.ok).toBe(true);
+  await game.waitIdle();
+  const after = (await game.eval((t, sheet) => t.weather(7, undefined, sheet), sheet)) as Weather;
+  // TintPalette_GrayScale on palettes.json's JASC colours (8 → 5 bits and back)
+  const gray = (c: number[]) => {
+    const out: number[] = [];
+    for (let i = 0; i < c.length; i += 3) {
+      const g = ((c[i] >> 3) * 76 + (c[i + 1] >> 3) * 151 + (c[i + 2] >> 3) * 29) >> 8;
+      const v = Math.floor((g * 255) / 31);
+      out.push(v, v, v);
+    }
+    return out;
+  };
+  // The tints: GRAYSCALE for the scenes, BACKUP_GRAYSCALE for the final one (the field's palettes and the player's
+  // sheet grey, as loaded and as shown: no weather in Pallet Town)
+  expect(seen.tints).toEqual([D.GRAY, D.BACKUP]);
+  const base = after.unfaded!;
+  expect(after.palette).toEqual(base);
+  expect(base).not.toEqual(gray(base));
+  for (const w of [seen.scene0!, seen.finalScene!]) {
+    expect(w.unfaded).toEqual(gray(base));
+    expect(w.palette).toEqual(gray(base));
+    const drawn = w.pixels!.filter((p) => p) as number[][];
+    expect(drawn.length).toBeGreaterThan(0);
+    for (const [r, g, b] of drawn) expect(r === g && g === b).toBe(true); // the atlases drew them grey
+    expect(w.sprite!.now).toEqual(gray(w.sprite!.original));
+  }
+  // The header: "Previously on your quest…" with the scenes left (2, 1), none on the final scene
+  expect(seen.headers).toEqual(['Previously on your quest…2', 'Previously on your quest…1', 'Previously on your quest…']);
+  // The events' lines, each up for GetQuestLogTextDisplayDuration frames (by its length) and the 16 of
+  // QuestLog_PlayCurrentEvent's overlap; then "saved the game at" on the final scene
+  const duration = (s: string) => {
+    const n = s.replace(/\n/g, '').length;
+    return n < 20 ? 0x5f : n < 36 ? 0x7f : n < 46 ? 0xbf : 0xff;
+  };
+  const [departed, arrived, savedAt] = seen.lines;
+  expect(departed).toMatchObject({ scene: 0 });
+  expect(departed.text).toMatch(/ rested comfortably at home\.$/);
+  expect(arrived).toMatchObject({ text: 'Arrived in PALLET TOWN.', scene: 1 });
+  for (const l of [departed, arrived]) {
+    expect(l.frames).toBeGreaterThanOrEqual(duration(l.text));
+    expect(l.frames).toBeLessThanOrEqual(duration(l.text) + 20);
+  }
+  expect(savedAt.scene).toBe(-1);
+  expect(savedAt.text).toMatch(/saved the game at this\slocation: PALLET TOWN\.$/); // (the probe decodes the line break as a space)
+  expect(savedAt.frames).toBeGreaterThanOrEqual(127); // Task_WaitAtEndOfQuestLog
+  expect(seen.lines.length).toBe(3);
+  // Task_EndQuestLog: 16 frames from grey back to the colours (CopyPaletteInvertedTint), then the backup back
+  expect(seen.restore.length).toBeGreaterThanOrEqual(16);
+  expect(seen.restore[0]).not.toEqual(base);
+  expect(seen.restore.some((p) => p.join() !== base.join() && p.join() !== gray(base).join())).toBe(true);
+  expect(seen.restore.at(-1)).toEqual(base);
+  expect(after.sprite!.now).toEqual(after.sprite!.original);
+  const screen = await game.eval((t) => t.questLogScreen());
+  expect(screen).toMatchObject({ tintMode: 0, musicDisabled: 0 });
+  expect(screen!.windows.every((w) => !w.added)).toBe(true);
+  // The music: stopped through the scenes (gDisableMapMusicChangeOnMapLoad STOP), Pallet Town's after the end
+  expect(seen.music).toContain(1);
+  const audio = await game.eval((t, mark) => t.audioEvents(mark), mark);
+  // (StopMapMusic starts MUS_DUMMY: the main menu's song stopped, then each scene's map load)
+  const bgm = audio.filter((e) => e.type === 'bgm' && e.name !== 'MUS_DUMMY');
+  expect(bgm.map((e) => e.name)).toEqual(['MUS_PALLET']);
 });
 
 test("QL3a's events go into the scene's stream as the C lays them out, and the save keeps them", async () => {
