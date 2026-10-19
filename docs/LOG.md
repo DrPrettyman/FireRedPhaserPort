@@ -3575,6 +3575,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   battles; a loss: the win text, no white-out, healed, the receptionist ends the challenge), plus trainerBattle and
   scriptedBattles. Found on the way: the "Will you change POKéMON?" prompt between a single trainer's two mons eats
   the mash's A (the test sets the SET battle style).
+
 ### W-sevii 2: Four Island and Icefall Cave (POSTGAME_PLAN.md batch 10)
 
 - `world/fieldTasks.ts` (new): field_tasks.c's per-step callback task. SetUpFieldTasks (a fresh STEP_CB_DUMMY task
