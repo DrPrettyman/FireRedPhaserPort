@@ -25,6 +25,7 @@ import { scriptGiveEgg } from '../world/daycare';
 import { FadeInBGM, FadeOutBGMTemporarily, IsBGMPausedOrStopped, IsFanfareTaskInactive, IsSEPlaying, Overworld_ChangeMusicTo, PlayFanfare, PlayNewMapMusic, PlaySE } from '../gba/sound';
 import { IsCryFinished, PlayCry_Script } from '../gba/sound'; // the cries (W-sound 2)
 import { Overworld_ChangeMusicToDefault, Overworld_SetSavedMusic } from '../gba/overworldMusic';
+import { gStringVar4 } from '../menus/common';
 
 export interface ScriptsData {
   code: Instruction[];
@@ -516,6 +517,7 @@ export class ScriptEngine {
 
   private stringFor(ctx: ScriptContext, token: string): number[] | undefined {
     const label = token === '0x0' || token === '0' ? String(ctx.data[0]) : token;
+    if (label === 'gStringVar4') return [...gStringVar4]; // `msgbox gStringVar4` (the Trainer Tower's speeches)
     const raw = this.strings[label];
     if (raw === undefined) {
       console.warn('[script] missing text', label);

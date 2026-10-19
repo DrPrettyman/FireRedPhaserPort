@@ -100,6 +100,9 @@ import { ClearRematchStateByTrainerId, registerVsSeeker, ResetMovementOfRematcha
 import { FieldFlash, FldEff_UseFlash, IsMapTypeOutdoors, Overworld_GetFlashLevel, SetDefaultFlashLevel } from '../world/flash';
 import { fieldListMenuGfxSymbols, fieldListMenuProbe, type ListMenuHost } from '../ui/FieldListMenu';
 import { stringWidth } from '../text/stringWidth';
+import { setTrainerTowerStringWidth } from '../world/trainerTower';
+import { currentTrainerTowerRecord } from '../state/trainerTowerRecord';
+import { VBlankCounter1Update } from '../gba/main';
 import { MultichoiceGridMenu, MultichoiceMenu } from '../ui/MultichoiceMenu';
 import type { ShopFieldView } from '../menus/shop';
 import { setBgMosaic } from '../world/BgMosaic';
@@ -345,6 +348,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     setUserFrameTypeSource(() => this.state.optionsWindowFrameType + 1); // the options' FRAME for field windows
     this.flash = new FieldFlash(this);
     this.fonts = new Fonts(this, this.assets.fonts);
+    setTrainerTowerStringWidth((str) => stringWidth(this.fonts, FONT_NORMAL, str, -1)); // TT_ConvertEasyChatMessageToString
     this.messageBox = new MessageBox(this, this.fonts, this.buttons, charmap, this.state);
     registerMuseumFossilPic({ scene: this, fonts: this.fonts, input: this.buttons });
     this.scripts = new ScriptEngine(
@@ -615,6 +619,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private tick(): void {
     this.tickField();
     PlayTimeCounter_Update(this.state.playTime); // AgbMain, once per frame
+    VBlankCounter1Update(); // VBlankIntr: the Trainer Tower's timer (world/trainerTower.ts)
     AgbMainFrameEnd(); // the sound tasks, MapMusicMain, m4aSoundMain
     this.flash.vblank(); // VBlankCB_Field's ScanlineEffect_InitHBlankDmaTransfer
     this.gbaScreen.frame(); // the GBA layer's half of the frame, when it's in use
@@ -1410,6 +1415,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.state.currentMap = name;
     this.state.currentMapId = cur.data.id;
     this.state.currentMapSection = this.mapSection();
+    this.state.mapHeaderLayoutId = this.defines.require(cur.data.layoutId); // gMapHeader (LoadCurrentMapData)
     testEvent('map', { map: name });
     // A warp's (and CONTINUE's) ResumeMap makes a new Task_RunTimeBasedEvents; a connection's ResetFieldTasksArgs zeroes it
     this.ambientCry = { state: 0, delayCounter: 0 };
@@ -2671,8 +2677,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   /** SetWhiteoutRespawnWarpAndHealerNpc (heal_location.c). */
   private whiteOutRespawn(): { map: string; x: number; y: number; healer?: string } {
     if (this.state.getVar('VAR_MAP_SCENE_TRAINER_TOWER') === 1) {
-      // The Trainer Tower challenge isn't tracked yet, so spokeToOwner reads as FALSE.
-      this.state.setVar('VAR_MAP_SCENE_TRAINER_TOWER', 0);
+      if (!currentTrainerTowerRecord(this.state).spokeToOwner) this.state.setVar('VAR_MAP_SCENE_TRAINER_TOWER', 0);
       this.state.setVar('VAR_LAST_TALKED', 1);
       return { map: 'MAP_TRAINER_TOWER_LOBBY', x: 4, y: 11 };
     }
