@@ -375,12 +375,15 @@ this is the next level down. When you add or change a subsystem, update its entr
   (script/postgameSpecials.ts) re-cracks from the temp flags (a CONTINUE keeps them, a warp clears them). Test events
   `iceCracked` / `iceBroken` (x, y); probe `perStepCallbackProbe()` (import the module in the page).
 - **Daycare:** `world/daycare.ts` is daycare.c except the hatching scene: `GameState.route5DayCareMon` (struct
-  DaycareMon: a BoxPokemon or null, u32 steps; no mail) and `GameState.daycare` (struct DayCare, the Four Island
+  DaycareMon: a BoxPokemon or null, u32 steps, and `mail?`: struct DayCareMail, absent = cleared) and `GameState.daycare` (struct DayCare, the Four Island
   daycare: two DaycareMons, the u16 offspringPersonality, the u8 egg-cycle stepCounter), both saved (SAVE_VERSION
-  4; a version 3 save had only `daycareStepCounter`). Storage: StorePokemonInDaycare / StoreSelectedPokemonInDaycare
-  (first empty slot), TakeSelectedPokemonFromDaycare / TakePokemonFromDaycare (BoxMonToMon, one exp per step,
-  ApplyDaycareExperience: TryIncrementMonLevel level by level with MonTryLearningNewMove, the first move pushed out
-  when full; then ShiftDaycareSlots), the level / cost helpers (cost 100 + 100 per level), GetDaycareState,
+  4; a version 3 save had only `daycareStepCounter`; the DaycareMons' `mail` since 12). Storage: StorePokemonInDaycare
+  / StoreSelectedPokemonInDaycare (first empty slot; a mon holding mail has it moved into its DayCareMail with the
+  player's name and its nickname, TakeMailFromMon), TakeSelectedPokemonFromDaycare / TakePokemonFromDaycare
+  (BoxMonToMon, one exp per step, ApplyDaycareExperience: TryIncrementMonLevel level by level with
+  MonTryLearningNewMove, the first move pushed out when full; the mail given back with GiveMailToMon2; then
+  ShiftDaycareSlots, which moves the mail up too), BufferDayCareMonReceivedMail / the special DaycareMonReceivedMail
+  (no FRLG script calls it), the level / cost helpers (cost 100 + 100 per level), GetDaycareState,
   GetDaycareMonNicknames. Eggs: ShouldEggHatch / TryProduceOrHatchEgg on every field step (the Route 5 mon's and
   the daycare mons' steps; with both mons in and no egg pending, when the second's steps reach 0xFF mod 256 the
   GetDaycareCompatibilityScore roll calls TriggerPendingDaycareEgg; party eggs' egg cycles), the compatibility
@@ -637,7 +640,10 @@ this is the next level down. When you add or change a subsystem, update its entr
   16 (30, 13) facing right; Zapdos from Power Plant (5, 12) and Mewtwo from Cerulean Cave B1F (7, 13), facing up).
 - **In-game trades and the Name Rater:** `script/tradeSpecials.ts` (TRADE_SPECIALS, spread into SPECIALS) is
   trade_scene.c's in-game path: GetInGameTradeSpeciesInfo, GetTradeSpecies, CreateInGameTradePokemon(Internal)
-  (the trade's mon into `state.enemyParty[0]`), TradeMons, UpdatePokedexForReceivedMon, BufferInGameTradeMonName,
+  (the trade's mon into `state.enemyParty[0]`; a mail item comes with GetInGameTradeMail's message in
+  `gLinkPartnerMail[0]`, the mon's mail id 0: DONTAE's Jynx's Fab Mail, sInGameTradeMailMessages through
+  extract_trades.py's `mailMessages`), TradeMons (the player's mon's mail slot cleared, the partner mail given to the
+  mon received with GiveMailToMon2), UpdatePokedexForReceivedMon, BufferInGameTradeMonName,
   and DoInGameTradeScene: the fade to black (the scene's graphics and both mon pics load meanwhile:
   `tradeSceneGfxSymbols`), then `ScriptHost.runScreenFromScript` runs `menus/tradeScene.ts` on FieldMenuScene:
   CB2_InitInGameTrade → CB2_InGameTrade (DoTradeAnim) → CB2_ReturnToField, and the script's `waitstate` ends once
@@ -896,15 +902,30 @@ this is the next level down. When you add or change a subsystem, update its entr
   MAIL?") takes it back; MAIL → READ (CB2_ReadHeldMail; a mail item without a slot reads as a blank mail), MAIL →
   TAKE → YES (TakeMailFromMon2: "sent to your PC") or NO → YES (into the bag, the message lost); the bag's CHECK
   (FieldUseFunc_Mail → CB2_CheckMail, menus/itemUse.ts: a blank mail of the item's type, no message). The special
-  ShowEasyChatScreen's EASY_CHAT_TYPE_MAIL edits VAR_0x8005's slot (easyChatWordsForType). Not yet (W-mail unit 2):
-  the PC mailbox (player_pc.c / mailbox_pc.c, PARTY_ACTION_GIVE_MAILBOX_MAIL), daycare.c's DayCareMail, the in-game
-  trade's mail. Probe: `__test.mail()` (mailType = ITEM_TO_MAIL, messageExists, monIconType / iconSpecies,
-  waitingForButton, the message `lines` and `authorName` decoded, nameX). Tests: tests/unit/mail.test.ts (the slots,
-  give / take, the mail species, the save), tests/e2e/mail.test.ts (a Retro Mail bought at the Celadon Dept. Store
+  ShowEasyChatScreen's EASY_CHAT_TYPE_MAIL edits VAR_0x8005's slot (easyChatWordsForType). The player's PC mailbox
+  (player_pc.c's mailbox tasks in `ui/PlayerPcMenu.ts`, mailbox_pc.c's windows and list in `ui/MailboxPc.ts`, both
+  field overlays): Task_PlayerPcMailbox (CountPCMail = 0: "There's no MAIL here."; else PCMailCompaction and the
+  list: the writers' names, CANCEL, eight rows, the scroll arrows; CountPCMail / PCMailCompaction / SELECTED_MAIL
+  (`selectedPcMail`) are in world/mail.ts, with `gPlayerPcMenuManager` = struct PlayerPCItemPageStruct's cursorPos
+  (the list's scroll) / itemsAbove (the row) / count / pageItems), "What would you like to do with X's MAIL?" and
+  READ / MOVE TO BAG / GIVE / EXIT: READ fades out to ReadMail on FieldMenuScene ('itemFromField' through the host's
+  `enterScreen`) and comes back through CB2_ReturnToMailbox; MOVE TO BAG asks YES / NO, then "The BAG is full." or
+  the item into the bag with the slot cleared; GIVE opens the party menu (ChooseMonToGiveMailFromMailbox,
+  PARTY_ACTION_GIVE_MAILBOX_MAIL → TryGiveMailToSelectedMon: GiveMailToMon2 + the PC slot cleared, or "This POKéMON
+  is holding an item") and comes back through CB2_ReturnToMailboxPc_UpdateScrollVariables. The daycare's struct
+  DayCareMail and the in-game trade's mail: see Daycare and In-game trades. Probes: `__test.mail()` (mailType =
+  ITEM_TO_MAIL, messageExists, monIconType / iconSpecies, waitingForButton, the message `lines` and `authorName`
+  decoded, nameX), `__test.mailbox()` (while the player's PC is on: its phase, e.g. 'topMenu', 'mailbox' = the
+  list's input, 'mailSubmenu', 'yesNo'; count, cursorPos, itemsAbove, pageItems, listShown). Tests:
+  tests/unit/mail.test.ts (the slots, give / take, the mail species, the save, CountPCMail / PCMailCompaction /
+  SELECTED_MAIL, the version 11 upgrade), tests/unit/daycare.test.ts (DayCareMail), tests/unit/inGameTrades.test.ts
+  (GetInGameTradeMail, TradeMons' mail), tests/e2e/mail.test.ts (a Retro Mail bought at the Celadon Dept. Store
   4F from (3, 11) facing down, given from the bag with HI AWESOME typed, read and taken; the party menu's GIVE
   cancelled and written, Bead Mail's icon, TAKE → YES to the PC slots; CHECK; a held mail through SAVE and
-  CONTINUE). tests/e2e/easyChatHelpers.ts holds the Easy Chat screen's helpers (step, typeByGroup, typeByKeyboard)
-  both e2e files use.
+  CONTINUE; the mailbox at the Viridian Pokémon Center's PC from (11, 2): empty, READ, MOVE TO BAG with the bag full
+  and not, GIVE; a mon holding mail through the Route 5 daycare; DONTAE's Fab Mail after the trade in
+  CeruleanCity_House3 from (2, 3)). tests/e2e/easyChatHelpers.ts holds the Easy Chat screen's helpers (step,
+  typeByGroup, typeByKeyboard) both e2e files use.
 - **Party selection from scripts, tutors, the move deleter:** `menus/partyMenuSpecials.ts` is
   party_menu_specials.c (ChoosePartyMon, ChooseMonForMoveRelearner, SelectMoveDeleterMove, the deleter's
   helpers) plus the ChooseMonForMoveTutor special; `PARTY_MENU_SPECIALS` is spread into SPECIALS. A special that
@@ -1002,7 +1023,7 @@ this is the next level down. When you add or change a subsystem, update its entr
   (CB2_ExitPokeStorage) returns to the field, which reopens the storage menu on the option just used
   (FieldTask_ReturnToPcMenu). The PC's "PLAYER's PC" (`special PlayerPC`, and `BedroomPC` at home) is
   `ui/PlayerPcMenu.ts`: ITEM STORAGE (WITHDRAW ITEM = `menus/itemPc.ts`, item_pc.c, FieldMenuScene 'itemPc';
-  DEPOSIT ITEM = the bag at ITEMMENULOCATION_ITEMPC, 'itemPcDeposit'), MAILBOX (always empty) and TURN OFF;
+  DEPOSIT ITEM = the bag at ITEMMENULOCATION_ITEMPC, 'itemPcDeposit'), MAILBOX (see Mail) and TURN OFF;
   `state/pcItems.ts` is item.c's PC item functions. Specials that hand the script over use
   `SpecialEnv.setupScript` (ScriptContext_SetupScript). Probes: `__test.pcStorage()` (task, state, cursor, box,
   displayed species, bottom message, menu items, the popup's box) and `__test.itemPc()`. Tests:
