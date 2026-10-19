@@ -109,12 +109,22 @@ this is the next level down. When you add or change a subsystem, update its entr
   timer is gMain.vblankCounter1 (gba/main.ts), counted by VBlankCounter1Update once per tick in OverworldScene.tick
   and GbaHostScene's loop (like the play time). The speeches go to gStringVar4 (menus/common.ts), which
   `msgbox gStringVar4` prints; TT_ConvertEasyChatMessageToString measures with the field's FONT_NORMAL
-  (`setTrainerTowerStringWidth`, set by OverworldScene). For unit 2 (the battles): DoTrainerTowerBattle is a stand-in
-  (`trainerTowerBattle` test event, VAR_RESULT B_OUTCOME_WON); InitTrainerTowerBattleStruct / BuildEnemyParty /
-  GetTrainerTowerOpponent* aren't ported yet; the floors in sTrainerTowerState are shared with the data, so
-  BuildEnemyParty must copy a mon before setting its level. Tests: tests/unit/trainerTower.test.ts,
-  tests/e2e/trainerTower.test.ts (`?start=after-rival&map=TrainerTower_Lobby&x=9&y=9`, up onto the entry trigger,
-  YES, the challenge type; the stairs at (9, 2); 1F's singles trigger (10, 13), doubles (9, 12)). Probe:
+  (`setTrainerTowerStringWidth`, set by OverworldScene). **The battles:** DoTrainerTowerBattle builds gEnemyParty
+  (BuildEnemyParty: CreateBattleTowerMon on a *copy* of each floor mon, since the floors in sTrainerTowerState are
+  the loaded data; at GetPartyMaxLevel; the mon tables are indexed by floors cleared) into `state.enemyParty` and
+  calls `env.startTowerBattle` (script/trainerTowerSpecials.ts: `host.startScriptedBattle(flags, party, transition,
+  0, false)`, `false` = its own task, not Task_BattleStart: no poison wait, no ClearPoisonStepCounter; the special's
+  wait state is CB2_EndTrainerTowerBattle's return to the field, never a white-out). The battle side:
+  `allocateBattleResources` / FreeBattleResources (battle/main.ts) call InitTrainerTowerBattleStruct /
+  FreeTrainerTowerBattleStruct (sTrainerTowerOpponent, module state in world/trainerTower.ts);
+  battle/message.ts's B_TXT_TRAINER1_CLASS / _NAME / _LOSE_TEXT / _WIN_TEXT and B_TXT_TRAINER2_* (doubles) and
+  controllerOpponent.ts's `opponentTrainerPicId` read GetTrainerTowerOpponent* / GetTrainerTowerTrainerFrontSpriteId;
+  BattleScene loads that pic up front (`trainerTowerOpponentPicId`, before CB2_InitBattle). The other
+  BATTLE_TYPE_TRAINER_TOWER checks (no exp, no Thief / Trick, AI flags, terrain, the won / lost scripts) were already
+  in the battle port. Tests: tests/unit/trainerTower.test.ts, tests/e2e/trainerTower.test.ts
+  (`?start=after-rival&map=TrainerTower_Lobby&x=9&y=9`, up onto the entry trigger, YES, the challenge type; the
+  stairs at (9, 2), 1F → 2F at (15, 6); every floor's singles / knockout trigger (10, 13), doubles (9, 12); the
+  e2e's `watchBattles` records each battle's messages, foes and sprite palette tags tick by tick). Probe:
   `t.state.trainerTower[t.state.towerChallengeId]`.
 - **Silph Co. card key doors** (data/scripts/silphco_doors.inc) need nothing of their own: ON_LOAD closes them with
   `setmetatile`, the bg events open them (FLAG_HIDE_SILPH_CO_5F_CARD_KEY, `special SetHiddenItemFlag`). Test spot:

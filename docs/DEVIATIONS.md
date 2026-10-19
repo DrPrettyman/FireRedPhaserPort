@@ -44,9 +44,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Script timing: `special EnterHallOfFame` ends its script at the special (script/specials.ts) instead of
     keeping it in its `waitstate` until the screen warps out (as DoSeagallopFerryScene now does), so in theory the
     field could take input in the frame's ticks left after it. Not seen: the field sleeps under the HoF screen.
-  - Trainer Tower (world/trainerTower.ts): DoTrainerTowerBattle is a stand-in until W-ttower unit 2: no battle, it
-    counts as won (VAR_RESULT B_OUTCOME_WON) and the map music comes back, so a challenge can be climbed without
-    fighting. ShowResultsBoard / CloseResultsBoard (`ttower_showresults` / `ttower_closeresults`, which no script
+  - Trainer Tower (world/trainerTower.ts): ShowResultsBoard / CloseResultsBoard (`ttower_showresults` / `ttower_closeresults`, which no script
     uses) validate the record but draw no window. The record times aren't XORed with an encryption key (no key in
     the port). GetFloorAlreadyCleared on the roof with every floor cleared reads a zeroed floor where the C reads
     past the set (heap memory); the roof's result changes nothing. The e-Reader sets are never read (link content).

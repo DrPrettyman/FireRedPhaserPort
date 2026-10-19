@@ -1,20 +1,143 @@
-// The Trainer Tower without its battles (POSTGAME_PLAN.md W-ttower unit 1; trainer_tower.c in world/trainerTower.ts):
-// the lobby's receptionist starts a challenge (TrainerTower_Lobby_EventScript_EntryTrigger), the timer counts, 1F's
-// layout and trainers are the challenge's (TrainerTower_OnTransition: ttower_initfloor), a trainer's trigger runs up
-// to `ttower_dobattle` (a stand-in until unit 2: it counts as won), the floor is cleared, and a loss sends the player
-// back out of the challenge at the lobby (TrainerTower_Lobby_EventScript_LostChallenge).
+// The Trainer Tower (POSTGAME_PLAN.md W-ttower units 1 and 2; trainer_tower.c in world/trainerTower.ts): the lobby's
+// receptionist starts a challenge (TrainerTower_Lobby_EventScript_EntryTrigger), the timer counts, 1F's layout and
+// trainers are the challenge's (TrainerTower_OnTransition: ttower_initfloor), a trainer's trigger runs up to
+// `ttower_dobattle`: the battle (DoTrainerTowerBattle: BATTLE_TYPE_TRAINER_TOWER, BuildEnemyParty at the party's top
+// level, the opponent's class / name / pic / texts from sTrainerTowerOpponent), the floor is cleared, and a loss sends
+// the player back out of the challenge at the lobby (TrainerTower_EventScript_WarpToLobbyLost, ..._LostChallenge).
 
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
 
 const session = useGame();
 
-const MEWTWO = { species: 'MEWTWO', level: 100, moves: ['PSYCHIC'] };
+const MEWTWO = { species: 'MEWTWO', level: 70, moves: ['PSYCHIC'] };
+const RATTATA = { species: 'RATTATA', level: 5, moves: ['TACKLE'] };
 
 /** Start in the lobby, below the entry trigger at (9, 7); the tower's data is in by then (Assets.init). */
-async function lobby(party = [MEWTWO]): Promise<Game> {
-  return session.start({ start: 'after-rival', map: 'TrainerTower_Lobby', x: 9, y: 9, party });
+async function lobby(party = [MEWTWO], boost = true): Promise<Game> {
+  const game = await session.start({ start: 'after-rival', map: 'TrainerTower_Lobby', x: 9, y: 9, party });
+  // So that the battles are won whatever the dice say: the floors' mons come at the party's top level with EVs
+  if (boost) {
+    await game.eval((t) => {
+      for (const m of t.state!.party) {
+        m.hp = m.maxHP = 999;
+        m.stats = { hp: 999, attack: 999, defense: 999, speed: 999, spAttack: 999, spDefense: 999 };
+      }
+    });
+  }
+  return game;
 }
+
+interface SeenBattle {
+  flags: number;
+  /** The foes' battle mons as "SPECIES:level" */
+  foes: string[];
+  /** Each battle message as it was expanded (gDisplayedStringBattle) */
+  msgs: string[];
+  /** The palette tags of the visible GBA sprites (a trainer front pic's is its TRAINER_PIC_*) */
+  tags: number[];
+}
+
+/**
+ * Record every battle from now on, tick by tick in the page (messages and sprites last only a few ticks), until
+ * `stopWatching`: resolves with the battles seen.
+ */
+async function watchBattles(game: Game): Promise<{ done: Promise<SeenBattle[]> }> {
+  await game.eval(() => {
+    const w = window as any;
+    w.__ttBattles = [];
+    w.__ttIn = false;
+    w.__ttStop = false;
+  });
+  const done = game.watch(
+    (t) => {
+      const w = window as any;
+      const b = t.battle();
+      if (b && b.mons.length) {
+        if (!w.__ttIn) {
+          w.__ttIn = true;
+          w.__ttBattles.push({ flags: b.typeFlags, foes: [], msgs: [], tags: [] });
+        }
+        const cur = w.__ttBattles[w.__ttBattles.length - 1];
+        for (let i = 1; i < b.mons.length; i += 2) {
+          const k = `${b.mons[i].species}:${b.mons[i].level}`;
+          if (b.mons[i].species && b.mons[i].species !== 'NONE' && !cur.foes.includes(k)) cur.foes.push(k);
+        }
+        const msg = b.message?.trim(); // (consecutive repeats are one message)
+        if (msg && cur.msgs[cur.msgs.length - 1] !== msg) cur.msgs.push(msg);
+        for (const sp of t.gbaSprites()) if (!sp.invisible && !cur.tags.includes(sp.paletteTag)) cur.tags.push(sp.paletteTag);
+      } else w.__ttIn = false;
+      return w.__ttStop ? (w.__ttBattles as SeenBattle[]) : undefined;
+    },
+    { maxFrames: 1_000_000, what: 'the battles' },
+  );
+  return { done }; // (not the promise itself: an async function would wait for it)
+}
+
+async function stopWatching(game: Game, watching: { done: Promise<SeenBattle[]> }): Promise<SeenBattle[]> {
+  await game.eval(() => void ((window as any).__ttStop = true));
+  return watching.done;
+}
+
+/**
+ * Walk onto a trigger `at` (null: already there) and mash through the floor's `battles` battles until the script is over: on the floor, or
+ * (`lost`) back in the lobby once the receptionist has ended the challenge.
+ */
+async function fightFloor(game: Game, at: [number, number] | null, battles: number, lost = false, since?: number): Promise<void> {
+  since ??= await game.mark();
+  await game.eval((_t, since, n, lost) => void Object.assign(window as any, { __ttSince: since, __ttN: n, __ttLost: lost }), since, battles, lost);
+  if (at) await game.eval((t, x, y) => t.walkTo(x, y), at[0], at[1]);
+  await game.mashUntil(
+    (t) => {
+      const w = window as any;
+      return (
+        t.events(w.__ttSince).filter((e) => e.type === 'battleEnd').length >= w.__ttN &&
+        t.idle() &&
+        !t.field()!.script &&
+        (!w.__ttLost || (t.field()!.map === 'TrainerTower_Lobby' && t.var('VAR_MAP_SCENE_TRAINER_TOWER') === 0))
+      );
+    },
+    { what: "the floor's battles", maxFrames: 200_000, timeout: 600_000 },
+  );
+}
+
+/**
+ * A trainer's speech as the battle prints it: TT_ConvertEasyChatMessageToString of challenge `type`'s floor
+ * `floor`, trainer `trainer`, speech `which`, decoded as t.battle().message decodes.
+ */
+function speech(game: Game, type: number, floor: number, trainer: number, which: 'speechWin' | 'speechLose') {
+  return game.eval(
+    async (t, type, floor, trainer, which) => {
+      const tt = await new Function('p', 'return import(p)')('/src/world/trainerTower.ts');
+      const s = (window as any).game.scene.getScene('Overworld');
+      const d = tt.trainerTowerData();
+      const words = d.floors[d.sets[type][floor]].trainers[trainer][which];
+      const bytes = tt.TT_ConvertEasyChatMessageToString(t.state, words);
+      return (s.charmap.decodePlain(bytes.slice(0, bytes.indexOf(0xff))) as string).replace(/\\[nlp]|\s+/g, ' ').trim();
+    },
+    type,
+    floor,
+    trainer,
+    which,
+  );
+}
+
+/** A trainer's name (the raw decomp string without its `$`). */
+function trainerName(game: Game, type: number, floor: number, trainer: number) {
+  return game.eval(
+    async (_t, type, floor, trainer) => {
+      const tt = await new Function('p', 'return import(p)')('/src/world/trainerTower.ts');
+      const d = tt.trainerTowerData();
+      return (d.floors[d.sets[type][floor]].trainers[trainer].name as string).replace(/\$$/, '');
+    },
+    type,
+    floor,
+    trainer,
+  );
+}
+
+const flags = (game: Game, ...names: string[]) => game.eval((t, names) => names.reduce((f, n) => f | t.state!.defines.require(n), 0), names);
+const define = (game: Game, name: string) => game.eval((t, name) => t.state!.defines.require(name), name);
 
 /** A multichoice menu `name` (MULTICHOICE_*) opened since window.__ttSince. */
 async function menuOpened(game: Game, name: string, mash: boolean): Promise<void> {
@@ -76,8 +199,10 @@ function stringVar4(game: Game) {
   });
 }
 
-test('the receptionist starts a Single challenge; 1F has its trainer; the battle is reached; the timer runs', async () => {
-  const game = await lobby();
+test('a Single challenge: 1F has its trainer, the battle is won (the opponent, the party\'s level, the lose text); the timer runs', async () => {
+  const game = await lobby([MEWTWO, RATTATA]);
+  // The SET battle style: no "Will you change POKéMON?" between the foe's two mons (the mash would answer YES)
+  await game.eval((t) => void (t.state!.battleStyleSet = true));
   await startChallenge(game, 0);
   let rec = await record(game);
   expect(rec).toMatchObject({ id: 0, floorsCleared: 0, spokeToOwner: false, validated: true });
@@ -112,17 +237,30 @@ test('the receptionist starts a Single challenge; 1F has its trainer; the battle
   // The timer kept counting through the warp (ON_RESUME's ttower_resumetimer)
   expect((await record(game)).timer).toBeGreaterThan(rec.timer);
 
-  // The singles trigger at (10, 13): the trainer walks up, says his intro (gStringVar4), the battle (stand-in)
+  // The singles trigger at (10, 13): the trainer walks up and says his intro (gStringVar4)
+  const watching = await watchBattles(game);
   const since = await game.mark();
   await game.eval((t) => t.walkTo(10, 13));
   const intro = await game.mashUntil((t) => t.message(), { what: 'the intro speech', maxFrames: 4000 });
   expect(intro).toBe(await stringVar4(game));
   expect(intro!.length).toBeGreaterThan(5);
-  await game.eval((_t, since) => ((window as any).__ttSince = since), since);
-  await game.mashUntil((t) => t.events((window as any).__ttSince).some((e) => e.type === 'trainerTowerBattle'), { what: 'the battle' });
-  const battle = await game.waitForEvent('trainerTowerBattle', { since });
-  expect(battle).toMatchObject({ challengeType: 0, floor: 0, trainer: 0 });
-  await game.mashUntil((t) => t.idle() && !t.field()!.script, { what: 'the floor cleared' });
+  // The battle (DoTrainerTowerBattle): won, the floor cleared
+  await fightFloor(game, null, 1, false, since);
+  const [battle] = await stopWatching(game, watching);
+  expect(await game.waitForEvent('battleStart', { since })).toMatchObject({ flags: await flags(game, 'BATTLE_TYPE_TRAINER', 'BATTLE_TYPE_TRAINER_TOWER'), trainer: 0 });
+  // BattleSetup_GetBattleTowerBattleTransition: the foes are at the party's top level, never below the lead's
+  expect(await game.waitForEvent('battleTransition', { since })).toMatchObject({ transition: await define(game, 'B_TRANSITION_BIG_POKEBALL') });
+  // BuildEnemyParty: sSingleBattleChallengeMonIdxs[0] = ALBERTO's FERALIGATR and KANGASKHAN, at Lv70 (MEWTWO's, not RATTATA's)
+  expect(battle.foes).toEqual(['FERALIGATR:70', 'KANGASKHAN:70']);
+  // battle_message.c's BATTLE_TYPE_TRAINER_TOWER paths: GetTrainerTowerOpponentClass / Name, the lose text
+  expect(battle.msgs).toContain('SAILOR ALBERTO would like to battle!');
+  const lose = await speech(game, 0, 0, 0, 'speechLose');
+  const won = battle.msgs.findIndex((m) => m === 'Player defeated SAILOR ALBERTO!');
+  expect(won).toBeGreaterThan(0);
+  expect(battle.msgs[won + 1]).toBe(lose);
+  // battle_controller_opponent.c: GetTrainerTowerTrainerFrontSpriteId (gFacilityClassToPicIndex[FACILITY_CLASS_SAILOR])
+  expect(battle.tags).toContain(await define(game, 'TRAINER_PIC_SAILOR'));
+  expect(await game.eval((t) => t.lastOutcome())).toBe('B_OUTCOME_WON');
   rec = await record(game);
   expect(rec.floorsCleared).toBe(1);
 
@@ -153,10 +291,11 @@ test('the receptionist starts a Single challenge; 1F has its trainer; the battle
   const frames = (await record(game)).timer;
   expect(Number(min) * 60 + Number(sec)).toBeLessThanOrEqual(Math.floor(frames / 60));
   expect(Number(min) * 60 + Number(sec)).toBeGreaterThan(0);
-});
+}, 400_000);
 
-test('a Double challenge swaps in 1F_DOUBLES and the pair\'s graphics; their trigger reaches the battle', async () => {
-  const game = await lobby([MEWTWO, MEWTWO]);
+test('a Double challenge swaps in 1F_DOUBLES and the pair\'s graphics; the double battles on 1F and 2F are won (both trainers\' texts)', async () => {
+  const surfer = { ...MEWTWO, moves: ['SURF'] }; // HOUNDOOM is immune to PSYCHIC; SURF hits both foes
+  const game = await lobby([surfer, surfer]);
   await startChallenge(game, 1);
   expect((await record(game)).id).toBe(1);
   await takeWarp(game, 9, 2, 'TrainerTower_1F');
@@ -172,14 +311,87 @@ test('a Double challenge swaps in 1F_DOUBLES and the pair\'s graphics; their tri
   expect(floor.objects).toHaveLength(2);
 
   // The 1F_DOUBLES grid is the one in use: TrainerTower_EventScript_DoubleBattleTriggerTop at (9, 12)
+  const watching = await watchBattles(game);
   const since = await game.mark();
-  await game.eval((t) => t.walkTo(9, 12));
-  await game.eval((_t, since) => ((window as any).__ttSince = since), since);
-  await game.mashUntil((t) => t.events((window as any).__ttSince).some((e) => e.type === 'trainerTowerBattle'), { what: 'the double battle', maxFrames: 6000 });
-  expect(await game.waitForEvent('trainerTowerBattle', { since })).toMatchObject({ challengeType: 1, floor: 0 });
-  await game.mashUntil((t) => t.idle() && !t.field()!.script, { what: 'the floor cleared' });
+  await fightFloor(game, [9, 12], 1);
+  const [battle] = await stopWatching(game, watching);
+  expect(await game.waitForEvent('battleStart', { since })).toMatchObject({
+    flags: await flags(game, 'BATTLE_TYPE_TRAINER', 'BATTLE_TYPE_TRAINER_TOWER', 'BATTLE_TYPE_DOUBLE'),
+  });
+  // sDoubleBattleChallengeMonIdxs[0]: JEN's JOLTEON and KIRA's ESPEON
+  expect(battle.foes).toEqual(['JOLTEON:70', 'ESPEON:70']);
+  expect(battle.msgs).toContain('TWINS JEN & KIRA would like to battle!');
+  expect(battle.tags).toContain(await define(game, 'TRAINER_PIC_TWINS'));
+  // BattleScript_BattleTowerTrainerBattleWon: STRINGID_TRAINER1LOSETEXT, then (DOUBLE) STRINGID_TRAINER2LOSETEXT (the
+  // twins both say WAAAH!, so 2F's pair shows the two texts apart)
+  let won = battle.msgs.indexOf('Player defeated TWINS JEN & KIRA!');
+  expect(won).toBeGreaterThan(0);
+  expect(battle.msgs[won + 1]).toBe(await speech(game, 1, 0, 0, 'speechLose'));
   expect((await record(game)).floorsCleared).toBe(1);
-});
+
+  // 2F: JO & HALEY (CRUSH KIN), sDoubleBattleChallengeMonIdxs[1]: JO's ALAKAZAM and HALEY's HOUNDOOM
+  await takeWarp(game, 15, 6, 'TrainerTower_2F');
+  const watching2 = await watchBattles(game);
+  await fightFloor(game, [9, 12], 1);
+  const [battle2] = await stopWatching(game, watching2);
+  expect(battle2.foes).toEqual(['ALAKAZAM:70', 'HOUNDOOM:70']);
+  expect(battle2.msgs).toContain('CRUSH KIN JO & HALEY would like to battle!');
+  expect(battle2.tags).toContain(await define(game, 'TRAINER_PIC_CRUSH_KIN'));
+  won = battle2.msgs.indexOf('Player defeated CRUSH KIN JO & HALEY!');
+  expect(won).toBeGreaterThan(0);
+  const lose1 = await speech(game, 1, 1, 0, 'speechLose');
+  const lose2 = await speech(game, 1, 1, 1, 'speechLose');
+  expect(lose1).not.toBe(lose2);
+  expect(battle2.msgs.slice(won + 1, won + 3)).toEqual([lose1, lose2]);
+  expect((await record(game)).floorsCleared).toBe(2);
+}, 400_000);
+
+test('a Knockout challenge: three battles in a row on 1F, one mon each at the party\'s level', async () => {
+  const game = await lobby();
+  await startChallenge(game, 2);
+  await takeWarp(game, 9, 2, 'TrainerTower_1F');
+  const watching = await watchBattles(game);
+  await fightFloor(game, [10, 13], 3);
+  const battles = await stopWatching(game, watching);
+  expect(battles).toHaveLength(3);
+  const single = await flags(game, 'BATTLE_TYPE_TRAINER', 'BATTLE_TYPE_TRAINER_TOWER');
+  // sKnockoutChallengeMonIdxs[0] = {0, 2, 4}: JORDY's MAGBY, ERNEST's TOGEPI, GABRIEL's SMOOCHUM
+  const kinds = await flags(game, 'BATTLE_TYPE_TRAINER', 'BATTLE_TYPE_TRAINER_TOWER', 'BATTLE_TYPE_DOUBLE');
+  expect(battles.map((b) => [b.flags & kinds, b.foes])).toEqual([
+    [single, ['MAGBY:70']],
+    [single, ['TOGEPI:70']],
+    [single, ['SMOOCHUM:70']],
+  ]);
+  for (let i = 0; i < 3; i++) {
+    const name = await trainerName(game, 2, 0, i);
+    expect(battles[i].msgs.some((m) => m.endsWith(`${name} would like to battle!`))).toBe(true);
+    expect(battles[i].msgs).toContain(await speech(game, 2, 0, i, 'speechLose'));
+  }
+  expect((await record(game)).floorsCleared).toBe(1);
+}, 400_000);
+
+test('a lost battle: the trainer\'s win text, no white-out; healed and back in the lobby, where the challenge ends', async () => {
+  const game = await lobby([{ species: 'MAGIKARP', level: 2, moves: ['SPLASH'] }], false);
+  await startChallenge(game, 0);
+  await takeWarp(game, 9, 2, 'TrainerTower_1F');
+  const watching = await watchBattles(game);
+  const since = await game.mark();
+  await fightFloor(game, [10, 13], 1, true);
+  const [battle] = await stopWatching(game, watching);
+  expect(await game.eval((t) => t.lastOutcome())).toBe('B_OUTCOME_LOST');
+  expect(battle.foes[0]).toBe('FERALIGATR:2');
+  // BattleScript_BattleTowerLost: the trainer slides back in and says his win text (STRINGID_TRAINER1WINTEXT)
+  expect(battle.msgs).toContain(await speech(game, 0, 0, 0, 'speechWin'));
+  expect(battle.msgs.some((m) => /whited out/i.test(m))).toBe(false);
+  const events = (await game.eval((t, since) => t.events(since), since)).map((e) => e.type);
+  expect(events).not.toContain('whiteOut');
+  // TrainerTower_EventScript_WarpToLobbyLost: HealPlayerParty, ttower_setlost, the lobby; the receptionist's TOO BAD
+  const party = await game.eval((t) => t.party());
+  expect(party[0].hp).toBe(party[0].maxHP);
+  expect(await game.eval((t) => t.field())).toMatchObject({ map: 'TrainerTower_Lobby' });
+  const rec = await record(game);
+  expect(rec).toMatchObject({ hasLost: false, floorsCleared: 0 });
+}, 400_000);
 
 test('a lost challenge: back in the lobby the receptionist ends it; leaving the tower ends it too', async () => {
   const game = await lobby();
@@ -203,10 +415,11 @@ test('a lost challenge: back in the lobby the receptionist ends it; leaving the 
 });
 
 test('whiting out during a challenge: back to the lobby (SetWhiteoutRespawnWarpAndHealerNpc), the challenge over', async () => {
-  const game = await lobby([{ species: 'MAGIKARP', level: 2, moves: ['SPLASH'] }]);
+  const game = await lobby([{ species: 'MAGIKARP', level: 2, moves: ['SPLASH'] }], false);
   await startChallenge(game, 0);
   await takeWarp(game, 9, 2, 'TrainerTower_1F');
-  // Any lost battle will do until the tower's own are in (unit 2): spokeToOwner is FALSE, so the challenge ends
+  // The tower's own battles never white out (CB2_EndTrainerTowerBattle); any other lost battle will do (a fainting
+  // poison step would too): spokeToOwner is FALSE, so the challenge ends
   const since = await game.mark();
   await game.eval((t) => t.startWildBattle({ species: 'MEWTWO', level: 100, moves: ['PSYCHIC'] }));
   await game.eval((_t, since) => ((window as any).__ttSince = since), since);
