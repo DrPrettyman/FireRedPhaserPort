@@ -5,6 +5,7 @@
 
 import type Phaser from 'phaser';
 import { K } from '../battle/constants';
+import { GetMenuCursorDimensionByFont } from '../gba/menu';
 import { PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import { ConvertInternationalString, StringLength } from '../menus/mail';
@@ -83,7 +84,7 @@ export class MailboxPc {
         itemPrintFunc: (index, y) => this.itemPrintFunc(win, index, y),
         totalItems: mgr.count + 1,
         maxShowed: 8,
-        item_X: this.fonts.get(FONT_NORMAL).info.maxLetterWidth, // GetMenuCursorDimensionByFont(FONT_NORMAL, 0)
+        item_X: GetMenuCursorDimensionByFont(FONT_NORMAL, 0), // 8, not the font's maxLetterWidth (10)
         cursor_X: 0,
         upText_Y: 10,
         itemVerticalPadding: 2,

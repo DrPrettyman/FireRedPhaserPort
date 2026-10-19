@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { K } from '../battle/constants';
+import { GetMenuCursorDimensionByFont } from '../gba/menu';
 import { PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import { CB2_ReturnToField } from '../menus/fieldCallbacks';
@@ -206,7 +207,7 @@ export class PlayerPcMenu {
   private openWindow(rect: typeof TOP_MENU_RECT, labels: string[], cursorPos: number): void {
     // SetStdWindowBorderStyle + PrintTextArray / AddItemMenuActionTextPrinters + Menu_InitCursor
     this.win = new MenuWindow(this.scene, rect, this.fonts, this.input, 'std');
-    const cursorWidth = this.fonts.get(FONT_NORMAL).info.maxLetterWidth; // GetMenuCursorDimensionByFont(FONT_NORMAL, 0)
+    const cursorWidth = GetMenuCursorDimensionByFont(FONT_NORMAL, 0); // 8, not the font's maxLetterWidth (10)
     labels.forEach((label, i) => this.win!.print(this.host.text(label), cursorWidth, 2 + i * 16));
     this.count = labels.length;
     this.cursorPos = cursorPos;
