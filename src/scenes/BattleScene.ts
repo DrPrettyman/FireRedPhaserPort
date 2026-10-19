@@ -32,7 +32,6 @@ import {
   SetVBlankCallback,
   START_BUTTON,
 } from '../gba/main';
-import { PlayBGM, PlayCry_Normal, PlayFanfare, PlaySE } from '../gba/sound';
 import { initGbaText } from '../gba/window';
 import { prepareMenus } from '../menus/host';
 import { NAMING_SCREEN_CAUGHT_MON, namingScreenGfxSymbols } from '../menus/namingScreen';
@@ -223,20 +222,10 @@ export class BattleScene extends GbaHostScene implements BattleUi {
     return gMain.newKeys !== 0;
   }
 
-  // Pass-throughs to sound.ts for the callers not yet converted (AUDIO_PLAN.md decision 21): new code calls
-  // gba/sound.ts directly with the C's arguments (cry modes, pans); W-sound 8 deletes these hooks.
-  playSE(songId: number): void {
-    PlaySE(songId);
-  }
-  playCry(species: number): void {
-    PlayCry_Normal(species, 0);
-  }
-  playBGM(songId: number): void {
-    PlayBGM(songId);
-  }
-  playFanfare(songId: number): void {
-    PlayFanfare(songId);
-  }
+  playSE(_songId: number): void {}
+  playCry(_species: number): void {}
+  playBGM(_songId: number): void {}
+  playFanfare(_songId: number): void {}
 
   addBagItem(itemId: number, count: number): void {
     this.start.state.bag.add(itemId, count);
