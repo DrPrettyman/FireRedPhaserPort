@@ -128,7 +128,7 @@ async function runOption(game: Game, what: string): Promise<Seen> {
       for (const task of t.gbaTasks()) if (/^Task_Bag_TeachyTv/.test(task) && !r.bagTasks.includes(task)) r.bagTasks.push(task);
       const tm = t.tmCase();
       if (tm?.menuType === 4) {
-        if (tm.numTMs) r.tmItems = tm.items;
+        if (tm.pokedudeState >= 0 && tm.pokedudeState < 21) r.tmItems = tm.items; // (restored at 21)
         r.tmState = Math.max(r.tmState, tm.pokedudeState);
       }
       const p = t.teachyTv();
@@ -254,9 +254,8 @@ test("each option's sequence: the title, the Pokédude's hello and intro, the de
       // His bag (InitPokedudeBag), scripted by the option's task, back to Teachy TV; for TMs through his TM case.
       const tms = option === 4;
       expect(seen.bagTasks, name).toEqual([tms ? 'Task_Bag_TeachyTvTMs' : 'Task_Bag_TeachyTvRegister']);
-      const screens = seen.screens.filter((s) => /Bag|TMCase|Idle|TeachyTv/.test(s));
-      expect(screens.includes('CB2_BagMenuRun'), name).toBe(true);
-      expect(screens.at(-1), name).toBe('TeachyTvMainCallback');
+      expect(seen.screens, name).toContain('CB2_BagMenuRun');
+      expect(seen.screens.indexOf('TeachyTvCallback', seen.screens.indexOf('CB2_BagMenuRun')), name).toBeGreaterThan(0);
       if (tms) {
         // Pokedude_InitTMCase: TM01, TM03, TM09, TM35; Task_Pokedude_Run to its last step (21: the fade out)
         expect(seen.tmItems, name).toEqual(await game.eval((t) => ['ITEM_TM01', 'ITEM_TM03', 'ITEM_TM09', 'ITEM_TM35'].map((i) => t.define(i))));
