@@ -110,8 +110,6 @@ Loose ends:
 - Dynamic-graphics objects (`OBJ_EVENT_GFX_VAR_*`) are only checked on Viridian's old man; other maps that use them
   (e.g. rival appearances) are untested. A script that sets `VAR_OBJ_GFX_ID_*` and then `addobject`s in the same
   run only works if that sprite was already preloaded; otherwise it logs `[overworld] no sprite loaded`.
-- Battle anims: with the BG dimmed (Thunder Shock, String Shot), faint diagonal lines show at the healthbox
-  corners. Compare against the real game (mGBA screenshot) and fix it or record it as matching the GBA.
 
 ## Checklist
 

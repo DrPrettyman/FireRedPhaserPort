@@ -315,3 +315,36 @@ test('Reflect: the foe moves to an anim BG under the wall and comes back', async
   await game.waitForActionMenu();
   expect((await game.eval((t) => t.battle()))!.mons[1].spriteInvisible).toBe(false);
 });
+
+// AnimTask_BlendBattleAnimPal(F_PAL_BG) blends BG palettes 1-3 only (GetBattlePalettesMask: 0xE). The healthboxes
+// are sprites in their own OBJ palette (TAG_HEALTHBOX_PAL), so they keep their colours, shadow included: the
+// shadow's 1-px edge (healthbox palette colour 5) stays lit next to the dimmed BG and shows as faint diagonal lines
+// at the healthbox corners. That's how the GBA draws it too (docs/DEV_NOTES.md, battle anims).
+test('Thunder Shock dims BG palettes 1-3 and leaves the healthboxes as they are', async () => {
+  const game = await session.start({ ...ROUTE1, speed: 1, party: [{ species: 'PIKACHU', level: 30, moves: ['THUNDER_SHOCK'] }] });
+  await game.eval((t) => t.startWildBattle({ species: 'SNORLAX', level: 30, moves: ['SPLASH'] }));
+  await game.waitForActionMenu();
+  // (the palettes as the action menu shows them, to compare against)
+  await game.eval(async () => {
+    const w = window as unknown as Record<string, unknown>;
+    w.__pal = await new Function("return import('/src/gba/palette.ts')")();
+    w.__spr = await new Function("return import('/src/gba/sprite.ts')")();
+    w.__before = (w.__pal as { gPlttBufferFaded: Uint16Array }).gPlttBufferFaded.slice();
+  });
+  const dimmed = game.watch((t) => {
+    const w = window as unknown as Record<string, any>;
+    const faded = w.__pal.gPlttBufferFaded;
+    const changed = (pal: number) => [...Array(16).keys()].some((i) => faded[pal * 16 + i] !== w.__before[pal * 16 + i]);
+    if (!changed(2)) return null;
+    const hb = 16 + w.__spr.IndexOfSpritePaletteTag(t.define('TAG_HEALTHBOX_PAL'));
+    // BG palettes 0-1 are the textbox's and the menu windows', 2-4 the terrain's (battle_bg.c); 5 is left out:
+    // picking the move changes it too
+    return { bg: [0, 1, 2, 3, 4].filter(changed), healthbox: changed(hb) };
+  }, { what: 'the BG dimmed' });
+  const since = await useFirstMove(game);
+  expect(await animEvent(game, 'battleAnim', 'Move_THUNDER_SHOCK', since)).toMatchObject({ ran: true });
+  const d = await dimmed;
+  expect(d.bg).toEqual([1, 2, 3]);
+  expect(d.healthbox).toBe(false);
+  await animEvent(game, 'battleAnimEnd', 'Move_THUNDER_SHOCK', since);
+});

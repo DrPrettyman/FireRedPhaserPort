@@ -1451,6 +1451,12 @@ this is the next level down. When you add or change a subsystem, update its entr
   `ScanlineEffect_InitWave` (src/gba/scanline.ts) for a travelling sine wave. An e2e test can read module state
   in the page with `await new Function('p', 'return import(p)')('/src/gba/hw.ts')` (a bare `import()` in the
   function gets rewritten by Vitest); see battleAnims.2d.test.ts's `hblankLines`.
+  **Dimmed BG and the healthboxes:** F_PAL_BG selects BG palettes 1-3 only (GetBattlePalettesMask's 0xE): the
+  textbox's BG palette 0, the terrain's third palette (4) and every OBJ palette stay as they are unless the script
+  selects them too. The healthboxes are sprites in TAG_HEALTHBOX_PAL, shadow included, so while Thunder Shock or
+  String Shot dims the BG the shadow keeps its colours, and its 1-px edge (healthbox palette colour 5, RGB(123, 148,
+  131)) shows as faint stepped diagonal lines at the boxes' bottom corners. The GBA draws it the same way (from the
+  C and the hardware rules; not compared against an mGBA screenshot). Test: battleAnims.test.ts's Thunder Shock.
   **Sounds:** every anim file calls `gba/sound.ts` directly, as the C does: PlaySE12WithPanning (and PlaySE1 / 2
   WithPanning, PlaySE) with the pan BattleAnimAdjustPanning / BattleAnimAdjustPanning2 give (SOUND_PAN_ATTACKER
   -64 .. SOUND_PAN_TARGET 63, negated for the opponent's side), SE12PanpotControl from `setpan` and the panse

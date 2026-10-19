@@ -71,7 +71,7 @@ export interface SpecialEnv {
 /** A gSpecials entry (data/specials.inc). The return value is stored by `specialvar`. */
 export type Special = (env: SpecialEnv) => number | void;
 
-/** Specials with no effect yet because the system they feed (quest log) doesn't exist. */
+/** Link-play specials, which have nothing to do in a game without link play. */
 const NO_OP = [
   'InitUnionRoom', // wireless only (and stubbed out from REVISION 0xA): CableClub_OnResume in every Pokémon Center
   'CloseLink', // link play: nothing was opened (TryBattleLinkup below never connects)

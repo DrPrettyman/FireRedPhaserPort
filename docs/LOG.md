@@ -4335,3 +4335,24 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
     the action menu with the cursor on BAG: the A that should open the bag never landed, and the test hung rather
     than hitting waitForBag's 30 s limit (an eval that never returned). Not fixed: listed in STATUS "Loose ends".
 - Typecheck clean, 745 unit tests.
+
+### The diagonal lines at the healthboxes in dimmed-BG battle anims (STATUS loose end)
+
+- Reproduced with Thunder Shock and String Shot (Pikachu vs Snorlax on Route 1): the port's own 240x160 frame
+  (`renderFrame` called in the page) before and during the dim, compared pixel by pixel. The lines are a 1-px
+  stepped edge along the diagonal ends of the healthbox's shadow, at the boxes' bottom-left and bottom-right
+  corners: healthbox palette colour 5 (RGB(123, 148, 131), the shadow's edge next to colour 6, the shadow itself).
+  Before the dim it sits between the shadow and the light sky / grass; once the BG is darkened to about the same
+  tone it reads as a faint line.
+- Cause: the healthbox and its shadow are sprites (healthbox_singles_*.png, OBJ palette TAG_HEALTHBOX_PAL), and
+  F_PAL_BG selects BG palettes 1-3 only (GetBattlePalettesMask's 0xE), both in Thunder Shock's
+  AnimTask_BlendBattleAnimPal (BlendPalette) and in String Shot's AnimSimplePaletteBlend (UnpackSelectedBattlePalettes,
+  then BeginNormalPaletteFade). So the whole healthbox, its shadow and that edge stay undimmed, on the GBA as in
+  the port. Nothing in the port differs: the same mask, BlendPalette and palette data. Not a bug: no change.
+- Not compared against the real game: mGBA 0.10.5's CLI has no scripting option and the GDB stub can't press
+  buttons, so getting a battle with one of these moves on screen would take well over the half hour budgeted.
+  Decided from the C and the hardware rules (OBJ and BG palettes are separate; the blend writes BG palettes 1-3).
+- Recorded in docs/DEV_NOTES.md (battle anims) and checked by a new battleAnims.test.ts test: during Thunder
+  Shock's dim BG palettes 1-3 change, 0 and 4 don't, and the healthbox palette doesn't.
+- Also: specials.ts' NO_OP comment said "quest log"; it now holds only link-play specials.
+- Typecheck, unit tests and tests/e2e/battleAnims.test.ts.
