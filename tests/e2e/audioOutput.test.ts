@@ -84,7 +84,8 @@ test('?audio=tone: the test tone reaches the speakers through the worklet, and M
     return s && s.frames > 30 && s.peak > 0 && s;
   }, { what: 'the tone to play' });
   expect(playing.peak).toBe(0.3125);
-  expect(playing.dropped).toBe(0);
+  // `dropped` isn't checked: a host stall (the machine under load) ticks up to 5 frames at once and the worklet
+  // drops what overflows its buffer, which is wall-clock behaviour, not a bug (tests/README.md rule 9).
 
   await game.realKey('KeyM');
   await game.waitFor((t) => {

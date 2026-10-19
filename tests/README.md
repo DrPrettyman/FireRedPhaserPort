@@ -111,6 +111,9 @@ A test fails if the page throws or logs `console.error`. When a test fails, the 
 8. `mashUntil` / `waitFor` also have a wall-clock `timeout` (120 s by default). A whole battle mashed through runs
    ~10k ticks, which at load ~230 took longer than that (storyLeague's Champion, batch 2 of SIDE_PLAN.md): give
    long mashes a larger `timeout` and let the frame budget (`maxFrames`) be the real bound.
+9. Don't assert real-time output statistics (the audio worklet's `dropped` / `underruns`): the browser's frame
+   loop stalls under load and ticks several frames at once, so they depend on the machine, not the code
+   (audioOutput's tone test failed this way at load ~90 in batch 9).
 
 Runs are close to deterministic, not exactly: the RNG is seeded, but the number of logic ticks between
 two harness calls depends on wall-clock time. Write scenarios that hold whatever the dice say.
