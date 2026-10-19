@@ -15,6 +15,7 @@ import type { PlayTime } from './playTime';
 import type { BoxPokemon } from './PokemonStorage';
 import type { DayCareMail, DaycareMon } from '../world/daycare';
 import type { TrainerTowerRecord } from './trainerTowerRecord';
+import { loadQuestLogScenes, questLogScenesSave, type QuestLogSceneSave } from '../world/questLog';
 import type { FameCheckerSaveData } from './fameChecker';
 import type { Mail } from '../world/mail';
 
@@ -23,9 +24,9 @@ import type { Mail } from '../world/mail';
  * are brought up to date by `upgradeSave` (version 1 had no gameStats, version 2 no options.sound, version 3 had
  * daycareStepCounter instead of daycare and no route5DayCareMon, version 4 no easyChat, version 5 no savedMusic,
  * version 6 no weather, version 7 no trainerTower, version 8 no gcnLinkFlags, version 9 no fameChecker,
- * version 10 no mail, version 11 no daycare mail).
+ * version 10 no mail, version 11 no questLog, version 12 no daycare mail).
  */
-export const SAVE_VERSION = 12;
+export const SAVE_VERSION = 13;
 
 /** The localStorage key of the one save slot. */
 export const SAVE_STORAGE_KEY = 'firered-phaser:save';
@@ -68,7 +69,7 @@ export type MonSave = Pokemon;
 /** struct DaycareMon (world/daycare.ts). */
 export interface DaycareMonSave {
   mon: BoxMonSave | null;
-  /** struct DayCareMail; since version 12 (absent: none, as every daycare mon of an older save) */
+  /** struct DayCareMail; since version 13 (absent: none, as every daycare mon of an older save) */
   mail?: DayCareMail;
   steps: number;
 }
@@ -164,6 +165,8 @@ export interface SaveData {
    * in an older save: the new-game slots (ClearMailData) stay (no mon held mail then).
    */
   mail?: Mail[];
+  /** gSaveBlock1Ptr->questLog[QUEST_LOG_SCENE_COUNT] (world/questLog.ts); since version 12. */
+  questLog: QuestLogSceneSave[];
 
   // ---- gPokemonStoragePtr
   storage: {
@@ -283,6 +286,7 @@ export function toSaveData(state: GameState): SaveData {
     trainerTower: { challengeId: state.towerChallengeId, records: state.trainerTower.map((r) => ({ ...r })) },
     fameChecker: state.fameChecker.map((p) => ({ ...p })),
     mail: structuredClone(state.mail),
+    questLog: questLogScenesSave(state.questLog),
     storage: {
       currentBox: st.currentBox,
       boxes: st.boxes.map((box) => box.map((mon) => mon && boxMonSave(mon))),
@@ -364,6 +368,8 @@ export function fromSaveData(data: SaveData, state: GameState): GameState {
   if (data.fameChecker) state.fameChecker.forEach((p, i) => Object.assign(p, data.fameChecker![i]));
   if (data.mail) state.mail.forEach((_, i) => (state.mail[i] = clone(data.mail![i] ?? state.mail[i])));
 
+  state.questLog = loadQuestLogScenes(data.questLog);
+
   const st = state.storage;
   st.currentBox = data.storage.currentBox;
   st.boxes.forEach((box, b) => box.forEach((_, p) => (box[p] = clone(data.storage.boxes[b]?.[p] ?? null))));
@@ -397,12 +403,14 @@ export function upgradeSave(data: SaveData): SaveData {
   if (data?.version === 9) data = { ...data, version: 10 };
   // No mail: fromSaveData keeps the new-game slots (ClearMailData); no mon held mail.
   if (data?.version === 10) data = { ...data, version: 11 };
-  // No daycare mail: a mon left in a daycare before version 12 kept its mail item but lost its slot, which stayed
+  // No quest log scenes (it wasn't ported): CONTINUE has nothing to play back.
+  if (data?.version === 11) data = { ...data, version: 12, questLog: [] };
+  // No daycare mail: a mon left in a daycare before version 13 kept its mail item but lost its slot, which stayed
   // taken; free the party mail slots (0-5) no party mon points at, so they can be used again.
-  if (data?.version === 11) {
+  if (data?.version === 12) {
     const held = new Set(data.party.map((m) => m.mail));
     const mail = data.mail?.map((m, i) => (i < 6 && m.itemId !== 0 && !held.has(i) ? { ...m, itemId: 0 } : m));
-    data = { ...data, version: 12, ...(mail && { mail }) };
+    data = { ...data, version: 13, ...(mail && { mail }) };
   }
   return data;
 }

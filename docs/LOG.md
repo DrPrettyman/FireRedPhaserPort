@@ -3969,6 +3969,31 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
     wasn't pinned down.
 - Typecheck clean, 646 unit tests.
 
+### W-teachy 1: Teachy TV's screen (FIELD_ITEMS_PLAN.md batch 12)
+
+- `menus/teachyTv.ts` is teachy_tv.c whole but the demos: InitTeachyTvController, CB2_ReturnToTeachyTV,
+  SetTeachyTvControllerModeToResume, the main callback (modes 0-2), the BGs (the TV set, the noise, the title, Route 1
+  drawn on BG3 from its layout and tilesets: TeachyTvLoadBg3Map and its tile / palette helpers), the Pokédude's object,
+  the six-option list (four without the TM case) with its scroll arrows and WIN0 darkening, every TTVcmd, the tall
+  grass sprites (the field effect's template on the GBA layer, with the C's subsprite tables), quitting to the bag or
+  the field (Overworld_PlaySpecialMapMusic). menus/itemUse.ts: FieldUseFunc_TeachyTv, InitTeachyTvFromBag,
+  Task_InitTeachyTvFromField. The Pokédude's battles and scripted bag / TM case (units 2-3) go through one seam,
+  PokedudeDemoNotPorted: logged, and the screen comes back as from the demo's end (mode 2: the closing text).
+- Extractor: `graphics/teachy_tv/` in extract_gfx.py's prefixes (gTeachyTv_Gfx, the screen and title tilemaps, the
+  4-palette gTeachyTv_Pal); extract.py reads `src/data/text/teachy_tv.h` with strings.c (strings.c #includes it, the
+  regex only saw strings.c's own text). FieldMenuScene awaits `prepareTeachyTv` for the bag and SELECT screens when
+  the bag holds Teachy TV (the layout is a JSON fetch, the rest graphics).
+- On the way: the grass sprites' callback reads sResources after TeachyTvPrepBattle has freed it (on the GBA, the
+  freed heap during the transition); the port keeps the freed buffer for it (sFreedResources).
+- Tests: tests/e2e/teachyTv.test.ts, 4 tests: the old man's tutorial to the gift and Teachy TV from the bag (five
+  rows, no arrows, MUS_TEACHY_TV_MENU, SELECT ignored from the bag, B back to the bag and the map music); all six
+  options with the TM case, each recorded tick by tick in the page (the texts printed, every TTVcmd in order, mode 2
+  after the skipped demo, grass sprites in the battle options only, MUS_FOLLOW_ME then MUS_TEACHY_TV_MENU, back on
+  the same row), then CANCEL scrolled into view; B mid-sequence (TTVcmd_End's state, the list on the same option);
+  SELECT from the field (HELPCONTEXT_BAG, SELECT and CANCEL back to the field with the controls locked until the
+  fade in). Screenshots of the noise, title, walk-in, hello, the grass, mode 2, the walk off and THE END checked by
+  eye. Typecheck, 646 unit tests; teachyTv, registeredItems and fieldItems e2e pass.
+
 ### W-mail 1: mail's data, the mail screen, the party menu's mail actions (FIELD_ITEMS_PLAN.md, batch 12)
 
 - mail_data.c whole in `world/mail.ts` (no Phaser): struct Mail, ClearMailData / ClearMailStruct, MonHasMail,
@@ -4043,7 +4068,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - daycare.c's struct DayCareMail (`DaycareMon.mail?`, absent = cleared): StorePokemonInDaycare's MonHasMail branch
   (the message, the player's name, the nickname; TakeMailFromMon), TakeSelectedPokemonFromDaycare's GiveMailToMon2,
   ShiftDaycareSlots moving it up, ClearDaycareMonMail, BufferDayCareMonReceivedMail and the special
-  DaycareMonReceivedMail (no FRLG script calls it). Save version 12: the daycare mons' `mail`; upgrading a version 11
+  DaycareMonReceivedMail (no FRLG script calls it). Save version 13 (12 at first; renumbered at the merge after W-qlog 1's 12): the daycare mons' `mail`; upgrading a version 12
   save frees the party mail slots no party mon points at (a mon left in a daycare before kept its mail item but leaked
   its slot).
 - trade_scene.c's GetInGameTradeMail (sInGameTradeMailMessages through extract_trades.py's `mailMessages`; the OT id
@@ -4061,3 +4086,29 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   (+4: the mailbox empty / READ / MOVE TO BAG with the bag full and not / GIVE; ten mails scrolled to the last and
   read; a mon with mail through the Route 5 daycare and read after; DONTAE's Fab Mail read after the trade), passed
   three times in a row; daycare, inGameTrades and pcStorage e2e pass.
+### W-qlog 1: the quest log's recording and the scenes in the save (QUEST_LOG_PLAN.md QL1, batch 12)
+
+- New `world/questLog.ts` (quest_log.c's recording half), `questLogEvents.ts` (quest_log_events.c: the u16 command
+  stream as the C lays it out, RecordEventHeader's repeats, SetQuestLogEvent with its filters, the deferred trainer /
+  link events, QL_EVENT_DEPARTED and QL_EVENT_ARRIVED), `questLogLocations.ts` (field_specials.c's departed
+  locations), `questLogObjects.ts` (QL_RecordObjects), `questLogPlayer.ts` (the gfx transition records); data from
+  the new `tools/extract_quest_log.py` (public/gen/questLog.json: MAP_* group / number / MAPSEC, the location and
+  flag tables, the command sizes). The field's hooks record what the C records: the player's steps
+  (PlayerSetAnimId), the gfx transitions, getting off Surf, Strength, fishing, the VS Seeker, NPC faces and steps
+  (NpcBrain's `onSingleMovement`), the field input that took the controls (gFieldInputRecord), and the frames
+  between actions (QL_TryRunActions while the controls are free). Scenes start at an event (here: leaving one of
+  the 51 buildings / caves / gates, entering a town for the first time) and end when the 128-u16 script or the
+  32-action buffer is full, on a cut (`special QuestLog_CutRecording`, ShowTownMap, ShowDiploma, a white-out, a
+  Victory Road switch, walking into a disabled location), on a rematch, or on a save (SaveQuestLogData from the save
+  dialog and the Hall of Fame, which also sorts the scenes oldest first). GetQuestLogState writes the real state.
+  The save keeps the four scenes: SAVE_VERSION 12 after W-fame's 10 and W-mail's 11 (upgradeSave gives a version 11
+  save none).
+- Found on the way: the after-rival start preset now sets VAR_QLBAK_MAP_LAYOUT as leaving the house does (BackUpMapLayout
+  at the departure's scene start); newGame.test.ts compares the preset against a real playthrough and caught it.
+- Not done (QL2-QL5): playback on CONTINUE (QL_ResetForContinue stands in: the next scene goes after the saved ones),
+  the other events' recorders and texts, the menus' call sites, QL_AvoidDisplay and `goto_if_questlog`.
+- Tests: tests/unit/questLog.test.ts (19: the codecs against the C's byte layout, a scene's head, the frames
+  between actions, the stream filling up after 30 steps, repeats past MAX_CMD_REPEAT, the ring of four and the
+  save's sort, the filters, the departed locations, the save round trip), tests/e2e/questLog.test.ts (3: leave the
+  house, walk, save; Daisy's cut; the fan club). Ran field, playerAvatar, saveContinue, hallOfFame, trainerBattle
+  and newGame e2e files: all pass, nothing in the field changed.

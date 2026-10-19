@@ -165,13 +165,13 @@ describe("the player's PC mailbox data (player_pc.c)", () => {
     Object.assign(gPlayerPcMenuManager, { cursorPos: 0, itemsAbove: 0 });
   });
 
-  it('a version-11 save frees the party mail slots no party mon points at (a daycare mon lost its slot before 12)', () => {
+  it('a version-12 save frees the party mail slots no party mon points at (a daycare mon lost its slot before 13)', () => {
     const { state, d, mon, defines, pokemon } = setup();
     GiveMailToMon(state, mon, d('ITEM_RETRO_MAIL')); // slot 0, held
     state.mail[1].itemId = d('ITEM_WOOD_MAIL'); // slot 1: leaked
     putPcMail(state, 0, d('ITEM_BEAD_MAIL')); // a PC slot stays
     const data = JSON.parse(JSON.stringify(toSaveData(state)));
-    data.version = 11;
+    data.version = 12;
     const fresh = new GameState(defines, [], pokemon, {});
     fromSaveData(data, fresh);
     expect(fresh.mail.map((m) => m.itemId).slice(0, 7)).toEqual([d('ITEM_RETRO_MAIL'), 0, 0, 0, 0, 0, d('ITEM_BEAD_MAIL')]);

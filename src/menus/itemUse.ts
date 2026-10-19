@@ -1,8 +1,8 @@
 // item_use.c: what Use does for each item, from the bag (tasks' data[3] == 0), from the field with SELECT
 // (a registered key item: UseRegisteredKeyItemOnField in menus/registeredItem.ts runs the field func as a task
 // with data[3] == 1) and in battle. The functions are looked up by the names in the item table (fieldUseFunc /
-// battleUseFunc). Uses that need overworld systems that don't exist yet (Teachy TV) aren't
-// in the tables; the bag logs them. Berries used from the berry pouch run these with the pouch's task, and hand
+// battleUseFunc). A use missing from the tables is logged by the bag.
+// Berries used from the berry pouch run these with the pouch's task, and hand
 // back to the pouch instead of the bag.
 
 import { K } from '../battle/constants';
@@ -50,6 +50,7 @@ import { newMail } from '../world/mail';
 import { InitRegionMapWithExitCB, REGIONMAP_TYPE_NORMAL, regionMapGfxSymbols } from './regionMap';
 import { InitTMCase, TMCASE_FIELD } from './tmCase';
 import { UseFameChecker } from './fameChecker';
+import { InitTeachyTvController } from './teachyTv';
 import {
   BERRYPOUCH_FROMBATTLE,
   BERRYPOUCH_FROMFIELD,
@@ -468,6 +469,31 @@ function InitBerryPouchFromBag(): void {
   InitBerryPouch(BERRYPOUCH_FROMFIELD, CB2_BagMenuFromStartMenu, 0);
 }
 
+/**
+ * FieldUseFunc_TeachyTv: from the bag, Teachy TV, which returns to the bag; with SELECT, Teachy TV from the field
+ * (Task_InitTeachyTvFromField), which SELECT closes too and which returns to the field. Its graphics (and Route 1's
+ * layout) are loaded with the bag's when the bag has it (prepareTeachyTv). No quest log event
+ * (ItemUse_SetQuestLogEvent).
+ */
+function FieldUseFunc_TeachyTv(taskId: number): void {
+  if (!inField(taskId)) {
+    ItemMenu_SetExitCallback(InitTeachyTvFromBag);
+    ItemMenu_StartFadeToExitCallback(taskId);
+  } else {
+    FadeToScreenFromField(taskId, Task_InitTeachyTvFromField);
+  }
+}
+
+/** InitTeachyTvFromBag */
+function InitTeachyTvFromBag(): void {
+  InitTeachyTvController(0, CB2_BagMenuFromStartMenu);
+}
+
+/** Task_InitTeachyTvFromField */
+function Task_InitTeachyTvFromField(taskId: number): void {
+  OpenScreenFromFieldOnceFaded(taskId, () => InitTeachyTvController(0, CB2_ReturnToField), []);
+}
+
 /** BattleUseFunc_BerryPouch: the battle bag's OPEN, back to the battle bag. */
 function BattleUseFunc_BerryPouch(taskId: number): void {
   ItemMenu_SetExitCallback(InitBerryPouchFromBattle);
@@ -787,6 +813,7 @@ export const FIELD_USE_FUNCS: Record<string, TaskFunc> = {
   FieldUseFunc_TmCase,
   FieldUseFunc_BerryPouch,
   FieldUseFunc_FameChecker,
+  FieldUseFunc_TeachyTv,
   FieldUseFunc_CoinCase,
   FieldUseFunc_PowderJar,
   FieldUseFunc_PokeFlute,

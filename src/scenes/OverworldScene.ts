@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { spriteTextureKey, type Assets } from '../data/assets';
 import type { MapData, ObjectEventData, WarpEventData } from '../data/types';
 import { bdata, initBattleEnv } from '../battle/env';
-import { K } from '../battle/constants';
+import { constant, K } from '../battle/constants';
 import { PlaySE } from '../gba/sound'; // field_control_avatar.c's SEs (W-sound 4)
 import { PlayMapChosenOrBattleBGM } from '../battle/battleBgm';
 import { BattleTransition_StartOnField, battleTransitionGfxSymbols, IsBattleTransitionDone, setTransitionFieldCamera } from '../battle/transition';
@@ -179,6 +179,25 @@ import { TEXT_SPEED } from '../text/TextPrinter';
 import { HALL_OF_FAME_RECORD_GFX, setHallOfFameRecordHost } from '../world/hallOfFameRecord';
 import { registerSSAnne, setSSAnneHost, SS_ANNE_GFX, ssAnneProbe } from '../world/ssAnne';
 import type { WarpData } from '../state/GameState';
+import {
+  gQL,
+  mapGroupAndNum,
+  OBJECT_EVENTS_COUNT,
+  QL_RecordFieldInput,
+  QL_ResetDefeatedWildMonRecord,
+  QL_ResetForContinue,
+  QL_TryRunActions,
+  QuestLog_CutRecording,
+  QuestLogRecordNPCStep,
+  ResetQuestLog,
+  RunQuestLogCB,
+  setQuestLogHost,
+  type QuestLogFieldInput,
+  type QuestLogHost,
+} from '../world/questLog';
+import { QuestLog_ShouldEndSceneOnMapChange, SetQuestLogEvent_Arrived } from '../world/questLogEvents';
+import { QuestLog_CheckDepartingIndoorsMap, QuestLog_TryRecordDepartedLocation } from '../world/questLogLocations';
+import { dirNumber, questLogObjectEventFrom, type QuestLogObjectEvent } from '../world/questLogObjects';
 
 /** GBA runs at ~59.73Hz; we tick game logic at a fixed 60Hz regardless of display refresh. */
 const FRAME_MS = 1000 / 60;
@@ -328,6 +347,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private ambientCry: AmbientCryTaskData = { state: 0, delayCounter: 0 };
   /** FreezeObjectEvents from field tasks: the NPCs hold still. */
   private objectsFrozen = false;
+  /** gFieldInputRecord: the input that took the controls in ProcessPlayerFieldInput (QL_RecordFieldInput) */
+  private fieldInputRecord: QuestLogFieldInput = { dpadDirection: 0 };
+  /** gSaveBlock1Ptr->location.warpId: the warp the player arrived through (WARP_ID_NONE = -1), for the quest log */
+  private arrivalWarpId = -1;
+  /** The warp id the next enterMap arrives through (loadWarpedMap sets it). */
+  private nextArrivalWarpId = -1;
   /** Task_QuestLogPlayback_OpenStartMenu: START cancelled a walked-into sign; open the menu once the controls are free. */
   private startMenuWhenFree = false;
   private hud!: Phaser.GameObjects.Text;
@@ -526,12 +551,14 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     registerDeoxysRock();
     await loadGfx(DEOXYS_ROCK_GFX);
     this.cameras.main.startFollow(this.player.anchor, true, 1, 1, 0, CAMERA_FOLLOW_OFFSET_Y);
+    setQuestLogHost(this.createQuestLogHost());
 
     if (start.continueGame) {
       await this.continueSavedGame(start);
     } else {
       // CB2_NewGame: NewGameInitData's gDifferentSaveFile and PlayTimeCounter_Reset, then PlayTimeCounter_Start
       gSave.differentSaveFile = true;
+      ResetQuestLog(this.state); // NewGameInitData
       PlayTimeCounter_Reset(this.state.playTime);
       PlayTimeCounter_Start(this.state.playTime);
       testHooks.applyTestOptions(this.state);
@@ -836,8 +863,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.cameraObject?.tick();
     if (arrived) this.updateObjectsForCamera(); // the camera moved a tile, scripted or not
     if (arrived && !this.scripts.running && this.overlay === undefined) this.onPlayerArrived();
+    SetQuestLogEvent_Arrived(); // OverworldBasic, after CameraUpdate
     // DoCB1_Overworld (next frame's, as the GBA's CB1 sees this frame's sprite updates):
-    // UpdatePlayerAvatarTransitionState and FieldGetPlayerInput run whether or not the controls are locked.
+    // QL_TryRunActions, then UpdatePlayerAvatarTransitionState and FieldGetPlayerInput run whether or not the
+    // controls are locked; RunQuestLogCB last.
+    QL_TryRunActions();
     UpdatePlayerAvatarTransitionState();
     const input = this.fieldGetPlayerInput();
     // A script or warp started this frame also blocks the player (ArePlayerFieldControlsLocked).
@@ -847,10 +877,16 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         this.startMenuWhenFree = false;
         PlaySE(K.SE_WIN_OPEN);
         this.openStartMenu();
+        RunQuestLogCB();
         return;
       }
-      if (!this.processPlayerFieldInput(input)) PlayerStep(input.dpadDirection, this.buttons);
+      if (this.processPlayerFieldInput(input)) {
+        if (gQL.playbackState === K.QL_PLAYBACK_STATE_RECORDING) QL_RecordFieldInput(this.fieldInputRecord);
+      } else {
+        PlayerStep(input.dpadDirection, this.buttons);
+      }
     }
+    RunQuestLogCB();
     // ProcessPlayerFieldInput returned TRUE (a script, menu, warp or trainer started): LockPlayerFieldControls
     // and DismissMapNamePopup. Crossing a connection isn't one of them (the popup is reshown instead).
     if (freeAtFrameStart && (this.scripts.running || this.overlay !== undefined || this.trainerApproach !== undefined || this.warping)) {
@@ -924,6 +960,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const facing = this.player.facing;
     const { x, y } = this.player.current; // GetPlayerPosition
     const tile = this.world.tileAt(x, y);
+    // gFieldInputRecord: cleared, the d-pad, then the input that took the controls (for QL_RecordFieldInput)
+    const record: QuestLogFieldInput = { dpadDirection: input.dpadDirection ? dirNumber(input.dpadDirection) : 0 };
+    this.fieldInputRecord = record;
     // CheckForTrainersWantingBattle runs on every frame the controls are free (mid-step too).
     const approach = checkForTrainersWantingBattle(this.trainerSee);
     if (approach) {
@@ -935,22 +974,23 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (input.tookStep) RunMassageCooldownStepCounter(this.state);
     if (input.tookStep) IncrementResortGorgeousStepCounter(this.state);
     if (input.tookStep) IncrementBirthIslandRockStepCount(this.state, this.world.current.data.id);
-    if (input.tookStep && this.tryStartStepBasedScript(x, y, tile.behavior)) return true;
+    if (input.tookStep && this.tryStartStepBasedScript(x, y, tile.behavior)) return (record.tookStep = true);
     if (input.checkStandardWildEncounter) {
-      if ((!input.dpadDirection || input.dpadDirection === facing) && this.tryWalkIntoSignpost()) return true;
-      if (this.wild.tryStandardWildEncounter(tile)) return true; // CheckStandardWildEncounter
+      if ((!input.dpadDirection || input.dpadDirection === facing) && this.tryWalkIntoSignpost()) return (record.checkStandardWildEncounter = true);
+      if (this.wild.tryStandardWildEncounter(tile)) return (record.checkStandardWildEncounter = true); // CheckStandardWildEncounter
     }
     const facingHeld = input.heldDirection && input.dpadDirection === facing;
-    if (facingHeld && this.tryArrowWarp(x, y, tile.behavior, facing)) return true;
-    if (facingHeld && this.tryWalkIntoSignpost()) return true;
-    if (input.pressedAButton && this.interact()) return true;
-    if (input.heldDirection2 && input.dpadDirection === facing && this.tryDoorWarp(facing)) return true;
+    if (facingHeld && this.tryArrowWarp(x, y, tile.behavior, facing)) return (record.heldDirection = true);
+    if (facingHeld && this.tryWalkIntoSignpost()) return (record.heldDirection = true);
+    if (input.pressedAButton && this.interact()) return (record.pressedAButton = true);
+    if (input.heldDirection2 && input.dpadDirection === facing && this.tryDoorWarp(facing)) return (record.heldDirection2 = true);
     if (input.pressedStartButton) {
+      record.pressedStartButton = true;
       PlaySE(K.SE_WIN_OPEN);
       this.openStartMenu();
       return true;
     }
-    if (input.pressedSelectButton && UseRegisteredKeyItemOnField()) return true;
+    if (input.pressedSelectButton && UseRegisteredKeyItemOnField()) return (record.pressedSelectButton = true);
     return false;
   }
 
@@ -1480,6 +1520,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.messageBox.hide(); // CB2_LoadMap frees the field's windows (the Escape Rope's message is still up)
     await this.doChangeMap(from, data, white);
     const dest = warpDestCoords(data, warpId, x, y);
+    this.nextArrivalWarpId = warpId; // ApplyCurrentWarp's location.warpId
     await this.enterMap(name, dest.x, dest.y, undefined, true);
     this.showMapNameOnWarpArrival(from);
     return MapTransitionIsExit(this.mapType(from), this.mapType(data));
@@ -1534,6 +1575,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    */
   private async enterMap(name: string, x: number, y: number, facing: Direction | undefined, warped: boolean, continued?: PlayerLocation): Promise<void> {
     this.warping = false;
+    this.arrivalWarpId = this.nextArrivalWarpId;
+    this.nextArrivalWarpId = -1;
     this.mapNamePopup?.destroy(); // the map load's ResetTasks
     ResetLeagueLightingTasks();
     ResetWeatherTask(); // (GBA tasks don't run between LoadMapFromWarp's scripts and ResumeMap's StartWeather)
@@ -1607,6 +1650,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     SetMapHeaderWeather(this.defines.require(cur.data.weather ?? 'WEATHER_NONE')); // LoadCurrentMapData's gMapHeader
     // A warp's (and CONTINUE's) ResumeMap makes a new Task_RunTimeBasedEvents; a connection's ResetFieldTasksArgs zeroes it
     this.ambientCry = { state: 0, delayCounter: 0 };
+    if (!warped && !continued) this.arrivalWarpId = -1; // LoadMapFromCameraTransition: SetWarpDestination(..., WARP_ID_NONE, ...)
+    if (!continued) QL_ResetDefeatedWildMonRecord(); // LoadMapFromWarp / LoadMapFromCameraTransition
     if (!continued) {
       this.state.clearTemps();
       this.wild.resetEncounterRateModifiers(); // RestartWildEncounterImmunitySteps
@@ -1663,6 +1708,13 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       const table = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_WARP_INTO_MAP_TABLE');
       const script = table && this.scripts.mapScriptTable(table);
       if (script) this.scripts.runImmediately(script);
+      // DoMapLoadLoop's states 3-4: QuestLog_ShouldEndSceneOnMapChange (a disabled location cuts the recording), then
+      // after InitObjectEventsLocal, QuestLog_CheckDepartingIndoorsMap and QuestLog_TryRecordDepartedLocation
+      QuestLog_ShouldEndSceneOnMapChange();
+      if (gQL.state !== K.QL_STATE_PLAYBACK) {
+        QuestLog_CheckDepartingIndoorsMap();
+        QuestLog_TryRecordDepartedLocation();
+      }
     }
     // LoadMapInStepsLocal's (ReturnToFieldLocal's) InitCurrentFlashLevelScanlineEffect (a connection keeps the running effect)
     if (warped || continued) this.flash.initCurrentFlashLevelScanlineEffect(Overworld_GetFlashLevel(this.state));
@@ -1697,6 +1749,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private async continueSavedGame(start: OverworldStart): Promise<void> {
     const s = this.state;
     gSave.differentSaveFile = false;
+    QL_ResetForContinue(s); // TryStartQuestLogPlayback's (QL2 plays the scenes back first)
     StopMapMusic(); // CB2_ContinueSavedGame
     // A save always has a location (the save dialog stores it); `start` is only a fallback.
     const loc = s.location ?? { mapId: '', x: start.x, y: start.y, facing: start.facing ?? 'down', avatarFlags: PLAYER_AVATAR_FLAG.ON_FOOT };
@@ -1715,6 +1768,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       const name = this.assets.mapNameForId(w.mapId) ?? start.map;
       const dest = warpDestCoords(await this.assets.loadMap(name), w.warpId, w.x, w.y);
       ResetInitialPlayerAvatarState();
+      this.nextArrivalWarpId = w.warpId;
       await this.enterMap(name, dest.x, dest.y, undefined, true);
       this.showMapNameOnWarpArrival(undefined);
       // FieldCB_DefaultWarpExit → SetUpWarpExitTask(FALSE)
@@ -1850,7 +1904,13 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     obj.graphicsId = graphicsId;
     obj.updateElevationAndPriority(); // DoGroundEffects_OnSpawn
     const data = { ...e };
-    return { localId, chunk, spawnedAs: data, graphicsId, stale: false, brain: new NpcBrain(obj, data, (o, d) => this.canMove(o, d)) };
+    const brain = new NpcBrain(obj, data, (o, d) => this.canMove(o, d));
+    const { mapGroup, mapNum } = mapGroupAndNum(chunk.data.id);
+    // ObjectEventSetSingleMovement: QuestLogRecordNPCStep while recording
+    brain.onSingleMovement = (action) => {
+      if (gQL.playbackState === K.QL_PLAYBACK_STATE_RECORDING) QuestLogRecordNPCStep(localId, mapNum, mapGroup, action);
+    };
+    return { localId, chunk, spawnedAs: data, graphicsId, stale: false, brain };
   }
 
   // ------------------------------------------------------------------ UI
@@ -2885,6 +2945,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       await this.enterMap(name, respawn.x, respawn.y, 'up', true); // WarpIntoMap, DIR_NORTH
       this.showMapNameOnWarpArrival(from); // CB2_WhiteOut loads the map in steps like a warp
     } else console.warn('[whiteout] unknown respawn map', respawn.map);
+    QuestLog_CutRecording(); // CB2_WhiteOut, after DoMapLoadLoop
     if (respawn.healer) {
       // SetWhiteoutRespawnHealerNpcAsLastTalked
       const id = this.resolveLocalId(respawn.healer);
@@ -2967,6 +3028,61 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   // ------------------------------------------------------------------ player avatar
 
   /** What field_player_avatar.c (world/playerAvatar.ts) reads and does on the field. */
+  /** What quest_log.c reads from gSaveBlock1Ptr / gObjectEvents (world/questLog.ts). */
+  private createQuestLogHost(): QuestLogHost {
+    const cur = () => this.world.current;
+    const info = (localId: number) => {
+      const { mapGroup, mapNum } = mapGroupAndNum(cur().data.id);
+      return { localId, mapNum, mapGroup, originX: cur().originX, originY: cur().originY };
+    };
+    return {
+      state: this.state,
+      location: () => ({ mapId: cur().data.id, warpId: this.arrivalWarpId, ...this.playerLocal() }),
+      mapSec: () => this.defines.require(this.mapSection()),
+      playerFacing: () => this.player.facing,
+      fieldControlsLocked: () =>
+        this.busy || this.warping || this.scripts.running || this.overlay !== undefined || this.controlsLocked > 0 || this.trainerApproach !== undefined,
+      // gObjectEvents: the player, then the current map's objects
+      objectEvents: () => {
+        const out: QuestLogObjectEvent[] = [
+          questLogObjectEventFrom(this.player, {
+            ...info(K.LOCALID_PLAYER),
+            isPlayer: true,
+            graphicsId: constant(this.player.graphicsId) ?? 0,
+            movementType: K.MOVEMENT_TYPE_PLAYER,
+            trainerType: 0,
+            trainerRange_berryTreeId: 0,
+            frozen: false,
+            trackedByCamera: this.cameraObject === undefined,
+          }),
+        ];
+        for (const n of this.npcs) {
+          if (n.chunk !== cur() || out.length >= OBJECT_EVENTS_COUNT) continue;
+          out.push(
+            questLogObjectEventFrom(n.brain.obj, {
+              ...info(n.localId),
+              isPlayer: false,
+              graphicsId: constant(n.graphicsId) ?? 0,
+              movementType: constant(n.brain.movementType) ?? 0,
+              trainerType: constant(n.spawnedAs.trainer_type) ?? 0,
+              trainerRange_berryTreeId: Number(n.spawnedAs.trainer_sight_or_berry_tree_id) || (constant(n.spawnedAs.trainer_sight_or_berry_tree_id) ?? 0),
+              frozen: this.objectsFrozen,
+              trackedByCamera: this.cameraObject === n.brain.obj,
+            }),
+          );
+        }
+        return out;
+      },
+      objectEventTemplates: () => this.templatesFor(cur()),
+      objectIdentity: (obj) => {
+        const n = this.npcs.find((m) => m.brain.obj === obj);
+        if (!n) return undefined;
+        const { mapGroup, mapNum } = mapGroupAndNum(n.chunk.data.id);
+        return { localId: n.localId, mapNum, mapGroup };
+      },
+    };
+  }
+
   private createAvatarHost(): PlayerAvatarHost {
     const scene = this;
     const objects = () => [this.player, ...this.npcs.map((n) => n.brain.obj)];
@@ -3181,7 +3297,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }
     if (this.behaviors.is(behavior, 'STRENGTH_BUTTON')) {
       for (const e of cur.data.coordEvents) {
-        if (e.x === x - cur.originX && e.y === y - cur.originY && e.script && e.script !== '0x0') this.startFieldScript(e.script);
+        if (e.x === x - cur.originX && e.y === y - cur.originY && e.script && e.script !== '0x0') {
+          QuestLog_CutRecording();
+          this.startFieldScript(e.script);
+        }
       }
     }
   }

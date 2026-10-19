@@ -11,6 +11,7 @@ import { initEasyChatData, type EasyChatData } from '../menus/easyChatData';
 import { initTrainerTowerData, type TrainerTowerData } from '../world/trainerTower';
 import { initFameCheckerData, type FameCheckerData } from '../state/fameChecker';
 import { initHelpSystemData, type HelpSystemData } from '../ui/helpSystemContext';
+import { initQuestLogData, type QuestLogData } from '../world/questLog';
 import { FieldDoors, type DoorData } from '../world/doors';
 import { ATLAS_LAYERS, TilesetPair } from '../world/TilesetPair';
 import { TILESET_ANIM_SYMBOLS, type TilesetAnimInfo } from '../world/tilesetAnims';
@@ -78,6 +79,7 @@ export class Assets {
     initTrainerTowerData(await fetchJson<TrainerTowerData>(`${GEN}/trainerTower.json`)); // world/trainerTower.ts
     initFameCheckerData(await fetchJson<FameCheckerData>(`${GEN}/fameChecker.json`)); // state/fameChecker.ts
     initHelpSystemData(await fetchJson<HelpSystemData>(`${GEN}/helpSystem.json`)); // ui/helpSystemMenu.ts
+    initQuestLogData(await fetchJson<QuestLogData>(`${GEN}/questLog.json`)); // world/questLog.ts
     await loadGfx(FieldDoors.gfxSymbols(this.doors));
     this.wildEncounters = wildEncounters;
     this.species = species;

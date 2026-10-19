@@ -1101,7 +1101,7 @@ def extract_scripts(decomp, out):
     )
     # C strings (menu labels etc.): const u8 gText_X[] = _("..." "...");
     # (+ daycare.c's sJapaneseEggNickname, trade.c's gText_MaleSymbol4 / gText_FemaleSymbol4 / gText_GenderlessSymbol)
-    for cfile in ("src/strings.c", "src/keyboard_text.c", "src/daycare.c", "src/trade.c"):
+    for cfile in ("src/strings.c", "src/keyboard_text.c", "src/daycare.c", "src/trade.c", "src/data/text/teachy_tv.h"):
         src = (decomp / cfile).read_text(encoding="utf-8")
         for name, body in re.findall(r"const u8 (\w+)\[\]\s*=\s*_\((.*?)\);", src, re.S):
             parts = re.findall(r'"((?:\\.|[^"\\])*)"', body)
@@ -1595,6 +1595,10 @@ def main():
     from extract_trainer_tower import extract_trainer_tower
 
     extract_trainer_tower(decomp, out)
+    print("quest log")
+    from extract_quest_log import extract_quest_log
+
+    extract_quest_log(decomp, out)
     print("fame checker")
     from extract_fame_checker import extract_fame_checker
 

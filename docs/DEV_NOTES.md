@@ -615,8 +615,8 @@ this is the next level down. When you add or change a subsystem, update its entr
     CB2_ReturnToField. Back on the field, `OverworldScene.runFieldCallback` (RunFieldCallback, shared with the start
     menu's screens) runs FieldCB2_UseItemFromField: objects frozen and controls locked while the field fades in,
     then both released. The TM case / pouch's USE and GIVE go through the party menu and back to the screen as from
-    the bag (the reopening keeps the CB2_ReturnToField exit); SELECT closes both. The Fame Checker and Teachy TV
-    (no screens) log and give the controls back (registeredItemFieldFunc). Script `release` / `releaseall` now also
+    the bag (the reopening keeps the CB2_ReturnToField exit); SELECT closes both. Teachy TV opens from the field the
+    same way (Task_InitTeachyTvFromField), and the Fame Checker through FieldUseFunc_FameChecker. Script `release` / `releaseall` now also
     unfreeze objects (ClearPlayerHeldMovementAndUnfreezeObjectEvents), and a map load or a battle's return clears the
     freeze. Probes: `field().locked` (LockPlayerFieldControls held), `field().objectsFrozen`, `__test.gbaTasks()`
     (active gTasks by function name, e.g. `Task_BagMenu_HandleInput`, `Task_FieldItemContextMenuHandleInput`),
@@ -667,6 +667,53 @@ this is the next level down. When you add or change a subsystem, update its entr
   `world/roamer.ts` is roamer.c with its EWRAM statics as module state
   (`roamerLocation()` for tests). Field code may call battle-engine pokemon.c functions (AdjustFriendship): the
   overworld initialises the battle env at boot.
+- **Quest log, recording (QUEST_LOG_PLAN.md QL1):** four files, no Phaser, split like the C.
+  - `world/questLog.ts` is quest_log.c's recording half: the state (`gQL`: gQuestLogState, gQuestLogPlaybackState,
+    sCurrentSceneNum, gQuestLogRecordingPointer as a `{scene, pos}` u16 cursor, gQuestLogCurActionIdx), the scenes
+    (`GameState.questLog`: struct QuestLogScene with flags / vars kept sparse, the objects snapshot, the templates and
+    the 128-u16 `script`), QL_StartRecordingAction and its snapshot, the 32-action buffer the field fills
+    (QuestLogRecordPlayerStep / NPCStep / gfx transitions / QL_RecordFieldInput), QL_TryRunActions' RECORDING case
+    (the frames between actions, counted while the controls are free), RunQuestLogCB → QLogCB_Recording
+    (TryRecordActionSequence encodes the new actions every frame), and the ends of a scene (the stream or the buffer
+    full, QL_FinishRecordingScene, QuestLog_CutRecording, SaveQuestLogData's sort, oldest first). Data:
+    `public/gen/questLog.json` (tools/extract_quest_log.py: MAP_* → group / number / MAPSEC, sInsideOutsidePairs,
+    sWorldMapFlags, the disabled locations, sQuestLogEventCmdSizes, ...), loaded by Assets.init.
+  - `world/questLogEvents.ts` is quest_log_events.c: the command codecs (QL_RecordAction_* / QL_LoadAction_*,
+    RecordEventHeader with the repeat tracker, QL_SkipCommand, QL_LoadEvent / QL_TryRepeatEvent), SetQuestLogEvent
+    with every filter, the deferred trainer / link events, QL_EVENT_DEPARTED and QL_EVENT_ARRIVED
+    (QuestLog_RecordEnteredMap from `setworldmapflag`, SetQuestLogEvent_Arrived every frame). Other events hook in
+    with `registerQuestLogEvent(id, record, load)` (QL3); until then SetQuestLogEvent ignores them.
+  - `world/questLogLocations.ts` is field_specials.c's QuestLog_CheckDepartingIndoorsMap /
+    QuestLog_TryRecordDepartedLocation; `world/questLogObjects.ts` is QL_RecordObjects (and
+    `questLogObjectEventFrom`, the port's ObjectEvent as a gObjectEvents entry, map coordinates with MAP_OFFSET);
+    `world/questLogPlayer.ts` has QL_PLAYER_GFX_*, QuestLogTryRecordPlayerAvatarGfxTransition and
+    field_player_avatar.c's QL_TryRecord*WithDuration helpers.
+  - **Hooks:** OverworldScene implements `QuestLogHost` (`setQuestLogHost` in create: location incl. the arrival
+    warp id, the objects, the templates, ArePlayerFieldControlsLocked), runs QL_TryRunActions before
+    UpdatePlayerAvatarTransitionState and RunQuestLogCB after the input (QL_RecordFieldInput with
+    `fieldInputRecord`, which processPlayerFieldInput fills like gFieldInputRecord), SetQuestLogEvent_Arrived after
+    the objects, and after a warp's map load (onMapLoaded, after ON_WARP_INTO) QuestLog_ShouldEndSceneOnMapChange and
+    the departed check; ResetQuestLog on a new game, QL_ResetForContinue on CONTINUE, QuestLog_CutRecording after a
+    white-out and before a Victory Road switch's script. playerAvatar.ts records the steps (PlayerSetAnimId), the gfx
+    transitions, getting off Surf and Strength; NpcBrain's `onSingleMovement` records NPC faces and steps; fishing and
+    the VS Seeker record their gfx changes. ScriptEngine: a rematch's trainerbattle ends the scene, CB2_EndTrainerBattle
+    runs QuestLogEvents_HandleEndTrainerBattle. The save dialog and the Hall of Fame call SaveQuestLogData; the
+    specials GetQuestLogState, QuestLog_CutRecording (also ShowTownMap, ShowDiploma) and
+    QuestLog_StartRecordingInputsAfterDeferredEvent are real. The save keeps the scenes since version 12
+    (`questLogScenesSave` / `loadQuestLogScenes`: inactive objects as null, trailing empty templates left out).
+  - **For QL2 (playback):** a scene's `startType` (QL_START_NORMAL / _WARP), `mapGroup` / `mapNum` (`mapIdOf`),
+    `warpId` (u8, 0xFF = none), `x` / `y` (map-local), `objectEvents` (map coordinates, + 7), `objectEventTemplates`
+    (|x|, negx, ...), `flags` / `vars` (as SaveData's) and `script` are what QLPlayback_InitOverworldState,
+    QL_CopySaveState, QL_LoadObjectsAndTemplates and ReadQuestLogScriptFromSav1 read; the codecs and QL_SkipCommand /
+    QL_UpdateLastDepartedLocation / QL_LoadEvent are ported; `fieldInputFromU32` turns an INPUT action back into a
+    field input. Not ported: ResetActions' RUNNING case, QL_TryRunActions' RUNNING case, QL_UpdateObject,
+    sMovementScripts, QL_LoadObjects, QLogCB_Playback.
+  - **Tests:** tests/unit/questLog.test.ts (the codecs against the C's layout, a scene's head, the frames between
+    actions, the stream filling up after 30 steps, repeats, the ring of four and the save's sort, the filters, the
+    departed locations incl. Rock Tunnel and the Rocket Hideout, the save round trip), tests/e2e/questLog.test.ts
+    (leaving the house at (4, 8) of PalletTown_PlayersHouse_1F, three steps, the save; Daisy's grooming cut in
+    PalletTown_RivalsHouse from (6, 4); the fan club door at (47, 21) of Saffron City). Probes: `__test.questLog()`
+    (the state and the scenes with their commands decoded), `__test.questLogEvent(name, data)` (SetQuestLogEvent).
 
 ## GBA screens and menus
 
@@ -782,6 +829,32 @@ this is the next level down. When you add or change a subsystem, update its entr
   Item icons: `CreateBerryPouchItemIcon` (menus/itemMenuIcons.ts). Probe `__test.berryPouch()` (BERRYPOUCH_* type,
   the screen task's name, `fading`, scroll/row, the pocket's berries in list order). Tests:
   tests/e2e/berryPouch.test.ts.
+- **Teachy TV:** `menus/teachyTv.ts` is teachy_tv.c. Ways in (menus/itemUse.ts FieldUseFunc_TeachyTv): the bag's
+  KEY ITEMS → TEACHY TV → USE (InitTeachyTvFromBag: `InitTeachyTvController(0, CB2_BagMenuFromStartMenu)`, B /
+  CANCEL back to the bag) and SELECT when it's registered (Task_InitTeachyTvFromField through
+  `OpenScreenFromFieldOnceFaded`, `InitTeachyTvController(0, CB2_ReturnToField)`; SELECT closes it too). The screen
+  draws synchronously, so FieldMenuScene awaits `prepareTeachyTv(assets)` for the 'bag' and 'itemFromField' menus
+  when the bag holds Teachy TV: Route 1's layout (`assets.loadLayout('LAYOUT_ROUTE1')`, the C's `&Route1_Layout`),
+  its tilesets' tiles / palettes / metatiles, `graphics/teachy_tv/` (extract_gfx.py), the tall grass field effect pic
+  and palette, the Pokédude's object (OBJ_EVENT_GFX_TEACHY_TV_HOST); the text is `data/text/teachy_tv.h`, which
+  extract.py now reads with strings.c. Structure as in the C: sStaticResources (mode, option, scroll / row: kept
+  across the demos) and sResources (the BG buffers, the grass counters: per open); TeachyTvMainCallback builds the
+  screen in mode 0 / 1 (the list: TeachyTvOptionListController) or mode 2 (after a demo:
+  TeachyTvPostBattleFadeControl, then the option's script from sWhereToReturnToFromBattle); an option runs its
+  TTVcmd list through TeachyTvRenderMsgAndSwitchClusterFuncs (B at any step: TTVcmd_End, the noise, the list).
+  BG3 is TeachyTvLoadBg3Map: Route 1's blocks (8..23, 6..14), each metatile's layers merged into four tiles, the
+  bottom layer's palettes from slot 15 down. **The seam for units 2-3** is at the bottom of the file:
+  TeachyTvPrepBattle / TeachyTvPreBattleAnimAndSetBattleCallback (unit 2: SavePlayerParty,
+  InitPokedudePartyAndOpponent, the transition, CB2_InitBattle; TeachyTvRestorePlayerPartyCallback is the way back
+  and already reads `state.battleOutcome` for B_OUTCOME_DREW = B quit) and InitPokedudeBag (unit 3: it belongs in
+  item_menu.c's itemMenu.ts, whose CreateBagInputHandlerTask still logs for the TTVSCR locations); both call
+  PokedudeDemoNotPorted until then. Exported for them: InitTeachyTvController, CB2_ReturnToTeachyTV,
+  SetTeachyTvControllerModeToResume, TTVSCR_*. Probe `__test.teachyTv()` (while TeachyTvCallback runs): mode,
+  whichScript, scrollOffset / selectedRow, the task and its TTVcmd (`step`, `timer`, `cmd`), `listReady`,
+  `listItems`, `arrows`, `text` (the symbol printed last) and `textActive`, the Pokédude's `dude` sprite, the
+  `grass` sprites up, BG3's scroll. Test: tests/e2e/teachyTv.test.ts (the Viridian old man's gift, the bag without
+  the TM case, each of the six options' sequences with the TM case, B mid-sequence, SELECT from the field). Quick
+  look: `?start=after-rival&map=PalletTown&x=12&y=14`, add ITEM_TEACHY_TV and register it, SELECT.
 - **Fame Checker:** `menus/fameChecker.ts` is fame_checker.c's screen: `UseFameChecker(savedCallback)` on whichever
   GBA host has the bag (FieldMenuScene). Ways in: the bag's KEY ITEMS → FAME CHECKER → USE (`FieldUseFunc_FameChecker`
   in menus/itemUse.ts → UseFameCheckerFromBag, back to CB2_BagMenuFromStartMenu) and, registered, SELECT on the field
@@ -918,7 +991,7 @@ this is the next level down. When you add or change a subsystem, update its entr
   decoded, nameX), `__test.mailbox()` (while the player's PC is on: its phase, e.g. 'topMenu', 'mailbox' = the
   list's input, 'mailSubmenu', 'yesNo'; count, cursorPos, itemsAbove, pageItems, listShown). Tests:
   tests/unit/mail.test.ts (the slots, give / take, the mail species, the save, CountPCMail / PCMailCompaction /
-  SELECTED_MAIL, the version 11 upgrade), tests/unit/daycare.test.ts (DayCareMail), tests/unit/inGameTrades.test.ts
+  SELECTED_MAIL, the version 12 upgrade), tests/unit/daycare.test.ts (DayCareMail), tests/unit/inGameTrades.test.ts
   (GetInGameTradeMail, TradeMons' mail), tests/e2e/mail.test.ts (a Retro Mail bought at the Celadon Dept. Store
   4F from (3, 11) facing down, given from the bag with HI AWESOME typed, read and taken; the party menu's GIVE
   cancelled and written, Bead Mail's icon, TAKE → YES to the PC slots; CHECK; a held mail through SAVE and
@@ -1978,7 +2051,7 @@ or extend them:
   saved anyway since the Safari start menu has no SAVE, and the roamer's location). Other optional warps the save
   keeps: `continueGameWarp` + `specialSaveWarpFlags` (CONTINUE_GAME_WARP), `escapeWarp`. Game stats
   (`state.gameStats`, Get/Set/IncrementGameStat; only GAME_STAT_ENTERED_HOF and _FIRST_HOF_PLAY_TIME are counted so
-  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8, `gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) since version 9. `fameChecker` (gSaveBlock1Ptr->fameChecker) since version 10. The mail slots (`mail`, world/mail.ts) and a party mon's `mail` since version 11. The Hall of Fame records live apart from the save, like their own flash
+  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8, `gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) since version 9. `fameChecker` (gSaveBlock1Ptr->fameChecker) since version 10. The mail slots (`mail`, world/mail.ts) and a party mon's `mail` since version 11, the quest log's scenes (`questLog`, world/questLog.ts) since version 12, the daycare mons' DayCareMail (`DaycareMon.mail`) since version 13. The Hall of Fame records live apart from the save, like their own flash
   sectors: `state/hallOfFame.ts` (key `HOF_STORAGE_KEY`, versioned), read into `gHofBuffer` (gDecompressionBuffer)
   by LoadHallOfFameSave, written by TrySavingData(SAVE_HALL_OF_FAME) (which also counts GAME_STAT_ENTERED_HOF) and
   erased by SAVE_OVERWRITE_DIFFERENT_FILE.
