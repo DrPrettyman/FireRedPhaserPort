@@ -7,7 +7,9 @@
 // cross, Task_OpenCenterWhiteColumn / Task_CloseCenterWhiteColumn. DoTradeAnim_Cable (and the cable map and
 // cable end sprites it uses) is only reachable from a link trade, which isn't ported.
 //
-// Audio isn't implemented: cries and sound effects count as already finished (see gba/sound.ts).
+// The sounds are trade_scene.c's, through gba/sound.ts: MUS_EVOLUTION as the map music for the scene (the map's
+// song cached and played again at the end), the two cries (the second's IsCryFinished holds the scene), the SEs
+// and the MUS_EVOLVED fanfare. The link path's FadeOutBGM / IsBGMStopped wait (CB2_SaveAndEndTrade) isn't ported.
 
 import { setBattleUi, ui } from '../battle/battleUi';
 import { K } from '../battle/constants';
@@ -81,7 +83,7 @@ import {
 } from '../gba/hw';
 import { A_BUTTON, gMain, JOY_NEW, SetMainCallback2, SetVBlankCallback } from '../gba/main';
 import { BeginNormalPaletteFade, BG_PLTT_ID, BlendPalettes, gPaletteFade, LoadPalette, OBJ_PLTT_ID, PLTT_SIZE_4BPP, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
-import { IsCryFinished, PlayCry_Normal, PlayFanfare, PlaySE } from '../gba/sound';
+import { GetCurrentMapMusic, IsCryFinished, PlayCry_Normal, PlayFanfare, PlayNewMapMusic, PlaySE } from '../gba/sound';
 import {
   AFFINEANIMCMD_END,
   AFFINEANIMCMD_FRAME,
@@ -189,6 +191,8 @@ const DISPCNT_MODE_1 = 1;
 /** The fields of sTradeAnim the in-game path uses (struct in trade_scene.c). */
 interface TradeAnim {
   timer: number;
+  /** GetCurrentMapMusic() when the scene started: played again at its end */
+  cachedMapMusic: number;
   monPersonalities: [number, number];
   monSpriteIds: [number, number];
   /** Multi-purpose sprite ids used during the transfer sequence */
@@ -632,6 +636,7 @@ function TradeBufferOTnameAndNicknames(): void {
 function newTradeAnim(): TradeAnim {
   return {
     timer: 0,
+    cachedMapMusic: 0,
     monPersonalities: [0, 0],
     monSpriteIds: [0, 0],
     connectionSpriteId1: 0,
@@ -675,8 +680,8 @@ export function CB2_InitInGameTrade(): void {
       ResetSpriteData();
       FreeAllSpritePalettes();
       SetVBlankCallback(VBlankCB_TradeAnim);
-      // The Poké Balls' open particles (battle_anim_special.c) play their SE through the battle's hooks
-      if (!ui) setBattleUi({ joyNew: () => false, joyHeld: () => false, anyNewKeys: () => false, playSE() {}, playCry() {}, playBGM() {}, playFanfare() {}, addBagItem() {}, playerGender: () => 0 });
+      // The Poké Balls' open particles (battle_anim_special.c) play their SE (SE_BALL_OPEN) through the battle's hooks
+      if (!ui) setBattleUi({ joyNew: () => false, joyHeld: () => false, anyNewKeys: () => false, playSE: (songId) => PlaySE(songId), playCry() {}, playBGM() {}, playFanfare() {}, addBagItem() {}, playerGender: () => 0 });
       TradeAnimInit_LoadGfx();
       const a = anim();
       a.state = 0;
@@ -854,7 +859,8 @@ function DoTradeAnim_Wireless(): boolean {
       playerMon().x2 = -180;
       playerMon().y2 = frontPicYOffset(a.monSpecies[TRADE_PLAYER]);
       a.state++;
-      // cachedMapMusic = GetCurrentMapMusic(); PlayNewMapMusic(MUS_EVOLUTION): no audio
+      a.cachedMapMusic = GetCurrentMapMusic();
+      PlayNewMapMusic(K.MUS_EVOLUTION);
       break;
     case STATE_MON_SLIDE_IN:
       if (a.bg2hofs > 0) {
@@ -1231,7 +1237,7 @@ function DoTradeAnim_Wireless(): boolean {
       break;
     case STATE_WAIT_FADE_OUT_END:
       if (!gPaletteFade.active) {
-        // PlayNewMapMusic(sTradeAnim->cachedMapMusic): no audio
+        PlayNewMapMusic(a.cachedMapMusic);
         FreeAllWindowBuffers();
         FreeMonSpritesGfx();
         sTradeAnim = null;

@@ -1,6 +1,6 @@
 // The browser's sound output (src/audio/output.ts, AUDIO_PLAN.md W-out 1): off headless, `?audio=1` creates the
 // AudioContext suspended and the first real key press resumes it (a hidden tab suspends it again), the m4a mixer's
-// frames play (the title screen's music), M toggles the output and the setting survives a
+// frames play (the title screen's music), the PSG synth plays (SE_SELECT), M toggles the output and the setting survives a
 // reload (but not when typed into a text field), and `?audio=tone` plays a tone through pushFrame's path (the
 // worklet reports the peak it wrote; headless Chrome runs the audio graph on a fake output device).
 // The boots go to the title screen (`title: true`), the quickest place where the page is up.
@@ -44,6 +44,32 @@ test('?audio=1: the context starts suspended and the first key press resumes it'
   await game.waitFor((t) => t.audioOutput.state().context === 'suspended', { what: 'the context to suspend' });
   await setHidden(false);
   await game.waitFor((t) => t.audioOutput.state().context === 'running', { what: 'the context to resume' });
+});
+
+test('?audio=1: the PSG reaches the speakers (SE_SELECT, square 1 only, with the music stopped)', async () => {
+  const game = await session.start({ speed: 1, query: { audio: '1' } });
+  await game.waitFor((t) => t.audioOutput.state().ready, { what: 'the worklet to load' });
+  await game.realKey('KeyQ');
+  await game.waitFor((t) => t.audioOutput.state().context === 'running', { what: 'the context to run' });
+  // Stop the map music; once its echo has died away the speakers are silent.
+  await game.eval(async (_t, path) => {
+    const m4a = await new Function('p', 'return import(p)')(path);
+    m4a.m4aMPlayAllStop();
+  }, '/src/audio/m4a.ts');
+  await game.waitFor((t) => t.audioOutput.state().stats?.peak === 0, { what: 'silence' });
+  // SE_SELECT (14 frames) every 30 frames until a report of the worklet's peak shows it; watched in the page.
+  const peak = await game.eval(async (t) => {
+    let ticks = 0;
+    let seen = 0;
+    await t.until(() => {
+      if (ticks++ % 30 === 0) t.playSong('SE_SELECT');
+      seen = t.audioOutput.state().stats?.peak ?? 0;
+      return seen > 0;
+    }, 600);
+    return seen;
+  });
+  expect(peak).toBeGreaterThan(0);
+  expect(peak).toBeLessThanOrEqual(1);
 });
 
 test('M toggles the output; the setting survives a reload; M in a text field is the field\'s', async () => {

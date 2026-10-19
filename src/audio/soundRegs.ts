@@ -1,6 +1,6 @@
 // The GBA's PSG sound registers (REG_SOUND1CNT_L 0x4000060 to REG_SOUNDBIAS_H 0x4000089, and the wave RAM at
 // 0x4000090), as the m4a engine writes and reads them: SoundInit, MPlayExtender, m4aSoundMode, CgbSound, CgbOscOff,
-// ply_port and SetPokemonCryStereo (m4a.c, m4a_1.s). Pure: no DOM; the worklet's synth (W-m4a 4b) imports the
+// ply_port and SetPokemonCryStereo (m4a.c, m4a_1.s). Pure: no DOM; the output's PSG synth (psgSynth.ts) imports the
 // offsets and the PsgFrame shape from here.
 //
 // The engine keeps the register file (what a read returns: every register the engine reads back, NRx2, NR10, NR43,

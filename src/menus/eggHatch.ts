@@ -4,8 +4,10 @@
 // nickname YES/NO and the naming screen) and CreatedHatchedMon / AddHatchedMonToParty / ScriptHatchMon.
 // The daycare's storage and egg making are world/daycare.ts.
 //
-// The cry is still a stub (W-sound 2); the MUS_EVOLVED fanfare holds "X hatched from the EGG!" for its sFanfares
-// count (gba/sound.ts's Task_Fanfare).
+// The sounds are daycare.c's, through gba/sound.ts: Task_EggHatchPlayBGM (the map music stopped, MUS_EVOLUTION_INTRO,
+// MUS_EVOLUTION 61 frames later), SE_BALL on the wobbles, SE_EGG_HATCH, the cry (IsCryFinished holds the scene) and
+// the MUS_EVOLVED fanfare, which holds "X hatched from the EGG!" for its sFanfares count (Task_Fanfare). The map
+// music comes back on the field (FieldCB_ContinueScriptHandleMusic: OverworldScene.runScreenFromScript).
 
 import { K } from '../battle/constants';
 import { bdata, pokemon as pokemonData, state as battleState } from '../battle/env';
@@ -18,7 +20,7 @@ import { gMain, SetMainCallback2, SetVBlankCallback } from '../gba/main';
 import { CreateYesNoMenu, LoadUserWindowGfx, GetTextWindowPalette, Menu_ProcessInputNoWrapClearOnChoose, ResetTempTileDataBuffers } from '../gba/menu';
 import { BeginNormalPaletteFade, BG_PLTT_ID, gPaletteFade, LoadPalette, PLTT_SIZE_4BPP, ResetPaletteFade, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
 import { ScanlineEffect_Stop } from '../gba/scanline';
-import { IsCryFinished, IsFanfareTaskInactive, PlayBGM, PlayCry_Normal, PlayFanfare, PlaySE } from '../gba/sound';
+import { GetCurrentMapMusic, IsCryFinished, IsFanfareTaskInactive, PlayBGM, PlayCry_Normal, PlayFanfare, PlaySE, StopMapMusic } from '../gba/sound';
 import {
   ANIMCMD_END,
   ANIMCMD_FRAME,
@@ -280,7 +282,7 @@ function CB2_EggHatch_0(): void {
       E().eggShardVelocityID = 0;
 
       SetVBlankCallback(VBlankCB_EggHatch);
-      // gSpecialVar_0x8005 = GetCurrentMapMusic(): no audio (and EventScript_EggHatch doesn't read it)
+      battleState.setVar('VAR_0x8005', GetCurrentMapMusic()); // gSpecialVar_0x8005 (EventScript_EggHatch doesn't read it)
 
       ResetTempTileDataBuffers();
       ResetBgsAndClearDma3BusyFlags(false);
@@ -301,7 +303,7 @@ function CB2_EggHatch_0(): void {
       ResetSpriteData();
       ResetTasks();
       ScanlineEffect_Stop();
-      // m4aSoundVSyncOn: no audio
+      // m4aSoundVSyncOn: returns at once, the sound was never turned off (only m4aSoundVSyncOff does that)
       gMain.state++;
       break;
     case 1:
@@ -371,10 +373,10 @@ function EggHatchSetMonNickname(): void {
   SetMainCallback2(CB2_ReturnToField);
 }
 
-/** Task_EggHatchPlayBGM: MUS_EVOLUTION_INTRO, then MUS_EVOLUTION after 60 frames (silent: no audio). */
+/** Task_EggHatchPlayBGM: the map music stopped, then MUS_EVOLUTION_INTRO, and MUS_EVOLUTION from frame 61. */
 function Task_EggHatchPlayBGM(taskID: number): void {
   const d = gTasks[taskID].data;
-  // data[0] == 0: StopMapMusic
+  if (d[0] === 0) StopMapMusic();
   if (d[0] === 1) PlayBGM(K.MUS_EVOLUTION_INTRO);
   if (d[0] > 60) {
     PlayBGM(K.MUS_EVOLUTION);
