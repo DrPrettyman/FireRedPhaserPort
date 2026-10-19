@@ -885,7 +885,7 @@ this is the next level down. When you add or change a subsystem, update its entr
   `gCB2_AfterEvolution` (`setCB2_AfterEvolution`). It draws on the battle BG/window layout, so the field host
   needs the battle text setup too (`initBattleMessages`, `setBattleTextSpeed`). `menuGfxSymbols` preloads the
   scene's graphics plus the pics/palettes/icons of every species the party can evolve into
-  (`evolutionTargetSpecies`). Tests wait for the `evolution` event (`from`, `to`, `stopped`).
+  (`evolutionTargetSpecies`). Tests wait for the `evolution` event (`from`, `to`, `stopped`). Its sounds: "Scene sounds".
 
 ## Battle
 
@@ -1335,6 +1335,34 @@ or extend them:
   `opendoor` SE_SLIDING_DOOR, the bedroom PC's SE_PC_ON without SE_SELECT, START's SE_WIN_OPEN and the menu's
   SE_SELECTs, the save dialog closing SE_SAVE's length + 60 frames after it, the heal machine's SE_BALLs 25 frames
   apart, MUS_HEAL 32 frames after the last, the effect running until the fanfare task resumes the BGM).
+
+### Scene sounds (W-sound 7a)
+
+- **Where:** each C call at its port function, through `gba/sound.ts` with the C's arguments.
+  `menus/evolutionScene.ts` (evolution_scene.c): m4aMPlayAllStop on entry (EvolutionScene) and on a cancel, the
+  cries (PlayCry_Normal; IsCryFinished holds EVOSTATE_INTRO_SOUND, _SET_MON_EVOLVED, _CANCEL_MSG), MUS_EVOLUTION_INTRO
+  through PlaySE (!IsSEPlaying holds EVOSTATE_START_MUSIC), PlayNewMapMusic(MUS_EVOLUTION), SE_EXP and
+  EVOSTATE_RESTORE_SCREEN's `if (IsSEPlaying())` + m4aMPlayAllStop (the frame after SE_EXP starts: it cuts SE_EXP
+  and MUS_EVOLUTION), PlayBGM(MUS_EVOLVED) (a fanfare song: it goes to SE2), PlayFanfare(MUS_LEVEL_UP), and
+  StopMapMusic + Overworld_PlaySpecialMapMusic when a move is learned or at the end (skipped on battle-test.html,
+  which has no field: `hasOverworldMusicHost`). `menus/evolutionGraphics.ts`: the sparkles' four SEs.
+  `menus/eggHatch.ts` (daycare.c): VAR_0x8005 = GetCurrentMapMusic(), Task_EggHatchPlayBGM (StopMapMusic, then
+  PlayBGM MUS_EVOLUTION_INTRO, MUS_EVOLUTION 60 frames later), SE_BALL, SE_EGG_HATCH, the cry, the MUS_EVOLVED
+  fanfare. `menus/tradeScene.ts` (trade_scene.c's wireless path): cachedMapMusic + PlayNewMapMusic(MUS_EVOLUTION) at
+  STATE_START, PlayNewMapMusic(cachedMapMusic) at the end, the two cries, the balls' / signal's SEs, MUS_EVOLVED; its
+  stand-in BattleUi's `playSE` is PlaySE (the ball open particles' SE_BALL_OPEN).
+- **m4aMPlayAllStop:** `gba/sound.ts` wraps the engine's and reports a `stop` per player that had a live track.
+- **Map music after script screens:** `OverworldScene.runScreenFromScript` calls Overworld_PlaySpecialMapMusic when
+  the screen left neither gFieldCallback nor gFieldCallback2: every screen it runs returns through a callback that
+  does (FieldCB_ContinueScriptHandleMusic: trades, egg hatching, the move relearner, the move tutor, the slot
+  machine; the diploma's FieldCB_WarpExitFadeFromBlack; RunFieldCallback's FieldCB_DefaultWarpExit). The ones that
+  set their own (the party menu's CB2_FadeFromPartyMenu, Easy Chat's FieldCB_ContinueScript, the move deleter's)
+  play none.
+- **Tests:** `tests/e2e/audioScenes.test.ts`: a Rare Candy evolution (the scene's stop of MUS_ROUTE1, Charmander's
+  cry, MUS_EVOLUTION_INTRO, MUS_EVOLUTION exactly the intro's length later, the four sparkle SEs, SE_EXP and the stop
+  one frame later, Charmeleon's cry, MUS_EVOLVED, MUS_ROUTE1 again); an egg hatching (MUS_DUMMY, MUS_EVOLUTION_INTRO a
+  frame later, MUS_EVOLUTION 60 after, SE_EGG_HATCH, the cry, MUS_EVOLVED, MUS_PALLET on the field); Reyley's trade
+  (MUS_EVOLUTION, both cries, MUS_EVOLVED, MUS_PEWTER again).
 
 ## Game state
 

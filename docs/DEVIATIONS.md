@@ -15,8 +15,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     have no contest stats), and DONTAE's Jynx holds its Fab Mail without the message (mail isn't modelled:
     GetInGameTradeMail / gLinkPartnerMail / MON_DATA_MAIL). The trade scene (menus/tradeScene.ts) skips
     CheckPartnersMonForRibbons (no ribbons; no in-game trade mon has any) and TradeEvolutionScene (no FRLG
-    in-game trade evolves), and is silent (no MUS_EVOLUTION / MUS_EVOLVED, cries or SEs). Only the in-game
-    (wireless) path is ported: DoTradeAnim_Cable is a link trade's.
+    in-game trade evolves). Only the in-game (wireless) path is ported: DoTradeAnim_Cable is a link trade's, and so
+    are CB2_SaveAndEndTrade's FadeOutBGM / IsBGMStopped wait. No PSG parts until W-m4a 4.
   - Lt. Surge's trash cans, Bill's cell separator: silent (SE_PIN, SE_UNLOCK, SE_BALL, SE_WARP_IN).
   - The Elite Four and Champion rooms' lighting (world/leagueLighting.ts): Task_CancelPokemonLeagueLightingEffect's
     BlendPalettes(palette 7 → black) while a fade runs does nothing (the field's fade is an overlay over everything,
@@ -76,9 +76,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     nudges its playback rate by up to ±0.5% to keep its 3-4 frame buffer filled (the page's frame loop and the
     audio clock drift apart); an underrun plays silence, a stall drops the oldest frames. The analog filtering
     after the GBA's DAC isn't modelled (sample-and-hold straight to the speakers, AUDIO_PLAN.md decision 8).
-  - Evolution scene: no PSG parts until W-m4a 4; EVOSTATE_RESTORE_SCREEN's `if (IsSEPlaying())` after SE_EXP goes
-    on unchecked (W-sound 7); the cries, the intro jingle (MUS_EVOLUTION_INTRO) and the other IsSEPlaying waits
-    hold the scene as on the GBA. The help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
+  - Evolution scene: no PSG parts until W-m4a 4. On battle-test.html (no field) EVOSTATE_END's
+    Overworld_PlaySpecialMapMusic is skipped: the BGM stays stopped. The help system isn't toggled; GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
     from the field uses fresh battle globals, so the backdrop follows the map's battle scene (gyms etc.) but not the
     last battle's type flags, which the GBA keeps (e.g. a Rare Candy right after a gym leader would draw the
     Leader terrain there). Mons have no language, markings, ribbons or mail, so EvolutionRenameMon always treats
@@ -307,9 +306,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     animation. The Hall of Fame's SetWarpsToRollCredits sets gDisableMapMusicChangeOnMapLoad but its DoWarp leaves the
     screen without TryFadeOutOldMapMusic and the BGMusicStopped wait (the field loads Indigo Plateau at once; with
     MUSIC_DISABLE_KEEP the music stays anyway). Of the screens that come back through FieldCB_ContinueScriptHandleMusic,
-    only the naming screen calls Overworld_PlaySpecialMapMusic: `runScreenFromScript`'s (party menu specials) and
-    the ones that set their own music (trades, the daycare, the move relearner, the slot machine: batch D) don't
-    yet. The ambient cries (ChooseAmbientCrySpecies, UpdateAmbientCry, PlayAmbientCry) aren't ported. Cable club /
+    SelectMoveDeleterMove's field callback (menus/partyMenuSpecials.ts) plays no Overworld_PlaySpecialMapMusic (the
+    deleter never changes the map music, so nothing is missed). The ambient cries (ChooseAmbientCrySpecies,
+    UpdateAmbientCry, PlayAmbientCry) aren't ported. Cable club /
     union room / link-return warps (DoCableClubWarp, ReturnFromLinkRoom, DoUnionRoomWarp) aren't ported (no link
     play).
   - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical; weather palettes ignored.

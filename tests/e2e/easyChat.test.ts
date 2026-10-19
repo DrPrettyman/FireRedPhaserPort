@@ -447,7 +447,10 @@ test('MYSTERY EVENT IS EXCITING typed: EventScript_GaveSpecialProfile', async ()
   await waitForField(game);
   // CompareProfileResponseWithPassphrase: VAR_0x8004 = 0, which the script checks before VAR_RESULT.
   expect(await untilMessage(game, /MYSTERY/, 'the profile in the message box')).toBe('MYSTERY EVENT IS EXCITING');
-  await untilMessage(game, /heard that before/, 'Text_HeardThatBefore');
+  // waitmessage, delay 80, msgbox: no input until Text_HeardThatBefore's \p, so wait for it without pressing (mashing A
+  // here once went past its first page and on into talking to her again, "Please tell me more about yourself next
+  // time!", until the test timed out)
+  expect(await game.eval((t) => t.until(() => /heard that before/.test(t.message() ?? ''), 2000))).toBe(true);
   await game.mashUntil((t) => t.idle() && !t.field()!.script, { what: 'the script over', button: 'B' });
   expect(await game.eval((t) => t.var('VAR_TEMP_1'))).toBe(1);
   expect(await game.eval((t) => t.state!.easyChatProfile.slice(0, 4))).toEqual(await wordIds(game, ['EC_WORD_MYSTERY', 'EC_WORD_EVENT', 'EC_WORD_IS', 'EC_WORD_EXCITING']));

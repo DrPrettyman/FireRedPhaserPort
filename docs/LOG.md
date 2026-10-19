@@ -3038,3 +3038,36 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   CB2_InitInGameTrade's one frame): the modules now load in an awaited eval first, 3 reruns green, cause added to
   tests/README.md. A headless render of MUS_PALLET (`tools/render-audio.ts`, 600 frames) gave 134,400 samples per
   FIFO, RMS 9.7 / peak 47 of 128.
+
+### W-sound 7a: the evolution scene's, egg hatching's and the in-game trade's sounds; map music after script screens
+
+- **Evolution scene** (`menus/evolutionScene.ts`, evolution_scene.c): m4aMPlayAllStop on entry and on a cancel,
+  PlayNewMapMusic(MUS_EVOLUTION), EVOSTATE_RESTORE_SCREEN's `if (IsSEPlaying())` after SE_EXP (no longer skipped:
+  the m4aMPlayAllStop the frame after it starts cuts SE_EXP and MUS_EVOLUTION), PlayBGM(MUS_EVOLVED),
+  PlayFanfare(MUS_LEVEL_UP), StopMapMusic + Overworld_PlaySpecialMapMusic when a move is learned or at the end
+  (battle-test.html has no field: skipped there). The cries, MUS_EVOLUTION_INTRO and the sparkles' SEs
+  (evolutionGraphics.ts, complete) were live already.
+- **Egg hatching** (`menus/eggHatch.ts`): gSpecialVar_0x8005 = GetCurrentMapMusic(), Task_EggHatchPlayBGM's
+  StopMapMusic; m4aSoundVSyncOn is a no-op (nothing turned the sound off).
+- **In-game trade** (`menus/tradeScene.ts`): cachedMapMusic + PlayNewMapMusic(MUS_EVOLUTION) at STATE_START,
+  PlayNewMapMusic(cachedMapMusic) at the end; its stand-in BattleUi's playSE is PlaySE (SE_BALL_OPEN). The cable /
+  link path's FadeOutBGM / IsBGMStopped wait isn't ported (no link play).
+- **Map music after script screens:** `OverworldScene.runScreenFromScript` calls Overworld_PlaySpecialMapMusic when
+  the screen set no field callback: in the C every such screen returns through FieldCB_ContinueScriptHandleMusic
+  (trades, egg hatching, the move relearner, the move tutor, the slot machine), FieldCB_WarpExitFadeFromBlack (the
+  diploma) or RunFieldCallback's FieldCB_DefaultWarpExit; the party menu's, Easy Chat's and the move deleter's set
+  their own. After egg hatching MUS_PALLET comes back on the field.
+- Shared: `gba/sound.ts` gains an `m4aMPlayAllStop` that reports a `stop` per player with a live track;
+  `gba/overworldMusic.ts` gains `hasOverworldMusicHost()`.
+- Found on the way (the full run): two test races, both fixed. gameCorner's slot machine read the main task in a
+  `.then()` after `t.until`, so a loss's MainTask_DarnNoPayout could be over before the read (now read inside the
+  predicate); easyChat's special profile mashed A through `delay 80` + Text_HeardThatBefore, which once went past the
+  page and on into talking to the woman again until the 120 s timeout (now waits in the page without pressing).
+- Tests: typecheck clean, 542 unit; new `tests/e2e/audioScenes.test.ts` (3: a Rare Candy evolution's events in
+  order with MUS_EVOLUTION exactly MUS_EVOLUTION_INTRO's length after it and SE_EXP stopped one frame after it
+  starts; an egg hatching's MUS_DUMMY / MUS_EVOLUTION_INTRO / MUS_EVOLUTION 60 frames later / cry / MUS_EVOLVED /
+  MUS_PALLET on the field; Reyley's trade's MUS_EVOLUTION, both cries, MUS_EVOLVED and MUS_PEWTER again); evolution,
+  eggHatch, daycare, inGameTrades, moveTutors, gameCorner (39) green. Full suite on 5e23095 + this (load ~90 from
+  the other workers): 410 e2e in 64 files, 408 passed, 27.4 min; the two failures are the races above, both green on
+  rerun after the fixes. No tick budgets needed raising (the waits this unit adds are a frame or none: the cries and
+  MUS_EVOLUTION_INTRO's wait were live already).
