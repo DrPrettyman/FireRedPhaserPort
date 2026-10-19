@@ -717,8 +717,9 @@ export class PsgSynth {
         this.pending = 0;
         this.clockSequencer();
       }
-      this.seqCountdown -= cyclesPerSample;
       if (interval === 0) {
+        // The box filter: the steps land on the samples' boundaries.
+        this.seqCountdown -= cyclesPerSample;
         this.mix(
           this.squareAverage(this.sq1, cyclesPerSample),
           this.squareAverage(this.sq2, cyclesPerSample),
@@ -729,25 +730,40 @@ export class PsgSynth {
         outR[i] = this.heldR;
         continue;
       }
-      // The held level changes only at the DAC's ticks, so the channels are moved on only there (and before the
-      // frame sequencer's steps, and at the end): `pending` is how far they lag.
+      // The held level changes only at the DAC's ticks, so the channels are moved on only there and at the frame
+      // sequencer's steps, each on its own cycle (a step on a tick's cycle first), and at the end: `pending` is how
+      // far they lag.
       let rem = cyclesPerSample;
       let accL = 0;
       let accR = 0;
-      while (this.dacCountdown <= rem) {
-        const c = this.dacCountdown;
-        accL += this.heldL * c;
-        accR += this.heldR * c;
-        this.advance(this.pending + c);
-        this.pending = 0;
-        rem -= c;
-        this.samplePoint();
-        this.dacCountdown = interval;
+      for (;;) {
+        const seq = this.seqCountdown;
+        const dac = this.dacCountdown;
+        if (seq <= rem && seq <= dac) {
+          this.advance(this.pending + seq);
+          this.pending = 0;
+          accL += this.heldL * seq;
+          accR += this.heldR * seq;
+          rem -= seq;
+          this.dacCountdown -= seq;
+          this.seqCountdown = FRAME_SEQUENCER_CYCLES;
+          this.clockSequencer();
+        } else if (dac <= rem) {
+          accL += this.heldL * dac;
+          accR += this.heldR * dac;
+          this.advance(this.pending + dac);
+          this.pending = 0;
+          rem -= dac;
+          this.seqCountdown -= dac;
+          this.samplePoint();
+          this.dacCountdown = interval;
+        } else break;
       }
       accL += this.heldL * rem;
       accR += this.heldR * rem;
       this.pending += rem;
       this.dacCountdown -= rem;
+      this.seqCountdown -= rem;
       outL[i] = accL / cyclesPerSample;
       outR[i] = accR / cyclesPerSample;
     }

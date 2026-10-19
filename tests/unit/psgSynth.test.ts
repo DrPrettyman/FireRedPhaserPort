@@ -358,6 +358,20 @@ describe('the wave channel', () => {
 });
 
 describe('mixing', () => {
+  test("through the DAC, the frame sequencer steps on its own cycle, not the output sample's boundary (W-ref 2b)", () => {
+    // Square 2 at 50% duty, frequency 0 (a duty step every 32,768 cycles from power-on): high from 229,376 to
+    // 294,912. Its envelope (15, down, a step per clock) steps at the sequencer's first step 7: 262,144 cycles.
+    // The output's sample 836 covers 262,086-262,399.5: the tick at 261,888 (15) holds for 58 cycles, the one at
+    // 262,144 (= 1,024 × 256) already sees 14.
+    const s = psg();
+    s.dacInterval = 256;
+    square2(s, 0x80, 0xf1, 0, 0, false);
+    const out = levels(s, 838, 313.5);
+    expect(out[835]).toBe(15);
+    expect(out[836]).toBeCloseTo((15 * 58 + 14 * 255.5) / 313.5, 6);
+    expect(out[837]).toBe(14);
+  });
+
   test('NR51 routes, NR50 scales each side (×1-8), SOUNDCNT_H bits 0-1 the PSG share', () => {
     const s = psg();
     s.write(PSG_NR51, 0x02); // square 2 right only
