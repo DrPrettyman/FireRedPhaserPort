@@ -1,6 +1,8 @@
-// The Trainer Tower's one special (data/specials.inc): trainer_tower.c's CallTrainerTowerFunc, which every
-// `ttower_*` macro calls with a TRAINER_TOWER_FUNC_* in VAR_0x8004. The functions are world/trainerTower.ts.
+// The Trainer Tower's specials (data/specials.inc): trainer_tower.c's CallTrainerTowerFunc, which every
+// `ttower_*` macro calls with a TRAINER_TOWER_FUNC_* in VAR_0x8004 (the functions are world/trainerTower.ts), and
+// battle_records.c's ShowBattleRecords (menus/battleRecords.ts), the lobby's TIME BOARD and the link records.
 
+import { BATTLE_RECORDS_GFX, ShowBattleRecords } from '../menus/battleRecords';
 import { CallTrainerTowerFunc } from '../world/trainerTower';
 import type { Special, SpecialEnv } from './specials';
 
@@ -22,5 +24,13 @@ export const TRAINER_TOWER_SPECIALS: Record<string, Special> = {
         });
       },
     });
+  },
+  /**
+   * ShowBattleRecords (battle_records.c) after `fadescreen FADE_TO_BLACK`: VAR_0x8004 1 the Trainer Tower's TIME
+   * BOARD, 0 the link battle results. It returns through CB2_ReturnToFieldContinueScriptPlayMapMusic; the script's
+   * `waitstate` ends once the field has faded back in.
+   */
+  ShowBattleRecords({ host, setWaitState }: SpecialEnv) {
+    setWaitState(host.runScreenFromScript(ShowBattleRecords, BATTLE_RECORDS_GFX));
   },
 };

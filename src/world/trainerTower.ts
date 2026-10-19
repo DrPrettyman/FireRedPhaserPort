@@ -11,8 +11,10 @@
 
 import { DisableVBlankCounter1, SetVBlankCounter1Ptr } from '../gba/main';
 import { PlayNewMapMusic } from '../gba/sound';
+import { COPYWIN_FULL, CopyWindowToVram, FillWindowPixelRect, PIXEL_FILL, PutWindowTilemap } from '../gba/window';
+import { bdata, charmap } from '../battle/env';
 import { ConvertIntToDecimalStringN, STR_CONV_MODE_LEADING_ZEROS, STR_CONV_MODE_LEFT_ALIGN, STR_CONV_MODE_RIGHT_ALIGN } from '../battle/stringUtil';
-import { setStringVar4 } from '../menus/common';
+import { setStringVar4, StringExpandPlaceholders, text } from '../menus/common';
 import { ConvertEasyChatWordsToString } from '../menus/easyChat';
 import type { Pokemon } from '../pokemon/Pokemon';
 import type { GameState } from '../state/GameState';
@@ -792,4 +794,48 @@ function PlayTrainerTowerEncounterMusic(state: GameState): void {
 /** HasSpokenToOwner (the receptionist's thanks) */
 function HasSpokenToOwner(state: GameState): void {
   setResult(state, currentTrainerTowerRecord(state).spokeToOwner ? 1 : 0);
+}
+
+// ------------------------------------------------------------------ battle_records.c's Trainer Tower page
+
+/** sTextColors: TEXT_COLOR_TRANSPARENT, TEXT_COLOR_DARK_GRAY, TEXT_COLOR_LIGHT_GRAY */
+const sTextColors = [0, 2, 3];
+
+/** A battle_message.c string (gText_TimeBoard, gText_XMinYZSec: battle/strings.json), encoded. */
+function battleMessageText(symbol: string): number[] {
+  return charmap.encode(bdata.strings.strings[symbol]);
+}
+
+/**
+ * AddTextPrinterParameterized3(windowId, FONT_NORMAL, x, y, color, 0, str) on the records screen's window
+ * (menus/battleRecords.ts, which logs it for its probe).
+ */
+export type RecordsPrinter = (windowId: number, x: number, y: number, color: number[], str: number[]) => void;
+
+/**
+ * PrintTrainerTowerRecords (battle_records.c's page for VAR_0x8004 != 0): TIME BOARD, then each challenge type's
+ * name and record time (PRINT_TOWER_TIME + gText_XMinYZSec), 20 px apart. The current challenge's record is
+ * validated first (a record of another set starts over).
+ */
+export function PrintTrainerTowerRecords(state: GameState, print: RecordsPrinter): void {
+  const windowId = 0;
+  const print3 = (x: number, y: number, str: number[]) => print(windowId, x, y, sTextColors, str);
+  SetUpTrainerTowerDataStruct(state);
+  try {
+    FillWindowPixelRect(0, PIXEL_FILL(0), 0, 0, 216, 144);
+    ValidateOrResetCurTrainerTowerRecord(state);
+    print3(0x4a, 0, battleMessageText('gText_TimeBoard'));
+    const typeTexts = bdata.strings.pointerTables.gTrainerTowerChallengeTypeTexts as string[];
+    for (let i = 0; i < state.defines.require('NUM_TOWER_CHALLENGE_TYPES'); i++) {
+      PRINT_TOWER_TIME(state, GetTrainerTowerRecordTime(state.trainerTower[i]));
+      const time = StringExpandPlaceholders(battleMessageText('gText_XMinYZSec'));
+      setStringVar4(time);
+      print3(0x18, 0x24 + 0x14 * i, text(typeTexts[i]));
+      print3(0x60, 0x24 + 0x14 * i, time);
+    }
+    PutWindowTilemap(windowId);
+    CopyWindowToVram(windowId, COPYWIN_FULL);
+  } finally {
+    FreeTrainerTowerDataStruct();
+  }
 }

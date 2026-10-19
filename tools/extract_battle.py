@@ -402,7 +402,7 @@ def extract_battle(decomp, out):
     for key, sym in re.findall(r"\[(\w+)\s*-\s*BATTLESTRINGS_TABLE_START\]\s*=\s*(\w+)", table_body):
         battle_strings[defines[key]] = sym
     pointer_tables = {}
-    for name in ("gStatNamesTable", "sStatNamesTable2", "sATypeMove_Table", "gPokeblockWasTooXStringTable"):
+    for name in ("gStatNamesTable", "sStatNamesTable2", "sATypeMove_Table", "gPokeblockWasTooXStringTable", "gTrainerTowerChallengeTypeTexts"):
         body = re.sub(r"//[^\n]*", "", c_array_body(msg_c, name))
         entries = []
         for e in [x.strip() for x in body.split(",") if x.strip()]:

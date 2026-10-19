@@ -50,6 +50,7 @@ import { helpMessageWindowProbe } from '../ui/HelpMessageWindow';
 import { optionMenuProbe } from '../menus/optionMenu';
 import { museumFossilPicProbe } from '../ui/MuseumFossilPic';
 import { daycareLevelMenuProbe } from '../ui/DaycareLevelMenu';
+import { battleRecordsProbe } from '../menus/battleRecords';
 import { diplomaProbe } from '../menus/diploma';
 import { easyChatProbe } from '../menus/easyChatScreen';
 import { seagallopProbe } from '../menus/seagallop';
@@ -637,6 +638,8 @@ function createApi(game: Phaser.Game) {
     daycareLevelMenu: () => daycareLevelMenuProbe(),
     /** The diploma screen (menus/diploma.ts): init / input state, NATIONAL or KANTO. */
     diploma: () => diplomaProbe(),
+    /** The battle records screen (menus/battleRecords.ts) while it runs: what it printed, decoded, with x / y. */
+    battleRecords: () => battleRecordsProbe()?.map((p) => ({ x: p.x, y: p.y, text: decode(p.str) })),
     /** The Easy Chat screen (menus/easyChatScreen.ts): the live model, the last command, the triangle cursor. */
     easyChat: () => easyChatProbe(),
     /** The Seagallop ferry scene (menus/seagallop.ts) while it's up: setup state, frames, BG3's x, the ferry, wakes. */

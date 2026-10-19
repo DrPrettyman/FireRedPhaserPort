@@ -428,3 +428,89 @@ test('whiting out during a challenge: back to the lobby (SetWhiteoutRespawnWarpA
   expect(await game.eval((t) => t.field())).toMatchObject({ map: 'TrainerTower_Lobby', x: 4, y: 11 });
   expect(await game.eval((t) => t.var('VAR_MAP_SCENE_TRAINER_TOWER'))).toBe(0);
 });
+
+// ---------------------------------------------------------------- the records (battle_records.c) and the full climb
+
+interface Printed {
+  x: number;
+  y: number;
+  text: string;
+}
+
+/**
+ * Read a records board (`special ShowBattleRecords` after `fadescreen`): wait for battle_records.c's MainCB2 with the
+ * fade in over, take what it printed, then A (Task_WaitButton: SE_SELECT, the fade out) back to the field.
+ */
+async function readRecords(game: Game, map: string, shot: string): Promise<{ printed: Printed[]; select: boolean }> {
+  await game.waitForScreen('MainCB2', { what: 'the records screen' });
+  const printed = (await game.eval((t) => (t as any).battleRecords())) as Printed[];
+  await game.screenshot(shot);
+  const mark = await game.mark();
+  await game.press('A');
+  await game.eval((_t, map) => ((window as any).__ttMap = map), map);
+  await game.waitFor((t) => t.idle() && !t.field()!.script && t.field()!.map === (window as any).__ttMap, { what: 'back on the field' });
+  const select = (await game.eval((t, s) => t.audioEvents(s), mark)).some((e) => e.type === 'se' && e.name === 'SE_SELECT');
+  return { printed, select };
+}
+
+/** The lobby's TIME BOARD (TrainerTower_Lobby_EventScript_ShowRecords: VAR_0x8004 = 1) from the sign at (8, 10). */
+async function timeBoard(game: Game, shot: string): Promise<Printed[]> {
+  await game.eval((t) => t.walkTo(8, 11));
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  const { printed, select } = await readRecords(game, 'TrainerTower_Lobby', shot);
+  expect(select).toBe(true);
+  return printed;
+}
+
+/** "59MIN. 59.99SEC." as PRINT_TOWER_TIME prints `frames` (the probe's decode collapses spaces). */
+function towerTime(frames: number): string {
+  const min = Math.floor(frames / 3600);
+  const sec = Math.floor((frames % 3600) / 60);
+  const cs = Math.floor(((frames % 60) * 168) / 100);
+  return `${min}MIN. ${sec}.${String(cs).padStart(2, '0')}SEC.`.replace(/ +/g, ' ');
+}
+
+/** PrintTrainerTowerRecords' lines: TIME BOARD at (74, 0), each type's name at (24, 36 + 20i) and time at (96, ...). */
+function board(times: number[]): Printed[] {
+  const names = ['SINGLE', 'DOUBLE', 'KNOCKOUT', 'MIXED'];
+  return [{ x: 0x4a, y: 0, text: 'TIME BOARD' }, ...times.flatMap((t, i) => [
+    { x: 0x18, y: 0x24 + 0x14 * i, text: names[i] },
+    { x: 0x60, y: 0x24 + 0x14 * i, text: towerTime(t) },
+  ])];
+}
+
+const MAX_TIME = 215999; // TRAINER_TOWER_MAX_TIME (ResetTrainerTowerResults)
+
+test('the link records machine (CableClub_EventScript_ShowBattleRecords, VAR_0x8004 = 0): the totals and five empty rows', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'ViridianCity_PokemonCenter_2F', x: 13, y: 4, party: [MEWTWO] });
+  // The MB_BATTLE_RECORDS metatile is at (12, 3)
+  await game.eval((t) => t.walkTo(12, 4));
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  const { printed, select } = await readRecords(game, 'ViridianCity_PokemonCenter_2F', 'battle-records-link');
+  expect(select).toBe(true);
+  const name = await game.eval((t) => t.state!.playerName);
+  // PrintBattleRecords: the title centred in 0xD0, the total record at (12, 24), the column headers at (0x54, 0x30)
+  expect(printed[0]).toMatchObject({ y: 4, text: `${name}’s BATTLE RESULTS` });
+  expect(printed[1]).toEqual({ x: 12, y: 24, text: 'TOTAL RECORD W:0 L:0 D:0 ' });
+  expect(printed[2]).toMatchObject({ x: 0x54, y: 0x30 });
+  expect(printed[2].text).toMatch(/^WIN ?LOSE ?DRAW$/);
+  // PrintOpponentBattleRecord: no link battles, so every row is dashes at 0, 0x54, 0x84, 0xB4, 14 px apart
+  const rows = printed.slice(3);
+  expect(rows).toHaveLength(5 * 4);
+  for (let i = 0; i < 5; i++) {
+    const y = 0x3d + 14 * i;
+    expect(rows.slice(i * 4, i * 4 + 4)).toEqual([
+      { x: 0, y, text: '-------' },
+      { x: 0x54, y, text: '----' },
+      { x: 0x84, y, text: '----' },
+      { x: 0xb4, y, text: '----' },
+    ]);
+  }
+});
+
+test('the lobby\'s records board shows each challenge\'s record time (a new game: 59 min. 59.99 sec.)', async () => {
+  const game = await lobby();
+  expect(await timeBoard(game, 'time-board-new')).toEqual(board([MAX_TIME, MAX_TIME, MAX_TIME, MAX_TIME]));
+});

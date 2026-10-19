@@ -95,7 +95,7 @@ export const SPECIALS: Record<string, Special> = {
   ...AUDIO_SPECIALS, // audioSpecials.ts: PlayTrainerEncounterMusic, Script_FadeOutMapMusic
   ...POSTGAME_SPECIALS, // postgameSpecials.ts: the postgame's specials (BrailleCursorToggle, ...)
   ...EVENT_ISLAND_SPECIALS, // eventIslandSpecials.ts: ShakeScreen, LoopWingFlapSound, Birth Island's triangle
-  ...TRAINER_TOWER_SPECIALS, // trainerTowerSpecials.ts: trainer_tower.c's CallTrainerTowerFunc (world/trainerTower.ts)
+  ...TRAINER_TOWER_SPECIALS, // trainerTowerSpecials.ts: trainer_tower.c's CallTrainerTowerFunc (world/trainerTower.ts), battle_records.c's ShowBattleRecords
 
   // field_player_avatar.c / bike.c / field_specials.c's player avatar specials
   ForcePlayerOntoBike,

@@ -33,7 +33,6 @@ export const KNOWN_GAPS: KnownGap[] = [
   { kind: 'special', name: 'GetHeracrossSizeRecordInfo', tag: 'postgame', where: "SixIsland_WaterPath_House1" },
   { kind: 'special', name: 'SampleResortGorgeousMonAndReward', tag: 'postgame', where: "FiveIsland_ResortGorgeous_House" },
   { kind: 'special', name: 'SetPostgameFlags', tag: 'postgame', where: "OneIsland_PokemonCenter_1F" },
-  { kind: 'special', name: 'ShowBattleRecords', tag: 'postgame', where: "(CableClub_EventScript_ShowBattleRecords), TrainerTower_Lobby" },
   { kind: 'movement', name: 'disable_anim', tag: 'postgame', where: "SixIsland_DottedHole_SapphireRoom" },
   { kind: 'movement', name: 'restore_anim', tag: 'postgame', where: "SixIsland_DottedHole_SapphireRoom" },
   // ---------------------------------------------------------------- link: link cable / wireless features (union room, cable club, minigames, Mystery Gift, e-Reader).

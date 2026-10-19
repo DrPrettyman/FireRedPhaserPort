@@ -26,7 +26,8 @@ from extract import read_jasc
 # pokedex_area_markers.c's markers), the Itemfinder's arrows and star (itemfinder.c), and the trainer card
 # (trainer_card.c), the move relearner's scroll arrows (learn_move.c), the slot machine (slot_machine.c), and the
 # Seagallop ferry scene (seagallop.c), the S.S. Anne's departure (ss_anne.c), Birth Island's triangle palettes
-# (field_specials.c's sDeoxysObjectPals) and the Deoxys rock's fragments (field_effect.c, already under field_effects/).
+# (field_specials.c's sDeoxysObjectPals), the Deoxys rock's fragments (field_effect.c, already under field_effects/)
+# and the battle records' frame (battle_records.c).
 GFX_PREFIXES = (
     "graphics/battle_interface/",
     "graphics/battle_terrain/",
@@ -74,6 +75,7 @@ GFX_PREFIXES = (
     "graphics/seagallop/",  # seagallop.c, the ferry scene (W-ferry)
     "graphics/easy_chat/",  # easy_chat_3.c, the Easy Chat screen (W-easychat)
     "graphics/field_specials/",  # field_specials.c's sDeoxysObjectPals, Birth Island's triangle (W-events)
+    "graphics/battle_records/",  # battle_records.c, the Trainer Tower's TIME BOARD and the link records (W-ttower)
     "data/tilesets/",
 )
 
