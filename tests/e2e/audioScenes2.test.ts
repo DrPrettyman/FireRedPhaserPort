@@ -45,8 +45,9 @@ test('the Hall of Fame: MUS_HALL_OF_FAME, SE_SAVE, a cry per mon on its timer, S
   // The first cry ducks the BGM (PlayCry_Normal: volume 85, Task_DuckBGMForPokemonCry restores it after the cry);
   // the screen doesn't wait for it: its 120-frame timer runs alongside
   const duck = await game.eval(async (t) => {
-    await t.until(() => t.audio().cry.duckTaskActive, 3600);
-    const ducked = t.audio().players.BGM.volume;
+    // read inside the predicate: the page can run several ticks before the awaiting code goes on
+    let ducked: number | null = null;
+    await t.until(() => t.audio().cry.duckTaskActive && (ducked = t.audio().players.BGM.volume) !== null, 3600);
     await t.until(() => !t.audio().cry.duckTaskActive, 600);
     return { ducked, restored: t.audio().players.BGM.volume };
   });
@@ -119,7 +120,7 @@ test('the Hall of Fame PC: a cry per mon shown, the last one stopped first; B du
   const game = await session.start(PC);
   await game.eval((t) => {
     const s = t.state!;
-    const team = ['MEWTWO', 'PIKACHU'].map((sp) => {
+    const team = ['MEWTWO', 'JYNX'].map((sp) => {
       const species = t.define(`SPECIES_${sp}`);
       return { tid: s.trainerId, personality: 0, species, lvl: 50, nick: [...s.pokemon.speciesName(species)] };
     });
@@ -136,28 +137,32 @@ test('the Hall of Fame PC: a cry per mon shown, the last one stopped first; B du
   await game.eval((t) => t.waitFrames(60));
   await game.pressTimes('DOWN', 3);
   await game.press('A');
-  const [mewtwo, pikachu] = await game.eval((t) => [t.define('SPECIES_MEWTWO'), t.define('SPECIES_PIKACHU')]);
-  // Mewtwo's page, then DOWN to Pikachu's; B while Pikachu's cry plays (all in the page, so it is still playing)
+  const [mewtwo, jynx] = await game.eval((t) => [t.define('SPECIES_MEWTWO'), t.define('SPECIES_JYNX')]);
+  // Mewtwo's page, then DOWN to Jynx's; B while Jynx's cry plays (the longest cry, 135 frames: the press lands where
+  // the page's batch of ticks ends, which can be dozens of ticks after the cry starts)
   const state = await game.eval(async (t) => {
     const ready = () => t.hallOfFame()?.task === 'Task_HofPC_HandleInput';
     await t.until(() => ready() && t.audio().cry.playing, 3600);
     await t.waitFrames(2);
     await t.press('DOWN');
-    await t.until(() => ready() && t.events().filter((e) => e.type === 'hallOfFamePcMon').length === 2 && t.audio().cry.playing, 600);
-    const ducked = t.audio().players.BGM.volume;
-    await t.press('B');
-    await t.until(() => t.events().some((e) => e.type === 'hallOfFamePcExit'), 600);
-    return { ducked, cryPlaying: t.audio().cry.playing };
+    let ducked: number | null = null;
+    await t.until(() => ready() && t.events().filter((e) => e.type === 'hallOfFamePcMon').length === 2 && t.audio().cry.playing && (ducked = t.audio().players.BGM.volume) !== null, 600);
+    let playingAtB: boolean | null = null;
+    await t.mash(() => {
+      playingAtB ??= t.audio().cry.playing; // the tick the first B is decided in
+      return t.events().some((e) => e.type === 'hallOfFamePcExit');
+    }, 'B', 600);
+    return { ducked, playingAtB, cryPlaying: t.audio().cry.playing };
   });
-  expect(state).toEqual({ ducked: 85 >> 2, cryPlaying: false });
+  expect(state).toEqual({ ducked: 85 >> 2, playingAtB: true, cryPlaying: false });
   const evs = await audioEvents(game, since);
   const msg = show(evs);
   const cries = evs.filter((e) => e.type === 'cry').map((e) => e.id);
-  expect(cries, msg).toEqual([mewtwo, pikachu]);
-  // Task_HofPC_PrintMonInfo's StopCryAndClearCrySongs before Pikachu's cry, Task_HofPC_HandleInput's on B after it
-  const pika = evs.findIndex((e) => e.type === 'cry' && e.id === pikachu);
-  expect(evs[pika - 1], msg).toMatchObject({ type: 'stop' });
-  expect(evs.slice(pika + 1).some((e) => e.type === 'stop' && e.player.startsWith('CRY')), msg).toBe(true);
+  expect(cries, msg).toEqual([mewtwo, jynx]);
+  // Task_HofPC_PrintMonInfo's StopCryAndClearCrySongs before Jynx's cry, Task_HofPC_HandleInput's on B after it
+  const second = evs.findIndex((e) => e.type === 'cry' && e.id === jynx);
+  expect(evs[second - 1], msg).toMatchObject({ type: 'stop' });
+  expect(evs.slice(second + 1).some((e) => e.type === 'stop' && e.player.startsWith('CRY')), msg).toBe(true);
   // m4aMPlayVolumeControl(&gMPlayInfo_BGM, TRACKS_ALL, 0x100); then back on the field the map's music as before
   await game.waitFor((t) => /Which PC/.test(t.message() ?? '') && !t.gbaScreen(), { what: 'the PC menu again' });
   expect(await bgm(game)).toMatchObject({ song: music, playing: true, volume: 64 });
