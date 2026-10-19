@@ -64,6 +64,16 @@ function expectUnshaded(w: Probe, weather = WEATHER_NONE) {
   expect(w.player.now).toEqual(w.player.original);
 }
 
+/**
+ * After a dev start: the field takes input and the weather's own fade in (WeatherFadeScreen from the start, then
+ * Task_WeatherInit and the gamma steps) is over. The field is idle before the weather is, so probing right after
+ * waitIdle raced the weather task under load.
+ */
+async function startedIdle(game: Game) {
+  await game.waitIdle();
+  await game.waitFor((t) => t.weather()!.palProcessingState === 3, { what: 'the weather idle (WEATHER_PAL_STATE_IDLE)' });
+}
+
 /** Walk `dir` onto a warp and wait until the new map is up and the field takes input. */
 async function warp(game: Game, dir: 'up' | 'down', to: string) {
   await game.walk(dir);
@@ -73,7 +83,7 @@ async function warp(game: Game, dir: 'up' | 'down', to: string) {
 
 test('Viridian Forest is shaded: the fade in blends to the shaded palettes in 16 frames; leaving it lifts the shade', async () => {
   const game = await session.start({ start: 'after-rival', map: 'Route2_ViridianForest_SouthEntrance', x: 7, y: 2 });
-  await game.waitIdle();
+  await startedIdle(game);
   expectUnshaded(await probe(game));
 
   // The frames the weather fades the screen in (FadeInScreen_RainShowShade: WEATHER_PAL_STATE_SCREEN_FADING_IN)
@@ -106,7 +116,7 @@ test('Viridian Forest is shaded: the fade in blends to the shaded palettes in 16
 
 test('a Tanoby chamber darkens through EventScript_TryDarkenRuins (its header says NONE), not once the ruins are unlocked', async () => {
   const game = await session.start({ start: 'after-rival', map: 'SevenIsland_TanobyRuins', x: 120, y: 11 });
-  await game.waitIdle();
+  await startedIdle(game);
   await warp(game, 'up', 'SevenIsland_TanobyRuins_MoneanChamber');
   const dark = await probe(game);
   expect(dark.savedWeather, 'setweather WEATHER_SHADE').toBe(WEATHER_SHADE);
@@ -125,7 +135,7 @@ test('a Tanoby chamber darkens through EventScript_TryDarkenRuins (its header sa
 
 test("Navel Rock's summit: Ho-Oh's scene lifts the shade (setweather 0, doweather: a gamma step a frame)", async () => {
   const game = await session.start({ start: 'after-rival', map: 'NavelRock_Summit', x: 9, y: 13 });
-  await game.waitIdle();
+  await startedIdle(game);
   expectShaded(await probe(game));
   // The trigger above (VAR_TEMP_1 == 0: FLAG_HO_OH_FLEW_AWAY unset) runs NavelRock_Summit_EventScript_HoOh
   const lifted = game.watch(
@@ -147,7 +157,7 @@ test("Navel Rock's summit: Ho-Oh's scene lifts the shade (setweather 0, doweathe
 
 test("the weather is saved: CONTINUE in a darkened Tanoby chamber is dark again (its header's weather is NONE)", async () => {
   const game = await session.start({ start: 'after-rival', map: 'SevenIsland_TanobyRuins', x: 120, y: 11 });
-  await game.waitIdle();
+  await startedIdle(game);
   await warp(game, 'up', 'SevenIsland_TanobyRuins_MoneanChamber');
   await game.walk('up');
   // START → SAVE → YES
