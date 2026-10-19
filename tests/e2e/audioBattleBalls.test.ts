@@ -149,3 +149,32 @@ test("a send-out in the red starts the beep, and winning stops it before the vic
   expect(victory).toBeTruthy();
   expect((await se3(game)).playing).toBe(false);
 });
+
+test("a double battle's intro: each side's left mon cries in CRY_MODE_DOUBLES, its right one after it, CRY_MODE_NORMAL", async () => {
+  // Cool Couple Ray & Tyra (trainerbattle_double) on Victory Road 3F: Ray at (38, 13) faces down, sight 1.
+  const game = await session.start({
+    start: 'after-rival', map: 'VictoryRoad_3F', x: 38, y: 15,
+    party: [
+      { species: 'MEWTWO', level: 100, moves: ['PSYCHIC'] },
+      { species: 'MEW', level: 100, moves: ['PSYCHIC'] },
+    ],
+  });
+  const since = await game.mark();
+  // The BGM's volume (volX: 64 = full) when the left mons' balls open: SpriteCB_ReleaseMonFromBall sets 128 (32).
+  const halved = game.watch((t) => t.audioEvents().some((e) => e.type === 'cry' && e.mode === 1) && t.audio().players.BGM.volume, { what: 'the first doubles cry' });
+  await game.walk('up');
+  await game.waitForEvent('trainerApproach', { since, what: 'Ray to spot the player' });
+  await game.mashUntil((t) => t.battle()?.controller?.startsWith('HandleInputChooseAction') ?? false, { what: 'the action menu', timeout: 240_000 });
+  expect(await halved).toBe(32);
+  const K = await defines(game, ['SPECIES_MEWTWO', 'SPECIES_MEW', 'CRY_MODE_NORMAL', 'CRY_MODE_DOUBLES']);
+  const cries = (await game.eval((t, s) => t.audioEvents(s), since)).filter((e) => e.type === 'cry');
+  const opp = cries.filter((e) => e.pan === 25);
+  const player = cries.filter((e) => e.pan === -25);
+  expect(opp.map((e) => e.mode)).toEqual([K.CRY_MODE_DOUBLES, K.CRY_MODE_NORMAL]);
+  expect(player).toMatchObject([
+    { id: K.SPECIES_MEWTWO, mode: K.CRY_MODE_DOUBLES },
+    { id: K.SPECIES_MEW, mode: K.CRY_MODE_NORMAL },
+  ]);
+  // Task_PlayCryWhenReleasedFromBall's case 3 waits 6 frames, then until the first cry is over, then 3 more.
+  expect(player[1].frame - player[0].frame).toBeGreaterThan(9);
+});
