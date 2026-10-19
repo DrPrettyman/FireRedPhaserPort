@@ -148,6 +148,8 @@ export class GameState {
 
   private flags = new Set<number>();
   private vars = new Map<number, number>();
+  /** Called after every setVar (OverworldScene: a VAR_OBJ_GFX_ID_* starts loading the sprite sheet it names). */
+  onSetVar?: (id: number, value: number) => void;
   /** STR_VAR_1..3 contents as encoded bytes (filled by buffer* script commands). */
   stringVars: number[][] = [[], [], []];
 
@@ -399,7 +401,9 @@ export class GameState {
 
   setVar(v: string | number, value: number): void {
     const n = this.id(v);
-    if (n !== undefined) this.vars.set(n, value & 0xffff);
+    if (n === undefined) return;
+    this.vars.set(n, value & 0xffff);
+    this.onSetVar?.(n, value & 0xffff);
   }
 
   /** VarGet semantics: ids below VARS_START are literal values, not variables. */

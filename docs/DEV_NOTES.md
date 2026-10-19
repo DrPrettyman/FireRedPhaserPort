@@ -11,6 +11,19 @@ this is the next level down. When you add or change a subsystem, update its entr
   them into Phaser depths between the `below`/`above` layers, or above `above` for priority 1. The camera follows
   `ObjectEvent.anchor`, which leaves out the jump lift. `OBJ_EVENT_GFX_VAR_*` graphics are resolved from
   `VAR_OBJ_GFX_ID_*` at spawn (`resolveGraphicsId`).
+- **Object sprite sheets and dynamic graphics:** `preloadMapSprites` loads every loaded map's object sheets on map
+  entry, again after ON_TRANSITION / ON_LOAD with the VAR_OBJ_GFX_ID_* they set, so spawns are synchronous. A sheet
+  that isn't in at a spawn (a script set a VAR_OBJ_GFX_ID_* to one the map doesn't use) loads on demand, as
+  SpawnObjectEventInternal reads the graphics from ROM in that frame: `GameState.onSetVar` makes any VarSet of
+  VAR_OBJ_GFX_ID_0..F (`setvar`, `copyvar`, specials like SetTrainerTowerNPCGraphics) start loading the sheet
+  (`loadObjectSprite`, `spriteLoadsPending`); `addobject` (`OverworldScene.addObject` returns FALSE while it loads)
+  sets `ScriptEngine.frameHeld`, and the field holds the rest of the frame (`heldFrame`: no input sample, no
+  logic, no VBlank) until the sheet is in, then `tick` runs the frame on from `scripts.tick()` (`tickFieldStart` is
+  the part before), so the object is out in the C's frame. A camera step's spawn that finds a sheet loading sets
+  `spawnsWaiting`: the next frame waits and spawns it first. Text colour comes from the resolved graphics
+  (ContextNpcGetTextColor). Checked by `tests/e2e/dynamicGfx.test.ts` (Fuchsia's statue, Birth Island's Deoxys,
+  Viridian's old man, a dev script that sets a var to an unloaded sheet and adds the object; `t.runScript(label,
+  code)` runs raw commands, `t.objects()` has each sprite's `texture`, `t.textColor()`), and trainerTower.test.ts.
 - **Player avatar:** `world/playerAvatar.ts` is field_player_avatar.c and `world/bike.ts` is bike.c; like the C,
   `gPlayerAvatar` (flags, runningState, tileTransitionState, ...) is a module global, so specials and item uses
   call `TestPlayerAvatarFlags`, `SetPlayerAvatarTransitionFlags`, `GetOnOffBike` etc. directly. OverworldScene

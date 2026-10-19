@@ -354,8 +354,19 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private templates = new Map<string, ObjectEventData[]>();
   /** OBJ_EVENT_GFX_* name by number, for resolving the values of VAR_OBJ_GFX_ID_*. */
   private graphicsIdNames = new Map<number, string>();
-  /** Graphics ids already warned about as unloadable, so the per-step spawn check doesn't spam. */
+  /** Graphics ids whose sheet failed to load (not tried again). */
   private missingSprites = new Set<string>();
+  /** Graphics ids already warned about as unloadable, so the per-step spawn check doesn't spam. */
+  private warnedSprites = new Set<string>();
+  /** Sprite sheets loading for objects (a VAR_OBJ_GFX_ID_* naming one the map didn't preload: loadObjectSprite). */
+  private spriteLoadsPending = new Set<string>();
+  /**
+   * The frame a script stopped in for a sheet in `spriteLoadsPending` (ScriptEngine.frameHeld: `addobject`): the
+   * frame-start state it had, to run the frame on from the script once the sheet is in.
+   */
+  private heldFrame?: { lockedAtFrameStart: boolean; freeAtFrameStart: boolean };
+  /** A camera step's spawn found an object's sheet loading: the next frame waits for it and spawns it first. */
+  private spawnsWaiting = false;
   /** What objects see of the field: tile elevations and the sprite camera offset. */
   private readonly field: ObjectEventField = {
     elevationAt: (x, y) => this.world.tileAt(x, y).elevation,
@@ -424,6 +435,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       fromSaveData(start.continueGame, this.state); // LoadSerializedGame & co. (load_save.c)
     }
     if (start.newGameProfile) Object.assign(this.state, start.newGameProfile);
+    // A VarSet of VAR_OBJ_GFX_ID_0..F (`setvar`, a special) starts loading the sheet it names, so that a spawn
+    // soon after (SpawnObjectEventInternal reads the graphics from ROM at once) finds it in or on its way.
+    const gfxVar0 = this.defines.require('VAR_OBJ_GFX_ID_0');
+    this.state.onSetVar = (id, value) => {
+      if (id >= gfxVar0 && id <= gfxVar0 + 0xf) this.loadObjectSprite(this.graphicsIdFromVar(value));
+    };
     const kb = this.input.keyboard!;
     this.buttons = new Input(this);
 
@@ -783,8 +800,20 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         facing: n.brain.obj.facing,
         movementType: n.brain.movementType,
         frame: Number(n.brain.obj.sprite.frame.name),
+        texture: n.brain.obj.sprite.texture.key,
         ...n.brain.spriteOffset,
       }));
+  }
+
+  /** Dev: start a script of raw commands ([op, ...args], as extracted) as a field script (dynamicGfx.test.ts). */
+  testRunScript(label: string, code: string[][]): boolean {
+    this.scripts.defineScript(label, code);
+    return this.startFieldScript(label);
+  }
+
+  /** Dev: ContextNpcGetTextColor for the running script ('male' / 'female' / 'neutral'). */
+  testTextColor(): string {
+    return this.scripts.contextTextColor();
   }
 
   /** Dev: the direction to push to take the warp the player stands on (stairs, arrow mats), if it is one. */
@@ -849,10 +878,21 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   // ------------------------------------------------------------------ frame logic
 
   private tick(): void {
-    this.buttons.sample();
-    // CallCallbacks: RunHelpSystemCallback first; while the help is up the field's callbacks and VBlank don't run
-    const help = this.help?.tick(this.buttons) ?? false;
-    if (!help) this.tickField();
+    // A sprite sheet an object needs is still loading: the frame waits for it (see heldFrame / spawnsWaiting)
+    if ((this.heldFrame || this.spawnsWaiting) && this.spriteLoadsPending.size) return;
+    const held = this.heldFrame;
+    this.heldFrame = undefined;
+    let help = false;
+    if (!held) {
+      if (this.spawnsWaiting) {
+        this.spawnsWaiting = false;
+        this.updateObjectsForCamera(); // the last camera step's TrySpawnObjectEvents, now the sheet is in
+      }
+      this.buttons.sample();
+      // CallCallbacks: RunHelpSystemCallback first; while the help is up the field's callbacks and VBlank don't run
+      help = this.help?.tick(this.buttons) ?? false;
+    }
+    if (!help && !this.tickField(held)) return; // held mid-frame for a sprite sheet: the rest runs once it's in
     PlayTimeCounter_Update(this.state.playTime); // AgbMain, once per frame
     VBlankCounter1Update(); // VBlankIntr: the Trainer Tower's timer (world/trainerTower.ts)
     AgbMainFrameEnd(!help); // the sound tasks (not while the help is up), MapMusicMain, m4aSoundMain
@@ -861,7 +901,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.gbaScreen.frame(); // the GBA layer's half of the frame, when it's in use
   }
 
-  private tickField(): void {
+  /** The field's frame up to the scripts. */
+  private tickFieldStart(): { lockedAtFrameStart: boolean; freeAtFrameStart: boolean } {
     // OverworldBasic's UpdateTilesetAnimations, and VBlank's transfer of what it queued. CB2_Overworld
     // removes the VBlank callback while a palette fade runs, so no frames are copied then (and on the GBA
     // layer, VBlankCB_Field does the transfer until a battle transition replaces it).
@@ -885,7 +926,17 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const freeAtFrameStart = !this.busy && !lockedAtFrameStart && this.trainerApproach === undefined;
     this.trainerApproach?.tick();
     if (this.trainerApproach?.done) this.trainerApproach = undefined;
+    return { lockedAtFrameStart, freeAtFrameStart };
+  }
+
+  /** The field's frame; FALSE if a script stopped it for a sprite sheet (heldFrame), `held` resumes it. */
+  private tickField(held?: { lockedAtFrameStart: boolean; freeAtFrameStart: boolean }): boolean {
+    const { lockedAtFrameStart, freeAtFrameStart } = held ?? this.tickFieldStart();
     this.scripts.tick();
+    if (this.scripts.frameHeld) {
+      this.heldFrame = { lockedAtFrameStart, freeAtFrameStart };
+      return false;
+    }
     // (a task may create another, which must survive this frame's filtering)
     const tasks = this.fieldTasks;
     this.fieldTasks = [];
@@ -924,7 +975,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (this.questLogPlaybackCB1()) {
       if (!this.busy) this.doCB1OverworldQuestLogPlayback(freeAtFrameStart);
     } else if (this.doCB1Overworld(lockedAtFrameStart, freeAtFrameStart)) {
-      return;
+      return true;
     }
 
     // AnimateSprites runs every object's ObjectEventUpdateSubpriority against last frame's camera;
@@ -935,6 +986,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.poisonEffect?.tick();
     if (this.poisonEffect && !this.poisonEffect.active) this.poisonEffect = undefined;
     this.updateFieldCamera();
+    return true;
   }
 
   /** CB1_Overworld's choice: QL_GetPlaybackState() == RUNNING or gQuestLogState == QL_STATE_PLAYBACK */
@@ -2170,8 +2222,26 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private resolveGraphicsId(id: string): string {
     if (!this.isDynamicGraphicsId(id)) return id;
     const n = this.defines.require(id) - this.defines.require('OBJ_EVENT_GFX_VARS');
-    const gfx = this.state.getVar(this.defines.require('VAR_OBJ_GFX_ID_0') + n); // VarGetObjectEventGraphicsId
+    return this.graphicsIdFromVar(this.state.getVar(this.defines.require('VAR_OBJ_GFX_ID_0') + n)); // VarGetObjectEventGraphicsId
+  }
+
+  /** A VAR_OBJ_GFX_ID_* value's OBJ_EVENT_GFX_* (GetObjectEventGraphicsInfo: out of range is LITTLE_BOY). */
+  private graphicsIdFromVar(gfx: number): string {
     return this.graphicsIdNames.get(gfx) ?? 'OBJ_EVENT_GFX_LITTLE_BOY';
+  }
+
+  /**
+   * Start loading an object's sprite sheet if it isn't in (a VAR_OBJ_GFX_ID_* naming one the map didn't preload).
+   * Until it is, `spriteLoadsPending` has it and a spawn that needs it holds the frame (heldFrame, spawnsWaiting).
+   */
+  private loadObjectSprite(id: string): void {
+    const info = this.assets.sprites[id];
+    if (!info || this.textures.exists(spriteTextureKey(info)) || this.spriteLoadsPending.has(id) || this.missingSprites.has(id)) return;
+    this.spriteLoadsPending.add(id);
+    void this.assets.loadSprite(this, id).finally(() => {
+      this.spriteLoadsPending.delete(id);
+      if (!this.textures.exists(spriteTextureKey(info))) this.missingSprites.add(id); // (spawnNpc warns, once)
+    });
   }
 
   private clearNpcs(): void {
@@ -2233,6 +2303,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         if (this.npcByLocalId(localId, chunk)) return;
         const n = this.spawnNpc(t, localId, chunk);
         if (n) this.npcs.push(n);
+        else if (this.spriteLoadsPending.has(this.resolveGraphicsId(t.graphics_id))) this.spawnsWaiting = true;
       });
     }
   }
@@ -2250,8 +2321,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const graphicsId = this.resolveGraphicsId(e.graphics_id);
     const info = this.assets.sprites[graphicsId];
     if (!info || !this.textures.exists(spriteTextureKey(info))) {
-      if (!this.missingSprites.has(graphicsId)) console.warn(`[overworld] no sprite loaded for ${graphicsId} (${e.graphics_id})`);
-      this.missingSprites.add(graphicsId);
+      // Not in yet (a VAR_OBJ_GFX_ID_* set to a sheet the map didn't preload): the caller waits for it
+      this.loadObjectSprite(graphicsId);
+      if (this.spriteLoadsPending.has(graphicsId)) return undefined;
+      if (!this.warnedSprites.has(graphicsId)) console.warn(`[overworld] no sprite loaded for ${graphicsId} (${e.graphics_id})`);
+      this.warnedSprites.add(graphicsId);
       return undefined;
     }
     const obj = new ObjectEvent(this, info, chunk.originX + e.x, chunk.originY + e.y, this.field, e.elevation);
@@ -3801,12 +3875,14 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }
   }
 
-  addObject(localId: number): void {
-    if (this.npcByLocalId(localId)) return;
+  /** addobject (TrySpawnObjectEvent); FALSE while the object's sprite sheet loads (the script holds the frame). */
+  addObject(localId: number): boolean {
+    if (this.npcByLocalId(localId)) return true;
     const t = this.templatesFor(this.world.current)[localId - 1];
-    if (!t) return;
+    if (!t) return true;
     const n = this.spawnNpc({ ...t, flag: '0' }, localId);
     if (n) this.npcs.push(n);
+    return n !== undefined || !this.spriteLoadsPending.has(this.resolveGraphicsId(t.graphics_id));
   }
 
   setObjectTemplate(localId: number, patch: { x?: number; y?: number; movementType?: string }): void {

@@ -4356,3 +4356,36 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   Shock's dim BG palettes 1-3 change, 0 and 4 don't, and the healthbox palette doesn't.
 - Also: specials.ts' NO_OP comment said "quest log"; it now holds only link-play specials.
 - Typecheck, unit tests and tests/e2e/battleAnims.test.ts.
+
+### W-dyngfx: dynamic-graphics objects (GAPS_PLAN.md batch 13)
+
+- The trap: a script that sets a VAR_OBJ_GFX_ID_* to a sheet the map didn't preload and then `addobject`s logged
+  `[overworld] no sprite loaded` and spawned nothing; SpawnObjectEventInternal reads the graphics from ROM in that
+  frame. Now any VarSet of VAR_OBJ_GFX_ID_0..F (`GameState.onSetVar`: `setvar`, `copyvar`, the specials) starts
+  loading the sheet, a spawn that finds one missing loads it on demand, and `addobject` holds the field's frame
+  mid-script while it loads (`ScriptEngine.frameHeld`, `OverworldScene.heldFrame`; `tickField` split into
+  `tickFieldStart` + the rest, so a held frame resumes at `scripts.tick()`): the object is out in the C's frame. A
+  naive wait in the script (no hold) had it out 34 ticks late in the new test. A camera step's spawn waiting for a
+  sheet (`spawnsWaiting`) spawns it at the start of the next frame. Only a spawn that needs a sheet still
+  loading waits; the rest stay synchronous. A sheet that fails to load is warned about once and not retried.
+- The sweep (every FRLG map with OBJ_EVENT_GFX_VAR_* objects, each checked in the port):
+  - Viridian City's tutorial old man: the three ViridianCity_OnTransition states (VAR 0: OLD_MAN_LYING_DOWN at
+    (21, 11) facing down; 1: OLD_MAN_1 at (21, 8) looking around; 2: OLD_MAN_1 at (21, 6)) were right; now in
+    dynamicGfx.test.ts with each sprite's texture.
+  - Fuchsia City's statue (the 9th object, VAR_0): Kabuto before FLAG_GOT_DOME_FOSSIL, Omanyte after, right.
+  - Birth Island's Deoxys: VAR_OBJ_GFX_ID_0 = DEOXYS_N in ON_TRANSITION, hidden until the `addobject`; right
+    (eventIslands.test.ts fights it; dynamicGfx.test.ts checks its graphics and the frame it comes out in).
+  - The Trainer Tower 1F-8F (SetTrainerTowerNPCGraphics in ttower_initfloor, ON_TRANSITION): singles (VAR_1) and
+    doubles (VAR_0 / VAR_3) were checked already; knockout (VAR_2 / _0 / _1: JORDY, ERNEST, GABRIEL, all
+    OBJ_EVENT_GFX_BIKER, at SetObjectsKnockout's places) was right and now has an assertion in trainerTower.test.ts.
+    2F-8F share the scripts (the full climb test).
+  - The Seven Island house's e-Reader room (SetEReaderTrainerGfxId) and the Union Room (union_room_player_avatar.c):
+    link maps, not checked (no link play).
+  - Text colour (ContextNpcGetTextColor / GetTextColorFromGraphicsId): the port takes it from the object's resolved
+    graphics, as the C's spawn-resolved graphicsId; the old man talks in NPC_TEXT_COLOR_MALE (an unresolved VAR_0
+    would be neutral). One corner left in DEVIATIONS: a var past NUM_OBJ_EVENT_GFX.
+- Nothing was broken on the FRLG maps; the fix is the mid-script load.
+- Test hooks: `t.runScript(label, code)` (raw commands as a field script, `ScriptEngine.defineScript`),
+  `t.textColor()`, `t.objects()` gains `texture`.
+- Verified: typecheck, unit tests, tests/e2e/dynamicGfx.test.ts (new, 4 tests), trainerTower.test.ts,
+  eventIslands.test.ts, story.test.ts.
