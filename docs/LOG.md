@@ -3902,6 +3902,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   Dewgong Lv. 64) and the Champion (TRAINER_CHAMPION_REMATCH_*, Heracross Lv. 72) with the network machine on;
   Oak rating 70 Kanto / 71 national, the aides, the fan club's worker, the tea lady once, the Indigo Plateau guard
   in the doorway (Lorelei away) and back at her post.
+
 ### W-help 2: the help system's contexts at every screen (batch 11)
 
 - The contexts: every SetHelpContext / BackupHelpContext / RestoreHelpContext / HelpSystem_Disable / _Enable call
