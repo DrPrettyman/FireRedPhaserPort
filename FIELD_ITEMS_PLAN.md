@@ -129,6 +129,13 @@ batch 13 (they add event calls to the party menu, the bag and the PC, which this
 | 12 | W-mail (1, 2), W-fame (1), W-teachy (1, 2, 3), W-qlog (QL1, QL2) | Four workstreams; the shared files above take one-line or distinct-function changes |
 | 13 | QUEST_LOG_PLAN.md QL3 onwards, and whatever batch 12 leaves | The quest log's events land in the screens batch 12 changes |
 
+## Batch 12 result
+
+Complete: W-fame (#137), W-mail 1-2 (#138, #141), W-teachy 1-3 (#139, #144, #148). W-qlog went further than
+planned: QL1, QL2a-b, QL3a-b and QL4a (#140, #142, #143, #145, #146, #147; QUEST_LOG_PLAN.md "Batch 12 result").
+The save-shape changes landed as versions 10 (Fame Checker), 11 (mail), 12 (the quest log's scenes) and 13 (the
+daycare's mail), renumbered at each merge as decision 4 says.
+
 ## Rules
 
 Worker and merger rules: docs/WORKFLOW.md sections 3 and 4. Each worker's e2e file is named in its unit above.

@@ -4,7 +4,7 @@ FireRed's quest log (quest_log.c, quest_log_events.c, quest_log_objects.c, quest
 ~4,500 lines, plus ~400 lines of hooks in 50 other C files). While the player plays, it records up to four scenes;
 on CONTINUE it plays them back in grey, with a "Previously on your quest" header and a line of text per event,
 then shows where the game was saved. It touches the field, the menus and the battles, so it spans batches:
-QL1-QL2 in batch 12 ([FIELD_ITEMS_PLAN.md](FIELD_ITEMS_PLAN.md)), QL3 onwards in batch 13.
+QL1-QL4a ran in batch 12 ([FIELD_ITEMS_PLAN.md](FIELD_ITEMS_PLAN.md); see "Batch 12 result"), QL4b and QL5 are left.
 
 ## How the C does it
 
@@ -105,6 +105,27 @@ Each unit leaves master green (typecheck, unit tests, its e2e file `tests/e2e/qu
    entry checked and removed. E2e: playback through a trainer battle, a shop and Surf.
 
 QL4 or QL5 may each need two workers; the coordinator of batch 13 sizes them against the code then.
+
+## Batch 12 result
+
+QL1 to QL4a ran in batch 12 (the plan had QL1-QL2; QL3 and QL4's menu half followed once the other workstreams'
+screens had merged). Units as they were split:
+
+- **QL1** (#140): recording, the command stream, the objects snapshot, DEPARTED / ARRIVED, the scenes in the save.
+- **QL2a** (#143): the playback engine (TryStartQuestLogPlayback, the scene loads, the recorded actions, A / B
+  skips, the final scene). **QL2b** (#146): the playback screen (the tints, the bars and the header, the
+  description window and its texts, the music).
+- **QL3a** (#142): the codecs and texts for QL_EVENT_* 3-29. **QL3b** (#145): 30-40 and quest_log_battle.c.
+- **QL4a** (#147): the menus' call sites: item use (ItemUse_SetQuestLogEvent), the party menu (held items, order,
+  items used, field moves), Fly, the item PC, the Pokémon storage system.
+
+Left for batch 13:
+
+- **QL4b:** the shops (RecordItemTransaction / RecordTransactionForQuestLog), the TM case's and berry pouch's
+  transactions, SetUsedPkmnCenterQuestLogEvent, the story items (QL_EVENT_OBTAINED_STORY_ITEM),
+  TrySetQuestLogBattleEvent from the battle's end, the Game Corner (SetQLPlayedTheSlots). These entry points exist
+  (QL3) and are called only by unit tests and `__test.questLogEvent` so far.
+- **QL5:** as unit 5 above.
 
 ## Shared files
 

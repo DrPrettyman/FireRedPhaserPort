@@ -54,9 +54,21 @@ a Kanto postgame sweep (Cerulean Cave through Mewtwo's battle, every legendary's
 IsNationalPokedexEnabled now checks all three of the C's conditions everywhere; the Elite Four rematch teams and
 Kanto's postgame NPCs checked).
 
-Next: the open work below. What a single player can still notice: the Fame Checker, Teachy TV and mail (bag items
-that need field systems), and the quest log (the "previously on your quest" recap on CONTINUE). Link play is the
-other big area left.
+**Mail, the Fame Checker and Teachy TV are done** ([FIELD_ITEMS_PLAN.md](FIELD_ITEMS_PLAN.md) complete in batch 12:
+PRs #136-#148): mail (mail_data.c, the mail screen, the party menu's mail actions, the PC mailbox, the daycare's
+and DONTAE's Fab Mail), the Fame Checker (fame_checker.c and its two specials), Teachy TV (teachy_tv.c, the
+Pokédude's four battles, his REGISTER bag and TM case demos). Save version 13.
+
+**The quest log is in up to its menu calls** ([QUEST_LOG_PLAN.md](QUEST_LOG_PLAN.md) QL1-QL4a, batch 12): recording
+(the four scenes in the save, the departed / arrived locations), playback on CONTINUE ("Previously on your quest",
+the grey field, the windows and texts, A / B skips, "saved the game at"), every QL_EVENT_* codec and its text, and
+the events from item use, the party menu, the PCs, the boxes and Fly.
+
+Next: the quest log's last two units (QUEST_LOG_PLAN.md, batch 13): QL4b (the shops, the TM case / berry pouch
+transactions, the Pokémon Center, story items, the battles, the Game Corner) and QL5 (QL_AvoidDisplay,
+`goto_if_questlog`, the escalators, the Surf / Strength / fishing recordings, playback's fanfare / cry / text
+differences, its help contexts, a battle's end in playback, the "no quest log" DEVIATIONS sweep). After that, link
+play is the big area left (needs a decision from the user about networking).
 
 [SIDE_PLAN.md](SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
 `bufferdecorationname` (and the other decoration commands) and FLDEFF_USE_DIVE with DoDiveWarp, ported as FRLG's C
@@ -84,12 +96,11 @@ reaches, the decoration commands and Dive, is ported as the C has it).
 
 Other open work:
 
-- The quest log (quest_log.c: the recap on CONTINUE; its help contexts and `goto_if_questlog` never branch).
-- Other bag items that need field systems: Fame Checker, Teachy TV, mail.
+- The quest log's QL4b and QL5 (QUEST_LOG_PLAN.md; `goto_if_questlog` never branches until QL5).
 - Link play (the cable club's link specials are stand-ins that never find a partner; the Seven Island house's
   e-Reader battle room).
 - More e2e scenarios (see the checklist's Tests section).
-- Mail (the in-game trade's held mail, the daycare's mail) and contest conditions/sheen aren't modelled.
+- Contest conditions/sheen aren't modelled.
 
 Loose ends:
 
@@ -167,8 +178,8 @@ Loose ends:
 - [x] Poké Mart (shop.c + buy_menu_helpers.c): `pokemart`, BUY/SELL/SEE YA! field menu, buy menu with the map view
   (field tiles + object sprites on the GBA layer), regular and TM layouts, quantity box, YES/NO; SELL via the bag
 - [~] Specials (`special X` / `specialvar`): table in `script/specials.ts` with one module per area spread in
-  (story, side, misc, party menu, trades, Game Corner, daycare, egg hatch); no-ops for quest log/help/fame
-  checker. Unknown specials log once; what's left is in `tests/unit/scriptCoverageGaps.ts`
+  (story, side, misc, party menu, trades, Game Corner, daycare, egg hatch, help, Fame Checker, quest log); only link
+  play's are no-ops. Unknown specials log once; what's left is in `tests/unit/scriptCoverageGaps.ts`
 - [x] Party selection from scripts (party_menu_specials.c: ChoosePartyMon), move tutors (incl. Cape Brink), the
   move deleter, the move relearner (learn_move.c)
 - [x] In-game trades (trade_scene.c's in-game path: the data, the specials, the wireless trade animation) and the
@@ -231,10 +242,12 @@ Loose ends:
   teaching / using; the berry pouch from the battle bag too
 - [x] Options (option_menu.c; SOUND sets mono or stereo through SetPokemonCryStereo) and trainer card (trainer_card.c: front, back, flip; the
   player's FRLG card only, no link cards)
-- [~] Field items: rods and fishing (Task_Fishing, FishingWildEncounter), Escape Rope, VS Seeker (vs_seeker.c:
+- [x] Field items: rods and fishing (Task_Fishing, FishingWildEncounter), Escape Rope, VS Seeker (vs_seeker.c:
   rematches, the raise-hand trainers, the charge), Itemfinder (itemfinder.c); Bike, Town Map, flutes, Repel, Coin
   Case, Powder Jar; registered items with SELECT (UseRegisteredKeyItemOnField: every key item's from-field
-  variant, incl. the Town Map, TM case and berry pouch from the field). Not yet: Fame Checker, Teachy TV, mail
+  variant, incl. the Town Map, TM case and berry pouch from the field); the Fame Checker (fame_checker.c), Teachy TV
+  (teachy_tv.c, battle_controller_pokedude.c, the Pokédude's bag and TM case), mail (mail.c, mail_data.c, the PC
+  mailbox, the daycare's and the in-game trade's mail)
 - [~] Wild encounters: grass/water step encounters (wild_encounter.c: cooldown, rate buff, flutes, Cleanse Tag,
   Stench/Illuminate, repel + EventScript_RepelWoreOff, Altering Cave, Tanoby/Unown), StartWildBattle (standard,
   Pokémon Tower ghosts with the ghost pic, roamers, Safari Zone), CB2_EndWildBattle / CB2_EndSafariBattle.
@@ -286,6 +299,8 @@ Loose ends:
   ChangePokemonNickname from scripts and by the battle's nickname prompt after a catch
 - [x] Copyright screen and intro movie (intro.c), title screen (title_screen.c, clear save data screen) and Oak's
   speech (oak_speech.c)
+- [~] Quest log (quest_log*.c, QUEST_LOG_PLAN.md): recording and the scenes in the save (QL1), playback on CONTINUE
+  (QL2a-b), every event's codec and text (QL3a-b), the menus' calls (QL4a). Left: QL4b, QL5
 
 ### Tests (tests/README.md)
 - [x] Unit tests (Vitest, Node): random.c, CreateMon/CalculateMonStats/levels/movesets/natures/gender/PP, Bag,
@@ -302,7 +317,8 @@ Loose ends:
   daycares, eggs and hatching, holes and the other side specials; the Seagallop ferry from every harbor and the
   Sevii 1-3 quest, the S.S. Anne (ticket check, departure, the dock after), the league lighting, Easy Chat; field
   weather; the postgame from Oak's National Dex to Seven Island, the Trainer Tower, the event islands, the
-  legendaries' battles and the Kanto postgame; map preview screens, the help system, the intro
+  legendaries' battles and the Kanto postgame; map preview screens, the help system, the intro; mail, the Fame
+  Checker, Teachy TV, the quest log
 - [x] Script coverage unit test: every script command, special, std script, movement action and field effect the
   scripts use, against the port's tables; known gaps tagged in `tests/unit/scriptCoverageGaps.ts`
 - [ ] More scenarios: party menu from the start menu, items in battle, level-up move learning, the Old Man
