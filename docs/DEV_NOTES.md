@@ -1171,7 +1171,8 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   DAC), shared by the worklet (`worklet.ts`) and the headless renderers (`tests/audioRender.ts`'s `speakers()`,
   `tools/render-audio.ts`). Pure: no DOM. Sources: GBATEK "Sound Channel 1-4" / "Sound Control Registers", Pan
   Docs "Audio Details", and mGBA's GB_AUDIO_GBA mode (`src/gb/audio.c`, `src/gba/audio.c`) where those leave the
-  GBA open; poryaaaa's `m4a_channel.c` (MIT) for the m4a side. No code is copied from either.
+  GBA open (its sweep and envelope edge cases follow mGBA's `_updateSweep` / `_updateEnvelopeDead`, rewritten,
+  not copied); poryaaaa's `m4a_channel.c` (MIT) was read for the m4a side, nothing taken from it.
 - **A frame** (`SoundCircuit.frame`): if the frame's `state` isn't what the writes so far left (the first frame,
   after a `reset()`, or frames missed) `loadState(state)` (registers latched, every channel off); then each write
   in order at the frame's start (`PsgSynth.write`: NRx4 bit 7 restarts, NRx2 bits 3-7 are the DAC, NR30's bank and
