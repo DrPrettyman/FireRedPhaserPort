@@ -217,6 +217,8 @@ export class SoundCircuit {
       for (let i = 0; i < psg.writes.length; i++) synth.write(psg.writes[i] >> 8, psg.writes[i] & 0xff);
       cntH = synth.soundcntH;
       soundbias = synth.soundbias;
+      // The GBA's DAC point-samples the PSG at SOUNDBIAS's rate (65,536 Hz for FRLG) and holds it.
+      synth.dacInterval = 0x200 >> ((soundbias >> 14) & 3);
       synth.render(this.psgL, this.psgR, out, GBA_CYCLES_PER_FRAME / out);
       if (!this.psgOn) {
         this.psgL.fill(0);
