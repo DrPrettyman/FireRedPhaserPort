@@ -869,11 +869,12 @@ this is the next level down. When you add or change a subsystem, update its entr
   GBA host has the bag (FieldMenuScene); `menuGfxSymbols` preloads `TM_CASE_GFX`. Ways in: the bag's KEY ITEMS → TM
   CASE → OPEN (`FieldUseFunc_TmCase` in menus/itemUse.ts → TMCASE_FIELD, back to CB2_BagMenuFromStartMenu), the
   bag's GIVE from the party menu / PC box (`GoToTMCase_Give` / `GoToTMCase_PCBox`) and the Poké Mart's SELL
-  (`GoToTMCase_Sell`), all in menus/itemMenu.ts. USE sets ItemUseCB_TMHM and opens CB2_ShowPartyMenuForItemUse,
+  (`GoToTMCase_Sell`), all in menus/itemMenu.ts, and Teachy TV's TMs demo (`Pokedude_InitTMCase` → TMCASE_POKEDUDE:
+  Task_Pokedude_Start / _Run scroll the list on a 101-frame timer and print his two texts; see Teachy TV). USE sets ItemUseCB_TMHM and opens CB2_ShowPartyMenuForItemUse,
   whose exit callback for the TM case pocket is CB2_ReturnToTMCaseMenu (TMCASE_REOPENING: same type, list position
   and exit callback). `SortPocketAndPlaceHMsFirst` / `SortAndCompactBagPocket` (item.c) live there too. Probe
   `__test.tmCase()` (TMCASE_* type, the screen task's name, `fading`, scroll/row, the pocket's item ids in list
-  order). Tests: tests/e2e/tmCase.test.ts.
+  order, `pokedudeState`: Task_Pokedude_Run's step or -1). Tests: tests/e2e/tmCase.test.ts.
 - **Berry pouch:** `menus/berryPouch.ts` is berry_pouch.c, built like the TM case (static vs per-open resources,
   `rebuildList` after a toss / sale). `InitBerryPouch(type, savedCallback, allowSelect)` runs on whichever GBA host
   has the bag: FieldMenuScene, or BattleScene for the battle bag (`menuGfxSymbols` preloads `BERRY_POUCH_GFX` for
@@ -908,17 +909,24 @@ this is the next level down. When you add or change a subsystem, update its entr
   TeachyTvPreBattleAnimAndSetBattleCallback (BattleTransition_StartOnField: WHITE_BARS_FADE for BATTLE, SLICE for
   the others) and CB2_InitPokedudeBattle, which runs the battle on this same host (FieldMenuScene: see "The Pokédude's
   battles" under Battle). The way back is TeachyTvRestorePlayerPartyCallback (LoadPlayerParty; gBattleOutcome
-  B_OUTCOME_DREW = B quit → the list, else MUS_FOLLOW_ME and the closing text in mode 2). **The seam for unit 3**
-  is at the bottom of the file: TTVSCR_TMS / _REGISTER's InitPokedudeBag goes through PokedudeDemoNotPorted until
-  itemMenu.ts' InitPokedudeBag gets those locations' tasks (it has the battle ones) and tm_case.c's TMCASE_POKEDUDE.
-  Exported for them: InitTeachyTvController, CB2_ReturnToTeachyTV,
+  B_OUTCOME_DREW = B quit → the list, else MUS_FOLLOW_ME and the closing text in mode 2). **The field demos**
+  (TTVSCR_TMS / _REGISTER): TeachyTvSetupBagItemsByOptionChosen → itemMenu.ts' InitPokedudeBag (BackUpPlayerBag, his
+  seven items, exit CB2_ReturnToTeachyTV) with Task_Bag_TeachyTvRegister (KEY ITEMS, TEACHY TV → REGISTER, which
+  writes `state.registeredItem` like the C's gSaveBlock1Ptr->registeredItem; RestorePlayerBag gives the player's
+  back) or Task_Bag_TeachyTvTMs (KEY ITEMS, TM CASE → USE; exitCB = tmCase.ts' Pokedude_InitTMCase: his TM01 / 03 /
+  09 / 35 over the player's TM case and key items pockets, TMCASE_POKEDUDE's Task_Pokedude_Run, then
+  CB2_ReturnToTeachyTV). B at any step: Task_BButtonInterruptTeachyTv / Task_Pokedude_Run's state 21 with
+  SetTeachyTvControllerModeToResume (the list again). Both run on the same host; the bag's item icons are in
+  pokedudeDemoGfxSymbols, the TM case's graphics in menuGfxSymbols. Exported for them: InitTeachyTvController, CB2_ReturnToTeachyTV,
   SetTeachyTvControllerModeToResume, TTVSCR_*. Probe `__test.teachyTv()` (while TeachyTvCallback runs): mode,
   whichScript, scrollOffset / selectedRow, the task and its TTVcmd (`step`, `timer`, `cmd`), `listReady`,
   `listItems`, `arrows`, `text` (the symbol printed last) and `textActive`, the Pokédude's `dude` sprite, the
   `grass` sprites up, BG3's scroll. Test: tests/e2e/teachyTv.test.ts (the Viridian old man's gift, the bag without
   the TM case, each of the six options' sequences with the TM case (the four battles to their end: voiceovers,
-  outcome, the party and bag given back), B mid-sequence, B quitting the battle / his bag / his party menu, SELECT
-  from the field). Quick
+  outcome, the party and bag given back; the field demos: his bag's task, his TM case's TMs and last step, the
+  registered item's values), B mid-sequence, B quitting the battle / his bag / his party menu, B quitting the field
+  demos from his bag and his TM case (the player's TM, key items and registered item given back), SELECT from the
+  field). Quick
   look: `?start=after-rival&map=PalletTown&x=12&y=14`, add ITEM_TEACHY_TV and register it, SELECT.
 - **Fame Checker:** `menus/fameChecker.ts` is fame_checker.c's screen: `UseFameChecker(savedCallback)` on whichever
   GBA host has the bag (FieldMenuScene). Ways in: the bag's KEY ITEMS → FAME CHECKER → USE (`FieldUseFunc_FameChecker`

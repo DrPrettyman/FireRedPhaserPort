@@ -4225,3 +4225,26 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   end. Screenshots of a voiceover, the healthbox-lit voiceover, his party menu checked by eye. Typecheck, 709 unit
   tests (after merging master at 4270872); teachyTv (twice), registeredItems, wildBattle, trainerBattle and
   audioBattleControllers e2e pass.
+
+### W-teachy 3: Teachy TV's field demos (FIELD_ITEMS_PLAN.md batch 12)
+
+- item_menu.c: Task_Bag_TeachyTvRegister (KEY ITEMS, TEACHY TV → REGISTER: gSaveBlock1Ptr->registeredItem, the list
+  rebuilt with its mark, down twice, the close) and Task_Bag_TeachyTvTMs (KEY ITEMS, down to the TM CASE → USE,
+  exitCB = Pokedude_InitTMCase) in CreateBagInputHandlerTask, which logged "not implemented" for them.
+- tm_case.c: Pokedude_InitTMCase (the player's TM case and key items pockets and list position put aside, his TM01 /
+  03 / 09 / 35, InitTMCase(TMCASE_POKEDUDE, CB2_ReturnToTeachyTV)), DoSetUpTMCaseUI's Task_Pokedude_Start,
+  Task_Pokedude_Run (the 0xFFFF8405 dim, down / up three times on a 101-frame timer, gPokedudeText_TMTypes, again,
+  gPokedudeText_ReadTMDescription, the restore and fade out; B before the end: state 21 and
+  SetTeachyTvControllerModeToResume), TintDiscpriteByType's TMCASE_POKEDUDE blend (the C's `1 << (16 + palOffset)`
+  kept: only OBJ slot 0 gets a bit, a shift of 32 or more is 0 on the ARM). `__test.tmCase()` has `pokedudeState`.
+- teachy_tv.c: TeachyTvSetupBagItemsByOptionChosen calls itemMenu.ts' InitPokedudeBag; the PokedudeDemoNotPorted seam
+  is gone. DEVIATIONS' Teachy TV and TMCASE_POKEDUDE placeholders removed (and a stale duplicated party menu line).
+- Shared: gba/menu.ts' DisplayMessageAndContinueTask takes a null follow-up task (the C passes NULL here and sets the
+  task's func itself).
+- Tests: tests/e2e/teachyTv.test.ts, 6 tests: the six options' test now checks the field demos too (his bag's task,
+  the bag and Teachy TV screens, his TM case's four TMs and Task_Pokedude_Run's last step, the registered item going
+  0 → TEACHY TV → the player's in REGISTER), with the player's own TM05 and registered BICYCLE in the before / after
+  check; a new one quits with B from his bag (TMs), his TM case (mid-scroll) and his bag after REGISTER, each back to
+  the list on the same option with the player's bag and registered item as before. Screenshots of the TM case demo
+  (dimmed list, the TM types text) and the REGISTER bag checked by eye. Typecheck, 731 unit tests; teachyTv,
+  tmCase and registeredItems e2e (17 tests) pass on origin/master 8ab44b9.

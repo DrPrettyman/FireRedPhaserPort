@@ -111,7 +111,6 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     afterwards. Here the script waits at the special and that `fadescreen` does the fade in (same on screen).
   - Party menu: Union Room and minigames are not ported (the Pokédude's battle tasks are); the PC mailbox's GIVE
     (PARTY_ACTION_GIVE_MAILBOX_MAIL) waits for W-mail unit 2. No
-  - Party menu: Union Room, minigames, Pokédude/Teachy TV demos are not ported. No
     field move records a quest log event (SetUsedFieldMoveQuestLogEvent, SetUsedFlyQuestLogEvent).
   - Move relearner (menus/learnMove.ts): the MUS_LEVEL_UP fanfare after a move is learned holds the screen as on
     the GBA. The C's scroll arrows are kept as they
@@ -145,13 +144,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     The Town Map, TM case, berry pouch and Fame Checker from SELECT start their screen once the map headers the
     region map / party menu read (prepareFieldMoveMenu) and the screen's graphics have loaded, a frame or more after
     the fade instead of in the same frame.
-  - TM case (menus/tmCase.ts): no quest log (RecordItemTransaction). Not ported:
-    the Pokédude's Teachy TV demo (TMCASE_POKEDUDE) and the Union Room's GIVE / EXIT menu (no link play).
-  - Teachy TV (menus/teachyTv.ts): the field demos aren't ported (FIELD_ITEMS_PLAN.md W-teachy unit 3): TMS /
-    REGISTER's scripted bag and TM case (the bag's Task_Bag_TeachyTvRegister / _TMs, tm_case.c's TMCASE_POKEDUDE).
-    They go through PokedudeDemoNotPorted, which logs and comes back as from the demo's end (CB2_ReturnToTeachyTV in
-    mode 2: the option's closing text, the walk off, THE END, the list). No quest log event
-    (ItemUse_SetQuestLogEvent).
+  - TM case (menus/tmCase.ts): no quest log (RecordItemTransaction). Not ported: the Union Room's GIVE / EXIT menu
+    (no link play).
+  - Teachy TV (menus/teachyTv.ts): no quest log event (ItemUse_SetQuestLogEvent).
   - The Pokédude's battles (battle/controllerPokedude.ts): they run on FieldMenuScene's GBA host (the screen Teachy TV
     is on), not BattleScene: CB2_InitPokedudeBattle sets what BattleScene.create would (a fresh BattleGlobals, no
     trainer, the BattleUi, ReturnFromBattleToOverworld's SetMainCallback2(gMain.savedCallback)), and FieldMenuScene
