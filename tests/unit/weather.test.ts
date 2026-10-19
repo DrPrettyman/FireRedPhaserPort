@@ -281,13 +281,13 @@ describe('the saved weather', () => {
   test('an unported weather runs as WEATHER_NONE and says so once', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     ResetWeatherTask();
-    SetSavedWeather(t.d('WEATHER_SNOW'));
+    SetSavedWeather(t.d('WEATHER_FOG_DIAGONAL'));
     StartWeather();
     ResumePausedWeather();
     WeatherFadeScreen(t.d('FADE_FROM_BLACK'));
     for (let i = 0; i < 5; i++) WeatherTask();
-    expect(weatherProbe()).toMatchObject({ currWeather: t.d('WEATHER_SNOW'), gammaIndex: 0 });
-    expect(warn.mock.calls.filter(([m]) => /weather 4 \(Snow\)/.test(String(m)))).toHaveLength(1);
+    expect(weatherProbe()).toMatchObject({ currWeather: t.d('WEATHER_FOG_DIAGONAL'), gammaIndex: 0 });
+    expect(warn.mock.calls.filter(([m]) => /weather 9 \(FogDiagonal\)/.test(String(m)))).toHaveLength(1);
     warn.mockRestore();
   });
 });
