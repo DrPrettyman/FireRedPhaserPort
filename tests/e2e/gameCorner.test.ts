@@ -229,6 +229,8 @@ async function waitBetting(game: Game) {
 async function spin(game: Game, payWithStart: boolean) {
   await waitBetting(game);
   const before = await game.eval((t) => t.state!.coins);
+  // In the HELP button mode (the default) R opens the help system over the machine (RunHelpSystemCallback runs first)
+  await game.eval((t) => (t.state!.optionsButtonMode = t.define('OPTIONS_BUTTON_MODE_LR')));
   await game.press('R');
   const bet = await game.eval((t) => t.slotMachine()!.bet);
   for (let reel = 0; reel < 3; reel++) {
