@@ -27,6 +27,8 @@ import {
   type SoundEvent,
 } from '../../src/gba/sound';
 import {
+  type AmbientCryTaskData,
+  ChooseAmbientCrySpecies,
   GetCurrLocationDefaultMusic,
   Overworld_ChangeMusicToDefault,
   Overworld_ClearSavedMusic,
@@ -36,8 +38,10 @@ import {
   Overworld_TryMapConnectionMusicTransition,
   setOverworldMusicHost,
   TryFadeOutOldMapMusic,
+  UpdateAmbientCry,
   type MapMusicHeader,
 } from '../../src/gba/overworldMusic';
+import { seedRng } from '../../src/util/random';
 import { gPlayerAvatar, PLAYER_AVATAR_FLAG } from '../../src/world/playerAvatar';
 import { newGame, readGen, type TestGame } from './gameData';
 
@@ -57,6 +61,8 @@ describe.skipIf(!existsSync(SONGS_JSON))('overworld.c map music on the extracted
   let t: TestGame;
   let current: MapMusicHeader;
   let local = { x: 5, y: 5 };
+  let wildMon = { species: 0, isWaterMon: false };
+  let surfable = false;
 
   beforeAll(() => {
     initConstants(defines);
@@ -68,7 +74,9 @@ describe.skipIf(!existsSync(SONGS_JSON))('overworld.c map music on the extracted
     t = newGame();
     current = PALLET;
     local = { x: 5, y: 5 };
-    setOverworldMusicHost({ state: t.state, currentMap: () => current, playerLocal: () => local, getLocalWildMon: () => ({ species: 0, isWaterMon: false }), playerDestIsSurfable: () => false });
+    setOverworldMusicHost({ state: t.state, currentMap: () => current, playerLocal: () => local, getLocalWildMon: () => wildMon, playerDestIsSurfable: () => surfable });
+    wildMon = { species: 0, isWaterMon: false };
+    surfable = false;
     AgbMainSoundInit();
     setSoundEventListener(undefined);
     gPlayerAvatar.flags = PLAYER_AVATAR_FLAG.ON_FOOT;
@@ -232,5 +240,77 @@ describe.skipIf(!existsSync(SONGS_JSON))('overworld.c map music on the extracted
     local = { x: 6, y: 11 };
     Overworld_PlaySpecialMapMusic();
     expect(GetCurrentMapMusic()).toBe(d('MUS_VICTORY_ROAD'));
+  });
+
+  /** random.c's LCG, independently: the rolls the ambient cries must make. */
+  const lcg = (seed: number) => {
+    let v = seed >>> 0;
+    return () => {
+      v = (Math.imul(1103515245, v) + 24691) >>> 0;
+      return v >>> 16;
+    };
+  };
+
+  test('the ambient cries (overworld.c): UpdateAmbientCry rolls the delays, PlayAmbientCry the pan and volume', () => {
+    const events: SoundEvent[] = [];
+    setSoundEventListener((e) => events.push(e));
+    const cries = () => events.filter((e) => e.type === 'cry');
+    const run = (task: AmbientCryTaskData, frames: number) => {
+      for (let f = 0; f < frames; f++) UpdateAmbientCry(task);
+    };
+
+    // No wild header: state 4, never a roll.
+    ChooseAmbientCrySpecies();
+    let task: AmbientCryTaskData = { state: 0, delayCounter: 0 };
+    seedRng(7);
+    run(task, 5000);
+    expect(task.state).toBe(4);
+    expect(cries()).toEqual([]);
+
+    // A land mon: state 0 → 1, the roll (1200 + Random() % 2400) in the second frame, the cry when it counts to 0,
+    // then 1200 + Random() % 1200 for the next.
+    wildMon = { species: d('SPECIES_PIDGEY'), isWaterMon: false };
+    ChooseAmbientCrySpecies();
+    task = { state: 0, delayCounter: 0 };
+    seedRng(7);
+    const rng = lcg(7);
+    const first = (rng() % 2400) + 1200;
+    const pan = (((rng() % 88) + 212) << 24) >> 24;
+    rng(); // volume: (Random() % 30) + 50 (not in the event)
+    const next = (rng() % 1200) + 1200;
+    run(task, 2 + first - 1);
+    expect(cries()).toEqual([]);
+    run(task, 1);
+    expect(cries()).toHaveLength(1);
+    expect(cries()[0]).toMatchObject({ id: d('SPECIES_PIDGEY'), mode: 0, ...(pan !== 0 ? { pan } : {}) });
+    expect(soundProbe().cry.duckTaskActive).toBe(false); // PlayCry_NormalNoDucking
+    run(task, 1); // state 2's roll
+    expect(task.delayCounter).toBe(next);
+
+    // A water mon cries only while the player stands on water (no rolls otherwise).
+    wildMon = { species: d('SPECIES_MAGIKARP'), isWaterMon: true };
+    ChooseAmbientCrySpecies();
+    task = { state: 3, delayCounter: 1 };
+    run(task, 1);
+    expect(cries()).toHaveLength(1);
+    surfable = true;
+    task = { state: 3, delayCounter: 1 };
+    run(task, 1);
+    expect(cries()).toHaveLength(2);
+
+    // gDisableMapMusicChangeOnMapLoad: KEEP plays nothing, STOP stops the map music instead.
+    PlayNewMapMusic(d('MUS_PALLET'));
+    AgbMainFrameEnd();
+    SetDisableMapMusicChangeOnMapLoad(MUSIC_DISABLE_KEEP);
+    task = { state: 3, delayCounter: 1 };
+    run(task, 1);
+    expect(cries()).toHaveLength(2);
+    SetDisableMapMusicChangeOnMapLoad(MUSIC_DISABLE_STOP);
+    task = { state: 3, delayCounter: 1 };
+    run(task, 1);
+    expect(cries()).toHaveLength(2);
+    expect(GetCurrentMapMusic()).toBe(0);
+    SetDisableMapMusicChangeOnMapLoad(MUSIC_DISABLE_OFF);
+    setSoundEventListener(undefined);
   });
 });
