@@ -41,12 +41,13 @@ test("`waitmoncry` holds the Celadon Condominiums Meowth's script until its cry 
       const f = t.field();
       const a = t.audio();
       log.push({ f: t.frame(), script: !!f?.script, cry: a.cry.playing });
-      return log.length > 2 && !f?.script && { seen: t.frame(), log };
+      return log.some((l) => l.script) && !f?.script && { seen: t.frame(), log };
     },
     { maxFrames: 3000, what: "the Meowth's script ends" },
   );
-  await game.press('A');
-  // Mash through the message; `waitmoncry` holds after it.
+  // Talk to it and mash through the message in one in-page mash (`waitmoncry` holds after the message). A press
+  // from Node followed by a mash could be any number of ticks apart under load (the message then ended long after
+  // the cry, and the script with it).
   await game.mashUntil((t) => !t.field()?.script && t.audioEvents().some((e) => e.type === 'cry'), {
     what: "the Meowth's script ends",
   });
@@ -56,15 +57,18 @@ test("`waitmoncry` holds the Celadon Condominiums Meowth's script until its cry 
   expect(cry).toMatchObject({ id: meowth, name: 'Cry_Meowth', player: 'CRY0', mode: 0 });
   const stop = cryStopFrame(meowth);
   expect(stop).toBeGreaterThan(20);
-  // (The message box stays open until `release`, so it can't show when `msgbox`'s waitbuttonpress ended; with A
-  // mashed every few frames that is ~20 frames after the cry started, well before it stops.)
   // The cry is IsCryPlaying from frame cry + 1 until after hook cry + stop - 1. Task_DuckBGMForPokemonCry sees it
   // stopped in frame cry + stop's hook, IsCryFinished is TRUE in frame cry + stop + 1's script check, `release` runs
-  // in the next frame, and the watcher (at the start of a tick) sees the script gone in the one after.
+  // in the next frame, and the watcher (at the start of a tick) sees the script gone in the one after: cry + stop + 3,
+  // if `msgbox`'s waitbuttonpress ended before that. The message box stays open until `release`, so when it ended
+  // can't be seen; the mash (a press every 6 ticks) ends it around the cry's end, so `release` can come up to a
+  // mash cycle later.
   const playing = log.filter((l) => l.cry).map((l) => l.f);
   expect(playing[0]).toBe(cry.frame + 1);
   expect(playing.at(-1)).toBe(cry.frame + stop - 1);
-  expect(seen - cry.frame).toBe(stop + 3);
+  expect(log.filter((l) => l.f > cry.frame && l.f < cry.frame + stop + 3).every((l) => l.script)).toBe(true);
+  expect(seen - cry.frame).toBeGreaterThanOrEqual(stop + 3);
+  expect(seen - cry.frame).toBeLessThanOrEqual(stop + 3 + 6);
 });
 
 test('A at a \\p in a field message plays SE_SELECT (text.c TextPrinterWaitWithDownArrow)', async () => {
