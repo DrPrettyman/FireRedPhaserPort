@@ -138,7 +138,8 @@ test('the beep starts at a send-out in the red, stops on a switch to a healthy m
 });
 
 test("a send-out in the red starts the beep, and winning stops it before the victory music", async () => {
-  const game = await session.start({ ...ROUTE1, party: [{ species: 'MEWTWO', level: 100, moves: ['PSYCHIC'] }] });
+  // Lv. 70, not 100: a level-100 mon gains no exp, and getexp then plays no victory music.
+  const game = await session.start({ ...ROUTE1, party: [{ species: 'MEWTWO', level: 70, moves: ['PSYCHIC'] }] });
   await game.eval((t) => (t.state!.party[0].hp = 10));
   await game.eval((t) => t.startWildBattle({ species: 'MAGIKARP', level: 5, moves: ['SPLASH'] }));
   await game.waitForActionMenu();
