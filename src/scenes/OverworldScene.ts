@@ -99,6 +99,7 @@ import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
 import { gFieldCallback, gFieldCallback2, type FieldCallbackHost } from '../menus/fieldCallbacks';
 import { RunMassageCooldownStepCounter } from '../script/miscSpecials';
 import { IncrementBirthIslandRockStepCount } from '../script/eventIslandSpecials';
+import { SetUpFieldTasks, Task_RunPerStepCallback, type PerStepCallbackHost } from '../world/fieldTasks'; // W-sevii
 import { DEOXYS_ROCK_GFX, registerDeoxysRock, setDeoxysRockHost } from '../world/deoxysRock';
 import { UseRegisteredKeyItemOnField } from '../menus/registeredItem';
 import { activeFieldEffects, setFieldEffectScriptHost, setFieldEffectScripts } from '../world/fieldEffectScripts';
@@ -247,6 +248,16 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private elevatorWindow?: MenuWindow;
   /** Tasks started by specials that run on their own, after the script each frame (RunTasks). */
   private fieldTasks: FieldTask[] = [];
+  /** What field_tasks.c's per-step callbacks read and change (world/fieldTasks.ts), map-local. */
+  private readonly perStepCallbackHost: PerStepCallbackHost = {
+    state: () => this.state,
+    playerDestCoords: () => {
+      const { x, y } = this.player.current; // PlayerGetDestCoords
+      return { x: x - this.world.current.originX, y: y - this.world.current.originY };
+    },
+    metatileBehaviorAt: (x, y) => this.world.tileAt(x + this.world.current.originX, y + this.world.current.originY).behavior,
+    setMetatileIdAt: (x, y, metatile) => this.setMetatile(x, y, metatile, false),
+  };
   /** Flash's darkness in caves (world/flash.ts) */
   private flash!: FieldFlash;
   /** The facing a map load was asked for (undefined: GetInitialPlayerAvatarState's). */
@@ -748,6 +759,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const tasks = this.fieldTasks;
     this.fieldTasks = [];
     this.fieldTasks = [...tasks.filter((t) => !t.tick()), ...this.fieldTasks];
+    // Task_RunPerStepCallback (priority 80, created before Task_RunTimeBasedEvents): world/fieldTasks.ts
+    if (!this.busy) Task_RunPerStepCallback(this.perStepCallbackHost);
     // Task_RunTimeBasedEvents (priority 80): the ambient cries, while ArePlayerFieldControlsLocked is FALSE
     if (!this.busy && !this.warping && !this.scripts.running && this.overlay === undefined && this.controlsLocked === 0 && this.trainerApproach === undefined) {
       UpdateAmbientCry(this.ambientCry);
@@ -1555,6 +1568,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       } else {
         this.startWeatherOnResumeMap();
       }
+      if (warped) SetUpFieldTasks(); // ResumeMap's ResetTasks + SetUpFieldTasks (a connection keeps the task)
       const resume = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_RESUME');
       if (resume) this.scripts.runImmediately(resume);
       if (warped) tilesetVram.resetBgPalettes();
@@ -2674,6 +2688,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     ResetWeatherTask();
     this.startWeatherOnResumeMap();
     this.ambientCry = { state: 0, delayCounter: 0 }; // and SetUpFieldTasks' new Task_RunTimeBasedEvents
+    SetUpFieldTasks(); // and its new Task_RunPerStepCallback (world/fieldTasks.ts)
     ReturnPlayerAvatarToField(); // SpawnObjectEventsOnReturnToField
     this.objectsFrozen = false; // FieldCB_ReturnToFieldNoScript's UnfreezeObjectEvents (a rod's bite froze them)
     this.player.clearHeldMovementIfFinished(); // (a finished step isn't processed again after a battle)

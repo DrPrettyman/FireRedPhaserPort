@@ -1,4 +1,5 @@
-import { avatarField, ClearPlayerHeldMovement, IsFreezePlayerFinished } from '../world/playerAvatar';
+import { avatarField, ClearPlayerHeldMovement, IsFreezePlayerFinished, ResetInitialPlayerAvatarState } from '../world/playerAvatar';
+import { ActivatePerStepCallback } from '../world/fieldTasks'; // setstepcallback (W-sevii)
 import type { ObjectEvent } from '../entities/ObjectEvent';
 import type { Button, Input } from '../input/Input';
 import type { NamingScreenRequest } from '../scenes/FieldMenuScene';
@@ -1014,6 +1015,27 @@ export class ScriptEngine {
     /** ScrCmd_warpsilent: DoDiveWarp (no SE_EXIT) */
     warpsilent(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
       this.doWarp(ctx, a, 'silent');
+    },
+    /**
+     * ScrCmd_warphole (W-sevii): SetWarpDestination(map, WARP_ID_NONE, the player's destination coords), then DoFallWarp
+     * (world/fallWarp.ts, as `special DoFallWarp`) and ResetInitialPlayerAvatarState; the `waitstate` after it never
+     * ends (the map load ends the script). MAP_UNDEFINED is SetWarpDestinationToFixedHoleWarp, which only R/S's
+     * `setholewarp` sets (no FRLG script; only the unused EventScript_FallDownHole reaches it): logged, no warp.
+     */
+    warphole(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      if (a[0] === 'MAP_UNDEFINED') {
+        console.warn('[script] warphole MAP_UNDEFINED: sFixedHoleWarp (setholewarp) is not ported');
+        ctx.done = true;
+        return;
+      }
+      const { x, y } = this.host.playerLocal(); // PlayerGetDestCoords
+      this.host.setWarpDestination(a[0], -1, x, y);
+      this.callSpecial('DoFallWarp');
+      ResetInitialPlayerAvatarState();
+    },
+    /** ScrCmd_setstepcallback: ActivatePerStepCallback (world/fieldTasks.ts; W-sevii) */
+    setstepcallback(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      ActivatePerStepCallback(this.state.value(a[0]));
     },
     /** ScrCmd_warpdoor: DoDoorWarp; the port goes straight to Task_DoorWarp's warp (no door anim; no FRLG script uses it) */
     warpdoor(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
