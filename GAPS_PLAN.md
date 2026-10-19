@@ -4,7 +4,8 @@ The main path, the side content, the audio and the Sevii postgame are done ([MAI
 [SIDE_PLAN.md](SIDE_PLAN.md), [AUDIO_PLAN.md](AUDIO_PLAN.md), [POSTGAME_PLAN.md](POSTGAME_PLAN.md)). This plan takes
 what a single player still meets that isn't ported, most visible first: the map preview screens (every cave and
 forest), the L/R help system, the intro movie before the title screen, and a sweep of the Kanto postgame (the
-National Dex's effects in Kanto, Cerulean Cave through Mewtwo's battle). Batch 11.
+National Dex's effects in Kanto, Cerulean Cave through Mewtwo's battle). Batch 11; **complete** ("Batch 11
+result" below).
 
 ## What was checked
 
@@ -117,6 +118,21 @@ own e2e file.
 | Batch | Workers | Why together |
 |---|---|---|
 | 11 | W-preview (1), W-help (1, 2), W-intro (1, 2), W-kanto (1, 2) | Four workstreams with distinct files; each unit merges as it hands back and the workstream's next unit starts from the new master |
+
+### Batch 11 result
+
+**The plan is complete.** Merged: #127 the plan; #128 W-intro 1 (the copyright screen, the framework, the Game Freak
+scene; `gba/menu2.ts`); #129 W-help 1 (the engine, the menus, the text through `tools/extract_help.py`, the BGM
+halving; R in the slot machine opens the help in HELP mode, as on the GBA); #130 W-kanto 1 (Cerulean Cave, every
+legendary's battle to its end; the field message box now closes on the return from a battle, as InitFieldMessageBox
+does); #132 W-intro 2 (scenes 1-3, frame counts checked against intro.c); #131 W-preview (map_preview_screen.c, the
+cave and forest banners); #133 W-help 2 (the contexts at every ported screen, the help specials,
+gHelpSystemEnabled FALSE until the title screen); #134 W-kanto 2 (IsNationalPokedexEnabled checks all three of the
+C's conditions everywhere, the summary screen's "No. ???"). The end-of-batch e2e run had two failures, both test
+races, fixed in the STATUS PR (ssAnne.test.ts's wandering sailor, postgameSevenIsland's warp-then-read).
+
+Left after this plan: the screens that set help contexts but aren't ported (mail, Teachy TV, Mystery Gift, the link
+screens, the quest log), the Fame Checker, link play, the unused weathers.
 
 ## Rules
 

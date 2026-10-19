@@ -3949,3 +3949,22 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   Gengar's attack (MUS_TITLE takes over from MUS_INTRO_FIGHT). The port matched every hand count on the first run.
   The full movie adds about 750 frames to each `title: true` boot (well inside the 60 s waits): titleScreen.test.ts,
   audioOutput.test.ts and audioScenes2.test.ts's title test pass unchanged.
+
+### Batch 11 merge: GAPS_PLAN.md complete (PRs #127-#134)
+
+- Merged in hand-back order, each with `origin/master` merged in, `npm run extract` (both sides changed `tools/`),
+  typecheck, unit tests and the PR's own e2e files: #128, #129, #130, #132, #131, #133, #134. Conflicts: #131's
+  OverworldScene `loadGfx` list (both symbol lists kept) and tests/README.md's events row (both sides' events);
+  #134's imports in hallOfFame.ts and partyMenu.ts (both kept). The union merges of docs/LOG.md dropped the blank
+  line before a heading three times (#130, #133, #134); fixed in each merge.
+- One full e2e run at the end, on master at eb7e1d1: 507 of 509 passed in 84 files. Both failures were test races,
+  rerun alone and fixed here:
+  - ssAnne.test.ts's "Vermilion once the S.S. Anne has left" failed again alone: its `talkTo` faced a wandering
+    sailor, but the sailor stepped away before the A press landed, so A talked to nobody (and runScript waited out
+    its 6000 frames, then returned no messages). It now presses A for 12 frames until a script starts and walks up
+    again if none did; 10 passed twice. tests/README.md item 11.
+  - postgameSevenIsland.test.ts's town test passed alone (6 passed): its `interact` returned at once when the field
+    wasn't idle right after the warp helper had seen it idle, so the sign wasn't read. It now waits up to 600 ticks
+    for the field (or a trainer's script) first; the test passed again alone. What held the field for those ticks
+    wasn't pinned down.
+- Typecheck clean, 646 unit tests.

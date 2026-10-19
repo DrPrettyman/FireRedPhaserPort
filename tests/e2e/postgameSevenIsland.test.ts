@@ -386,6 +386,9 @@ async function interact(game: Game, map: string, x: number, y: number, trainer?:
   const since = await game.mark();
   await game.eval(
     async (t, localId, x, y) => {
+      // The field can be held for a tick or two after the warp helper saw it idle (the full run of batch 11 caught
+      // it so: this returned at once, nothing was read and the sign's message was missing); wait for it.
+      await t.until(() => t.idle() || !!t.field()!.script, 600);
       if (t.field()!.script || !t.idle()) return; // a trainer saw the player
       const target = () => {
         const o = localId ? t.objects().find((o) => o.localId === localId) : undefined;

@@ -57,7 +57,11 @@ async function talkTo(game: Game, graphicsId: string, x: number, y: number): Pro
       dy,
       face,
     );
-    if (facing) return runScript(game);
+    if (!facing) continue;
+    // A wandering NPC can still step away before the A press lands (A then talks to nobody and runScript would
+    // wait out its 6000 frames for a script): press A for a few frames and try again if no script starts.
+    const started = await game.eval((t) => t.mash((tt: typeof t) => !!tt.field()?.script, 'A', 12, []).then((m) => !!m.value));
+    if (started) return runScript(game);
   }
   throw new Error(`Couldn't get next to ${graphicsId} near (${x}, ${y})`);
 }

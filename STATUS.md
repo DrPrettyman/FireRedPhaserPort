@@ -24,7 +24,8 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
   (`postgame*.test.ts`: Oak's National Dex, Kindle Road, Mt. Ember and the Ruby, the Rainbow Pass, Four Island and
   Icefall Cave, Six Island's Dotted Hole and the Sapphire theft, Five Island's Rocket Warehouse and Celio's network
   machine, Seven Island's Tanoby Key and chambers; `trainerTower.test.ts`: a full climb; `eventIslands.test.ts`:
-  Lugia, Ho-Oh, Deoxys).
+  Lugia, Ho-Oh, Deoxys; `postgameKanto*.test.ts`: Cerulean Cave and Mewtwo, every legendary's battle to its end,
+  the National Dex's effects in Kanto, the Elite Four rematch teams).
 
 ## Next up
 
@@ -36,7 +37,7 @@ registers are identical frame by frame on 31 songs, SEs and cries; the listening
 sound: the field, map music (saved), the battle (music in the transition, the controllers, scripts, balls, the low
 HP beep, the anims' panned SEs and waits), the scenes (evolution, eggs, trades, Hall of Fame, credits, Pokédex,
 title), the ambient cries. Every audio wait times as on the GBA. Deferred: the rain weathers' sounds (no FRLG
-map has rain), the help system, quest log and link play (AUDIO_PLAN.md "Batch D result").
+map has rain), quest log and link play (AUDIO_PLAN.md "Batch D result").
 
 **The postgame is done** ([POSTGAME_PLAN.md](POSTGAME_PLAN.md) complete in one batch, batch 10: PRs #114-#125). The
 42 postgame gaps are ported: braille, field weather (FRLG's Shade and horizontal fog: Viridian Forest, Pokémon Tower,
@@ -45,12 +46,17 @@ callbacks, `warphole`), the Heracross record, Resort Gorgeous, SetPostgameFlags,
 its battles, the records board, battle_records.c), ShakeScreen, the event islands (the tickets from the Hall of
 Fame as in REVISION 0xA, a deliberate QOL change; Lugia, Ho-Oh, the Deoxys triangle). Save version 9.
 
-Next: the open work below. The map preview screens are the most visible gap left (every postgame cave has one);
-then the help system and the intro movie. A Kanto-wide postgame sweep (the National Dex's Kanto changes, Cerulean
-Cave beyond Mewtwo's battle start) is still open.
+**The single-player gaps are closed** ([GAPS_PLAN.md](GAPS_PLAN.md) complete in batch 11: PRs #127-#134): the map
+preview screens (map_preview_screen.c: every cave and forest banner), the L/R help system (help_system.c,
+help_system_util.c: the menus, the text, the BGM halving, the contexts at every ported screen), the intro movie
+(intro.c: the copyright screen, the Game Freak scene, Gengar vs Nidorino, the title screen's timeout back to it), and
+a Kanto postgame sweep (Cerulean Cave through Mewtwo's battle, every legendary's battle caught / beaten / fled;
+IsNationalPokedexEnabled now checks all three of the C's conditions everywhere; the Elite Four rematch teams and
+Kanto's postgame NPCs checked).
 
-**Batch 11** ([GAPS_PLAN.md](GAPS_PLAN.md)): the map preview screens, the help system, the intro movie and the
-Kanto postgame sweep.
+Next: the open work below. What a single player can still notice: the Fame Checker, Teachy TV and mail (bag items
+that need field systems), and the quest log (the "previously on your quest" recap on CONTINUE). Link play is the
+other big area left.
 
 [SIDE_PLAN.md](SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
 `bufferdecorationname` (and the other decoration commands) and FLDEFF_USE_DIVE with DoDiveWarp, ported as FRLG's C
@@ -78,9 +84,7 @@ reaches, the decoration commands and Dive, is ported as the C has it).
 
 Other open work:
 
-- The intro movie (intro.c) before the title screen.
-- The L/R help system (help_system.c) behind OPTIONS_BUTTON_MODE_HELP.
-- Map preview screens (map_preview_screen.c): TryDoMapTransition already knows where they'd run.
+- The quest log (quest_log.c: the recap on CONTINUE; its help contexts and `goto_if_questlog` never branch).
 - Other bag items that need field systems: Fame Checker, Teachy TV, mail.
 - Link play (the cable club's link specials are stand-ins that never find a partner; the Seven Island house's
   e-Reader battle room).
@@ -198,6 +202,8 @@ Loose ends:
 - [x] Start menu shell: items by flags, wrap-around cursor, remembered position, B/START close; every entry opens
   its real screen
 - [x] Start menu help window (help_message.c, start_menu.c's descriptions) in HELP button mode
+- [x] The L/R help system (help_system.c, help_system_util.c): the menus over any screen, its text, the BGM
+  halving, the help contexts at every ported screen and the help specials
 - [x] Tile animations (tileset_anims.c): General water/sand/flowers, Celadon fountain, Silph Co. fountain, Mt. Ember
   steam, Vermilion Gym door, Celadon Gym flowers
 - [x] Door animations (field_door.c), Task_DoorWarp / Task_ExitDoor, `opendoor`/`closedoor`/`waitdooranim`/
@@ -257,7 +263,8 @@ Loose ends:
   (GetWildBattleTransition / GetTrainerBattleTransition; Old Man's tutorial uses Slice)
 - [x] Warp screen effects: WarpFadeOutScreen / WarpFadeInScreen (white in and out of caves), the cave flash
   transitions (FlashTransition_Enter / _Exit from CB2_DoChangeMap), the barn door wipe leaving through a door
-- [ ] Map preview screens (map_preview_screen.c: the cave/forest name banners)
+- [x] Map preview screens (map_preview_screen.c, fldeff_flash.c's RunMapPreviewScreen: the cave banners before
+  the flash, the forest banners on map load, shorter on a second visit)
 - [x] Field weather (field_weather.c, field_weather_util.c, field_weather_effects.c' FRLG weathers): None, Sunny,
   Shade (the gamma shift on the field's palettes and sheets), horizontal fog (the sprites, BLDALPHA blend);
   `setweather` / `doweather` / `resetweather`, the saved weather. Rain, snow and the other unused weathers aren't
@@ -277,7 +284,8 @@ Loose ends:
   map has them)
 - [x] Naming screen (naming_screen.c): every template (player, rival, PC box, nickname, caught mon); opened by
   ChangePokemonNickname from scripts and by the battle's nickname prompt after a catch
-- [x] Title screen (title_screen.c, clear save data screen) and Oak's speech (oak_speech.c); intro.c isn't ported
+- [x] Copyright screen and intro movie (intro.c), title screen (title_screen.c, clear save data screen) and Oak's
+  speech (oak_speech.c)
 
 ### Tests (tests/README.md)
 - [x] Unit tests (Vitest, Node): random.c, CreateMon/CalculateMonStats/levels/movesets/natures/gender/PP, Bag,
@@ -293,7 +301,8 @@ Loose ends:
   deleter / relearner, in-game trades and the Name Rater, the Game Corner, Oak's rating and the fossils, the
   daycares, eggs and hatching, holes and the other side specials; the Seagallop ferry from every harbor and the
   Sevii 1-3 quest, the S.S. Anne (ticket check, departure, the dock after), the league lighting, Easy Chat; field
-  weather; the postgame from Oak's National Dex to Seven Island, the Trainer Tower, the event islands
+  weather; the postgame from Oak's National Dex to Seven Island, the Trainer Tower, the event islands, the
+  legendaries' battles and the Kanto postgame; map preview screens, the help system, the intro
 - [x] Script coverage unit test: every script command, special, std script, movement action and field effect the
   scripts use, against the port's tables; known gaps tagged in `tests/unit/scriptCoverageGaps.ts`
 - [ ] More scenarios: party menu from the start menu, items in battle, level-up move learning, the Old Man

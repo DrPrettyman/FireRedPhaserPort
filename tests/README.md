@@ -119,6 +119,9 @@ A test fails if the page throws or logs `console.error`. When a test fails, the 
    the player while the start loads, and its EventScript_DoTrainerBattleFromApproach carries on into the next map
    and never ends there (postgameSevenIsland's chambers, batch 10). Start on the map you test, or wait for the
    field to be idle with no script before the warp.
+11. Talking to a wandering NPC: being next to it and facing it isn't enough, it can step away before the A press
+   lands, and A then talks to nobody. Press A for a few frames until a script starts (`t.mash(t => t.field()?.script,
+   'A', 12)`) and walk up again if none did (ssAnne.test.ts's `talkTo`, batch 11).
 
 Runs are close to deterministic, not exactly: the RNG is seeded, but the number of logic ticks between
 two harness calls depends on wall-clock time. Write scenarios that hold whatever the dice say.
