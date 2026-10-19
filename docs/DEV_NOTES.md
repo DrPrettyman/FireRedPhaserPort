@@ -995,7 +995,8 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   controls, gMPlayInfo_BGM / SE1 / SE2 / SE3, gPokemonCryMusicPlayers, the cry song and its setters,
   `setVoiceData`), `m4aMixer.ts` (SoundMainRAM: the DirectSound envelopes, sample positions and the mix; see
   "m4a mixer" below),
-  `m4aCgb.ts` (gCgbChans, CgbSound: a placeholder until W-m4a 4), `m4aVoices.ts` (voicegroups / samples / waves
+  `m4aCgb.ts` (gCgbChans, CgbSound and the PSG: see "PSG frames" below), `soundRegs.ts` (the sound registers),
+  `m4aVoices.ts` (voicegroups / samples / waves
   JSON → ToneData / WaveData), `m4aInternal.ts` (m4a_internal.h: the structs and constants), `m4aTables.ts`
   (gClockTable, gPcmSamplesPerVBlankTable, gScaleTable, gFreqTable, gPokemonCrySongTemplate), `songTable.ts`
   (`loadSongTable(json)`: songs.json → gSongTable, checks the players against gMPlayTable, returns `idByName`). Pure logic: no DOM, no AudioContext, no clock; module
@@ -1015,8 +1016,8 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   the asm looks up the voice (`_081DDB46`): W-m4a 2 adds the voice lookup and channels there (or replaces
   `gSoundInfo.plynote`), fills `ChnVolPitUpdate` (MPlayMain's per-channel volume / pitch), `SongHeader.tone` from
   the voicegroup, and the cry songs. The channel loops (gate times, TrackStop, ply_fine, ply_endtie, RealClearChain)
-  are ported and walk an empty list until then. `SoundMain` runs SoundMainRAM (the mixer, "m4a mixer" below);
-  `gSoundInfo.CgbSound` / `CgbOscOff` are DummyFunc and `ply_port` writes `gSoundInfo.soundRegs` (W-m4a 4).
+  are ported and walk an empty list until then. `SoundMain` runs CgbSound ("PSG frames" below), then
+  SoundMainRAM (the mixer, "m4a mixer" below); `ply_port` writes the sound registers (soundRegs.ts).
 - **Hooking in:** see "sound.c" below: the boot loads the songs and calls `m4aSoundInit()`, AgbMainFrameEnd runs
   `m4aSoundMain()` once per frame; gba/sound.ts calls the m4a* functions on the gMPlayInfo_* players.
 - **Voices:** `setVoiceData(voicegroups, samples, waves, pcm?)` (m4a.ts) takes the parsed voicegroups.json,
@@ -1051,9 +1052,9 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   `gCryTable[SpeciesToCryId(species - 1)]` entry. Lifetimes for section 2's species and modes are pinned in
   tests/unit/m4aChannels.test.ts (they equal AUDIO_PLAN's estimates, e.g. Charizard NORMAL 56 frames, Jynx
   NORMAL 135, any species DOUBLES ≤ 21).
-- **Seams:** `m4aCgb.ts`'s CgbSound / CgbOscOff / MidiKeyToCgbFreq are
-  placeholders (W-m4a 4: CGB channels go off as soon as released, frequency 0); `ply_port` writes
-  `gSoundInfo.soundRegs` (W-m4a 4).
+- **CGB channels:** a CGB note's channel lives from its START through CgbSound's envelope, release and pseudo
+  echo ("PSG frames" below); ply_note only takes it while it isn't playing a higher-priority note, so a released
+  one is free. IsSEPlaying and the other waits read the tracks, not the channels.
 - **Hooking in:** W-sound 1 calls `m4aSoundInit()`, `loadSongTable()` and `setVoiceData()` at boot and
   `m4aSoundMain()` once per frame (AUDIO_PLAN.md section 4, "The tick"); gba/sound.ts calls the m4a* functions on
   the gMPlayInfo_* players.
@@ -1086,8 +1087,8 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   set, in both FIFOs (a mono echo).
 - **Mono:** FRLG's mixer never reads `soundInfo.mode` bit 0; SetPokemonCryStereo sets `gRegSoundCntH`
   (REG_SOUNDCNT_H: SOUNDCNT_H_STEREO, or SOUNDCNT_H_MONO = both FIFOs to both speakers at half volume), which
-  `m4aPcmFrame` hands to the output's DAC (`frameToDac`). The bit itself is CgbSound's (W-m4a 4: the PSG
-  centred). Callers: SetTitleScreenScene_Cry after LoadGameSave (`titleScreenEnv.savedOptionsSound`, from
+  `m4aPcmFrame` hands to the output's DAC (`frameToDac`). The bit itself is CgbModVol's (the PSG channels on both
+  sides). Callers: SetTitleScreenScene_Cry after LoadGameSave (`titleScreenEnv.savedOptionsSound`, from
   MainMenuScene), CloseAndSaveOptionMenu (`state.optionsSound`). Dev starts that skip the title keep SoundInit's
   stereo.
 - **On / off:** `m4aSetMixing(on)`: AgbMainFrameEnd sets it from `audioOutputWantsFrames()` each frame and pushes
@@ -1097,7 +1098,8 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   loads in the background, `audioData.ts`, only when the output is on) also only advances.
 - **Hearing it:** `npm run dev`, open http://localhost:5173/ (the output is on by default; `?audio=1` forces it),
   press a key (the browser's autoplay rule): the title screen plays MUS_TITLE; M mutes. Only DirectSound parts
-  sound until W-m4a 4: SE_SELECT, SE_DOOR, SE_EXIT and the other square / noise SEs are silent; SE_SAVE,
+  sound until W-m4a 4b (the engine writes the PSG registers, nothing plays them yet): SE_SELECT, SE_DOOR, SE_EXIT
+  and the other square / noise SEs are silent; SE_SAVE,
   SE_BALL_OPEN, SE_SHOP, SE_EXP and the cries sound. Headless: `npx vite-node tools/render-audio.ts MUS_PALLET
   1200 out.wav [mono]` renders a song (comma-separated names start together) to a 13,379 Hz WAV of what the
   speakers get, and prints its RMS (`tests/audioRender.ts` does the loading and the frame loop).
@@ -1109,6 +1111,66 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   for the 30 frames before it starts), MUS_PALLET (RMS 9.6), SE_SAVE (sounds, silent from 42 frames after its
   start), a cry and its reverse, SE_SELECT silent (PSG). `tests/e2e/audioOutput.test.ts`: with `?audio=1` the
   title's frames reach the worklet with a non-zero peak.
+
+### PSG frames (CgbSound)
+
+- **Where:** `src/audio/m4aCgb.ts` (m4a.c: CgbSound, CgbModVol, CgbPan, CgbOscOff, MidiKeyToCgbFreq; gCgbChans as
+  MPlayExtender sets them up), `src/audio/soundRegs.ts` (the sound registers, the write log, the `PsgFrame` type and
+  the register offsets: pure, the worklet can import it), the tables in `m4aTables.ts` (gCgbScaleTable,
+  gCgbFreqTable, gNoiseTable, gCgb3Vol). The C's register writes go through `SoundRegWrite8/16/32`, its reads
+  through `SoundRegRead8` (CgbSound reads back NRx2, NR10, NR43, NR51 and SOUNDBIAS_H, all readable as written).
+- **Who writes:** m4aSoundInit (first `resetSoundRegs()`: the BIOS's power-on state, SOUNDBIAS 0x200), SoundInit
+  (SOUNDCNT_X 0x8F, SOUNDCNT_H, SOUNDBIAS_H 0x42), MPlayExtender (SOUNDCNT_X, SOUNDCNT_L 0, NR12 / NR22 / NR42 8,
+  NR14 / NR24 / NR44 0x80, NR30 0, NR50 0x77), m4aSoundMode (SOUNDBIAS_H's resolution), SetPokemonCryStereo
+  (SOUNDCNT_H), ply_port (no FRLG song has one), TrackStop's CgbOscOff (the game logic: m4aSongNumStop,
+  m4aMPlayStop / AllStop, a song replacing another), and CgbSound in each frame's SoundMain.
+- **CgbSound per frame** (between the sequencers and SoundMainRAM): a START channel gets ATTACK, CgbModVol (goal
+  (left + right) / 16, clamped to 15 only when hard-panned; sustain goal; NR51 bits: one side when one volume is at
+  least twice the other, both in mono), the note's setup writes (square 1's NR10 sweep (8 = none), NRx1 duty << 6 +
+  length, the wave's RAM when the wave changed: NR30 0x40, 16 bytes, NR30 0; NR31; the noise's NR41 and NR43 width
+  bit), then the software envelope: +1 per `attack` frames to the goal, −1 per `decay` frames to the sustain goal,
+  the sustain (re-read every 7 frames), −1 per `release` frames after STOP, then the pseudo echo (the track's
+  xIECV volume for xIECL frames), then CgbOscOff. c15 makes every 15th frame step twice (the hardware envelope's
+  64 Hz). On a pitch change NRx3 / NRx4 (no restart); on a volume change NR51, NRx2 (the envelope's direction and
+  step time with the new volume) and NRx4 | 0x80 (a restart; square 1 twice with a rising sweep), or for the wave
+  NR32 from gCgb3Vol and, on its first, NR30 0x80 and NR34 with the restart. Between those writes the hardware
+  envelope (NRx2's step time) does the steps the software only counts.
+- **The frame** (`m4aPcmFrame().psg`, taken in AgbMainFrameEnd every frame, pushed only when the output wants
+  frames): `{ writes: Uint16Array, state: Uint8Array }`. `writes` are all the writes since the previous frame in
+  order, each `offset << 8 | value`, offsets from REG_SOUND1CNT_L 0x4000060: NR10 0x00, NR11 0x02, NR12 0x03,
+  NR13 0x04, NR14 0x05, NR21 0x08, NR22 0x09, NR23 0x0C, NR24 0x0D, NR30 0x10, NR31 0x12, NR32 0x13, NR33 0x14,
+  NR34 0x15, NR41 0x18, NR42 0x19, NR43 0x1C, NR44 0x1D, NR50 0x20, NR51 0x21, SOUNDCNT_H 0x22-0x23, NR52 0x24,
+  SOUNDBIAS 0x28-0x29, wave RAM 0x30-0x3F (`PSG_*` in soundRegs.ts). A wave RAM write goes to the bank NR30 bit 6
+  does *not* play at the time of the write (so CgbSound's NR30 0x40, bytes, NR30 0 loads bank 0 and plays it).
+  `state` (`PSG_STATE_SIZE` 0x50 bytes) is the register file before `writes`: 0x00-0x2F as above, then wave RAM
+  bank 0 (0x30) and bank 1 (0x40): latched values, no events. In the worklet message: `psg` (the writes' buffer),
+  `psgState`.
+- **For the synth (W-m4a 4b):** replay `writes` in order as the hardware takes them (GBATEK "Sound Channel 1-4"):
+  NRx4 bit 7 restarts the channel (length counter reloaded if 0, envelope volume / direction / step from NRx2,
+  frequency timer, square 1's sweep, the wave's position; a wave restart with NR30 bit 7 clear leaves it off), bit 6
+  enables the length counter (NRx1's 6-bit length for squares and noise, NR31's 8-bit for the wave), bits 0-2 the
+  frequency's high bits (bit 3 holds MidiKeyToCgbFreq's +2048: unused). NRx2: volume 4-7, direction 3, step 0-2
+  (n/64 s; 0 none). NR32 bits 5-7: 0 mute, 0x20 100%, 0x40 50%, 0x60 25%, 0x80 75%. NR43: clock shift 4-7, width
+  bit 3 (1: 7-bit LFSR), divider 0-2. Then NR50 (0x77: 7 of 7 on both sides), NR51 (routing, 1 bit per channel and
+  side), SOUNDCNT_H bits 0-1 (the PSG's share: 2 = 100% in both stereo and mono) and NR52 bit 7 (on). The GBA mixes
+  the PSG into the same 10-bit sum as the FIFOs (outputCore's `directSoundLevel` / `dacOutput`).
+- **Gotchas for the synth:** (1) Timing: CgbSound writes in VBlank, which takes effect at once, but the DirectSound
+  mix made in the same SoundMain plays in the *next* frame: on the GBA the PSG leads the FIFOs of the same frame by
+  one frame, so apply a frame's `writes` one frame before the PCM it arrives with plays (or hold the PCM back one
+  frame). Game-logic writes (CgbOscOff) come first in `writes` and happened earlier in the frame; applying them at
+  the frame's start is close enough. (2) Starting mid-song (the output starts at the first key press, after boot's
+  writes): load `state` first; channels triggered before then stay silent until their next restart (frequent:
+  every volume change restarts). Load it again after dropping frames. (3) The CGB voices' length byte is their pan
+  byte (music_voice.inc), so a voice with a pan gets a length (and NRx1 values whose top bits change the duty):
+  apply them as written. (4) A frame can write the same register several times (NR14 twice, NR43 twice, NR30 three
+  times): the order matters. (5) NRx2 = 0x08 (CgbOscOff) is volume 0 with the DAC on.
+- **Tests:** `tests/unit/m4aCgb.test.ts`: MidiKeyToCgbFreq against the tables, the init writes in the C's order,
+  wave RAM banking and the frame's state, SOUNDCNT_H from SetPokemonCryStereo, CgbModVol in stereo / mono, then
+  frame by frame against m4a.c (worked by hand in the comments): a square note (attack, decay, sustain, release,
+  pseudo echo, off; the track unlinks it a frame later), a rising sweep, square 2, a wave note (bank switch, NR32 per
+  step, no reload for the same wave), a noise note, START with STOP, TrackStop's CgbOscOff, the echo's length; on
+  public/gen/audio: SE_SELECT, MUS_ROUTE1's four channels, and the frame each PSG-only SE's channels go off
+  (SE_SELECT 15, SE_DOOR 22, SE_EXIT 36, SE_PC_ON 68, SE_WALL_HIT 14, SE_FLEE 39).
 
 ### ROM reference measurements
 
@@ -1163,10 +1225,10 @@ or extend them:
   flushed and it resumes.
 - **pushFrame(frame)** (audio/frame.ts's AgbMainFrameEnd, once per frame after m4aSoundMain, with `m4aPcmFrame()`): `{ fifoA, fifoB, soundcntH?,
   psg? }`: the frame's 224 signed 8-bit samples per FIFO (A = `pcmBuffer`, B = `pcmBuffer + PCM_DMA_BUF_SIZE`),
-  REG_SOUNDCNT_H (`SOUNDCNT_H_STEREO` by default, `SOUNDCNT_H_MONO` after SetPokemonCryStereo(0)) and, TODO W-m4a 4,
-  `psg: { writes: Uint16Array }` (the frame's sound register writes, `offset << 8 | value` from REG_SOUND1CNT_L; a
-  proposal, W-m4a 4 owns the shape). The arrays are copied into one transferable buffer and posted on the node's
-  port; a no-op while the output is off, suspended, loading or playing the tone. `audioOutputWantsFrames()` lets the
+  REG_SOUNDCNT_H (`SOUNDCNT_H_STEREO` by default, `SOUNDCNT_H_MONO` after SetPokemonCryStereo(0)) and `psg` (the
+  PSG's register writes and state: "PSG frames" below). The FIFOs are copied into one transferable buffer, the PSG
+  writes and state into two more (the message's `psg`, `psgState`), and posted on the node's port; a no-op while
+  the output is off, suspended, loading or playing the tone. `audioOutputWantsFrames()` lets the
   mixer skip writing samples when nobody listens (never its bookkeeping). Nothing else may read the output's state
   (AUDIO_PLAN.md "Rules").
 - **The worklet:** `frameToDac` turns each frame into speaker samples as the GBA does: each routed FIFO ×4 (full)
@@ -1175,14 +1237,14 @@ or extend them:
   (docs/DEVIATIONS.md) in the context's rate: it starts once 3 frames are buffered, nudges its step by up to ±0.5%
   (0.5% per frame off) to keep the fill at 3.5 frames, plays silence on an underrun until 3 frames are back, and
   drops the oldest samples back to 3.5 frames when a push passes 7 (after a stall). The PSG synth goes here
-  (TODO W-m4a 4). It reports stats (frames, underruns, dropped, buffered, peak, rendered) every 64 render quanta.
+  (TODO W-m4a 4b). It reports stats (frames, underruns, dropped, buffered, peak, rendered) every 64 render quanta.
 - **Mute key M** (docs/DEVIATIONS.md "Deliberate QOL changes"): toggles the output only (the worklet writes zeros,
   the frames keep flowing); ignored with Ctrl / Cmd / Alt and in text fields; saved as
   `firered-phaser:audio-muted` in localStorage (try/catch). Works with the output off too (it is remembered).
 - **Bundling:** `import workletUrl from './worklet.ts?worker&url'`: Vite serves it as a module in dev and builds it
   as its own chunk (`assets/worklet-*.js`, imports inlined) in `npm run build`.
 - **Try it:** `npm run dev`, open `/` (or `/?audio=1`), press any key: the title screen's MUS_TITLE (without its
-  PSG parts until W-m4a 4). `/?audio=tone`, press any key: a square wave alternating A4 / E5 every half
+  PSG parts until W-m4a 4b). `/?audio=tone`, press any key: a square wave alternating A4 / E5 every half
   second; M mutes it. In the console: `__test.audioOutput.state()`, `__test.audioOutput.tone(false)`. Same on
   `/battle-test.html?audio=tone`.
 - **Tests:** `tests/unit/audioOutput.test.ts` (decideOutput, the DAC's stereo / mono / clipping values, the

@@ -376,12 +376,11 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     the port skips it. No quest log entry (SetQLPlayedTheSlots) and no GAME_STAT_SLOT_JACKPOTS.
   - The Game Corner's photo printer flash (FldEff_PhotoFlash) is the field's FADE_FROM_WHITE (16 → 0 in steps of 2)
     where the C fades from 15 to 0 in steps of 3, a few frames longer.
-  - The m4a engine (src/audio/, AUDIO_PLAN.md): the CGB (PSG) channels are silent and a placeholder until W-m4a 4
-    (`m4aCgb.ts`), so songs and SEs play only their DirectSound parts (SE_SELECT, SE_DOOR, SE_EXIT, SE_PC_ON and
-    other square / noise SEs are silent; MUS_TITLE and MUS_PALLET lack their square and wave parts): a note on a square / wave / noise voice claims its channel as ply_note does, but the channel
-    goes off as soon as it is released (CgbSound's release envelope, pseudo echo and the hardware length counter
-    aren't run) and MidiKeyToCgbFreq returns 0. Only claims between CGB notes can differ (a released note frees its
-    channel a few frames early); no wait depends on them. A note on a keysplit entry that voicegroups.json has as
+  - The m4a engine (src/audio/, AUDIO_PLAN.md): the CGB (PSG) channels are silent until W-m4a 4b. The engine side is
+    ported (W-m4a 4a: CgbSound's envelopes, release, pseudo echo and register writes, MidiKeyToCgbFreq, the PSG
+    frame each frame hands the output), but the output has no synth for those registers yet, so songs and SEs play
+    only their DirectSound parts (SE_SELECT, SE_DOOR, SE_EXIT, SE_PC_ON and other square / noise SEs are silent;
+    MUS_TITLE and MUS_PALLET lack their square and wave parts). A note on a keysplit entry that voicegroups.json has as
     null (a ROM pointer byte, outside the table's key range) is dropped, where the GBA would play the subgroup voice
     that byte names; no FRLG song plays one (tests/unit/m4aChannels.test.ts).
   - The m4a mixer (audio/m4aMixer.ts, W-m4a 3): mixes as m4a_1.s's SoundMainRAM does, byte for byte, with two
