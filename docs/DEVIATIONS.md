@@ -237,15 +237,20 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     checker, minigame records, the enigma berry, mystery gift, link records and
     the region map zoom option. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
-  - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the title screen; the
-    copyright screen and intro.c's Game Freak / Nidorino movie before it aren't ported. Dev starts (`?start=`,
-    `?map=`) skip the title screen and the main menu; dev `?skipIntro` (the e2e harness's default) skips the title
-    screen and Oak's speech: the main menu with a save, the new game without. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
+  - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the copyright screen, the
+    intro and the title screen. Dev starts (`?start=`, `?map=`) skip all of them and the main menu; dev
+    `?skipIntro` (the e2e harness's default) skips the copyright screen, the intro, the title screen and Oak's
+    speech: the main menu with a save, the new game without. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
     before CONTINUE. SAVE_STATUS_ERROR ("the previous save file will be loaded") can't happen: one
     slot, no backup; an unreadable slot is SAVE_STATUS_INVALID ("The save file has been deleted...").
-  - Title screen (menus/titleScreen.ts): no help system (HELPCONTEXT_TITLE_SCREEN: L/R do nothing). When its 2700-frame timer runs out it goes
-    straight back to the title screen (CB2_InitCopyrightScreenAfterTitleScreen would replay the copyright screen
-    and the intro). StartTimer1 / SeedRngAndSetTrainerId don't seed the RNG from the time spent on the title
+  - Copyright screen and intro (menus/intro.ts, intro.c): the GameCube multiboot the copyright screen listens for
+    (Pokémon Colosseum's link over the GBA cable: SerialCB_CopyrightScreen, GameCubeMultiBoot_*, sGcmb) isn't
+    ported; no GameCube ever answers, so the screen always fades out after its 140 frames. The intro movie stops
+    after the Game Freak scene: scenes 1-3 (the grass, the forest pan, Gengar and Nidorino's fight; IntroCB_Scene1
+    on) aren't ported yet (W-intro unit 2), so IntroCB_Scene1 goes straight to IntroCB_ExitToTitleScreen.
+    LoadSpritePalettes(sFightSceneSpritePalettes) reads past the array's end without BUGFIX (no {0} entry); the
+    port loads its five palettes only.
+  - Title screen (menus/titleScreen.ts): no help system (HELPCONTEXT_TITLE_SCREEN: L/R do nothing). StartTimer1 / SeedRngAndSetTrainerId don't seed the RNG from the time spent on the title
     screen: the port seeds it at load. B+SELECT (REVISION 0's berry fix program, a multiboot program for Ruby and
     Sapphire's berry clock) does nothing. The clear save data screen (B+SELECT+UP) empties the one localStorage
     slot (ClearSaveData erases every flash sector, incl. the Hall of Fame) and its soft reset (DoSoftReset) is
@@ -303,8 +308,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Credits (menus/credits.ts): a map scene loads asynchronously, so it can start
     a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
     GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.
-    SoftReset (BootScene's `softReset`) restarts the boot flow (the title screen) with a fresh Overworld scene and
-    GameState; other module-level state isn't reset, and intro.c's movie isn't ported.
+    SoftReset (BootScene's `softReset`) restarts the boot flow (the copyright screen, the intro, the title screen)
+    with a fresh Overworld scene and GameState; other module-level state isn't reset.
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, cable club monitors) start their scripts and hit the unimplemented-special warnings.
   - No-op specials (`NO_OP` in `script/specials.ts`): quest log, help system, fame checker, GameCube link flags,

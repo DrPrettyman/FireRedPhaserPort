@@ -12,13 +12,13 @@ import type { OverworldStart } from './OverworldScene';
 const NEW_GAME_START: OverworldStart = { map: 'PalletTown_PlayersHouse_2F', x: 6, y: 6 };
 
 export interface BootStart {
-  /** DoSoftReset: boot again (to the title screen), ignoring the URL's dev starts. */
+  /** DoSoftReset: boot again (to the copyright screen), ignoring the URL's dev starts. */
   softReset?: boolean;
 }
 
 /**
- * Boot: load the extracted data, then the title screen (title_screen.c; the copyright screen and intro.c's
- * Game Freak / Nidorino movie before it aren't ported). Dev starts (`?start=`, `?map=`) go straight into the
+ * Boot: load the extracted data, then the copyright screen, the intro movie and the title screen (intro.c's
+ * CB2_InitCopyrightScreenAfterBootup, which AgbMain starts with; title_screen.c). Dev starts (`?start=`, `?map=`) go straight into the
  * field; `?skipIntro` (dev, used by the e2e harness) boots like the port did before the title screen existed:
  * into the main menu when the save slot holds something, else straight into the new game, and NEW GAME skips Oak's
  * speech.
@@ -54,14 +54,15 @@ export class BootScene extends Phaser.Scene {
       if (gSave.fileStatus === SAVE_STATUS_EMPTY) this.scene.start('Overworld', NEW_GAME_START);
       else this.scene.start('MainMenu', { entry: 'mainMenu', newGame: NEW_GAME_START, skipOakSpeech: true } satisfies MainMenuStart);
     } else {
-      this.scene.start('MainMenu', { entry: 'title', newGame: NEW_GAME_START } satisfies MainMenuStart);
+      this.scene.start('MainMenu', { entry: 'copyright', newGame: NEW_GAME_START } satisfies MainMenuStart);
     }
   }
 }
 
 /**
  * DoSoftReset (the clear save data screen, the end of the credits): stop every scene and boot again, which shows
- * the title screen (with ?skipIntro: the main menu or the new game). The extracted data stays loaded; everything
+ * the copyright screen, the intro and the title screen as at power-on (with ?skipIntro: the main menu or the new
+ * game). The extracted data stays loaded; everything
  * else starts fresh. SoftReset clears RAM, but Phaser reuses a stopped scene's instance with all its fields, so the
  * Overworld (whose fields hold the field's state) is replaced by a new instance. Call it from a scene's own code
  * (a GBA host should stopHost() first, as MainMenuScene's clear save data screen does).
@@ -88,7 +89,7 @@ export function softReset(from: Phaser.Scene): void {
   game.events.once(Phaser.Core.Events.POST_STEP, reboot);
 }
 
-/** `?skipIntro` (dev builds only): no title screen. */
+/** `?skipIntro` (dev builds only): no copyright screen, intro or title screen. */
 function skipIntro(): boolean {
   return import.meta.env.DEV && new URLSearchParams(location.search).has('skipIntro');
 }

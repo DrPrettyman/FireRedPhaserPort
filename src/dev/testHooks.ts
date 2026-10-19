@@ -42,6 +42,7 @@ import { trainerCardProbe } from '../menus/trainerCard';
 import { slotMachineProbe } from '../menus/slotMachine';
 import { mainMenuProbe } from '../menus/mainMenu';
 import { titleScreenProbe } from '../menus/titleScreen';
+import { introProbe } from '../menus/intro';
 import { clearSaveDataProbe } from '../menus/clearSaveDataScreen';
 import { oakSpeechProbe } from '../menus/oakSpeech';
 import { saveDialogProbe } from '../ui/SaveDialog';
@@ -617,6 +618,8 @@ function createApi(game: Phaser.Game) {
     },
     /** The title screen while its main task runs: the scene (INIT .. CRY), its state, the restart timer, whether PRESS START shows, the flames alive. */
     titleScreen: () => (game.scene.isActive('MainMenu') ? titleScreenProbe() : undefined),
+    /** The copyright screen (its gMain.state) or the intro (the IntroCallback's name, its state and timer), with the sprites in use. */
+    intro: () => (game.scene.isActive('MainMenu') ? introProbe() : undefined),
     /** The clear save data screen (B+SELECT+UP on the title screen) while it runs: whether its YES/NO takes input. */
     clearSaveData: () => (game.scene.isActive('MainMenu') ? clearSaveDataProbe() : undefined),
     /** Oak's speech (NEW GAME) while it runs: the running task's function name, the page / shrink timer, the menu taking input ('gender' | 'names' | 'yesNo'), fading, the Pikachu intro's state, the gender and names so far. */

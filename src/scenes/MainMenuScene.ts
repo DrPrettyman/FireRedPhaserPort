@@ -1,7 +1,8 @@
 // The boot screens on the GBA layer, one host for all of them since they hand over to each other through gMain
-// like the C: the title screen (menus/titleScreen.ts, title_screen.c), its clear save data screen
-// (menus/clearSaveDataScreen.ts) and the main menu (menus/mainMenu.ts, main_menu.c). BootScene starts it on the
-// title screen (or, with the dev-only ?skipIntro, on the main menu). CONTINUE hands the save to the overworld
+// like the C: the copyright screen and the intro (menus/intro.ts, intro.c), the title screen
+// (menus/titleScreen.ts, title_screen.c), its clear save data screen (menus/clearSaveDataScreen.ts) and the main
+// menu (menus/mainMenu.ts, main_menu.c). BootScene starts it on the copyright screen (or, with the dev-only
+// ?skipIntro, on the main menu). CONTINUE hands the save to the overworld
 // (CB2_ContinueSavedGame); NEW GAME runs Oak's speech (menus/oakSpeech.ts) here, then starts the new game. The
 // clear save data screen ends with DoSoftReset (BootScene's `softReset`).
 
@@ -14,6 +15,7 @@ import { menuEnv } from '../gba/menu';
 import { CB2_SaveClearScreen_Init, clearSaveDataEnv } from '../menus/clearSaveDataScreen';
 import { CB2_InitMainMenu, mainMenuEnv, mainMenuGfxSymbols } from '../menus/mainMenu';
 import { CB2_InitTitleScreen, titleScreenEnv, titleScreenGfxSymbols } from '../menus/titleScreen';
+import { CB2_InitCopyrightScreenAfterBootup, introEnv, introGfxSymbols } from '../menus/intro';
 import { Defines } from '../script/Defines';
 import { gSave, LoadGameSave } from '../state/save';
 import { clearSave, type SaveData } from '../state/saveData';
@@ -41,8 +43,11 @@ import type { OverworldStart } from './OverworldScene';
 const TEXTURE = 'main_menu_screen';
 
 export interface MainMenuStart {
-  /** Which screen to start on: the title screen (CB2_InitTitleScreen) or the main menu (CB2_InitMainMenu). */
-  entry: 'title' | 'mainMenu';
+  /**
+   * Which screen to start on: the copyright screen at boot (CB2_InitCopyrightScreenAfterBootup, then the intro and
+   * the title screen), the title screen (CB2_InitTitleScreen) or the main menu (CB2_InitMainMenu).
+   */
+  entry: 'copyright' | 'title' | 'mainMenu';
   /** Where NEW GAME starts (new_game.c's warp into the player's room). */
   newGame: OverworldStart;
   /** Dev (?skipIntro): NEW GAME goes straight into the new game, without Oak's speech. */
@@ -63,7 +68,8 @@ export class MainMenuScene extends GbaHostScene {
     initConstants(assets.scripts.defines); // string_util.c's helpers read the K table
     const charmap = new Charmap(assets.charmap);
     await assets.loadTextTextures(this);
-    await loadGfx([...mainMenuGfxSymbols(), ...titleScreenGfxSymbols()]);
+    await loadGfx([...mainMenuGfxSymbols(), ...titleScreenGfxSymbols(), ...introGfxSymbols()]);
+    const { gSineTable } = (await sharedBattleData()).tables.mech as { gSineTable: number[] }; // the intro's star
     this.fonts = new Fonts(this, assets.fonts);
     const text = (label: string) => charmap.encode(assets.strings[label] ?? '?$');
     let save: SaveData | undefined;
@@ -95,6 +101,12 @@ export class MainMenuScene extends GbaHostScene {
       savedOptionsSound: () => save?.options.sound ?? 0,
       saveClearScreenInit: () => SetMainCallback2(CB2_SaveClearScreen_Init),
     });
+    Object.assign(introEnv, {
+      define: (name: string) => defines.require(name),
+      loadGameSave,
+      savedOptionsSound: () => save?.options.sound ?? 0,
+      sineTable: gSineTable,
+    });
     Object.assign(clearSaveDataEnv, {
       define: (name: string) => defines.require(name),
       text,
@@ -113,7 +125,7 @@ export class MainMenuScene extends GbaHostScene {
     resetHardware();
     gMain.inBattle = false;
     SetMainCallback1(null);
-    SetMainCallback2(start.entry === 'title' ? CB2_InitTitleScreen : CB2_InitMainMenu);
+    SetMainCallback2(start.entry === 'copyright' ? CB2_InitCopyrightScreenAfterBootup : start.entry === 'title' ? CB2_InitTitleScreen : CB2_InitMainMenu);
     this.startHost();
   }
 

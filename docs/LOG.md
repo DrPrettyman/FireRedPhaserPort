@@ -3798,3 +3798,26 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   gameCorner.test.ts (8). Screenshots of the welcome page, the topics, a scrolled submenu and a help item looked
   like FRLG's.
 
+### W-intro 1: the copyright screen, the intro's framework and the Game Freak scene (batch 11)
+
+- `menus/intro.ts` ports intro.c up to the end of the Game Freak scene: CB2_InitCopyrightScreenAfterBootup /
+  AfterTitleScreen, SetUpCopyrightScreen, LoadCopyrightGraphics, CB2_WaitFadeBeforeSetUpIntro, CB2_SetUpIntro,
+  CB2_Intro, VBlankCB_Intro, Intro_ResetGpuRegs, StartIntroSequence, SetIntroCB, Task_CallIntroCallback (the skip
+  with A / START / SELECT), IntroCB_Init, IntroCB_ExitToTitleScreen, LoadFightSceneSpriteGraphics, and
+  IntroCB_GF_OpenWindow / _Star / _RevealName / _RevealLogo with GFScene_* and the star, sparkle and logo sprites
+  (REVISION 0: no "presents", the copyright screen fades in from white). PlaySE(MUS_GAME_FREAK) as the C plays it.
+  IntroCB_Scene1 is a stub that goes to IntroCB_ExitToTitleScreen until unit 2 ports scenes 1-3.
+- menu2.c's StartBlendTask / IsBlendTaskActive: new `gba/menu2.ts`. `graphics/intro/` is in extract_gfx.py's
+  GFX_PREFIXES (all 49 INCBINs extract).
+- Boot (BootScene → MainMenuScene `entry: 'copyright'`) and soft reset now run copyright → intro → title; the
+  title screen's 2700-frame timeout goes to CB2_InitCopyrightScreenAfterTitleScreen instead of straight back to
+  the title screen. `?skipIntro`, `?start=`, `?map=` skip it all as before. MainMenuScene loads the battle data for
+  gSineTable (the star's wave).
+- Tests: new tests/e2e/intro.test.ts (harness option `intro: true`: boot like the game, return once the copyright
+  screen is up): the copyright screen, the GF scene's callbacks in order with their frame counts against the C
+  (copyright → IntroCB_Init 167 frames, Init 2, OpenWindow 8, Star 121, RevealName 189, RevealLogo 187), the
+  jingle in the Star's first frame, the sparkles, A skipping to the title screen, and the title screen's timeout
+  back to the copyright screen. titleScreen.test.ts: the restart and the soft resets go through the copyright
+  screen; audioOutput.test.ts's headless check boots with `intro: true` (only needs the page up). The frame counts
+  showed BeginNormalPaletteFade doing the fade's first step itself and the intro task first running the frame
+  after CB2_SetUpIntro creates it, as in the C.
