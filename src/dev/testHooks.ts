@@ -38,6 +38,8 @@ import { creditsProbe, creditsSkipToClosing } from '../menus/credits';
 import { pokedexAreaProbe } from '../menus/pokedexArea';
 import { pokedexScreenProbe } from '../menus/pokedexScreen';
 import { regionMapProbe } from '../menus/regionMap';
+import { changeMapTaskProbe, mapPreviewCaveProbe } from '../world/mapTransition';
+import { mapPreviewForestProbe } from '../world/mapPreviewScreen';
 import { trainerCardProbe } from '../menus/trainerCard';
 import { slotMachineProbe } from '../menus/slotMachine';
 import { mainMenuProbe } from '../menus/mainMenu';
@@ -213,7 +215,8 @@ function playerProbe(info: MusicPlayerInfo) {
  * Record a milestone for the tests: `ready`, `map` {map}, `script` {label}, `trainerApproach`,
  * `battleTransition` {transition}, `battleTransitionEnd` {black: share of black pixels in its last
  * frame}, `battleStart` {flags, trainer}, `battleEnd` {outcome}, `whiteOut`,
- * `mapTransition` {from, to} (a cave's flash screen), `barnDoorWipe`.
+ * `mapTransition` {from, to} (a cave's flash screen), `mapPreview` {kind: cave / forest, mapsec, duration} (a map
+ * preview screen's banner, once its duration is read), `barnDoorWipe`.
  */
 export function testEvent(type: string, data: Record<string, unknown> = {}): void {
   if (!enabled) return;
@@ -729,6 +732,19 @@ function createApi(game: Phaser.Game) {
      * REGIONMAP_TYPE_*, the task, the cursor and player icon cells, what's under the cursor (MAPSEC_*,
      * MAPSECTYPE_*), the fly icons, and the map name and top bar's right text, decoded.
      */
+    /**
+     * A map preview screen while it's up (world/mapPreviewScreen.ts): `kind` (the cave's on the GBA layer during
+     * CB2_DoChangeMap, the forest's over the field), MAPSEC_* id, its task's state (the banner holds in state 3 for
+     * the forest, 4 for the cave), the frames counted there, its duration, and the forest's blend (EVA, EVB).
+     */
+    /** The task CB2_DoChangeMap is running (world/mapTransition.ts: a flash transition, a cave preview), by name. */
+    changeMapTask: () => changeMapTaskProbe(),
+    mapPreview: () => {
+      const cave = mapPreviewCaveProbe();
+      if (cave) return { kind: 'cave', ...cave };
+      const forest = mapPreviewForestProbe();
+      return forest && { kind: 'forest', ...forest };
+    },
     regionMap: () => {
       const p = regionMapProbe();
       return p && { ...p, mapName: decode(p.mapName), topBarRight: decode(p.topBarRight) };
