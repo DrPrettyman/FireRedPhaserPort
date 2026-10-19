@@ -99,13 +99,22 @@ test('Doom Desire: two turns later the light beam flashes over the target', asyn
 test('Smokescreen: the four-part smoke cloud appears on the target and is freed after', async () => {
   const game = await session.start({ ...ROUTE1, speed: 1, party: [{ species: 'RATTATA', level: 10, moves: ['SMOKESCREEN'] }] });
   await game.eval((t) => t.startWildBattle({ species: 'SNORLAX', level: 100, moves: ['SPLASH'] }));
-  const since = await useFirstMove(game);
-  expect(await animEvent(game, 'battleAnim', 'Move_SMOKESCREEN', since)).toMatchObject({ ran: true });
-  // TAG_SMOKESCREEN (55019) sprites: the four quarters
+  // TAG_SMOKESCREEN (55019) sprites: the four quarters. The cloud lasts only some ticks, so it's watched in the page
+  // (a poll from Node could come after it's gone under load: the race named in batch D); gSprites is imported first,
+  // so the watcher starts at once.
+  await game.eval(async (_t, path) => {
+    (window as unknown as { __gSprites: unknown }).__gSprites = (await new Function('p', 'return import(p)')(path)).gSprites;
+  }, '/src/gba/sprite.ts');
+  const cloud = game.watch(
+    () =>
+      (window as unknown as { __gSprites: { inUse: boolean; template: { tileTag: number } }[] }).__gSprites.filter((s) => s.inUse && s.template.tileTag === 55019).length === 4,
+    { what: 'the smoke cloud' },
+  );
   const smokeCount = () =>
     game.eval(async (_t, path) => (await new Function('p', 'return import(p)')(path)).gSprites.filter((s: { inUse: boolean; template: { tileTag: number } }) => s.inUse && s.template.tileTag === 55019).length, '/src/gba/sprite.ts');
-  await poll(game, async () => (await smokeCount()) === 4, 'the smoke cloud');
-  await game.screenshot('e3a-smokescreen');
+  const since = await useFirstMove(game);
+  expect(await animEvent(game, 'battleAnim', 'Move_SMOKESCREEN', since)).toMatchObject({ ran: true });
+  await cloud;
   await animEvent(game, 'battleAnimEnd', 'Move_SMOKESCREEN', since);
   await poll(game, async () => (await smokeCount()) === 0, 'the smoke to clear');
 });
