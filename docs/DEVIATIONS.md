@@ -25,8 +25,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     Script_BufferFanClubTrainerName always names the NPC trainer (the rival, LT. SURGE, KOGA), and the link-battle
     fan updates (Special_UpdateTrainerFansAfterLinkBattle) never run.
   - Side specials (script/miscSpecials.ts): Daisy's MUS_HEAL fanfare is the script's; the diploma's
-    FANFARE_OBTAIN_BADGE holds its screen for sFanfares' 340 frames, as on the GBA. No quest log (QuestLog_CutRecording). The Magikarp size record loads pokedex.json for the
-    heights the first time the guru measures (the script waits for it). The diploma returns through the field's
+    FANFARE_OBTAIN_BADGE holds its screen for sFanfares' 340 frames, as on the GBA. No quest log (QuestLog_CutRecording). The size records (script/pokemonSizeRecord.ts: the
+    Magikarp and the Heracross) load pokedex.json for the heights the first time one is measured or read (the script
+    waits for it). The diploma returns through the field's
     plain fade from black rather than FieldCB_WarpExitFadeFromBlack's Task_ExitNonDoor (same look).
   - Fall warps (world/fallWarp.ts): no help context while surfing on Seafoam B4F.
   - Easy Chat (menus/easyChat.ts, menus/easyChatScreen.ts, SIDE_PLAN.md W-easychat): ShowEasyChatScreen: on the GBA the script's `fadescreen FADE_FROM_BLACK` after the special

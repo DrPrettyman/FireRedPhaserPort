@@ -7,7 +7,7 @@
 
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
-import { afterHallOfFame, MEWTWO, SCENE, scriptsSince, warp } from './postgameHelpers';
+import { afterHallOfFame, battlesSince, MEWTWO, SCENE, scriptsSince, warp } from './postgameHelpers';
 
 const session = useGame();
 
@@ -332,3 +332,168 @@ test("The Water Path house's Heracross record (CompareHeracrossSize, GetHeracros
   await untilMessage(game, /58\.2 inches!/, 'the chart');
   await scriptDone(game, 'the chart');
 }, 300_000);
+
+type Dir = 'up' | 'down' | 'left' | 'right';
+/**
+ * A trainer (its TRAINER_* without the prefix), where to stand to talk to it and which way to face; `surf` on water;
+ * `wait`: a trainer that keeps walking (MOVEMENT_TYPE_WALK_*): stand in its way until it sees the player.
+ */
+type TrainerSpot = [trainer: string, map: string, x: number, y: number, dir: Dir, surf?: boolean, wait?: boolean];
+
+/**
+ * Warp to the spot and talk to the trainer (or be seen by it first), then mash through the battle. A trainer that
+ * walks about may have stepped away: then the player walks up to where it is now and talks to it there.
+ */
+async function battleTrainer(game: Game, [trainer, map, x, y, dir, surf, wait]: TrainerSpot) {
+  // A Pokémon Center between battles (the A mash only ever picks the first move)
+  await game.eval((t) => {
+    for (const m of t.state!.party) {
+      m.hp = m.maxHP;
+      m.pp = m.pp.map((pp: number, i: number) => (m.moves[i] ? 10 : pp));
+    }
+  });
+  // (marked before the warp: a trainer can see the player as the map loads)
+  const since = await game.mark();
+  await warp(game, map, x, y);
+  if (surf) await game.eval((t) => t.setAvatarState('SURFING'));
+  const d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[dir];
+  const started = wait
+    ? await game.eval(
+        async (t, s, dir) => {
+          const begun = () => t.events(s).some((e) => e.type === 'script' && /Trainer|_EventScript_/.test(e.label as string));
+          await t.face(dir);
+          for (let i = 0; i < 60 && !begun(); i++) {
+            await t.press('A');
+            await t.until(begun, 16);
+          }
+          return begun();
+        },
+        since,
+        dir,
+      )
+    : await game.eval(
+    async (t, s, sx, sy) => {
+      const begun = () => t.events(s).some((e) => e.type === 'script' && /Trainer|_EventScript_/.test(e.label as string));
+      const DIRS = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] } as const;
+      for (let tries = 0; tries < 20 && !begun(); tries++) {
+        // the trainer: the object nearest its spawn
+        const objs = t.objects() as { x: number; y: number; moving: boolean }[];
+        const o = objs.reduce((a, b) => (Math.abs(b.x - sx) + Math.abs(b.y - sy) < Math.abs(a.x - sx) + Math.abs(a.y - sy) ? b : a));
+        if (o.moving) {
+          await t.waitFrames(1);
+          continue;
+        }
+        for (const [face, [dx, dy]] of Object.entries(DIRS)) {
+          // stand on the far side of `face` and face back toward it
+          const nx = o.x - dx;
+          const ny = o.y - dy;
+          try {
+            if (t.field()!.x !== nx || t.field()!.y !== ny) await t.walkTo(nx, ny);
+          } catch {
+            continue;
+          }
+          if (begun()) return true;
+          if (t.field()!.x !== nx || t.field()!.y !== ny) continue;
+          await t.face(face as keyof typeof DIRS);
+          await t.press('A');
+          await t.until(begun, 30);
+          break;
+        }
+      }
+      return begun();
+    },
+    since,
+    x + d[0],
+    y + d[1],
+  );
+  if (!started) throw new Error(`${trainer}: never got to the battle`);
+  await game.eval((_t, n) => ((window as any).__sixTrainer = n), trainer);
+  await game.mashUntil((t) => t.trainerDefeated((window as any).__sixTrainer) && t.idle() && !t.field()!.script, { what: trainer, ...SCENE });
+  return battlesSince(game, since);
+}
+
+/** Talk to (or check) what's at the faced tile and mash until the script is over; the item count after. */
+async function pickUp(game: Game, map: string, x: number, y: number, dir: Dir, item: string) {
+  await warp(game, map, x, y);
+  await game.eval((t, dir) => t.face(dir), dir);
+  await game.press('A');
+  await game.eval((t) => t.until(() => !!t.field()!.script, 600));
+  await game.mashUntil((t) => t.idle() && !t.field()!.script, { what: item });
+  return game.eval((t, item) => t.itemCount(item), item);
+}
+
+test('Pattern Bush, Green Path, Outcast Island, the Water Path and Ruin Valley: trainers, items, NPCs', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'SixIsland', x: 10, y: 12, party: [MEWTWO, MEWTWO] });
+  await afterRainbowPass(game);
+  const PB = 'MAP_SIX_ISLAND_PATTERN_BUSH';
+  const GP = 'MAP_SIX_ISLAND_GREEN_PATH';
+  const OI = 'MAP_SIX_ISLAND_OUTCAST_ISLAND';
+  const WP = 'MAP_SIX_ISLAND_WATER_PATH';
+  const RV = 'MAP_SIX_ISLAND_RUIN_VALLEY';
+  const spots: TrainerSpot[] = [
+    ['PKMN_BREEDER_BETHANY', PB, 48, 16, 'up'],
+    ['PKMN_BREEDER_ALLISON', PB, 10, 6, 'up'],
+    ['BUG_CATCHER_GARRET', PB, 51, 7, 'up'],
+    ['BUG_CATCHER_JONAH', PB, 12, 14, 'up'],
+    ['BUG_CATCHER_VANCE', PB, 35, 23, 'right', false, true],
+    ['YOUNGSTER_NASH', PB, 32, 6, 'up'],
+    ['YOUNGSTER_CORDELL', PB, 52, 21, 'up'],
+    ['LASS_DALIA', PB, 8, 22, 'up'],
+    ['LASS_JOANA', PB, 39, 7, 'up'],
+    ['CAMPER_RILEY', PB, 4, 9, 'left'],
+    ['PICNICKER_MARCY', PB, 20, 24, 'left', false, true],
+    ['RUIN_MANIAC_LAYTON', PB, 30, 20, 'up'],
+    ['PSYCHIC_JACLYN', GP, 11, 9, 'up'],
+    ['TEAM_ROCKET_GRUNT_46', OI, 9, 25, 'up'],
+    ['FISHERMAN_TYLOR', OI, 12, 16, 'up'],
+    ['SWIMMER_MALE_MYMO', OI, 13, 35, 'up', true],
+    ['SWIMMER_FEMALE_NICOLE', OI, 14, 63, 'up', true, true],
+    ['SIS_AND_BRO_AVA_GEB', OI, 10, 45, 'up', true],
+    ['AROMA_LADY_ROSE', WP, 12, 14, 'up'],
+    ['JUGGLER_EDWARD', WP, 11, 53, 'up'],
+    ['SWIMMER_MALE_SAMIR', WP, 13, 36, 'up', true],
+    ['SWIMMER_FEMALE_DENISE', WP, 15, 46, 'up', true],
+    ['TWINS_MIU_MIA', WP, 6, 22, 'up'],
+    ['HIKER_EARL', WP, 11, 75, 'down'],
+    ['RUIN_MANIAC_STANLY', RV, 32, 12, 'up'],
+    ['RUIN_MANIAC_FOSTER', RV, 33, 17, 'up'],
+    ['RUIN_MANIAC_LARRY', RV, 31, 25, 'up'],
+    ['HIKER_DARYL', RV, 14, 11, 'up'],
+    ['POKEMANIAC_HECTOR', RV, 21, 30, 'up'],
+  ];
+  for (const spot of spots) {
+    const battles = await battleTrainer(game, spot);
+    expect(battles, spot[0]).toContain(await game.eval((t, n) => t.define(`TRAINER_${n}`), spot[0]));
+  }
+  expect(await game.eval((t, names) => names.filter((n) => !t.trainerDefeated(n)), spots.map((s) => s[0]))).toEqual([]);
+
+  // Items: the item balls (finditem) and the hidden items (EventScript_HiddenItemScript)
+  const items: [string, number, number, Dir, string][] = [
+    [OI, 11, 15, 'down', 'PP_UP'],
+    [WP, 17, 18, 'down', 'ELIXIR'],
+    [WP, 17, 86, 'down', 'DRAGON_SCALE'],
+    [RV, 5, 34, 'up', 'HP_UP'],
+    [RV, 19, 12, 'up', 'FULL_RESTORE'],
+    [RV, 43, 33, 'up', 'SUN_STONE'],
+    [GP, 12, 8, 'down', 'ULTRA_BALL'],
+    [OI, 16, 22, 'down', 'STAR_PIECE'],
+    [OI, 6, 23, 'down', 'NET_BALL'],
+    [WP, 15, 75, 'down', 'ASPEAR_BERRY'],
+    [WP, 3, 7, 'down', 'ORAN_BERRY'],
+    [WP, 13, 62, 'down', 'PINAP_BERRY'],
+  ];
+  for (const [map, x, y, dir, item] of items) expect(await pickUp(game, map, x, y, dir, item), item).toBe(1);
+
+  // Pattern Bush's OnTransition: the escape warp to the Green Path exit on the side the player came in by
+  await warp(game, PB, 55, 25);
+  expect(await game.eval((t) => t.state!.escapeWarp)).toMatchObject({ mapId: 'MAP_SIX_ISLAND_GREEN_PATH', x: 64, y: 10 });
+  await warp(game, PB, 4, 25);
+  expect(await game.eval((t) => t.state!.escapeWarp)).toMatchObject({ mapId: 'MAP_SIX_ISLAND_GREEN_PATH', x: 45, y: 10 });
+
+  // The Water Path's second house: the man (MSGBOX_NPC)
+  await warp(game, 'MAP_SIX_ISLAND_WATER_PATH_HOUSE2', 7, 5);
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await untilMessage(game, /measured me/i, 'the man');
+  await scriptDone(game, 'the man');
+}, 1_500_000);
