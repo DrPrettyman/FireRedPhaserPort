@@ -4303,3 +4303,35 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   withdraw / deposit and a mon deposited, then moved in its box; Fly's event with the destination, ending the scene).
   Typecheck, unit tests, questLog / pcStorage / fieldItems / mail / fly / fieldMoves / vsSeeker / teachyTv /
   fameChecker e2e pass.
+
+### Batch 12 merge: FIELD_ITEMS_PLAN.md complete, the quest log QL1-QL4a (PRs #136-#149)
+
+- Merged one at a time, each with `origin/master` merged in, `npm run extract`, typecheck, unit tests and the PR's
+  own e2e files: the plan (#136), W-fame (#137), W-mail 1 (#138), W-teachy 1 (#139), W-qlog 1 (#140), W-mail 2
+  (#141), QL3a (#142), QL2a (#143), W-teachy 2 (#144), QL3b (#145), QL2b (#146), QL4a (#147), W-teachy 3 (#148).
+- Save version: each save-shape PR bumped it from master's and was renumbered at its merge (FIELD_ITEMS_PLAN.md
+  decision 4): 10 the Fame Checker, 11 mail, 12 the quest log's scenes, 13 the daycare's mail; each `upgradeSave`
+  step kept in order.
+- questLog.ts and questLogPlayback.ts import each other (through trainerSee.ts' QL_IsTrainerSightDisabled), so
+  QLogCB_Playback is registered by QL_StartPlaybackScene (registerQLogCBPlayback), not at module load, where one
+  module read the other before it had loaded (QL2a).
+- weather.test.ts' two races (#146): the fog's drift is checked against the frames the step took (a fixed 30 px
+  failed under load), and the Tanoby test checks its step off the entrance (once the walk back up never reached
+  the chamber).
+- A network outage stopped the first coordinator's run partway; its workers were resumed in their worktrees and
+  handed back, and the last two merges (#147, #148) and this entry were done by a second run.
+- #148 after #147: the union merge kept both sides of DEVIATIONS' party menu, TM case and Teachy TV lines. Tidied:
+  Teachy TV's "no quest log event" entry went (QL4a records it), the party menu's line is "Union Room and
+  minigames" (the PC mailbox's GIVE is in since W-mail 2), the TM case keeps only RecordItemTransaction (QL4b).
+- One full e2e run at the end, on master at 8eae7aa: 532 of 536 passed in 88 files. The failing files rerun alone:
+  - postgameFourIsland.test.ts failed again (deterministic): CONTINUE replays a scene with the rival's ON_FRAME
+    scene on Four Island, whose msgbox waits for A in the port's playback (QL5: auto-scroll, WaitForAorBPress'
+    timeout). The test now skips the recap with B (#149; tests/README.md item 12; DEVIATIONS' playback note).
+  - postgameKantoLegendaries.test.ts (ARTICUNO and ZAPDOS caught: test timeouts at 300 s) and
+    postgameSevenIsland.test.ts (Sevault Canyon: COOLTRAINER_LEROY not defeated within the mash) passed alone.
+    Each failed again in two of four reruns beside two other e2e files, and passed in the one with debug dumps
+    added, so the cause isn't pinned down (one more rerun hit a machine-wide load spike and timed out across all
+    three files; not counted). A failed bird test's screenshot is
+    the action menu with the cursor on BAG: the A that should open the bag never landed, and the test hung rather
+    than hitting waitForBag's 30 s limit (an eval that never returned). Not fixed: listed in STATUS "Loose ends".
+- Typecheck clean, 745 unit tests.

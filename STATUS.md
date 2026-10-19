@@ -104,6 +104,9 @@ Other open work:
 
 Loose ends:
 
+- Two e2e tests fail now and then when other e2e files run alongside, and pass alone (batch 12's LOG entry):
+  postgameKantoLegendaries' bird catches (the A that opens the bag doesn't land; the test hangs to its timeout) and
+  postgameSevenIsland's Sevault Canyon (COOLTRAINER_LEROY's fight doesn't finish within the mash).
 - Dynamic-graphics objects (`OBJ_EVENT_GFX_VAR_*`) are only checked on Viridian's old man; other maps that use them
   (e.g. rival appearances) are untested. A script that sets `VAR_OBJ_GFX_ID_*` and then `addobject`s in the same
   run only works if that sprite was already preloaded; otherwise it logs `[overworld] no sprite loaded`.
