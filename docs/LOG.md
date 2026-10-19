@@ -3215,3 +3215,8 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the box's cancelled average); the circuit tests skip each frame's first sample (it can hold the previous frame's
   last DAC tick) and get 30 s timeouts (they're CPU-heavy; the machine's load ran them past 5 s). Typecheck clean;
   unit 578 in 42 files; e2e audio, audioOutput, audioCries, audioScenes 13 passed.
+- After merging master with W-sound 5a (#104: the controllers' cries are real): audioBattleAnims' Growl test counts
+  only the CRY_MODE_GROWL_1 / _2 cries (the send-out and intro cries come first now), and its Perish Song test
+  waits for the intro cry's BGM ducking to end before its mark. battleAnims.2d's Memento polled for the shadow
+  from Node, importing gba/hw.ts on every poll (600 of them past the 120 s test timeout under load): the module is
+  now loaded once and the shadow watched in the page.

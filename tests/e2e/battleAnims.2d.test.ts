@@ -101,10 +101,18 @@ test("Memento: the attacker's shadow shrinks away and the target's grows, then t
     ],
   });
   await game.eval((t) => t.startWildBattle({ species: 'SNORLAX', level: 100, moves: ['SPLASH'] }));
+  // The shadows are per-line BG1VOFS / BG2VOFS tables, watched in the page (a Node poll that imports gba/hw.ts each
+  // time missed them under load). The module is loaded in an awaited eval first, so the watcher starts at once.
+  await game.eval(async (_t, path) => {
+    (window as unknown as { __hw: unknown }).__hw = await new Function('p', 'return import(p)')(path);
+  }, '/src/gba/hw.ts');
+  const shadow = game.watch(() => {
+    const regs = (window as unknown as { __hw: { hblankRegs: Map<number, unknown> } }).__hw.hblankRegs;
+    return regs.has(0x16) || regs.has(0x1a);
+  }, { what: 'the shadow' });
   const since = await useFirstMove(game);
   expect(await animEvent(game, 'battleAnim', 'Move_MEMENTO', since)).toMatchObject({ ran: true, attacker: 0 });
-  // the shadows are per-line BGnVOFS tables
-  await poll(game, async () => (await hblankLines(game, 0x16)) ?? (await hblankLines(game, 0x1a)), 'the shadow');
+  await shadow;
   await animEvent(game, 'battleAnimEnd', 'Move_MEMENTO', since);
   await game.waitFor((t) => t.battle()!.mons[0].hp === 0, { what: 'the attacker to faint' });
   expect(await hblankLines(game, 0x16)).toBeNull();

@@ -68,8 +68,9 @@ test("Growl plays the attacker's cry twice (CRY_MODE_GROWL_1, then _2 once the f
   await useMoveSlot(game, 0, 0);
   const { cry } = await atEnd;
   expect(cry.playing).toBe(false);
-  const cries = (await game.eval((t, s) => t.audioEvents(s), since)).filter((e) => e.type === 'cry');
   const K = await game.eval((t) => ({ g1: t.define('CRY_MODE_GROWL_1'), g2: t.define('CRY_MODE_GROWL_2'), rattata: t.define('SPECIES_RATTATA') }));
+  // (the controllers' send-out and intro cries are CRY_MODE_NORMAL / _ENCOUNTER: only Growl's are counted)
+  const cries = (await game.eval((t, s) => t.audioEvents(s), since)).filter((e) => e.type === 'cry' && (e.mode === K.g1 || e.mode === K.g2));
   expect(cries).toMatchObject([
     { id: K.rattata, mode: K.g1, pan: SOUND_PAN_ATTACKER },
     { id: K.rattata, mode: K.g2, pan: SOUND_PAN_ATTACKER },
@@ -84,6 +85,9 @@ test('Perish Song (gMovesWithQuietBGM) halves the BGM volume until its anim ends
   const game = await session.start({ ...ROUTE1, party: [{ species: 'RATTATA', level: 10, moves: ['PERISH_SONG'] }] });
   await game.eval((t) => t.startWildBattle({ species: 'SNORLAX', level: 100, moves: ['SPLASH'] }));
   await game.eval((t) => t.playSong('MUS_VS_WILD'));
+  // The send-out cries duck the BGM to 85 until they're over (Task_DuckBGMForPokemonCry): let them end first.
+  await game.waitForActionMenu();
+  expect(await game.eval((t) => t.until(() => !t.audio().cry.duckTaskActive && t.audio().players.BGM.volume === 64, 2000))).toBe(true);
   const since = await game.mark();
   // The BGM's volume (volX: 64 = full) read at the start of every tick, until the tick after the anim's end.
   const watched = game.watch((t) => {
