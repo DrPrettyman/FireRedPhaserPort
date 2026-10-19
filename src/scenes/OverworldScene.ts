@@ -66,6 +66,24 @@ import { DEPTH_MIDDLE, DEPTH_TOP } from '../world/MapChunk';
 import { DEPTH_UI } from '../text/TextWindow';
 import { FieldDoors } from '../world/doors';
 import { InitSecondaryTilesetAnimation, InitTilesetAnimations, TransferTilesetAnimsBuffer, UpdateTilesetAnimations } from '../world/tilesetAnims';
+import {
+  ApplyWeatherGammaShiftToBgPals,
+  DoCurrentWeather,
+  fadedFieldEffectPaletteTags,
+  loadWeatherData,
+  ResetWeatherTask,
+  ResumePausedWeather,
+  SetSavedWeatherFromCurrMapHeader,
+  setWeatherHost,
+  SetMapHeaderWeather,
+  setWeatherPaletteFadeActive,
+  StartWeather,
+  WeatherFadeInBlend,
+  WeatherFadeScreen,
+  weatherProbe,
+  WeatherTask,
+} from '../world/weather';
+import { WeatherTextures } from '../world/weatherTextures';
 import { leagueLightingProbe, loadLeagueLightingData, registerLeagueLighting, ResetLeagueLightingTasks, setLeagueLightingHost, StopPokemonLeagueLightingEffectTask } from '../world/leagueLighting';
 import { tilesetVram } from '../world/TilesetVram';
 import { ShopMenu, type ShopHost } from '../ui/ShopMenu';
@@ -209,6 +227,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   /** A field UI overlay (start menu, notices) that owns input while open. */
   private overlay?: { tick(): boolean };
   private screenFade!: ScreenFade;
+  /** The weather's gamma shift on the field's sprite sheets (world/weatherTextures.ts). */
+  private weatherTextures!: WeatherTextures;
   /** The field on the GBA layer, while a battle transition (or a cave's map change screen) runs. */
   private gbaScreen!: FieldGbaScreen;
   private fieldEffects!: FieldEffects;
@@ -315,6 +335,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     await loadMenusData('gen'); // sTMHMMoves, for BufferTMHMMoveName
     await loadSlotMachineData('gen'); // sSlotMachineIndices, for GetRandomSlotMachineId
     await loadLeagueLightingData('gen'); // the Elite Four / Champion rooms' lighting palettes and timers
+    await loadWeatherData('gen'); // field_weather.c's tables
     await this.assets.loadFieldEffectTextures(this);
     const field = this.field;
     const behaviorAt = (x: number, y: number) => this.world.tileAt(x, y).behavior;
@@ -343,6 +364,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       FADE_FROM_WHITE: d.require('FADE_FROM_WHITE'),
       FADE_TO_WHITE: d.require('FADE_TO_WHITE'),
     });
+    this.setUpWeather();
     this.gbaScreen = new FieldGbaScreen(this, DEPTH_FADE + 10);
     setTransitionFieldCamera(() => this.gbaScreen.cameraPixelOffset());
     await loadGfx([...mapTransitionGfxSymbols, ...fieldListMenuGfxSymbols, ...helpMessageWindowGfxSymbols, ...museumFossilPicGfxSymbols]);
@@ -478,6 +500,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       StopMapMusic(); // CB2_NewGame
       ResetInitialPlayerAvatarState();
       await this.enterMap(start.map, start.x, start.y, start.facing ?? 'down', true);
+      // CB2_NewGame's FieldCB_WarpExitFadeFromBlack fades in with FadeScreen; the port shows the field at once, but
+      // the weather's half of it runs (its InitAll and palettes: a dev start in a shaded map is shaded)
+      WeatherFadeScreen(this.defines.require('FADE_FROM_BLACK'));
       this.showMapNameOnWarpArrival(undefined); // CB2_NewGame loads the map like a warp
       Overworld_PlaySpecialMapMusic(); // FieldCB_WarpExitFadeFromBlack
     }
@@ -551,6 +576,56 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       palette7: tilesetVram.bgPalette(pair.info.secondary, 7),
       pixel: tilesetVram.palettePixel(pair, 7, colorIndex),
     };
+  }
+
+  /**
+   * Dev: the weather for `__test.weather()`: its state, BG palette `slot` (unfaded and as shown), a pixel the current
+   * map's pair atlas drew with it (of colour index `colorIndex`; read back from the canvas) and a pixel of the
+   * sprite sheet `texture` (now and as loaded).
+   */
+  testWeather(slot = 7, colorIndex?: number, texture?: string) {
+    const pair = this.assets.tilesetPair(this.world.current.data.tilesetPair);
+    return {
+      ...weatherProbe(),
+      unfaded: tilesetVram.bgPaletteUnfaded(pair, slot),
+      palette: tilesetVram.bgPalette(slot < 7 ? pair.info.primary : pair.info.secondary, slot),
+      pixel: tilesetVram.palettePixel(pair, slot, colorIndex),
+      sprite: texture ? this.weatherTextures.pixel(texture) : undefined,
+      fading: this.screenFade.active,
+    };
+  }
+
+  /**
+   * field_weather.c on the field: the palettes the weather shifts (the current map's BG palettes through tilesetVram,
+   * the sprite sheets through WeatherTextures) and FadeScreen's weather half in the screen fade.
+   */
+  private setUpWeather(): void {
+    this.weatherTextures = WeatherTextures.for(this.textures, new Set(
+      Object.entries(this.assets.fieldEffectObjects.templates)
+        .filter(([, t]) => fadedFieldEffectPaletteTags().includes(t.paletteTag))
+        .map(([name]) => name),
+    ));
+    const pair = () => this.assets.tilesetPair(this.world.current.data.tilesetPair);
+    setWeatherHost({
+      bgPaletteUnfaded: (slot) => (slot < 13 && this.world.current ? tilesetVram.bgPaletteUnfaded(pair(), slot) : undefined),
+      setBgPaletteFaded: (slot, colors) => tilesetVram.loadBgPaletteFaded(this.textures, pair(), slot, colors),
+      setObjPaletteGamma: (normal, alt) => this.weatherTextures.setTables(normal, alt),
+    });
+    setWeatherPaletteFadeActive(() => this.screenFade.active);
+    this.screenFade.weather = {
+      fadeScreen: (mode) => WeatherFadeScreen(mode),
+      fadeInBlend: () => WeatherFadeInBlend(),
+    };
+  }
+
+  /**
+   * ResumeMap's StartWeather + ResumePausedWeather (a warp's map load, a return to the field, CONTINUE), after its
+   * InitObjectEventPalettes: the sprite sheets back to their colours as loaded.
+   */
+  private startWeatherOnResumeMap(): void {
+    this.weatherTextures.reset();
+    StartWeather();
+    ResumePausedWeather();
   }
 
   /** Dev: the current map's objects, for `__test.objects()`. */
@@ -672,6 +747,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       UpdateAmbientCry(this.ambientCry);
     }
     this.flash.tick(); // UpdateFlashLevelEffect / Task_WaitForFlashUpdate (priority 80)
+    WeatherTask(); // Task_WeatherInit / Task_WeatherMain (priority 80)
     this.messageBox.tick();
     this.screenFade.tick();
     this.monPic?.tick();
@@ -1366,6 +1442,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.warping = false;
     this.mapNamePopup?.destroy(); // the map load's ResetTasks
     ResetLeagueLightingTasks();
+    ResetWeatherTask(); // (GBA tasks don't run between LoadMapFromWarp's scripts and ResumeMap's StartWeather)
     this.mapNamePopup = undefined;
     this.fieldEffects.clear();
     this.doors.clear();
@@ -1432,6 +1509,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.state.currentMapId = cur.data.id;
     this.state.currentMapSection = this.mapSection();
     testEvent('map', { map: name });
+    SetMapHeaderWeather(this.defines.require(cur.data.weather ?? 'WEATHER_NONE')); // LoadCurrentMapData's gMapHeader
     // A warp's (and CONTINUE's) ResumeMap makes a new Task_RunTimeBasedEvents; a connection's ResetFieldTasksArgs zeroes it
     this.ambientCry = { state: 0, delayCounter: 0 };
     if (!continued) {
@@ -1440,6 +1518,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       mapResetTrainerRematches(this.state);
       ResetMovementOfRematchableTrainers();
       // LoadMapFromWarp / LoadMapFromCameraTransition
+      SetSavedWeatherFromCurrMapHeader();
       ChooseAmbientCrySpecies();
       updateLocationHistoryForRoamer(this.state);
       if (warped) roamerMoveToOtherLocationSet(this.state);
@@ -1461,7 +1540,14 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       // LoadMapInStepsLocal's ResumeMap / LoadMapFromCameraTransition's RunOnResumeMapScript (CONTINUE runs it from
       // resumeMap). A warp then reloads the BG palettes (LoadMapTilesetPalettes, after it); a connection loaded
       // the secondary's before it (LoadSecondaryTilesetPalette).
-      if (!warped) tilesetVram.resetBgPalettes();
+      if (!warped) {
+        tilesetVram.resetBgPalettes();
+        // LoadMapFromCameraTransition: ApplyWeatherGammaShiftToPal on the reloaded palettes, then DoCurrentWeather
+        ApplyWeatherGammaShiftToBgPals();
+        DoCurrentWeather();
+      } else {
+        this.startWeatherOnResumeMap();
+      }
       const resume = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_RESUME');
       if (resume) this.scripts.runImmediately(resume);
       if (warped) tilesetVram.resetBgPalettes();
@@ -2578,6 +2664,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    */
   private resumeMap(): void {
     ResetLeagueLightingTasks(); // ResumeMap's ResetTasks
+    ResetWeatherTask();
+    this.startWeatherOnResumeMap();
     this.ambientCry = { state: 0, delayCounter: 0 }; // and SetUpFieldTasks' new Task_RunTimeBasedEvents
     ReturnPlayerAvatarToField(); // SpawnObjectEventsOnReturnToField
     this.objectsFrozen = false; // FieldCB_ReturnToFieldNoScript's UnfreezeObjectEvents (a rod's bite froze them)

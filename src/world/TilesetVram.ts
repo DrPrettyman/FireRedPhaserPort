@@ -25,8 +25,10 @@ class TileStore {
   readonly metatiles: Uint16Array;
   /** Tiles that no longer match the atlas PNGs (written by an animation at least once). */
   readonly modified = new Set<number>();
-  /** The palettes as BG palette RAM holds them now: `basePalettes` with any `loadBgPalette` on top. */
+  /** The palettes as BG palette RAM holds them now (gPlttBufferFaded): `basePalettes` with any load on top. */
   readonly palettes: number[][];
+  /** gPlttBufferUnfaded: what `loadBgPalette` loaded; `loadBgPaletteFaded` (the weather's gamma shift) leaves it. */
+  readonly unfaded: number[][];
   /** Palette slots that no longer match the atlas PNGs (`loadBgPalette`). */
   readonly modifiedPalettes = new Set<number>();
 
@@ -40,6 +42,7 @@ class TileStore {
     this.tiles = gfx(tilesSymbol).slice();
     this.metatiles = gfx16(metatilesSymbol);
     this.palettes = basePalettes.slice();
+    this.unfaded = basePalettes.slice();
   }
 
   get tileCount(): number {
@@ -327,6 +330,16 @@ export const tilesetVram = {
    */
   loadBgPalette(textures: Phaser.Textures.TextureManager, pair: TilesetPair, slot: number, colors: number[]): void {
     const store = stores.get(slot < NUM_PALS_IN_PRIMARY ? pair.info.primary : pair.info.secondary);
+    if (store) store.unfaded[slot] = colors;
+    this.loadBgPaletteFaded(textures, pair, slot, colors);
+  },
+
+  /**
+   * Only gPlttBufferFaded's copy of a map BG palette (the weather's ApplyGammaShift): the slot shows `colors`, its
+   * unfaded colours (`bgPaletteUnfaded`) stay.
+   */
+  loadBgPaletteFaded(textures: Phaser.Textures.TextureManager, pair: TilesetPair, slot: number, colors: number[]): void {
+    const store = stores.get(slot < NUM_PALS_IN_PRIMARY ? pair.info.primary : pair.info.secondary);
     if (!store || sameColors(store.palettes[slot], colors)) return;
     store.palettes[slot] = colors;
     if (sameColors(store.basePalettes[slot], colors)) store.modifiedPalettes.delete(slot);
@@ -341,12 +354,18 @@ export const tilesetVram = {
    */
   resetBgPalettes(): void {
     for (const store of stores.values()) {
+      store.basePalettes.forEach((p, slot) => (store.unfaded[slot] = p));
       for (const slot of [...store.modifiedPalettes]) {
         store.modifiedPalettes.delete(slot);
         store.palettes[slot] = store.basePalettes[slot];
         redrawPalette(store, slot);
       }
     }
+  },
+
+  /** A pair's map BG palette (0-6 the primary's, 7-12 the secondary's) as gPlttBufferUnfaded holds it. */
+  bgPaletteUnfaded(pair: TilesetPair, slot: number): number[] | undefined {
+    return stores.get(slot < NUM_PALS_IN_PRIMARY ? pair.info.primary : pair.info.secondary)?.unfaded[slot];
   },
 
   /** A tileset's palette slot as BG palette RAM holds it now (16 [r, g, b]), or undefined if not loaded. */

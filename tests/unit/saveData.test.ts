@@ -45,6 +45,7 @@ function playedState(): TestGame['state'] {
   s.registeredItem = t.d('ITEM_BICYCLE');
   s.flashLevel = 4;
   s.savedMusic = s.defines.require('MUS_CYCLING');
+  s.weather = s.defines.require('WEATHER_SHADE');
   s.pcItems[0] = { itemId: t.d('ITEM_POTION'), quantity: 1 };
   s.bag.add(t.d('ITEM_POTION'), 5);
   s.bag.add(t.d('ITEM_ANTIDOTE'), 2);
@@ -129,6 +130,7 @@ describe('save data (save.c / load_save.c)', () => {
       registeredItem: s.registeredItem,
       flashLevel: 4,
       savedMusic: s.savedMusic,
+      weather: s.weather,
       trainerRematchStepCounter: 0x1234,
       trainerRematches: [0, 1, 0, 1],
       daycare: s.daycare,
@@ -166,6 +168,13 @@ describe('save data (save.c / load_save.c)', () => {
     expect(data.flags.every((f) => f < t.d('SPECIAL_FLAGS_START'))).toBe(true);
     const loaded = fromSaveData(data, newGame().state);
     expect(loaded.getVar('VAR_0x8004')).toBe(0);
+  });
+
+  test('a version-6 save (no saved weather) loads with WEATHER_NONE', () => {
+    const { weather: _weather, ...v6 } = { ...toSaveData(t.state), version: 6 };
+    const loaded = fromSaveData(v6 as ReturnType<typeof toSaveData>, newGame().state);
+    expect(loaded.weather).toBe(t.d('WEATHER_NONE'));
+    expect(loaded.savedMusic).toBe(t.state.savedMusic);
   });
 
   test('a save of another version is refused', () => {

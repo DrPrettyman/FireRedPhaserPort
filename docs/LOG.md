@@ -3444,3 +3444,31 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   down), the fragments 32 / 24 px apart in their first frame, SE_THUNDER2 then SE_THUNDER, the rock's flag, DEOXYS
   30), plus hallOfFame, listMenuFlash (the elevator's shake) and sideSpecials (the fall warp's shake) for the shared
   code.
+### W-weather 1: field weather's framework and Shade (POSTGAME_PLAN.md batch 10)
+
+- `world/weather.ts`: field_weather.c's state (gWeatherPtr), StartWeather, SetNextWeather /
+  SetCurrentAndNextWeather, Task_WeatherInit / Task_WeatherMain with sWeatherPalStateFuncs (UpdateWeatherGammaShift,
+  FadeInScreenWithWeather / FadeInScreen_RainShowShade), BuildGammaShiftTables (the C's u16 loops), ApplyGammaShift,
+  FadeScreen's weather half, IsWeatherNotFadingIn & co.; field_weather_util.c's saved weather (SetSavedWeather,
+  SetSavedWeatherFromCurrMapHeader, DoCurrentWeather, ResumePausedWeather, TranslateWeatherNum, UpdateRainCounter);
+  None, Sunny (no visible effect: gamma 0) and Shade (gamma index 3, 20 frames a step). Fog and the unused weathers
+  run as NONE and log once (fog is unit 2).
+- `public/gen/weather.json` (tools/extract_field.py `extract_weather`): sBasePaletteGammaTypes, sWeatherFuncs' row
+  names, the loadfadedpal field effect palette tags. Rerun `npm run extract` (or just that function).
+- The field: tilesetVram keeps the unfaded BG palettes beside the shown ones (`loadBgPaletteFaded`,
+  `bgPaletteUnfaded`); `world/weatherTextures.ts` redraws the field's sprite sheets through the shift (the object
+  sheets GAMMA_ALT, which rows 0-2 leave alone, reflections and loadfadedpal field effects GAMMA_NORMAL);
+  `ScreenFade.weather` lets the weather fade the screen in (the shade's 16 frames). OverworldScene calls the weather
+  where overworld.c does (LoadMapFromWarp / LoadMapFromCameraTransition / ResumeMap), and ticks the task.
+- Save version 7: `weather` (gSaveBlock1Ptr->weather); version-6 saves load with WEATHER_NONE.
+- Script commands `setweather`, `doweather`, `resetweather`; `setweather` and `doweather` are off the gap list.
+- Stale "no field weather" notes in docs/DEVIATIONS.md reworded (the rain stopping sound stays out: decision 1);
+  "weather tints are ignored" on the battle transitions' copy of the field and on reflections removed.
+- Verified: typecheck; unit 590 passed, with tests/unit/weather.test.ts (gamma tables against the C's arithmetic by hand, the
+  shade's fade in, doweather's steps both ways, the saved weather, an unported weather); e2e
+  tests/e2e/weather.test.ts (Viridian Forest through the gate: a BG atlas pixel and the tall grass sheet at the
+  shade's colours, the player's sheet unchanged, the 16-frame weather fade, back out lit; the Monean Chamber dark
+  through EventScript_TryDarkenRuins and lit with FLAG_SYS_UNLOCKED_TANOBY_RUINS; Navel Rock's Ho-Oh scene lifting
+  the shade 3, 2, 1, 0 a frame apart; the weather surviving save + CONTINUE), plus leagueLighting, saveContinue,
+  fieldEffects and transitions (19 passed). A screenshot of Viridian Forest shows the shaded map with the tall grass
+  sprite matching it.

@@ -30,10 +30,8 @@ export const KNOWN_GAPS: KnownGap[] = [
   // ---------------------------------------------------------------- side: optional content before the Hall of Fame (NPCs, trades, the Game Corner, the daycare, the Sevii 1-3 trip).
   // ---------------------------------------------------------------- postgame: after the Hall of Fame (Sevii 4-7, Trainer Tower, the event islands) or the link features postgame areas share.
   { kind: 'command', name: 'braillemessage', tag: 'postgame', where: "MtEmber_RubyPath_B4F, MtEmber_RubyPath_B5F, SixIsland_DottedHole_B1F, SixIsland_DottedHole_B2F, SixIsland_DottedHole_B3F, ... (8 in all)" },
-  { kind: 'command', name: 'doweather', tag: 'postgame', where: "NavelRock_Summit, SevenIsland_TanobyRuins_DilfordChamber, SevenIsland_TanobyRuins_LiptooChamber, SevenIsland_TanobyRuins_MoneanChamber, SevenIsland_TanobyRuins_RixyChamber, ... (8 in all)" },
   { kind: 'command', name: 'getbraillestringwidth', tag: 'postgame', where: "MtEmber_RubyPath_B5F, SixIsland_DottedHole_SapphireRoom" },
   { kind: 'command', name: 'setstepcallback', tag: 'postgame', where: "FourIsland_IcefallCave_1F" },
-  { kind: 'command', name: 'setweather', tag: 'postgame', where: "NavelRock_Summit, SevenIsland_TanobyRuins_DilfordChamber, SevenIsland_TanobyRuins_LiptooChamber, SevenIsland_TanobyRuins_MoneanChamber, SevenIsland_TanobyRuins_RixyChamber, ... (8 in all)" },
   { kind: 'command', name: 'ttower_checkdoubles', tag: 'postgame', where: "TrainerTower_1F, TrainerTower_2F, TrainerTower_3F, TrainerTower_4F, TrainerTower_5F, ... (8 in all)" },
   { kind: 'command', name: 'ttower_checkfinaltime', tag: 'postgame', where: "TrainerTower_2F, TrainerTower_3F, TrainerTower_4F, TrainerTower_5F, TrainerTower_6F, ... (8 in all)" },
   { kind: 'command', name: 'ttower_clearedfloor', tag: 'postgame', where: "TrainerTower_1F, TrainerTower_2F, TrainerTower_3F, TrainerTower_4F, TrainerTower_5F, ... (10 in all)" },
