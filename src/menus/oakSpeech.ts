@@ -149,6 +149,7 @@ import { ballGfxSymbols } from '../battle/gfx';
 import { DoNamingScreen, NAMING_SCREEN_PLAYER, NAMING_SCREEN_RIVAL } from './namingScreen';
 import { StringExpandPlaceholders } from './common';
 import { testEvent } from '../dev/testHooks';
+import { SetHelpContext } from '../ui/helpSystemContext';
 
 /** What Oak's speech reads and writes outside oak_speech.c. */
 export const oakSpeechEnv = {
@@ -403,7 +404,7 @@ const Task_NewGameScene: TaskFunc = (taskId) => {
       ResetSpriteData();
       FreeAllSpritePalettes();
       ResetTempTileDataBuffers();
-      // SetHelpContext(HELPCONTEXT_NEW_GAME): no help system
+      SetHelpContext(K.HELPCONTEXT_NEW_GAME);
       break;
     case 1:
       sOakSpeechResources = {

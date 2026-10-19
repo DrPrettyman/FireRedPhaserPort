@@ -114,6 +114,7 @@ import { menusData } from './data';
 import { CopyEasyChatWord } from './easyChat';
 import { CreateTrainerCardTrainerPicSprite, PlayerGenderToFrontTrainerPicId } from './picSprites';
 import { GetIconSpecies, GetMonIconTiles, monIconSymbol } from './pokemonIcon';
+import { SetHelpContext } from '../ui/helpSystemContext';
 
 // include/constants/trainer_card.h
 const CARD_TYPE_FRLG = 0;
@@ -488,7 +489,7 @@ function Task_TrainerCard(taskId: number): void {
         d.timeColonNeedDraw = false;
       }
       if (JOY_NEW(A_BUTTON)) {
-        // SetHelpContext(HELPCONTEXT_TRAINER_CARD_BACK): no help system
+        SetHelpContext(K.HELPCONTEXT_TRAINER_CARD_BACK);
         FlipTrainerCard();
         PlaySE(K.SE_CARD_FLIP);
         d.mainState = STATE_WAIT_FLIP_TO_BACK;
@@ -506,7 +507,7 @@ function Task_TrainerCard(taskId: number): void {
     case STATE_HANDLE_INPUT_BACK:
       // Not linked: B flips back to the front, A closes the card.
       if (JOY_NEW(B_BUTTON)) {
-        // SetHelpContext(HELPCONTEXT_TRAINER_CARD_FRONT)
+        SetHelpContext(K.HELPCONTEXT_TRAINER_CARD_FRONT);
         FlipTrainerCard();
         d.mainState = STATE_WAIT_FLIP_TO_FRONT;
         PlaySE(K.SE_CARD_FLIP);
@@ -832,7 +833,7 @@ function InitBgsAndWindows(): void {
 /** SetTrainerCardCB2 */
 function SetTrainerCardCB2(): void {
   SetMainCallback2(CB2_TrainerCard);
-  // SetHelpContext(HELPCONTEXT_TRAINER_CARD_FRONT): no help system
+  SetHelpContext(K.HELPCONTEXT_TRAINER_CARD_FRONT);
 }
 
 /** SetUpTrainerCardTask */

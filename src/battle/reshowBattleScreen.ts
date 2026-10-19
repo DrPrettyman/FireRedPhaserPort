@@ -12,6 +12,7 @@ import { BattleInitBgsAndWindows, LoadBattleTextboxAndBackground } from './battl
 import { BattleMainCB2, VBlankCB_Battle } from './battleCallbacks';
 import { CreateBattlerHealthboxSprites, CreateSafariPlayerHealthboxSprites, InitBattlerHealthboxCoords, SetHealthboxSpriteInvisible, SetHealthboxSpriteVisible, UpdateHealthboxAttribute } from './battleInterface';
 import { K } from './constants';
+import { SetHelpContextForBattle } from '../ui/helpSystemContext';
 import { ActionSelectionCreateCursorAt } from './controllerPlayer';
 import { bdata, g, state } from './env';
 import {
@@ -57,7 +58,7 @@ export function ReshowBattleScreenAfterMenu(): void {
   SetGpuReg(REG_OFFSET_MOSAIC, 0);
   g.battleScripting.reshowMainState = 0;
   g.battleScripting.reshowHelperState = 0;
-  // SetHelpContext: the help system isn't implemented
+  SetHelpContextForBattle(g.battleTypeFlags);
   SetMainCallback2(CB2_ReshowBattleScreenAfterMenu);
 }
 

@@ -3772,6 +3772,33 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   ended). Fixed by starting inside a chamber; the file rerun alone: 6 passed. tests/README.md item 10 names the
   pattern.
 
+### W-preview: the map preview screens (GAPS_PLAN.md batch 11)
+
+- New `world/mapPreviewScreen.ts`: map_preview_screen.c whole (sMapPreviewScreenData from menus.json
+  `mapPreviewScreens`, MapHasPreviewScreen / _HandleQLState2, MapPreview_InitBgs / LoadGfx / Unload /
+  IsGfxLoadFinished / CreateMapNameWindow, MapPreview_StartForestTransition, Task_RunMapPreviewScreenForest,
+  ForestMapPreviewScreenIsRunning, GetDungeonMapPreviewScreenInfo, MapPreview_GetDuration, MapPreview_SetFlag) and
+  `world/mapPreviewLayer.ts` (the forest banner's BG0 blended over the Phaser field, MULTIPLY / ADD as the fog).
+  `world/mapTransition.ts`: fldeff_flash.c's RunMapPreviewScreen / Task_MapPreviewScreen_0 from TryDoMapTransition,
+  handing over to Task_FlashTransition_Enter_1; its hand-written section table is gone. The forest hook is
+  OverworldScene.showMapNameOnWarpArrival (LoadMapInStepsLocal's state 12); the warp exits wait for
+  FieldFadeTransitionBackgroundEffectIsFinished (the fade and ForestMapPreviewScreenIsRunning). `setworldmapflag`
+  goes through MapPreview_SetFlag. The region map's copy of the table and GetDungeonMapPreviewScreenInfo moved onto
+  the new module. Extractor: `map_preview_screen_data` (menus.json `mapPreviewScreens`, with the type the region
+  map's table lacked) and include/map_preview_screen.h in the defines (MPS_TYPE_*).
+- No quest log, so MapHasPreviewScreen_HandleQLState2 takes the non-playback path (MapHasPreviewScreen).
+- Found on the way: the C's AddWindow keeps the preview's BG0 tilemap only because the field's InitWindows left BG0
+  a window tilemap buffer; the port's GBA side has no field windows, so `InitFieldBg0AndWindows` puts back what
+  InitOverworldBgs / InitStandardTextBoxWindows leave (else AddWindow swaps in an empty tilemap). The cave screen's
+  B check needs gMain's keys: OverworldScene.doChangeMap calls ReadKeys while CB2_DoChangeMap runs.
+- Verified: typecheck; unit (tests/unit/mapPreview.test.ts new); e2e mapPreview.test.ts (new: Mt. Moon's banner held
+  121 frames in state 4 for its 120-frame duration then 41 for 40 on the second visit, the change-map tasks
+  Task_MapPreviewScreen_0 → Task_FlashTransition_Enter_1..3, B cutting it short, Viridian Forest's banner held 121
+  frames after the Shade's fade in and blended out in 47, the field busy meanwhile and no name popup, 41 on the
+  second visit, Icefall Cave's banner, none from Mt. Moon 1F to B1F), transitions, weather, fly, and the story tests
+  that warp into forest sections (storyCeladonSaffron's Game Corner stairs to the Rocket Hideout, storyLeague's
+  Safari Zone gate). Screenshots of both banners checked by eye (the name window and the art as on the GBA).
+
 ### W-kanto 1: Cerulean Cave and the legendaries' battles to the end (GAPS_PLAN.md batch 11)
 
 - Played headless: Cerulean Cave from Cerulean City's entrance (the guard hidden by FLAG_HIDE_CERULEAN_CAVE_GUARD)
@@ -3875,3 +3902,49 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   Dewgong Lv. 64) and the Champion (TRAINER_CHAMPION_REMATCH_*, Heracross Lv. 72) with the network machine on;
   Oak rating 70 Kanto / 71 national, the aides, the fan club's worker, the tea lady once, the Indigo Plateau guard
   in the doorway (Lorelei away) and back at her post.
+### W-help 2: the help system's contexts at every screen (batch 11)
+
+- The contexts: every SetHelpContext / BackupHelpContext / RestoreHelpContext / HelpSystem_Disable / _Enable call
+  site the port has a counterpart for, as one- or two-line hooks: title_screen.c (HELPCONTEXT_TITLE_SCREEN and
+  HelpSystem_Enable in SetTitleScreenScene_Run, Disable on the timeout), oak_speech.c, naming_screen.c,
+  start_menu.c's save (StartCB_Save1 / Field_AskSaveTheGame → SaveDialog's constructor, the restore on every way
+  out of RunSaveDialogCB), option_menu.c, pokedex_screen.c, party_menu.c, pokemon_summary_screen.c (its local
+  no-op SetHelpContext replaced), item_menu.c (the item PC's deposit context), item_pc.c, player_pc.c (the
+  bedroom PC's contexts through PlayerPcMenu's `notInRoom`), pokemon_storage_system_menu.c / _tasks.c,
+  trainer_card.c, battle_main.c / reshow_battle_screen.c (SetHelpContextForBattle), battle_setup.c's
+  Task_BattleStart, field_effect.c (FldEff_UseSurf's end, the Seafoam fall warp), field_specials.c's
+  ForcePlayerToStartSurfing, field_player_avatar.c's Task_WaitStopSurfing (SetHelpContextForMap), daycare.c's egg
+  hatch, evolution_scene.c, trade_scene.c's in-game trade, seagallop.c, hall_of_fame.c. Skipped (no port): mail,
+  Teachy TV, the main menu's Mystery Gift, the link / wireless screens, the e-Reader, the berry fix program, the
+  quest log.
+- The help specials out of NO_OP (specials.ts HELP_SPECIALS; sideSpecials.ts's no-op Backup / Restore pair gone).
+  The duplicated "No-op specials" lines in DEVIATIONS.md (a union-merge leftover) are one line now.
+- Boot: gHelpSystemEnabled starts FALSE (main.c); the title screen enables it, and BootScene does for the dev
+  starts that skip the title screen. softReset calls ResetHelpSystemState. MainMenuScene hands the help its fonts
+  and loads its graphics, and builds a GameState from the save on each LoadGameSave (the help reads the flags and
+  the button mode), so the help opens on the title screen and the main menu of a fresh boot.
+- Tests: helpSystem.test.ts grows checkHelpContext (the context, then L, the topics against helpSystem.json's
+  sHelpSystemContextTopicFlags / order, B) on the title screen, a Pokémon Center, the save dialog (and the
+  restore after NO), the Pokédex, the party menu, the summary (and the skills page's context), the bag, Bill's
+  PC, a wild battle (and the bag in it keeping the battle's context), plus Surf's context on and off the water.
+  Unit: SetHelpContextForBattle by battle type, the help specials. Ran helpSystem, titleScreen, intro, surf and
+  inGameTrades e2e files.
+
+### W-intro 2: the intro's scenes 1-3 (batch 11)
+
+- `menus/intro.ts` ports the rest of intro.c: IntroCB_Scene1 (Scene1_Task_AnimateGrass, Scene1_StartGrassScrolling,
+  Scene1_Task_BgZoom), IntroCB_Scene2 (Scene2_Task_PanForest / _PanMons, Scene2_CreateMonSprites /
+  _DestroyMonSprites), IntroCB_Scene3_Entrance and IntroCB_Scene3_Fight with every Scene3_* task and function
+  (the BG scroll, Gengar's bounce, entrance and attack, the swipes, the grass, Nidorino's entrance, cry, recoil and
+  its dust, hops and attack, the zooms) and the sprite callbacks; sBgTemplates_Scene1/2/3, the sprite templates and
+  anims. m4aSongNumStart(MUS_INTRO_FIGHT) and PlayCry_ByMode(SPECIES_NIDORINO, 0x3F, CRY_MODE_DOUBLES) through
+  gba/sound.ts. The movie now ends on IntroCB_ExitToTitleScreen after the fight. No shared files changed: gba/bg.ts
+  already had ChangeBgX / ChangeBgY / GetBgX, and the scenes use no affine BG.
+- Tests: tests/e2e/intro.test.ts's callback order is the whole movie (boot, the title screen's timeout); a new
+  full-movie test checks each scene's frame count against the C, worked out by hand from intro.c (scene 1 47,
+  scene 2 138, scene 3's entrance 60, the fight 501: the fades, Gengar's scroll vs Nidorino's slide, the cry, the
+  attack landing on its 31st frame, the recoil and hops, Gengar's 30-frame bounce), MUS_INTRO_FIGHT on scene 1's
+  17th frame and Nidorino's cry on the fight's 41st, with screenshots of each scene; another skips with A during
+  Gengar's attack (MUS_TITLE takes over from MUS_INTRO_FIGHT). The port matched every hand count on the first run.
+  The full movie adds about 750 frames to each `title: true` boot (well inside the 60 s waits): titleScreen.test.ts,
+  audioOutput.test.ts and audioScenes2.test.ts's title test pass unchanged.

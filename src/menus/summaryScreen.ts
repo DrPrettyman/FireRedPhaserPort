@@ -3,10 +3,11 @@
 //
 // Box mons (PSS_MODE_BOX, from the PC) are a box's slots (BoxPokemon | null); the screen shows each through
 // BoxMonToMon. Not ported because the systems don't exist yet: the trade screen's view of the partner's
-// party, multi-battle party order (link), Pokémon cries and the help system. The struct Pokemon fields the
+// party, multi-battle party order (link) and Pokémon cries. The struct Pokemon fields the
 // port doesn't store read as their defaults: met game FireRed, no "fateful encounter" flag, English language.
 
 import { K } from '../battle/constants';
+import { SetHelpContext } from '../ui/helpSystemContext';
 import { g, pokemon, state } from '../battle/env';
 import { GetHPBarLevel } from '../battle/battleInterface';
 import { gBallSpriteTemplates, DestroySpriteAndFreeResources_Ball, ItemIdToBallId, LoadBallGfx, ShouldPlayNormalMonCry, animTable } from '../battle/gfx';
@@ -409,8 +410,6 @@ function IsMoveHm(move: number): boolean {
   for (let i = 0; hm[i] !== 0xffff; i++) if (hm[i] === move) return true;
   return false;
 }
-
-const SetHelpContext = (_context: number) => {}; // help system not implemented
 
 /** StringLength */
 const StringLength = (s: number[]) => strBody(s).length;

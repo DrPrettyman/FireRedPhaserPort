@@ -93,6 +93,7 @@ import { CreateItemMenuIcon, CreateSwapLine, DestroyItemMenuIcon, gBagSwapSprite
 import { AddScrollIndicatorArrowPairParameterized, RemoveScrollIndicatorArrowPair } from './menuIndicators';
 import { gPartyMenu, InitPartyMenu, ItemIdToBattleMoveId, Task_HandleChooseMonInput } from './partyMenu';
 import { BeginPCScreenEffect_TurnOff, BeginPCScreenEffect_TurnOn, IsPCScreenEffectRunning_TurnOff, IsPCScreenEffectRunning_TurnOn } from './pcScreenEffect';
+import { SetHelpContext } from '../ui/helpSystemContext';
 
 /** struct ItemPcResources */
 interface ItemPcResources {
@@ -286,7 +287,7 @@ function ItemPc_DoGfxSetup(): boolean {
       gMain.state++;
       break;
     case 17:
-      // SetHelpContext(HELPCONTEXT_PLAYERS_PC_ITEMS)
+      SetHelpContext(K.HELPCONTEXT_PLAYERS_PC_ITEMS);
       gMain.state++;
       break;
     case 18:

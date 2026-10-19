@@ -22,6 +22,7 @@ import {
 import { K } from '../battle/constants';
 import { PlaySE } from '../gba/sound';
 import { Overworld_PlaySpecialMapMusic } from '../gba/overworldMusic';
+import { SetHelpContext } from '../ui/helpSystemContext';
 
 /**
  * DoFallWarp: DoDiveWarp (world/dive.ts: LockPlayerFieldControls, WarpFadeOutScreen, Task_Teleport2Warp: once
@@ -125,7 +126,7 @@ function FieldCB_FallWarpExit(): void {
           if (MetatileBehavior_IsSurfableInSeafoamIslands(x, y)) {
             state.setVar('VAR_TEMP_1', 1);
             SetPlayerAvatarTransitionFlags(PLAYER_AVATAR_FLAG.SURFING);
-            // SetHelpContext(HELPCONTEXT_SURFING): no help system
+            SetHelpContext(K.HELPCONTEXT_SURFING);
           }
           testEvent('fallWarpDone');
           return true;

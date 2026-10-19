@@ -95,6 +95,7 @@ import { RemoveScrollIndicatorArrowPair, AddScrollIndicatorArrowPair, type Scrol
 import { DexScreen_GetSetPokedexFlag, FLAG_GET_CAUGHT, FLAG_GET_SEEN, FLAG_SET_CAUGHT, FLAG_SET_SEEN, NationalPokedexNumToSpecies, pokedexData } from './pokedex';
 import { DexScreen_DestroyAreaScreenResources, DexScreen_DrawMonAreaPage, pokedexAreaGfxSymbols } from './pokedexArea';
 import { GetIconSpecies, monIconSymbol } from './pokemonIcon';
+import { SetHelpContext } from '../ui/helpSystemContext';
 
 // include/pokedex_screen.h
 const DEX_CATEGORY_COUNT = 9;
@@ -553,7 +554,7 @@ export function CB2_OpenPokedexFromStartMenu(): void {
   SetGpuReg(REG_OFFSET_BLDALPHA, 0);
   SetGpuReg(REG_OFFSET_BLDY, 0);
   SetMainCallback2(CB2_PokedexScreen);
-  // SetHelpContext(HELPCONTEXT_POKEDEX): no help system
+  SetHelpContext(K.HELPCONTEXT_POKEDEX);
 }
 
 /** DoClosePokedex */

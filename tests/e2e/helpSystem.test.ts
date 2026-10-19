@@ -14,7 +14,17 @@ const session = useGame();
 
 const gen = (f: string) => JSON.parse(readFileSync(resolve(__dirname, '../../public/gen', f), 'utf8'));
 const strings: Record<string, string> = gen('text/strings.json');
-const helpIds: Record<string, number> = gen('helpSystem.json').helpIds;
+const helpJson = gen('helpSystem.json');
+const helpIds: Record<string, number> = helpJson.helpIds;
+/**
+ * The topics BuildMainTopicsListAndMoveToH00 lists for a context: sHelpSystemContextTopicFlags[context]'s, in
+ * sHelpSystemContextTopicOrder; the last (EXIT) has index -2.
+ */
+function topicsFor(context: number): number[] {
+  const ids = (helpJson.contextTopicOrder as number[]).filter((i) => helpJson.contextTopicFlags[context][i]);
+  ids[ids.length - 1] = -2;
+  return ids;
+}
 /** A strings.json string as `t.helpSystem()` decodes it (without the EOS). */
 const str = (label: string) => strings[label].replace(/\$$/, '');
 
@@ -26,6 +36,23 @@ async function waitMenuState(game: Game, menuState: number, what: string) {
   const ok = await game.eval((t, s) => t.until(() => t.helpSystem().videoState === 5 && t.helpSystem().menuState === s, 2000), menuState);
   expect(ok, what).toBe(true);
   return game.eval((t) => t.helpSystem());
+}
+
+/**
+ * The context is `contextName` (HELPCONTEXT_*): L opens the help (A past the welcome page if it shows), its topics
+ * are the context's, B closes it again.
+ */
+async function checkHelpContext(game: Game, contextName: string, what: string): Promise<void> {
+  const context = await game.eval((t, n) => t.define(n), contextName);
+  expect(await game.eval((t) => t.helpSystem().context), `the context: ${what}`).toBe(context);
+  await game.press('L');
+  const up = await game.eval((t) => t.until(() => t.helpSystem().videoState === 5 && [0, 9].includes(t.helpSystem().menuState), 2000));
+  expect(up, `the help opens: ${what}`).toBe(true);
+  if ((await game.eval((t) => t.helpSystem().menuState)) === 9) await game.press('A');
+  const help = await waitMenuState(game, 0, `the topics: ${what}`);
+  expect(help.items.map((i) => i.index), `the topics: ${what}`).toEqual(topicsFor(context));
+  await game.press('B');
+  expect(await game.eval((t) => t.until(() => t.helpSystem().videoState === 0, 600)), `the help closes: ${what}`).toBe(true);
 }
 
 test('L in the field opens the help: the welcome page once, a topic and an item, B back out; the field and the BGM as before', async () => {
@@ -143,4 +170,96 @@ test('the help opens over a GBA-layer screen (the bag) and pauses it', async () 
   // and the bag takes input again: B leaves it for the field
   await game.press('B');
   await game.waitFor((t) => !t.gbaScreen() && t.startMenu(), { what: 'back to the start menu' });
+});
+
+test('the title screen: HELPCONTEXT_TITLE_SCREEN, its one topic (ABOUT THE GAME)', async () => {
+  const game = await session.start({ title: true });
+  await game.waitFor((t) => t.titleScreen()?.scene === 'RUN', { what: 'the title screen to run', timeout: 60_000 });
+  expect(topicsFor(await game.eval((t) => t.define('HELPCONTEXT_TITLE_SCREEN')))).toEqual([3, -2]); // TOPIC_ABOUT_GAME, EXIT
+  await checkHelpContext(game, 'HELPCONTEXT_TITLE_SCREEN', 'the title screen');
+  // The title screen runs on
+  await game.eval((t) => t.waitFrames(10));
+  expect(await game.eval((t) => t.gbaScreen())).toBe('CB2_TitleScreenRun');
+});
+
+test("each screen's context: the save dialog, the Pokédex, the party menu, the bag, the summary, Bill's PC, a wild battle", async () => {
+  const game = await session.start({ start: 'after-rival', map: 'ViridianCity_PokemonCenter_1F', x: 11, y: 2 });
+  await game.waitIdle();
+  await game.eval((t) => {
+    t.state!.optionsButtonMode = t.define('OPTIONS_BUTTON_MODE_HELP');
+    t.state!.setFlag('FLAG_SYS_POKEDEX_GET', true);
+  });
+  await checkHelpContext(game, 'HELPCONTEXT_POKECENTER', 'a Pokémon Center');
+
+  /** START, then the start menu's entry `item`. */
+  const startMenu = async (item: string) => {
+    await game.waitIdle();
+    await game.press('START');
+    await game.waitFor((t) => t.startMenu(), { what: 'the start menu' });
+    const menu = (await game.eval((t) => t.startMenu()))!;
+    const to = menu.items.indexOf(item as (typeof menu.items)[number]);
+    for (let i = menu.cursor; i !== to; i += Math.sign(to - i)) await game.press(to > i ? 'DOWN' : 'UP');
+    await game.press('A');
+  };
+  const backToField = async (what: string) => {
+    await game.mashUntil((t) => !t.gbaScreen() && t.idle(), { button: 'B', what });
+  };
+
+  // The save dialog: BackupHelpContext + HELPCONTEXT_SAVE; NO restores the Pokémon Center's
+  await startMenu('SAVE');
+  await game.waitFor((t) => t.saveDialog(), { what: 'the save dialog' });
+  await checkHelpContext(game, 'HELPCONTEXT_SAVE', 'the save dialog');
+  await game.mashUntil((t) => !!t.startMenu(), { button: 'B', what: 'NO: back to the start menu' });
+  expect(await game.eval((t) => t.helpSystem().context)).toBe(await game.eval((t) => t.define('HELPCONTEXT_POKECENTER')));
+  await game.press('B');
+
+  await startMenu('POKEDEX');
+  await game.waitFor((t) => t.gbaScreen() === 'CB2_PokedexScreen' && t.pokedex()?.ready, { what: 'the Pokédex' });
+  await checkHelpContext(game, 'HELPCONTEXT_POKEDEX', 'the Pokédex');
+  await backToField('out of the Pokédex');
+
+  await startMenu('POKEMON');
+  await game.waitForPartyMenu();
+  await checkHelpContext(game, 'HELPCONTEXT_PARTY_MENU', 'the party menu');
+  // The summary (the first mon's action menu, SUMMARY): POKéMON INFO, then RIGHT to the skills page
+  await game.press('A');
+  await game.eval((t) => t.waitFrames(10));
+  await game.press('A');
+  await game.waitForScreen('CB2_RunPokemonSummaryScreen');
+  await checkHelpContext(game, 'HELPCONTEXT_POKEMON_INFO', 'the summary');
+  await game.press('RIGHT');
+  const skills = await game.eval((t) => t.define('HELPCONTEXT_POKEMON_SKILLS'));
+  expect(await game.eval((t, c) => t.until(() => t.helpSystem().context === c, 600), skills), 'the skills page').toBe(true);
+  await backToField('out of the party menu');
+
+  await startMenu('BAG');
+  await game.waitForBag();
+  await checkHelpContext(game, 'HELPCONTEXT_BAG', 'the bag');
+  await backToField('out of the bag');
+
+  // The PC (Someone's PC): Task_PCMainMenu's HELPCONTEXT_BILLS_PC
+  await game.eval((t) => t.face('up'));
+  await game.press('A');
+  await game.mashUntil((t) => /withdraw a POK/.test(t.message() ?? ''), { what: 'the storage menu' });
+  await checkHelpContext(game, 'HELPCONTEXT_BILLS_PC', "Bill's PC");
+  await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the PC off' });
+
+  // A wild battle: CB2_InitBattle's HELPCONTEXT_WILD_BATTLE; the bag in it keeps it (SetHelpContext)
+  await game.eval((t) => t.startWildBattle({ species: 'RATTATA', level: 2 }));
+  await game.waitForActionMenu();
+  await checkHelpContext(game, 'HELPCONTEXT_WILD_BATTLE', 'a wild battle');
+  await game.chooseAction('BAG');
+  await game.waitForBag();
+  expect(await game.eval((t) => t.helpSystem().context), 'the bag in a battle').toBe(await game.eval((t) => t.define('HELPCONTEXT_WILD_BATTLE')));
+});
+
+test('Surf: HELPCONTEXT_SURFING on the water, SetHelpContextForMap once off it (Task_WaitStopSurfing)', async () => {
+  const game = await session.start({ start: 'after-rival', map: 'PalletTown', x: 7, y: 18, party: [{ species: 'LAPRAS', level: 40, moves: ['SURF'] }] });
+  await game.eval((t) => t.state!.setVar('VAR_REPEL_STEP_COUNT', 200));
+  await game.waitIdle();
+  expect(await game.eval((t) => t.helpSystem().context)).toBe(await game.eval((t) => t.define('HELPCONTEXT_SURFING')));
+  await game.eval((t) => t.face('left'));
+  await game.eval((t) => t.walk('left', 1));
+  await game.waitFor((t) => t.idle() && t.field()!.avatar.flags.includes('ON_FOOT'), { what: 'the player on land' });
+  expect(await game.eval((t) => t.helpSystem().context)).toBe(await game.eval((t) => t.define('HELPCONTEXT_OVERWORLD')));
 });

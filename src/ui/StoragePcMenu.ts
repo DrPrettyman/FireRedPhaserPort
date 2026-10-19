@@ -3,6 +3,7 @@ import { K } from '../battle/constants';
 import { PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import { FONT_NORMAL, type Fonts } from '../text/Font';
+import { SetHelpContext } from './helpSystemContext';
 import { MenuWindow } from './MenuWindow';
 
 /** What the PC's storage menu needs from the overworld. */
@@ -92,6 +93,7 @@ export class StoragePcMenu {
     const k = this.host.constants;
     switch (this.tState) {
       case STATE_LOAD:
+        SetHelpContext(K.HELPCONTEXT_BILLS_PC);
         this.CreatePCMainMenu(this.tSelectedOption);
         this.printDescription(this.tSelectedOption);
         this.tState++;

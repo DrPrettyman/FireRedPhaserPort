@@ -28,8 +28,9 @@ export interface HelpSystemListMenu {
   state: number;
 }
 
-/** gHelpSystemEnabled (help_system_util.c): HelpSystem_Enable / HelpSystem_Disable. */
-export let gHelpSystemEnabled = true;
+/** gHelpSystemEnabled (help_system_util.c): HelpSystem_Enable / HelpSystem_Disable. FALSE at boot (main.c); the title
+ * screen (or BootScene, for the dev starts that skip it) enables it. */
+export let gHelpSystemEnabled = false;
 /** gHelpSystemToggleWithRButtonDisabled (help_system_util.c) */
 export let gHelpSystemToggleWithRButtonDisabled = false;
 
@@ -152,6 +153,18 @@ export function SetHelpContext(contextId: number): void {
 /** Script_SetHelpContext (special SetHelpContext... in the scripts: `special Script_SetHelpContext`): VAR_0x8004. */
 export function Script_SetHelpContext(var8004: number): void {
   sHelpSystemContextId = var8004;
+}
+
+/**
+ * The battle's context, as CB2_InitBattle (battle_main.c) and ReshowBattleScreenAfterMenu (reshow_battle_screen.c)
+ * both set it inline from gBattleTypeFlags (not in a link battle).
+ */
+export function SetHelpContextForBattle(battleTypeFlags: number): void {
+  if (battleTypeFlags & K.BATTLE_TYPE_LINK) return;
+  if (battleTypeFlags & K.BATTLE_TYPE_TRAINER)
+    SetHelpContext(battleTypeFlags & K.BATTLE_TYPE_DOUBLE ? K.HELPCONTEXT_TRAINER_BATTLE_DOUBLE : K.HELPCONTEXT_TRAINER_BATTLE_SINGLE);
+  else if (battleTypeFlags & K.BATTLE_TYPE_SAFARI) SetHelpContext(K.HELPCONTEXT_SAFARI_BATTLE);
+  else SetHelpContext(K.HELPCONTEXT_WILD_BATTLE);
 }
 
 export function BackupHelpContext(): void {

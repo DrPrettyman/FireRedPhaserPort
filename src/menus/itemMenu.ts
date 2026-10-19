@@ -161,6 +161,7 @@ import { CB2_ChooseMonToGiveItem, CB2_SelectBagItemToGive } from './partyMenu';
 import { CB2_ReturnToPokeStorage } from './pokemonStorage';
 import { InitTMCase, TMCASE_GIVE_PARTY, TMCASE_GIVE_PC, TMCASE_SELL } from './tmCase';
 import { BERRYPOUCH_FROMMARTSELL, BERRYPOUCH_FROMPARTYGIVE, BERRYPOUCH_FROMPOKEMONSTORAGEPC, InitBerryPouch } from './berryPouch';
+import { SetHelpContext } from '../ui/helpSystemContext';
 
 const LIST_TILES_WIDTH = 18;
 const LIST_TILES_HEIGHT = 12;
@@ -436,7 +437,7 @@ function LoadBagMenuGraphics(): boolean {
       gMain.state++;
       break;
     case 19:
-      // SetHelpContext(HELPCONTEXT_BAG): the help system isn't implemented
+      SetHelpContext(gBagMenuState.location === K.ITEMMENULOCATION_ITEMPC ? K.HELPCONTEXT_PLAYERS_PC_ITEMS : K.HELPCONTEXT_BAG);
       gPaletteFade.bufferTransferDisabled = false;
       gMain.state++;
       break;

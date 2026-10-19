@@ -78,6 +78,7 @@ import { fieldReturn, gFieldCallback } from './fieldCallbacks';
 import { ResetAllPicSprites } from './picSprites';
 import { BGMusicStopped } from '../gba/sound'; // Task_Seagallop_2's wait (W-sound 3)
 import { Overworld_FadeOutMapMusic } from '../gba/overworldMusic';
+import { HelpSystem_Disable, HelpSystem_Enable } from '../ui/helpSystemContext';
 
 const TILESTAG_FERRY = 3000;
 const TILESTAG_WAKE = 4000;
@@ -172,11 +173,11 @@ const sWakeSpriteTemplate: SpriteTemplate = {
 
 /**
  * DoSeagallopFerryScene (the screen half): SetMainCallback2(CB2_SetUpSeagallopScene). The field (its VBlank
- * callback) is already gone and the help system has no port; gMain.state is 0, as the field leaves it.
+ * callback) is already gone; gMain.state is 0, as the field leaves it.
  */
 export function DoSeagallopFerryScene(): void {
   SetVBlankCallback(null);
-  // HelpSystem_Disable: no help system
+  HelpSystem_Disable();
   gMain.state = 0;
   SetMainCallback2(CB2_SetUpSeagallopScene);
 }
@@ -283,7 +284,7 @@ const Task_Seagallop_2: TaskFunc = (taskId) => {
   ScrollBG();
   if (BGMusicStopped() && !gPaletteFade.active) {
     Task_Seagallop_3();
-    // HelpSystem_Enable: no help system
+    HelpSystem_Enable();
     DestroyTask(taskId);
   }
 };

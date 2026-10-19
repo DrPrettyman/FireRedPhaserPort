@@ -11,6 +11,7 @@
 // another screen. Not ported: the quest log events (SetPokeStorageQuestLogEvent), the help context and SEs.
 
 import { K } from '../battle/constants';
+import { SetHelpContext } from '../ui/helpSystemContext';
 import { state } from '../battle/env';
 import { GetMonSpritePalFromSpeciesAndPersonality, LoadSpecialPokePic, monPalSymbols, monPicSymbol } from '../battle/gfx';
 import { ChangeBgX, ChangeBgY, CopyBgTilemapBufferToVram, FillBgTilemapBufferRect, FillBgTilemapBufferRect_Palette0, InitBgsFromTemplates, LoadBgTiles, SetBgTilemapBuffer, ShowBg, type BgTemplate } from '../gba/bg';
@@ -793,6 +794,7 @@ export function EnterPokeStorage(boxOption: number): void {
   sMovingItemId = 0;
   gStorage.state = 0;
   gStorage.taskId = CreateTask(Task_InitPokeStorage, 3);
+  SetHelpContext(K.HELPCONTEXT_BILLS_PC);
   sLastUsedBox = state.storage.getCurrentBox();
   SetMainCallback2(CB2_PokeStorage);
 }
@@ -805,6 +807,7 @@ export function CB2_ReturnToPokeStorage(): void {
   gStorage.isReopening = true;
   gStorage.state = 0;
   gStorage.taskId = CreateTask(Task_InitPokeStorage, 3);
+  SetHelpContext(K.HELPCONTEXT_BILLS_PC);
   SetMainCallback2(CB2_PokeStorage);
 }
 

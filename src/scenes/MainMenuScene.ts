@@ -18,7 +18,7 @@ import { CB2_InitTitleScreen, titleScreenEnv, titleScreenGfxSymbols } from '../m
 import { CB2_InitCopyrightScreenAfterBootup, introEnv, introGfxSymbols } from '../menus/intro';
 import { Defines } from '../script/Defines';
 import { gSave, LoadGameSave } from '../state/save';
-import { clearSave, type SaveData } from '../state/saveData';
+import { clearSave, fromSaveData, type SaveData } from '../state/saveData';
 import { Charmap, EOS } from '../text/charmap';
 import { Fonts } from '../text/Font';
 import { TEXT_SPEED } from '../text/TextPrinter';
@@ -38,6 +38,7 @@ import { GameState } from '../state/GameState';
 import { testHooks } from '../dev/testHooks';
 import { random } from '../util/random';
 import { GbaHostScene } from './GbaHostScene';
+import { helpSystemGfxSymbols, InitHelpSystemFonts, SetHelpSystemNameEncoder } from '../ui/helpSystem';
 import type { OverworldStart } from './OverworldScene';
 
 const TEXTURE = 'main_menu_screen';
@@ -68,15 +69,25 @@ export class MainMenuScene extends GbaHostScene {
     initConstants(assets.scripts.defines); // string_util.c's helpers read the K table
     const charmap = new Charmap(assets.charmap);
     await assets.loadTextTextures(this);
-    await loadGfx([...mainMenuGfxSymbols(), ...titleScreenGfxSymbols(), ...introGfxSymbols()]);
-    const { gSineTable } = (await sharedBattleData()).tables.mech as { gSineTable: number[] }; // the intro's star
+    await loadGfx([...mainMenuGfxSymbols(), ...titleScreenGfxSymbols(), ...introGfxSymbols(), ...helpSystemGfxSymbols]);
+    const battleData = await sharedBattleData();
+    const { gSineTable } = battleData.tables.mech as { gSineTable: number[] }; // the intro's star
     this.fonts = new Fonts(this, assets.fonts);
+    // The L/R help system from the title screen on (title_screen.c's HelpSystem_Enable): what it draws with, and
+    // gSaveBlock1/2 as LoadGameSave leaves them (the options' button mode, the flags its topics read)
+    InitHelpSystemFonts(this.fonts);
+    SetHelpSystemNameEncoder((s) => charmap.encodePlain(s));
+    const pokemon = new PokemonData(readPokemonConstants(defines), assets.species, assets.moves, assets.items, assets.pokemonTables, charmap);
     const text = (label: string) => charmap.encode(assets.strings[label] ?? '?$');
     let save: SaveData | undefined;
 
     /** LoadGameSave(SAVE_NORMAL) and what the main menu reads of it (gSaveBlock1/2, the options). */
     const loadGameSave = () => {
       save = LoadGameSave();
+      const state = new GameState(defines, assets.constants.newGameFlags, pokemon, assets.strings);
+      if (save) try { fromSaveData(save, state); } catch (e) { console.warn(e); } // (CONTINUE reports a bad save)
+      initBattleEnv(battleData, assets.scripts.defines, pokemon, state, charmap);
+      setTextStrings(assets.strings);
       // An empty or unreadable slot gets Sav2_ClearSetDefault's options
       initGbaText(this.fonts, this.buttons, TEXT_SPEED[save?.options.textSpeed ?? 'mid'].scroll);
       Object.assign(mainMenuEnv, {

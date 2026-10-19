@@ -36,7 +36,7 @@ import { StartMenu } from '../ui/StartMenu';
 import { helpMessageWindowGfxSymbols } from '../ui/HelpMessageWindow';
 import { helpSystemGfxSymbols } from '../ui/helpSystem';
 import { HelpSystemFieldHost } from '../ui/helpSystemField';
-import { SetHelpContextForMap } from '../ui/helpSystemContext';
+import { HelpSystem_Disable, HelpSystem_Enable, SetHelpContextForMap } from '../ui/helpSystemContext';
 import { SAVECB_RETURN_CANCEL, SAVECB_RETURN_CONTINUE, SaveDialog } from '../ui/SaveDialog';
 import { ClearContinueGameWarpStatus, gSave, UseContinueGameWarp } from '../state/save';
 import { fromSaveData, type SaveData } from '../state/saveData';
@@ -86,7 +86,10 @@ import {
   WeatherFadeScreen,
   weatherProbe,
   WeatherTask,
+  IsWeatherNotFadingIn,
 } from '../world/weather';
+import { MapPreviewLayer } from '../world/mapPreviewLayer';
+import { ForestMapPreviewScreenIsRunning, MapPreview_InitFieldBg0, MapPreview_LoadGfx, MapPreview_StartForestTransition, mapPreviewGfxSymbols } from '../world/mapPreviewScreen';
 import { WeatherTextures } from '../world/weatherTextures';
 import { FogHorizontal } from '../world/fogHorizontal';
 import { leagueLightingProbe, loadLeagueLightingData, registerLeagueLighting, ResetLeagueLightingTasks, setLeagueLightingHost, StopPokemonLeagueLightingEffectTask } from '../world/leagueLighting';
@@ -128,7 +131,7 @@ import { fieldListMenuGfxSymbols, fieldListMenuProbe, type ListMenuHost } from '
 import { stringWidth } from '../text/stringWidth';
 import { setTrainerTowerStringWidth } from '../world/trainerTower';
 import { currentTrainerTowerRecord } from '../state/trainerTowerRecord';
-import { VBlankCounter1Update } from '../gba/main';
+import { ReadKeys, VBlankCounter1Update } from '../gba/main';
 import { MultichoiceGridMenu, MultichoiceMenu } from '../ui/MultichoiceMenu';
 import type { ShopFieldView } from '../menus/shop';
 import { setBgMosaic } from '../world/BgMosaic';
@@ -398,7 +401,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.setUpWeather();
     this.gbaScreen = new FieldGbaScreen(this, DEPTH_FADE + 10);
     setTransitionFieldCamera(() => this.gbaScreen.cameraPixelOffset());
-    await loadGfx([...mapTransitionGfxSymbols, ...fieldListMenuGfxSymbols, ...helpMessageWindowGfxSymbols, ...museumFossilPicGfxSymbols, ...brailleCursorGfxSymbols, ...helpSystemGfxSymbols]);
+    await loadGfx([...mapTransitionGfxSymbols, ...mapPreviewGfxSymbols(), ...fieldListMenuGfxSymbols, ...helpMessageWindowGfxSymbols, ...museumFossilPicGfxSymbols, ...brailleCursorGfxSymbols, ...helpSystemGfxSymbols]);
     setUserFrameTypeSource(() => this.state.optionsWindowFrameType + 1); // the options' FRAME for field windows
     this.flash = new FieldFlash(this);
     this.fonts = new Fonts(this, this.assets.fonts);
@@ -1366,7 +1369,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
             break;
           case 9:
             // FieldFadeTransitionBackgroundEffectIsFinished, !FuncIsActiveTask(Task_BarnDoorWipe)
-            if (!this.screenFade.active && !this.player.isMoving && !this.doors.running && wipe.done) return true; // case 4
+            if (this.fieldFadeTransitionBackgroundEffectIsFinished() && !this.player.isMoving && !this.doors.running && wipe.done) return true; // case 4
             break;
         }
         if (!wipe.done) wipe.tick(); // Task_BarnDoorWipe (priority 80) runs after Task_ExitDoor
@@ -1418,10 +1421,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private async doChangeMap(from: MapData, to: MapData, fadedWhite: boolean): Promise<void> {
     const change = { fromType: this.mapType(from), toType: this.mapType(to), fromMapsec: from.regionMapSection ?? 'MAPSEC_NONE', toMapsec: to.regionMapSection ?? 'MAPSEC_NONE' };
     this.gbaScreen.startBare();
+    initGbaText(this.fonts, this.buttons, TEXT_SPEED[this.state.textSpeed].scroll); // RunMapPreviewScreen's name window
     CB2_DoChangeMap(change, fadedWhite ? RGB_WHITE : RGB_BLACK);
     if (!IsChangeMapDone()) {
       testEvent('mapTransition', { from: from.name, to: to.name });
-      await this.waitFrames(IsChangeMapDone);
+      // AgbMain's ReadKeys: the cave preview ends early while B is held
+      await this.waitFrames(() => (ReadKeys(this.buttons), IsChangeMapDone()));
     }
     this.gbaScreen.stop();
   }
@@ -1456,7 +1461,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const arrival = this.world.tileAt(this.player.tileX, this.player.tileY);
     if (this.behaviors.isDoor(arrival.behavior)) this.exitDoor(isExit);
     else this.warpFadeInScreen(isExit);
-    await this.waitFrames(() => !this.screenFade.active);
+    await this.waitFrames(() => this.fieldFadeTransitionBackgroundEffectIsFinished()); // Task_ExitNonDoor
+  }
+
+  /** FieldFadeTransitionBackgroundEffectIsFinished: the fade in is over and no forest preview is up. */
+  private fieldFadeTransitionBackgroundEffectIsFinished(): boolean {
+    return !this.screenFade.active && ForestMapPreviewScreenIsRunning();
   }
 
   /**
@@ -1477,13 +1487,27 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /**
    * LoadMapInStepsLocal's state 12: into another region map section with a forest preview screen,
-   * MapPreview_StartForestTransition (not ported, so nothing is shown); else the map name popup if the
-   * header asks for one.
+   * MapPreview_LoadGfx and MapPreview_StartForestTransition (world/mapPreviewScreen.ts); else the map name popup if
+   * the header asks for one.
    */
   private showMapNameOnWarpArrival(from: MapData | undefined): void {
     const to = this.world.current.data;
     const fromMapsec = from?.regionMapSection ?? 'MAPSEC_NONE';
-    if (fromMapsec !== this.mapSection() && MapHasForestPreviewScreen(this.mapSection())) return;
+    if (fromMapsec !== this.mapSection() && MapHasForestPreviewScreen(this.mapSection())) {
+      const mapsec = this.defines.require(this.mapSection());
+      initGbaText(this.fonts, this.buttons, TEXT_SPEED[this.state.textSpeed].scroll); // the name window
+      MapPreview_InitFieldBg0();
+      MapPreview_LoadGfx(mapsec);
+      MapPreview_StartForestTransition(mapsec, {
+        createLayer: () => new MapPreviewLayer(this, DEPTH_FADE - 10), // under the fade: the banner fades in with the field
+        fadeInFromBlack: () => this.fadeScreen(this.defines.require('FADE_FROM_BLACK')),
+        isWeatherNotFadingIn: IsWeatherNotFadingIn,
+        playSpecialMapMusic: Overworld_PlaySpecialMapMusic,
+        lockPlayerFieldControls: () => {}, // the warp holds the field (`busy`) until its exit task sees the banner gone
+        createTask: (tick) => this.fieldTasks.unshift({ tick }), // priority 0: before the field's other tasks
+      });
+      return;
+    }
     if (to.showMapName) this.showMapNamePopup();
   }
 
@@ -1707,7 +1731,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       this.warpFadeInScreen(false);
     }
     // Task_ExitNonDoor: the controls stay locked until the fade is done
-    if (!this.overlay) this.overlay = { tick: () => !this.screenFade.active };
+    if (!this.overlay) this.overlay = { tick: () => this.fieldFadeTransitionBackgroundEffectIsFinished() };
   }
 
   /** A loaded map's templates; a neighbour that was never current starts from its header. */
@@ -2056,7 +2080,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /** PlayerPC / BedroomPC (player_pc.c): the item storage menus run as a field overlay while the script waits. */
-  openPlayerPc(): Wait {
+  openPlayerPc(notInRoom = true): Wait {
     const d = this.defines;
     const menu = new PlayerPcMenu(this, this.fonts, this.buttons, {
       text: (symbol) => this.charmap.encode(this.assets.strings[symbol] ?? '?$'),
@@ -2074,7 +2098,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         this.runFieldMenu({ menu: screen }, () => onReturn());
       },
       fadeInFromBlack: () => this.fadeScreen(d.require('FADE_FROM_BLACK')),
-    });
+    }, notInRoom);
     this.overlay = menu;
     return () => menu.done;
   }
@@ -2223,7 +2247,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const arrival = this.world.tileAt(this.player.tileX, this.player.tileY);
     if (this.behaviors.isDoor(arrival.behavior)) this.exitDoor(isExit);
     else this.warpFadeInScreen(isExit);
-    await this.waitFrames(() => !this.screenFade.active);
+    await this.waitFrames(() => this.fieldFadeTransitionBackgroundEffectIsFinished());
     this.busy = false;
   }
 
@@ -2679,6 +2703,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
           phase = 'transition';
           testEvent('battleTransition', { transition });
           this.gbaScreen.start(source);
+          if (battleStartTask) HelpSystem_Disable(); // Task_BattleStart
           BattleTransition_StartOnField(transition);
         }
         if (phase === 'transition' && IsBattleTransitionDone()) {
@@ -2688,6 +2713,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
           this.gbaScreen.stop();
           this.screenFade.fill(false);
           if (battleStartTask) {
+            HelpSystem_Enable();
             this.wild.resetEncounterRateModifiers(); // RestartWildEncounterImmunitySteps
             this.state.setVar('VAR_POISON_STEP_COUNTER', 0); // ClearPoisonStepCounter
           }

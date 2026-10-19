@@ -31,6 +31,8 @@ export interface MenusData {
   namingKeyboardChars: string[][];
   /** region_map.c's tables (menus/regionMap.ts RegionMapData) */
   regionMap: import('./regionMap').RegionMapData;
+  /** map_preview_screen.c's sMapPreviewScreenData (world/mapPreviewScreen.ts) */
+  mapPreviewScreens: import('../world/mapPreviewScreen').MapPreviewScreen[];
   /** wild_pokemon_area.c's / pokedex_area_markers.c's tables (menus/wildPokemonArea.ts PokedexAreaData) */
   pokedexArea: import('./wildPokemonArea').PokedexAreaData;
 }

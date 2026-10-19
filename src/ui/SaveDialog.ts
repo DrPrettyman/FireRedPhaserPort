@@ -12,6 +12,7 @@ import type { Charmap } from '../text/charmap';
 import { FONT_NORMAL, FONT_SMALL, type Fonts } from '../text/Font';
 import type { MessageBox } from '../text/MessageBox';
 import { stringWidth } from '../text/stringWidth';
+import { BackupHelpContext, RestoreHelpContext, SetHelpContext } from './helpSystemContext';
 import { MenuWindow } from './MenuWindow';
 import { SaveStatToString } from './saveMenuUtil';
 import { YesNoMenu } from './YesNoMenu';
@@ -64,6 +65,9 @@ export class SaveDialog {
   private stats: number[][] = [];
 
   constructor(private host: SaveDialogHost) {
+    // StartCB_Save1 / Field_AskSaveTheGame
+    BackupHelpContext();
+    SetHelpContext(K.HELPCONTEXT_SAVE);
     // StartMenu_PrepareForSave (SaveMapView isn't ported: the port doesn't save the map view)
     this.cb = this.printAskSaveText;
     openDialog = this;
@@ -74,6 +78,7 @@ export class SaveDialog {
     if (this.host.messageBox.isPrinting) return SAVECB_RETURN_CONTINUE;
     const r = this.cb();
     if (r !== SAVECB_RETURN_CONTINUE && openDialog === this) openDialog = undefined;
+    if (r !== SAVECB_RETURN_CONTINUE) RestoreHelpContext(); // StartCB_Save2 / task50_save_game, on every way out
     return r;
   }
 

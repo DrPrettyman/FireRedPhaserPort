@@ -80,6 +80,7 @@ import {
   LoadEvoSparkleSpriteAndPal,
 } from './evolutionGraphics';
 import { GetMoveSlotToReplace, ShowSelectMovePokemonSummaryScreen } from './summaryScreen';
+import { HelpSystem_Disable, HelpSystem_Enable } from '../ui/helpSystemContext';
 
 /** The C symbols the scene loads besides the battle textbox/terrain and the mon pics (for preloading). */
 export const EVOLUTION_SCENE_GFX = ['sMovingBackgroundTiles', 'sMovingBackgroundMap1', 'sMovingBackgroundMap2', 'sBlackPalette', 'sBgAnim_Pal', ...EVOLUTION_SPARKLE_GFX];
@@ -329,7 +330,7 @@ export function EvolutionScene(mon: Pokemon, postEvoSpecies: number, canStopEvo:
   SetHBlankCallback(EvoDummyFunc);
   SetVBlankCallback(VBlankCB_EvolutionScene);
   m4aMPlayAllStop();
-  // HelpSystem_Disable: no help system
+  HelpSystem_Disable();
   SetMainCallback2(CB2_EvolutionSceneUpdate);
 }
 
@@ -585,7 +586,7 @@ function Task_EvolutionScene(taskId: number): void {
       break;
     case EVOSTATE_TRY_LEARN_MOVE:
       if (!IsTextPrinterActive(0)) {
-        // HelpSystem_Enable
+        HelpSystem_Enable();
         const learn = monTryLearningNewMove(mon, !!d[tLearnsFirstMove]);
         if (learn !== K.MOVE_NONE && !d[tEvoWasStopped]) {
           StopMapMusic();

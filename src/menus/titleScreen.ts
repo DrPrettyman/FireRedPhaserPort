@@ -109,6 +109,8 @@ import { CreateTask, DestroyTask, FindTaskIdByFunc, FuncIsActiveTask, GetWordTas
 import { testEvent } from '../dev/testHooks';
 import { CB2_InitCopyrightScreenAfterTitleScreen } from './intro';
 import { CB2_InitMainMenu } from './mainMenu';
+import { K } from '../battle/constants';
+import { HelpSystem_Disable, HelpSystem_Enable, SetHelpContext } from '../ui/helpSystemContext';
 
 /** What the title screen reads from outside title_screen.c. */
 export const titleScreenEnv = {
@@ -482,11 +484,12 @@ const KEYSTROKE_BERRY_FIX = B_BUTTON | SELECT_BUTTON;
 function SetTitleScreenScene_Run(data: Int16Array): void {
   switch (data[tState]) {
     case 0:
-      // SetHelpContext(HELPCONTEXT_TITLE_SCREEN), HelpSystem_Enable: the help system isn't ported
+      SetHelpContext(K.HELPCONTEXT_TITLE_SCREEN);
       CreateTask(Task_TitleScreen_BlinkPressStart, 0);
       CreateTask(Task_FlameSpawner, 5);
       SetGpuRegsForTitleScreenRun();
       data[tSlashSpriteId] = CreateSlashSprite();
+      HelpSystem_Enable();
       data[tState]++;
     // fallthrough
     case 1:
@@ -543,7 +546,7 @@ function SetTitleScreenScene_Restart(data: Int16Array): void {
       }
       break;
     case 4:
-      // HelpSystem_Disable: no help system
+      HelpSystem_Disable();
       DestroyTask(FindTaskIdByFunc(Task_TitleScreenMain));
       SetMainCallback2(CB2_InitCopyrightScreenAfterTitleScreen); // the copyright screen and the intro (menus/intro.ts)
       break;

@@ -1,8 +1,8 @@
 // What a warp looks like between maps of different types: fldeff_flash.c's sTransitionTypes (the
 // white fades in and out of caves, MapTransitionIsEnter / MapTransitionIsExit), CB2_DoChangeMap's
 // TryDoMapTransition and its FlashTransition_Enter / FlashTransition_Exit screens, which run on the
-// GBA layer between the fade out and the new map. Map preview screens (map_preview_screen.c) aren't
-// ported: where one would show, the warp goes straight on to the map.
+// GBA layer between the fade out and the new map, and RunMapPreviewScreen's cave banner before the flash into a
+// section with an MPS_TYPE_CAVE preview (world/mapPreviewScreen.ts is map_preview_screen.c).
 
 import { gfx, gfx16 } from '../gba/gfx';
 import {
@@ -33,16 +33,45 @@ import {
   REG_OFFSET_BLDCNT,
   REG_OFFSET_BLDY,
   REG_OFFSET_DISPCNT,
+  PALETTES_ALL,
+  RGB_BLACK,
+  RGB_WHITE,
   SetGpuReg,
   vram,
 } from '../gba/hw';
-import { SetVBlankCallback } from '../gba/main';
-import { BG_PLTT_ID, gPlttBufferFaded, gPlttBufferUnfaded, LoadPalette, ResetPaletteFade, TransferPlttBuffer } from '../gba/palette';
+import { IsDma3ManagerBusyWithBgCopy } from '../gba/bg';
+import { B_BUTTON, gMain, JOY_HELD, SetVBlankCallback } from '../gba/main';
+import {
+  BeginNormalPaletteFade,
+  BG_PLTT_ID,
+  BlendPalettes,
+  gPlttBufferFaded,
+  gPlttBufferUnfaded,
+  LoadPalette,
+  ResetPaletteFade,
+  TransferPlttBuffer,
+  UpdatePaletteFade,
+} from '../gba/palette';
+import { CopyWindowToVram, COPYWIN_FULL } from '../gba/window';
+import { testEvent } from '../dev/testHooks';
+import {
+  InitFieldBg0AndWindows,
+  MapHasPreviewScreen,
+  MapHasPreviewScreen_HandleQLState2,
+  MapPreview_CreateMapNameWindow,
+  MapPreview_GetDuration,
+  MapPreview_InitBgs,
+  MapPreview_IsGfxLoadFinished,
+  MapPreview_LoadGfx,
+  MapPreview_Unload,
+  MPS_TYPE_CAVE,
+  MPS_TYPE_FOREST,
+} from './mapPreviewScreen';
 import { ProcessSpriteCopyRequests, ResetOamRange, ResetSpriteData } from '../gba/sprite';
 import { CreateTask, gTasks, ResetTasks } from '../gba/task';
-import { K } from '../battle/constants';
+import { constant, K } from '../battle/constants';
 
-/** struct FlashStruct (func2 is RunMapPreviewScreen for every entry) */
+/** struct FlashStruct (func2, RunMapPreviewScreen for every entry, is never called through the table) */
 interface FlashStruct {
   fromType: number;
   toType: number;
@@ -80,58 +109,19 @@ export function MapTransitionIsExit(fromType: number, toType: number): boolean {
   return findTransitionType(fromType, toType)?.isExit ?? false;
 }
 
-// map_preview_screen.c
-const MPS_TYPE_CAVE = 0;
-const MPS_TYPE_FOREST = 1;
-const MPS_TYPE_ANY = 2;
-
-/** sMapPreviewScreenData: mapsec -> MPS_TYPE_* */
-const sMapPreviewScreenData: Record<string, number> = {
-  MAPSEC_VIRIDIAN_FOREST: MPS_TYPE_FOREST,
-  MAPSEC_MT_MOON: MPS_TYPE_CAVE,
-  MAPSEC_DIGLETTS_CAVE: MPS_TYPE_CAVE,
-  MAPSEC_ROCK_TUNNEL: MPS_TYPE_CAVE,
-  MAPSEC_POKEMON_TOWER: MPS_TYPE_CAVE,
-  MAPSEC_KANTO_SAFARI_ZONE: MPS_TYPE_FOREST,
-  MAPSEC_SEAFOAM_ISLANDS: MPS_TYPE_CAVE,
-  MAPSEC_POKEMON_MANSION: MPS_TYPE_FOREST,
-  MAPSEC_ROCKET_HIDEOUT: MPS_TYPE_FOREST,
-  MAPSEC_SILPH_CO: MPS_TYPE_CAVE,
-  MAPSEC_KANTO_VICTORY_ROAD: MPS_TYPE_CAVE,
-  MAPSEC_CERULEAN_CAVE: MPS_TYPE_CAVE,
-  MAPSEC_POWER_PLANT: MPS_TYPE_FOREST,
-  MAPSEC_MT_EMBER: MPS_TYPE_CAVE,
-  MAPSEC_ROCKET_WAREHOUSE: MPS_TYPE_FOREST,
-  MAPSEC_MONEAN_CHAMBER: MPS_TYPE_CAVE,
-  MAPSEC_DOTTED_HOLE: MPS_TYPE_CAVE,
-  MAPSEC_BERRY_FOREST: MPS_TYPE_FOREST,
-  MAPSEC_ICEFALL_CAVE: MPS_TYPE_CAVE,
-  MAPSEC_LOST_CAVE: MPS_TYPE_CAVE,
-  MAPSEC_ALTERING_CAVE: MPS_TYPE_CAVE,
-  MAPSEC_PATTERN_BUSH: MPS_TYPE_FOREST,
-  MAPSEC_LIPTOO_CHAMBER: MPS_TYPE_CAVE,
-  MAPSEC_WEEPTH_CHAMBER: MPS_TYPE_CAVE,
-  MAPSEC_DILFORD_CHAMBER: MPS_TYPE_CAVE,
-  MAPSEC_SCUFIB_CHAMBER: MPS_TYPE_CAVE,
-  MAPSEC_RIXY_CHAMBER: MPS_TYPE_CAVE,
-  MAPSEC_VIAPOIS_CHAMBER: MPS_TYPE_CAVE,
-};
-
-/** MapHasPreviewScreen */
-export function MapHasPreviewScreen(mapsec: string, type: number): boolean {
-  const previewType = sMapPreviewScreenData[mapsec];
-  if (previewType === undefined) return false;
-  return type === MPS_TYPE_ANY || previewType === type;
+/** A region map section's id from its MAPSEC_* name (MAPSEC_NONE if unknown). */
+function mapsecId(name: string): number {
+  return constant(name) ?? K.MAPSEC_NONE;
 }
 
 /** MapHasPreviewScreen(mapsec, MPS_TYPE_FOREST), for the map load's MapPreview_StartForestTransition */
 export function MapHasForestPreviewScreen(mapsec: string): boolean {
-  return MapHasPreviewScreen(mapsec, MPS_TYPE_FOREST);
+  return MapHasPreviewScreen_HandleQLState2(mapsecId(mapsec), MPS_TYPE_FOREST);
 }
 
 /** MapHasPreviewScreen(mapsec, MPS_TYPE_CAVE), for WarpFadeOutScreen */
 export function MapHasCavePreviewScreen(mapsec: string): boolean {
-  return MapHasPreviewScreen(mapsec, MPS_TYPE_CAVE);
+  return MapHasPreviewScreen(mapsecId(mapsec), MPS_TYPE_CAVE);
 }
 
 /** The warp's ends, as GetLastUsedWarpMapType / GetCurrentMapType and their region map sections see them. */
@@ -162,6 +152,7 @@ function VBC_ChangeMapVBlank(): void {
  * left every palette at: the palette buffers still hold the old map's, faded (only PLTT is cleared).
  */
 export function CB2_DoChangeMap(change: MapChange, fadedTo: number): void {
+  InitFieldBg0AndWindows(); // what the field left on the GBA side (its BG0 and windows), for RunMapPreviewScreen
   gPlttBufferUnfaded.fill(fadedTo);
   gPlttBufferFaded.fill(fadedTo);
   pltt[0] = fadedTo;
@@ -186,13 +177,89 @@ export function CB2_DoChangeMap(change: MapChange, fadedTo: number): void {
   sChangeMapDone = !TryDoMapTransition(change);
 }
 
-/** TryDoMapTransition (RunMapPreviewScreen isn't ported, so a map with a cave preview gets none) */
+/** TryDoMapTransition */
 function TryDoMapTransition(change: MapChange): boolean {
-  if (change.fromMapsec !== change.toMapsec && MapHasPreviewScreen(change.toMapsec, MPS_TYPE_CAVE)) return false;
+  if (change.fromMapsec !== change.toMapsec && MapHasPreviewScreen_HandleQLState2(mapsecId(change.toMapsec), MPS_TYPE_CAVE)) {
+    RunMapPreviewScreen(mapsecId(change.toMapsec));
+    return true;
+  }
   const t = findTransitionType(change.fromType, change.toType);
   if (!t) return false;
   t.func1();
   return true;
+}
+
+/** RunMapPreviewScreen */
+function RunMapPreviewScreen(mapSecId: number): void {
+  const taskId = CreateTask(Task_MapPreviewScreen_0, 0);
+  gTasks[taskId].data[3] = mapSecId;
+}
+
+/** gMain.vblankCallback, saved in the task's data[5..6] (SetWordTaskArg) */
+let sSavedVBlankCallback: (() => void) | null = null;
+
+/** The cave banner on the GBA layer: shown from black, `duration` frames (B cuts it short), then a fade to white. */
+function Task_MapPreviewScreen_0(taskId: number): void {
+  const data = gTasks[taskId].data;
+  switch (data[0]) {
+    case 0:
+      sSavedVBlankCallback = gMain.vblankCallback;
+      SetVBlankCallback(null);
+      MapPreview_InitBgs();
+      MapPreview_LoadGfx(data[3]);
+      BlendPalettes(PALETTES_ALL, 0x10, RGB_BLACK);
+      data[0]++;
+      break;
+    case 1:
+      if (!MapPreview_IsGfxLoadFinished()) {
+        data[4] = MapPreview_CreateMapNameWindow(data[3]);
+        CopyWindowToVram(data[4], COPYWIN_FULL);
+        data[0]++;
+      }
+      break;
+    case 2:
+      if (!IsDma3ManagerBusyWithBgCopy()) {
+        BeginNormalPaletteFade(PALETTES_ALL, -1, 16, 0, RGB_BLACK);
+        SetVBlankCallback(sSavedVBlankCallback);
+        data[0]++;
+      }
+      break;
+    case 3:
+      if (!UpdatePaletteFade()) {
+        data[2] = MapPreview_GetDuration(data[3]);
+        testEvent('mapPreview', { kind: 'cave', mapsec: data[3], duration: data[2] });
+        data[0]++;
+      }
+      break;
+    case 4:
+      data[1]++;
+      if (data[1] > data[2] || JOY_HELD(B_BUTTON)) {
+        BeginNormalPaletteFade(PALETTES_ALL, -2, 0, 16, RGB_WHITE);
+        data[0]++;
+      }
+      break;
+    case 5:
+      if (!UpdatePaletteFade()) {
+        for (let i = 0; i < 16; i++) data[i] = 0;
+        MapPreview_Unload(data[4]);
+        gTasks[taskId].func = Task_FlashTransition_Enter_1;
+      }
+      break;
+  }
+}
+
+/** Dev probe: the task CB2_DoChangeMap runs (its function's name), until the map load goes on. */
+export function changeMapTaskProbe(): string | undefined {
+  if (sChangeMapDone) return undefined;
+  return gTasks.find((t) => t.isActive)?.func.name;
+}
+
+/** Dev probe: the cave banner's task while it runs (its state, frames shown, duration). */
+export function mapPreviewCaveProbe(): { mapsec: number; state: number; timer: number; duration: number } | undefined {
+  for (const t of gTasks) {
+    if (t.isActive && t.func === Task_MapPreviewScreen_0) return { mapsec: t.data[3], state: t.data[0], timer: t.data[1], duration: t.data[2] };
+  }
+  return undefined;
 }
 
 function caveTransitionGfx(): void {

@@ -52,6 +52,7 @@ import { random } from '../util/random';
 import { EOS, GetMonNickname, gStringVar1, gStringVar3, StringExpandPlaceholders, text } from './common';
 import { CB2_ReturnToField } from './fieldCallbacks';
 import { DoNamingScreen, NAMING_SCREEN_NICKNAME, namingScreenGfxSymbols } from './namingScreen';
+import { HelpSystem_Disable, HelpSystem_Enable } from '../ui/helpSystemContext';
 
 // ------------------------------------------------------------------ the hatched mon
 
@@ -369,7 +370,7 @@ function EggHatchSetMonNickname(): void {
   mon.nickname = gStringVar3.get().slice(); // SetMonData(MON_DATA_NICKNAME, gStringVar3)
   FreeMonSpritesGfx();
   sEggHatchData = null;
-  // HelpSystem_Enable: no help system
+  HelpSystem_Enable();
   SetMainCallback2(CB2_ReturnToField);
 }
 
@@ -471,7 +472,7 @@ function CB2_EggHatch_1(): void {
         FreeMonSpritesGfx(); // (the C leaves the mon sprite buffers allocated on this path)
         sEggHatchData = null;
         SetMainCallback2(CB2_ReturnToField);
-        // HelpSystem_Enable: no help system
+        HelpSystem_Enable();
       }
       break;
   }
@@ -636,7 +637,7 @@ export const EGG_HATCH_SPECIALS: Record<string, Special> = {
    */
   EggHatch({ state, host, setWaitState }) {
     const fade = host.fadeScreen(state.defines.require('FADE_TO_BLACK')); // BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_BLACK)
-    // HelpSystem_Disable: no help system
+    HelpSystem_Disable();
     let screen: (() => boolean) | undefined;
     setWaitState(() => {
       if (!screen) {

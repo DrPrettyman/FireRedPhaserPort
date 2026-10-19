@@ -134,6 +134,7 @@ import {
   type WindowTemplate,
 } from '../gba/window';
 import { GetMapName } from '../world/regionMap';
+import { GetDungeonMapPreviewScreenInfo, mapPreviewGfxSymbols, mapPreviewPalette, type MapPreviewScreen } from '../world/mapPreviewScreen';
 import { ReturnToFieldFromFlyMapSelect, SetWarpDestinationToHealLocation, SetWarpDestinationToMapWarp } from '../world/fly';
 import { encodeRaw, text } from './common';
 import { menusData } from './data';
@@ -157,8 +158,6 @@ export interface RegionMapData {
   flyDestinations: ([string, number] | null)[];
   /** sDungeonInfo: [mapsec, description string label] (the name is the mapsec's) */
   dungeonInfo: [number, string][];
-  /** map_preview_screen.c sMapPreviewScreenData: [mapsec, flag, tiles, tilemap, palette symbols] */
-  mapPreviews: [number, string, string, string, string][];
 }
 
 function data(): RegionMapData {
@@ -239,7 +238,7 @@ export function regionMapGfxSymbols(withPreviews: boolean): string[] {
     'sBackground_Gfx',
     'sBackground_Tilemap',
   ];
-  if (withPreviews) for (const [, , tiles, tilemap, pal] of data().mapPreviews) syms.push(tiles, tilemap, pal);
+  if (withPreviews) syms.push(...mapPreviewGfxSymbols());
   return syms;
 }
 
@@ -347,7 +346,7 @@ interface SwitchMapMenu {
 interface DungeonMapPreview {
   tiles: Uint8Array;
   tilemap: Uint16Array;
-  mapPreviewInfo: [number, string, string, string, string];
+  mapPreviewInfo: MapPreviewScreen;
   savedTask: TaskFunc;
   mainState: number;
   drawState: number;
@@ -1372,16 +1371,12 @@ function GetDungeonName(mapsec: number): number[] {
   return info ? mapsecName(info[0]) : text('gText_RegionMap_NoData');
 }
 
-/** GetDungeonMapPreviewScreenInfo (map_preview_screen.c) */
-function GetDungeonMapPreviewScreenInfo(mapsec: number): [number, string, string, string, string] | undefined {
-  return data().mapPreviews.find(([id]) => id === mapsec);
-}
-
 /** InitDungeonMapPreview */
 function InitDungeonMapPreview(_unused: number, taskId: number, taskFunc: TaskFunc): void {
   let mapsec = GetDungeonMapsecUnderCursor();
   if (mapsec === K.MAPSEC_TANOBY_CHAMBERS) mapsec = K.MAPSEC_MONEAN_CHAMBER;
-  const info = GetDungeonMapPreviewScreenInfo(mapsec) ?? GetDungeonMapPreviewScreenInfo(K.MAPSEC_ROCK_TUNNEL)!;
+  let info = GetDungeonMapPreviewScreenInfo(mapsec);
+  if (info === null) info = GetDungeonMapPreviewScreenInfo(K.MAPSEC_ROCK_TUNNEL)!;
   sDungeonMapPreview = {
     tiles: new Uint8Array(7200 * 2),
     tilemap: new Uint16Array(640),
@@ -1414,32 +1409,21 @@ function InitDungeonMapPreview(_unused: number, taskId: number, taskFunc: TaskFu
 
 const dp = (): DungeonMapPreview => sDungeonMapPreview!;
 
-/**
- * The preview's three palettes (LoadPalette(palptr, BG_PLTT_ID(13), 3 * PLTT_SIZE_4BPP)). The palette files hold
- * two; the C's third is whatever follows them in the ROM, which no preview tilemap uses.
- */
-function previewPalette(): Uint16Array {
-  const pal = new Uint16Array(0x30);
-  const src = gfx16(dp().mapPreviewInfo[4]);
-  pal.set(src.subarray(0, 0x30));
-  return pal;
-}
-
 /** LoadMapPreviewGfx */
 function LoadMapPreviewGfx(): boolean {
   const p = dp();
   switch (p.loadState) {
     case 0:
-      p.tiles = bytes(p.mapPreviewInfo[2], 7200 * 2);
+      p.tiles = bytes(p.mapPreviewInfo.tilesptr, 7200 * 2);
       break;
     case 1:
-      p.tilemap = words(p.mapPreviewInfo[3], 640);
+      p.tilemap = words(p.mapPreviewInfo.tilemapptr, 640);
       break;
     case 2:
       LoadBgTiles(2, p.tiles, p.tiles.length, 0);
       break;
     case 3:
-      LoadPalette(previewPalette(), BG_PLTT_ID(13), 3 * PLTT_SIZE_4BPP);
+      LoadPalette(mapPreviewPalette(p.mapPreviewInfo), BG_PLTT_ID(13), 3 * PLTT_SIZE_4BPP);
       break;
     default:
       return true;
@@ -1527,7 +1511,7 @@ function Task_DrawDungeonMapPreviewFlavorText(taskId: number): void {
         p.red -= 6;
         p.green -= 5;
         p.blue -= 5;
-        p.palette = previewPalette();
+        p.palette = mapPreviewPalette(p.mapPreviewInfo);
         TintPalette_CustomTone(p.palette, 48, p.red, p.green, p.blue);
         LoadPalette(p.palette, BG_PLTT_ID(13), p.palette.length * 2);
       }
