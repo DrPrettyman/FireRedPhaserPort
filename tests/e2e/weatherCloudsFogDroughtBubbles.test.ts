@@ -39,7 +39,8 @@ const to5 = (v: number) => v >> 3;
 const expand = (c: number) => Math.floor((c * 255) / 31);
 
 /**
- * Freeze the weather's sprites (their callbacks no-ops, test-only), then read ~`n` of the front blended sprite's
+ * Freeze the weather's sprites (their callbacks no-ops) and the tile animations (Pallet Town's flowers: none from
+ * now, test-only), then read ~`n` of the front blended sprite's
  * opaque pixels inside `box`: the sprite's colour, the screen under it (sprites hidden) and as shown.
  */
 function blendedPixels(game: Game, box: { x0: number; y0: number; x1: number; y1: number }, n: number) {
@@ -47,6 +48,8 @@ function blendedPixels(game: Game, box: { x0: number; y0: number; x1: number; y1
     async (t, box, n) => {
       const sprites = await new Function('p', 'return import(p)')('/src/world/weatherSprites.ts');
       for (const s of sprites.gWeatherSprites) if (s.inUse) s.callback = () => {};
+      const anims = await new Function('p', 'return import(p)')('/src/world/tilesetAnims.ts');
+      anims.InitTilesetAnimations({ name: 'none' }, { name: 'none' });
       await t.waitFrames(2);
       const opaque: [number, number][] = [];
       for (let y = Math.max(0, box.y0); y < Math.min(160, box.y1); y += 2) {
