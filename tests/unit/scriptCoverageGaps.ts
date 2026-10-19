@@ -31,8 +31,6 @@ export const KNOWN_GAPS: KnownGap[] = [
   // ---------------------------------------------------------------- postgame: after the Hall of Fame (Sevii 4-7, Trainer Tower, the event islands) or the link features postgame areas share.
   { kind: 'special', name: 'CompareHeracrossSize', tag: 'postgame', where: "SixIsland_WaterPath_House1" },
   { kind: 'special', name: 'GetHeracrossSizeRecordInfo', tag: 'postgame', where: "SixIsland_WaterPath_House1" },
-  { kind: 'special', name: 'SampleResortGorgeousMonAndReward', tag: 'postgame', where: "FiveIsland_ResortGorgeous_House" },
-  { kind: 'special', name: 'SetPostgameFlags', tag: 'postgame', where: "OneIsland_PokemonCenter_1F" },
   { kind: 'special', name: 'ShowBattleRecords', tag: 'postgame', where: "(CableClub_EventScript_ShowBattleRecords), TrainerTower_Lobby" },
   { kind: 'movement', name: 'disable_anim', tag: 'postgame', where: "SixIsland_DottedHole_SapphireRoom" },
   { kind: 'movement', name: 'restore_anim', tag: 'postgame', where: "SixIsland_DottedHole_SapphireRoom" },

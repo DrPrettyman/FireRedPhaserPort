@@ -10,6 +10,9 @@ import { DEPTH_UI } from '../text/TextWindow';
 import type { FieldTask } from '../world/elevator';
 import { SetIcefallCaveCrackedIceMetatiles } from '../world/fieldTasks';
 import type { Special } from './specials';
+import type { GameState } from '../state/GameState';
+import { FLAG_GET_SEEN, GetSetPokedexFlag } from '../menus/pokedex';
+import { random } from '../util/random';
 
 /** text.c's CURSOR_DELAY: frames between the cursor's bob steps. */
 const CURSOR_DELAY = 8;
@@ -174,4 +177,82 @@ export const POSTGAME_SPECIALS: Record<string, Special> = {
     if (state.getVar('VAR_0x8006') !== 0) result |= 1 << 2;
     return result;
   },
+
+  // ---------------------------------------------------------------- Five Island and the Sapphire (W-sevii unit 4)
+
+  /**
+   * SampleResortGorgeousMonAndReward (field_specials.c; FiveIsland_ResortGorgeous_House's Selphy): with no request
+   * open (SPECIES_NONE, or 0xFFFF after 250 steps), a new requested mon and reward and the step counter reset;
+   * gStringVar1 = the requested mon's name either way.
+   */
+  SampleResortGorgeousMonAndReward({ state }) {
+    const requestedSpecies = state.getVar('VAR_RESORT_GORGEOUS_REQUESTED_MON');
+    if (requestedSpecies === 0 || requestedSpecies === 0xffff) {
+      state.setVar('VAR_RESORT_GORGEOUS_REQUESTED_MON', SampleResortGorgeousMon(state));
+      state.setVar('VAR_RESORT_GORGEOUS_REWARD', SampleResortGorgeousReward(state));
+      state.setVar('VAR_RESORT_GOREGEOUS_STEP_COUNTER', 0);
+    }
+    state.stringVars[0] = [...state.pokemon.speciesName(state.getVar('VAR_RESORT_GORGEOUS_REQUESTED_MON'))];
+  },
+
+  /**
+   * SetPostgameFlags (save_location.c; OneIsland_PokemonCenter_1F_EventScript_GiveCelioSapphire): CHAMPION_SAVEWARP
+   * in gSaveBlock2Ptr->specialSaveWarpFlags (only union_room.c's cross-version trade check reads it: link play) and
+   * gcnLinkFlags bits 1, 2, 3 and 15 (read by the GameCube games through the ROM header).
+   */
+  SetPostgameFlags({ state }) {
+    state.specialSaveWarpFlags |= CHAMPION_SAVEWARP;
+    state.gcnLinkFlags |= (1 << 1) | (1 << 2) | (1 << 3) | (1 << 15);
+  },
+
+  /** SetUnlockedPokedexFlags (save_location.c; Oak's National Dex scene): gcnLinkFlags bits 0, 4 and 5. */
+  SetUnlockedPokedexFlags({ state }) {
+    state.gcnLinkFlags |= (1 << 0) | (1 << 4) | (1 << 5);
+  },
 };
+
+/** save_location.h's CHAMPION_SAVEWARP (specialSaveWarpFlags bit 7). */
+export const CHAMPION_SAVEWARP = 1 << 7;
+
+/** sResortGorgeousDeluxeRewards (field_specials.c) */
+const sResortGorgeousDeluxeRewards = ['ITEM_BIG_PEARL', 'ITEM_PEARL', 'ITEM_STARDUST', 'ITEM_STAR_PIECE', 'ITEM_NUGGET', 'ITEM_RARE_CANDY'];
+
+/**
+ * IncrementResortGorgeousStepCounter (field_specials.c; ProcessPlayerFieldInput, every step): while a request is
+ * open, 250 steps close it (VAR_RESORT_GORGEOUS_REQUESTED_MON 0xFFFF: Selphy is tired of waiting).
+ */
+export function IncrementResortGorgeousStepCounter(state: GameState): void {
+  let var4035 = state.getVar('VAR_RESORT_GOREGEOUS_STEP_COUNTER');
+  if (state.getVar('VAR_RESORT_GORGEOUS_REQUESTED_MON') !== 0) {
+    var4035 = (var4035 + 1) & 0xffff;
+    if (var4035 >= 250) {
+      state.setVar('VAR_RESORT_GORGEOUS_REQUESTED_MON', 0xffff);
+      state.setVar('VAR_RESORT_GOREGEOUS_STEP_COUNTER', 0);
+    } else {
+      state.setVar('VAR_RESORT_GOREGEOUS_STEP_COUNTER', var4035);
+    }
+  }
+}
+
+/** SampleResortGorgeousMon: a random species the player has seen (100 tries, then down from the last try). */
+function SampleResortGorgeousMon(state: GameState): number {
+  const NUM_SPECIES = state.defines.require('NUM_SPECIES');
+  const BULBASAUR = state.defines.require('SPECIES_BULBASAUR');
+  const seen = (species: number) => GetSetPokedexFlag(state, state.pokemon.nationalDex(species), FLAG_GET_SEEN);
+  let species = 0;
+  for (let i = 0; i < 100; i++) {
+    species = (random() % (NUM_SPECIES - 1)) + 1;
+    if (seen(species)) return species;
+  }
+  while (!seen(species)) {
+    if (species === BULBASAUR) species = NUM_SPECIES - 1;
+    else species--;
+  }
+  return species;
+}
+
+/** SampleResortGorgeousReward: a Luxury Ball 70% of the time, else one of sResortGorgeousDeluxeRewards. */
+function SampleResortGorgeousReward(state: GameState): number {
+  if (random() % 100 >= 30) return state.defines.require('ITEM_LUXURY_BALL');
+  return state.defines.require(sResortGorgeousDeluxeRewards[random() % sResortGorgeousDeluxeRewards.length]);
+}

@@ -55,7 +55,7 @@ import { GetMapName } from '../world/regionMap';
 import { YesNoMenu } from '../ui/YesNoMenu';
 import { MonPicBox } from '../ui/MonPicBox';
 import { museumFossilPicGfxSymbols, registerMuseumFossilPic } from '../ui/MuseumFossilPic';
-import { brailleCursorGfxSymbols } from '../script/postgameSpecials';
+import { brailleCursorGfxSymbols, IncrementResortGorgeousStepCounter } from '../script/postgameSpecials';
 import { MoneyBox } from '../ui/MoneyBox';
 import { CoinsBox } from '../ui/CoinsBox';
 import { loadSlotMachineData } from '../menus/slotMachineLogic';
@@ -918,6 +918,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }
     if (this.tryOnFrameScript()) return true;
     if (input.tookStep) RunMassageCooldownStepCounter(this.state);
+    if (input.tookStep) IncrementResortGorgeousStepCounter(this.state);
     if (input.tookStep) IncrementBirthIslandRockStepCount(this.state, this.world.current.data.id);
     if (input.tookStep && this.tryStartStepBasedScript(x, y, tile.behavior)) return true;
     if (input.checkStandardWildEncounter) {
