@@ -1594,6 +1594,10 @@ def main():
     from extract_trainer_tower import extract_trainer_tower
 
     extract_trainer_tower(decomp, out)
+    print("quest log")
+    from extract_quest_log import extract_quest_log
+
+    extract_quest_log(decomp, out)
     print("gfx")
     from extract_gfx import extract_gfx
     extract_gfx(decomp, out)

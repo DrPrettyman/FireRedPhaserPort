@@ -11,6 +11,7 @@ import { NewGameInitPCItems } from './pcItems';
 import { InitEasyChatPhrases, InitQuestionnaireWords } from '../menus/easyChatData';
 import { boxMonFromMon, boxMonRestorePP, PokemonStorage } from './PokemonStorage';
 import { newTrainerTowerRecord, ResetTrainerTowerResults, type TrainerTowerRecord } from './trainerTowerRecord';
+import { emptyQuestLogScenes, type QuestLogScene } from '../world/questLog';
 
 /**
  * Save-block style game state: event flags, vars, names, options, party, bag, Pokédex.
@@ -133,6 +134,8 @@ export class GameState {
   towerChallengeId = 0;
   /** gSaveBlock1Ptr->trainerTower[NUM_TOWER_CHALLENGE_TYPES] (world/trainerTower.ts); ResetTrainerTowerResults in the constructor. */
   trainerTower: TrainerTowerRecord[] = [];
+  /** gSaveBlock1Ptr->questLog[QUEST_LOG_SCENE_COUNT] (world/questLog.ts); ResetQuestLog zeroes them on a new game. */
+  questLog: QuestLogScene[] = emptyQuestLogScenes();
 
   private flags = new Set<number>();
   private vars = new Map<number, number>();
