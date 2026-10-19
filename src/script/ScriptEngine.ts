@@ -151,7 +151,7 @@ export interface ScriptHost {
   /** ClearRematchStateByTrainerId (world/vsSeeker.ts), at the end of every trainer battle. */
   clearRematchStateByTrainerId?(trainer: number): void;
   /** A non-trainer battle against `enemyParty` (gEnemyParty) behind a B_TRANSITION_*, e.g. StartOldManTutorialBattle. */
-  startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number): TrainerBattleRun;
+  startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number, song?: number): TrainerBattleRun;
   /** GetWildBattleTransition against gEnemyParty[0] = `enemy`. */
   wildBattleTransition(enemy: Pokemon): number;
   /** FieldEffectStart for an effect over `obj` (the emote icons); false if it isn't ported. */

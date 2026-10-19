@@ -14,6 +14,7 @@ import { recordAbilityBattle } from './ai';
 import { InitBattleBgsVideo, LoadBattleTextboxAndBackground } from './battleBg';
 import { BattleMainCB2, VBlankCB_Battle } from './battleCallbacks';
 import { ui } from './battleUi';
+import { PlaySE } from '../gba/sound';
 import { BattleCreateYesNoCursorAt, BattleDestroyYesNoCursorAt, BattlePutTextOnWindow, HandleBattleWindow } from './battleWindow';
 import { adv, b, isItemMail, w } from './bsCommands1';
 import { isInvalidForSleepTalkOrAssist, isTwoTurnsMove, trySetDestinyBondToHappen } from './bsCommands3';
@@ -1323,19 +1324,19 @@ export function Cmd_trygivecaughtmonnick(): void {
       break;
     case 1:
       if (ui.joyNew('UP') && mc[K.CURSOR_POSITION] !== 0) {
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         BattleDestroyYesNoCursorAt(mc[K.CURSOR_POSITION]);
         mc[K.CURSOR_POSITION] = 0;
         BattleCreateYesNoCursorAt(0);
       }
       if (ui.joyNew('DOWN') && mc[K.CURSOR_POSITION] === 0) {
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         BattleDestroyYesNoCursorAt(mc[K.CURSOR_POSITION]);
         mc[K.CURSOR_POSITION] = 1;
         BattleCreateYesNoCursorAt(1);
       }
       if (ui.joyNew('A')) {
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         if (mc[K.CURSOR_POSITION] === 0) {
           mc[K.MULTIUSE_STATE]++;
           BeginFastPaletteFade(FAST_FADE_OUT_TO_BLACK);
@@ -1343,7 +1344,7 @@ export function Cmd_trygivecaughtmonnick(): void {
           mc[K.MULTIUSE_STATE] = 4;
         }
       } else if (ui.joyNew('B')) {
-        ui.playSE(K.SE_SELECT);
+        PlaySE(K.SE_SELECT);
         mc[K.MULTIUSE_STATE] = 4;
       }
       break;

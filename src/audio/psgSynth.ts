@@ -233,8 +233,9 @@ export function waveLevel(sample: number, volume: number): number {
 
 /**
  * The PSG. `write` takes the engine's register writes in order; `render` plays it forward, filling per-sample PSG
- * levels in the DAC's 10-bit units (what the GBA adds to the FIFOs' ×4 / ×2), each the average over the sample's
- * cycles (a box filter, so the fast channels don't alias; the GBA's 8-bit PWM samples it at 65,536 Hz).
+ * levels in the DAC's 10-bit units (what the GBA adds to the FIFOs' ×4 / ×2): with `dacInterval` (SoundCircuit) as
+ * the GBA's 8-bit PWM takes it, point samples at 65,536 Hz held and averaged to the output's samples; without, each
+ * the channels' average over the sample's cycles (a box filter).
  *
  * `regs` mirrors the engine's register file (soundRegs.ts: latched values, wave RAM writes in the bank the CPU
  * reaches) so the output can tell whether it missed writes (`matchesState`) and pick up from a frame's `state`.
@@ -285,6 +286,17 @@ export class PsgSynth {
   /** The frame sequencer's last step (0-7) and the cycles to its next. */
   seqStep = 7;
   seqCountdown = FRAME_SEQUENCER_CYCLES;
+  /** How `render` turns the channels into samples. 0: each sample is the channels' average over its cycles (a box
+   *  filter: the channels' levels as such, which the hand-worked tests read). Otherwise the GBA's way, which
+   *  SoundCircuit sets: the DAC point-samples the PSG every `dacInterval` cycles (0x200 >> SOUNDBIAS's resolution:
+   *  256, 65,536 Hz, for FRLG) and holds it, and each output sample is that held signal's average over its cycles. */
+  dacInterval = 0;
+  /** Cycles to the DAC's next point sample, and the levels it took at the last (per side, 10-bit units). */
+  dacCountdown = 0;
+  /** Cycles the channels haven't been moved on by yet (DAC mode moves them only at its ticks). */
+  private pending = 0;
+  heldL = 0;
+  heldR = 0;
 
   constructor() {
     this.reset();
@@ -309,6 +321,9 @@ export class PsgSynth {
     this.soundbias = 0x200;
     this.seqStep = 7;
     this.seqCountdown = FRAME_SEQUENCER_CYCLES;
+    this.dacCountdown = 0;
+    this.pending = 0;
+    this.heldL = this.heldR = 0;
   }
 
   /**
@@ -678,6 +693,10 @@ export class PsgSynth {
    * the routed channels' outputs (0-15 each) × 8 × (NR50's volume + 1), then SOUNDCNT_H's share (100%: / 4, 50%:
    * / 8, 25%: / 16), as mGBA's GBAudioSamplePSG and GBAAudioSample: a channel at 15 spans 240 of the 1,024 (GBATEK:
    * "each PSG a quarter of the output range"). The PSG's levels are unsigned (0 when silent).
+   *
+   * With `dacInterval` set (SoundCircuit), as the GBA: the DAC point-samples the PSG and holds it, so the fast
+   * channels (noise at a high clock) alias at full level instead of averaging out (W-ref 2: SE_FLEE's noise was
+   * 10 dB down against mGBA with the box filter); each output sample is the held signal's average over its cycles.
    */
   render(outL: Float32Array, outR: Float32Array, n: number, cyclesPerSample: number): void {
     if (!this.master) {
@@ -685,24 +704,84 @@ export class PsgSynth {
       outR.fill(0, 0, n);
       return;
     }
+    const interval = this.dacInterval;
     for (let i = 0; i < n; i++) {
       while (this.seqCountdown <= 0) {
         this.seqCountdown += FRAME_SEQUENCER_CYCLES;
+        this.advance(this.pending);
+        this.pending = 0;
         this.clockSequencer();
       }
       this.seqCountdown -= cyclesPerSample;
-      const c1 = this.squareAverage(this.sq1, cyclesPerSample);
-      const c2 = this.squareAverage(this.sq2, cyclesPerSample);
-      const c3 = this.waveAverage(cyclesPerSample);
-      const c4 = this.noiseAverage(cyclesPerSample);
-      const nr51 = this.nr51;
-      const right = (nr51 & 1 ? c1 : 0) + (nr51 & 2 ? c2 : 0) + (nr51 & 4 ? c3 : 0) + (nr51 & 8 ? c4 : 0);
-      const left = (nr51 & 0x10 ? c1 : 0) + (nr51 & 0x20 ? c2 : 0) + (nr51 & 0x40 ? c3 : 0) + (nr51 & 0x80 ? c4 : 0);
-      // SOUNDCNT_H bits 0-1: 0 25%, 1 50%, 2 100% (3 is prohibited: as 100%).
-      const share = Math.min(this.soundcntH & 3, 2);
-      const scale = 8 / (1 << (4 - share));
-      outL[i] = left * scale * (this.volLeft + 1);
-      outR[i] = right * scale * (this.volRight + 1);
+      if (interval === 0) {
+        this.mix(
+          this.squareAverage(this.sq1, cyclesPerSample),
+          this.squareAverage(this.sq2, cyclesPerSample),
+          this.waveAverage(cyclesPerSample),
+          this.noiseAverage(cyclesPerSample),
+        );
+        outL[i] = this.heldL;
+        outR[i] = this.heldR;
+        continue;
+      }
+      // The held level changes only at the DAC's ticks, so the channels are moved on only there (and before the
+      // frame sequencer's steps, and at the end): `pending` is how far they lag.
+      let rem = cyclesPerSample;
+      let accL = 0;
+      let accR = 0;
+      while (this.dacCountdown <= rem) {
+        const c = this.dacCountdown;
+        accL += this.heldL * c;
+        accR += this.heldR * c;
+        this.advance(this.pending + c);
+        this.pending = 0;
+        rem -= c;
+        this.samplePoint();
+        this.dacCountdown = interval;
+      }
+      accL += this.heldL * rem;
+      accR += this.heldR * rem;
+      this.pending += rem;
+      this.dacCountdown -= rem;
+      outL[i] = accL / cyclesPerSample;
+      outR[i] = accR / cyclesPerSample;
     }
+    this.advance(this.pending);
+    this.pending = 0;
+  }
+
+  /** Moves every channel on by `cycles` (their *Average functions, the averages unused). */
+  private advance(cycles: number): void {
+    if (cycles <= 0) return;
+    this.squareAverage(this.sq1, cycles);
+    this.squareAverage(this.sq2, cycles);
+    this.waveAverage(cycles);
+    this.noiseAverage(cycles);
+  }
+
+  /** The DAC's point sample (mGBA's GBAudioSamplePSG): each channel's level now, into heldL / heldR. */
+  private samplePoint(): void {
+    const a = this.sq1;
+    const b = this.sq2;
+    const w = this.wave;
+    const n = this.noise;
+    this.mix(
+      a.on ? SQUARE_DUTY[a.duty][a.index] * a.env.volume : 0,
+      b.on ? SQUARE_DUTY[b.duty][b.index] * b.env.volume : 0,
+      w.on ? waveLevel(w.sample, w.volume) : 0,
+      n.on ? n.out * n.env.volume : 0,
+    );
+  }
+
+  /** The channels' levels (0-15) routed by NR51, × 8 × (NR50 + 1), then SOUNDCNT_H's share: into heldL / heldR. */
+  private mix(c1: number, c2: number, c3: number, c4: number): void {
+    const nr51 = this.nr51;
+    const right = (nr51 & 1 ? c1 : 0) + (nr51 & 2 ? c2 : 0) + (nr51 & 4 ? c3 : 0) + (nr51 & 8 ? c4 : 0);
+    const left = (nr51 & 0x10 ? c1 : 0) + (nr51 & 0x20 ? c2 : 0) + (nr51 & 0x40 ? c3 : 0) + (nr51 & 0x80 ? c4 : 0);
+    // SOUNDCNT_H bits 0-1: 0 25%, 1 50%, 2 100% (3 is prohibited: as 100%).
+    const share = Math.min(this.soundcntH & 3, 2);
+    const scale = 8 / (1 << (4 - share));
+    this.heldL = left * scale * (this.volLeft + 1);
+    this.heldR = right * scale * (this.volRight + 1);
   }
 }
