@@ -57,6 +57,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   (before it on a connection) and in `resumeMap` after ON_RESUME / ON_RETURN_TO_FIELD, as the GBA reloads the
   palettes there. The GBA layer's copy of the map (fieldGbaScreen.ts, battle transitions) loads the changed slots
   too (`bgPaletteOverrides`, back to BGR555). The field's fades are an overlay, so they cover a loaded palette too.
+  Each store keeps gPlttBufferUnfaded beside the shown palettes: `loadBgPalette` (LoadPalette) sets both,
+  `loadBgPaletteFaded` only the shown ones (the weather's gamma shift), `bgPaletteUnfaded(pair, slot)` reads it.
 - **League lighting:** `world/leagueLighting.ts` is field_specials.c's DoPokemonLeagueLightingEffect (registered
   with `registerLeagueLighting()`; the rooms' ON_RESUME script), Task_RunPokemonLeagueLightingEffect /
   Task_CancelPokemonLeagueLightingEffect as field tasks, and StopPokemonLeagueLightingEffectTask (the start menu's
@@ -67,6 +69,25 @@ this is the next level down. When you add or change a subsystem, update its entr
   `__test.leagueLighting(colorIndex?)` (the tasks, BG palette 7, a canvas pixel drawn with palette 7). Tests:
   tests/e2e/leagueLighting.test.ts (dev start `?map=PokemonLeague_LoreleisRoom&x=6&y=12` or
   `PokemonLeague_ChampionsRoom&x=6&y=19`).
+- **Field weather:** `world/weather.ts` is field_weather.c / field_weather_util.c and FRLG's weathers of
+  field_weather_effects.c (None, Sunny, Shade; FogHorizontal is W-weather unit 2: add its callbacks to `PORTED`, make
+  `fadesInWithWeatherPalettes` and FadeInScreenWithWeather take it, and its sprites go in a module of their own). The
+  tables come from `public/gen/weather.json` (tools/extract_field.py `extract_weather`: sBasePaletteGammaTypes, the
+  sWeatherFuncs row names, the loadfadedpal field effect palette tags); the gamma tables are built by
+  BuildGammaShiftTables as in the C. The saved weather is `GameState.weather` (gSaveBlock1Ptr->weather, save
+  version 7). OverworldScene hooks: `SetMapHeaderWeather` + SetSavedWeatherFromCurrMapHeader in `onMapLoaded`
+  (before ON_TRANSITION), a warp's `startWeatherOnResumeMap` (StartWeather + ResumePausedWeather, before ON_RESUME;
+  `enterMap` kills the task first: ResetTasks), a connection's ApplyWeatherGammaShiftToBgPals + DoCurrentWeather
+  after its palette reload, `resumeMap` (battles, menus, CONTINUE) the same as a warp, `WeatherTask()` in
+  `tickField` (priority 80). The host (`setUpWeather`) shifts the current map's BG palettes 0-12 through
+  `tilesetVram.loadBgPaletteFaded` and the sprite sheets through `world/weatherTextures.ts` (the sheet's texture
+  source becomes a canvas, redrawn through the table; Phaser's ADD event shifts sheets loaded later). FadeScreen's
+  weather half is `ScreenFade.weather`: a fade in where the weather fades the screen itself (Shade) follows
+  `WeatherFadeInBlend` instead of a palette fade. Commands: `setweather`, `doweather`, `resetweather`. Probe:
+  `__test.weather(slot?, colorIndex?, texture?)` (state, gamma index, BG palette `slot` unfaded / shown, an atlas
+  pixel drawn with it, a sheet pixel now / as loaded). Tests: tests/unit/weather.test.ts (tables, the task),
+  tests/e2e/weather.test.ts (dev starts: `?map=ViridianForest`, `?map=NavelRock_Summit&x=9&y=13`,
+  `?map=SevenIsland_TanobyRuins&x=120&y=11` then up into the Monean Chamber).
 - **Map layouts (`setmaplayoutindex`):** maps carry `layoutId` (gMapHeader.mapLayoutId) and `GameState.mapLayoutId`
   is gSaveBlock1Ptr->mapLayoutId: `onMapLoaded` sets it from the header before ON_TRANSITION (LoadCurrentMapData),
   the script command changes it (SetCurrentMapLayout), and `initMapLayout` then swaps the current chunk's grid,
