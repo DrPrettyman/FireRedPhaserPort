@@ -9,11 +9,13 @@
 //
 // SetQuestLogEvent runs the C's filters and starts a scene (QL_StartRecordingAction) when none is recording. The
 // per-event recorders are in sRecordEventFuncs: QL_EVENT_DEPARTED and QL_EVENT_ARRIVED here, QL_EVENT_* 3-29 in
-// questLogEventCodecs.ts (QL3a); 30-34, 37, 38, 40 are QUEST_LOG_PLAN.md's QL3b (`registerQuestLogEvent`).
+// questLogEventCodecs.ts (QL3a), 30-34, 36-38 and 40 in questLogEventCodecs2.ts (QL3b).
 // The loaders (playback) for the two here decode the data; their texts are QL2's.
 
 import { constant, K } from '../battle/constants';
+import { bdata } from '../battle/env';
 import { registerQuestLogEventCodecs } from './questLogEventCodecs';
+import { registerQuestLogEventCodecs2 } from './questLogEventCodecs2';
 import {
   QuestLog_CutRecording,
   QL_FinishRecordingScene,
@@ -115,6 +117,7 @@ function ensureEventTables(): void {
   if (!sRecordEventFuncs.has(K.QL_EVENT_DEPARTED)) registerQuestLogEvent(K.QL_EVENT_DEPARTED, RecordEvent_DepartedLocation, LoadEvent_DepartedLocation);
   if (!sRecordEventFuncs.has(K.QL_EVENT_ARRIVED)) registerQuestLogEvent(K.QL_EVENT_ARRIVED, RecordEvent_ArrivedInLocation, LoadEvent_ArrivedInLocation);
   registerQuestLogEventCodecs(); // QL_EVENT_* 3-29
+  registerQuestLogEventCodecs2(); // QL_EVENT_* 30-40 (QL3b)
 }
 
 /** IS_LINK_QL_EVENT */
@@ -249,8 +252,13 @@ function ShouldRegisterEvent_HandlePartyActions(eventId: number, data: QuestLogE
 function ShouldRegisterEvent_HandleBeatStoryTrainer(eventId: number, data: QuestLogEventData): boolean {
   if (eventId !== K.QL_EVENT_DEFEATED_TRAINER) return false;
   const trainerId = Number(data?.trainerId ?? 0);
-  const trainerClass = questLogHost()?.trainerClass?.(trainerId) ?? -1;
+  const trainerClass = questLogHost()?.trainerClass?.(trainerId) ?? gTrainerClass(trainerId);
   return !questLogData().storyTrainerClasses.some((c) => K[c] === trainerClass);
+}
+
+/** gTrainers[trainerId].trainerClass */
+export function gTrainerClass(trainerId: number): number {
+  return bdata.tables.trainers[trainerId]?.trainerClass ?? -1;
 }
 
 /** QL_EnableRecordingSteps */
@@ -261,6 +269,11 @@ export function QL_EnableRecordingSteps(): void {
 /** sStepRecordingMode = STEP_RECORDING_MODE_DISABLED_UNTIL_DEPART (RecordEvent_UsedItem: an Escape Rope ends the scene) */
 export function QL_DisableRecordingStepsUntilDepart(): void {
   sStepRecordingMode = STEP_RECORDING_MODE_DISABLED_UNTIL_DEPART;
+}
+
+/** sStepRecordingMode = STEP_RECORDING_MODE_DISABLED (the battle and field move events: the scene ends after them) */
+export function QL_DisableRecordingSteps(): void {
+  sStepRecordingMode = STEP_RECORDING_MODE_DISABLED;
 }
 
 /** ShouldRegisterEvent: start the event in a new scene (after the last one ran out of room). */

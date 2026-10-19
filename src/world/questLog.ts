@@ -924,7 +924,8 @@ export function decodeQuestLogScript(script: number[], end = script.length): { i
     else {
       const size = questLogData().eventCmdSizes[Object.keys(questLogData().eventCmdSizes).find((k) => K[k] === id) ?? ''];
       if (!size) break;
-      n = (size + (size - 4) * (script[pos] >> 12)) / 2;
+      // (QL_SkipCommand: DEFEATED_CHAMPION's count of 2 is its three lines, not repeats)
+      n = (size + (size - 4) * (id === K.QL_EVENT_DEFEATED_CHAMPION ? 0 : script[pos] >> 12)) / 2;
     }
     if (pos + n > end) break;
     out.push({ id, words: script.slice(pos, pos + n) });

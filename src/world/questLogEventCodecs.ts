@@ -63,7 +63,7 @@ export interface QuestLogEventTraded {
   speciesReceived: number;
   partnerName: number[];
 }
-/** struct QuestLogEvent_LinkBattle (outcome: B_OUTCOME_*; playerNames: the partner, then the two opponents) */
+/** struct QuestLogEvent_LinkBattle (outcome: gBattleOutcome - 1, 0 won / 1 lost / 2 drew; playerNames: the partner, then the two opponents) */
 export interface QuestLogEventLinkBattle {
   outcome: number;
   playerNames: number[][];
@@ -78,10 +78,10 @@ export interface QuestLogEventMovedBoxMon {
 
 // ------------------------------------------------------------------ helpers
 
-const advance = (p: ScriptPtr, n: number): ScriptPtr => ({ scene: p.scene, pos: p.pos + n });
+export const advance = (p: ScriptPtr, n: number): ScriptPtr => ({ scene: p.scene, pos: p.pos + n });
 
 /** *((u8 *)record + offset) = value */
-function putByte(record: ScriptPtr, offset: number, value: number): void {
+export function putByte(record: ScriptPtr, offset: number, value: number): void {
   const script = scriptOf(record);
   const pos = record.pos + (offset >> 1);
   const v = value & 0xff;
@@ -89,13 +89,13 @@ function putByte(record: ScriptPtr, offset: number, value: number): void {
 }
 
 /** *((const u8 *)record + offset) */
-function getByte(record: ScriptPtr, offset: number): number {
+export function getByte(record: ScriptPtr, offset: number): number {
   const w = scriptOf(record)[record.pos + (offset >> 1)] ?? 0;
   return offset & 1 ? (w >> 8) & 0xff : w & 0xff;
 }
 
-const word = (record: ScriptPtr, i: number): number => scriptOf(record)[record.pos + i] ?? 0;
-const setWord = (record: ScriptPtr, i: number, v: number | undefined): void => {
+export const word = (record: ScriptPtr, i: number): number => scriptOf(record)[record.pos + i] ?? 0;
+export const setWord = (record: ScriptPtr, i: number, v: number | undefined): void => {
   scriptOf(record)[record.pos + i] = Number(v ?? 0) & 0xffff;
 };
 
@@ -152,7 +152,7 @@ function GetBoxNamePtr(boxId: number): number[] {
 }
 
 /** GetMapNameGeneric */
-function GetMapNameGeneric(mapSec: number): number[] {
+export function GetMapNameGeneric(mapSec: number): number[] {
   return GetMapName(mapSec, 0);
 }
 
@@ -162,19 +162,19 @@ function tmhmMoveName(itemId: number): number[] {
 }
 
 /** StringExpandPlaceholders(gStringVar4, gText_QuestLog_*) */
-function expandToStringVar4(symbol: string): void {
+export function expandToStringVar4(symbol: string): void {
   setStringVar4(StringExpandPlaceholders(text(symbol)));
 }
 
 /** DynamicPlaceholderTextUtil_ExpandPlaceholders(gStringVar4, gText_QuestLog_*) */
-function dynamicExpandToStringVar4(symbol: string): void {
+export function dynamicExpandToStringVar4(symbol: string): void {
   setStringVar4(DynamicPlaceholderTextUtil_ExpandPlaceholders(text(symbol)));
 }
 
-/** sBattleOutcomeTexts[outcome - 1] */
+/** sBattleOutcomeTexts[outcome] (the event's outcome is gBattleOutcome - 1: 0 won, 1 lost, 2 drew) */
 function battleOutcomeText(outcome: number): number[] {
   const names = ['gText_QuestLog_Win', 'gText_QuestLog_Loss', 'gText_QuestLog_Draw'];
-  return text(names[outcome - K.B_OUTCOME_WON] ?? names[0]);
+  return text(names[outcome] ?? names[0]);
 }
 
 /** The link events' header: [id, gQuestLogCurActionIdx] with no repeat count. */
@@ -183,7 +183,7 @@ function linkHeader(eventId: number, dest: ScriptPtr): void {
   setWord(dest, 1, gQL.curActionIdx);
 }
 
-const d = <T>(data: QuestLogEventData) => data as unknown as T;
+export const d = <T>(data: QuestLogEventData) => data as unknown as T;
 
 // ------------------------------------------------------------------ QL_EVENT_SWITCHED_PARTY_ORDER
 

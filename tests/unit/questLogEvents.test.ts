@@ -308,19 +308,19 @@ describe('the link events (deferred to QuestLog_StartRecordingInputsAfterDeferre
 
   test('the link battles: single, double, union room, multi', () => {
     const outcome = (o: string) => fill(`gText_QuestLog_${o}`, {});
-    linkEvent('QL_EVENT_LINK_BATTLED_SINGLE', { outcome: d('B_OUTCOME_WON'), playerNames: [name('BLUE')] });
+    linkEvent('QL_EVENT_LINK_BATTLED_SINGLE', { outcome: d('B_OUTCOME_WON') - 1, playerNames: [name('BLUE')] });
     const words = eventWords('QL_EVENT_LINK_BATTLED_SINGLE');
     expect(words.length).toBe(6);
-    expect(words[2]).toBe(d('B_OUTCOME_WON') | (name('BLUE')[0] << 8)); // rOutcome, then the name's first byte
+    expect(words[2]).toBe((d('B_OUTCOME_WON') - 1) | (name('BLUE')[0] << 8)); // rOutcome, then the name's first byte
     expect(load('QL_EVENT_LINK_BATTLED_SINGLE')).toBe(fill('gText_QuestLog_SingleBattleWithPersonResultedInOutcome', { D0: 'BLUE', D1: outcome('Win') }));
     ResetQuestLog(t.state);
-    linkEvent('QL_EVENT_LINK_BATTLED_DOUBLE', { outcome: d('B_OUTCOME_LOST'), playerNames: [name('BLUE')] });
+    linkEvent('QL_EVENT_LINK_BATTLED_DOUBLE', { outcome: d('B_OUTCOME_LOST') - 1, playerNames: [name('BLUE')] });
     expect(load('QL_EVENT_LINK_BATTLED_DOUBLE')).toBe(fill('gText_QuestLog_DoubleBattleWithPersonResultedInOutcome', { D0: 'BLUE', D1: outcome('Loss') }));
     ResetQuestLog(t.state);
-    linkEvent('QL_EVENT_LINK_BATTLED_UNION', { outcome: d('B_OUTCOME_DREW'), playerNames: [name('BLUE')] });
+    linkEvent('QL_EVENT_LINK_BATTLED_UNION', { outcome: d('B_OUTCOME_DREW') - 1, playerNames: [name('BLUE')] });
     expect(load('QL_EVENT_LINK_BATTLED_UNION')).toBe(fill('gText_QuestLog_BattledTrainerEndedInOutcome', { STR_VAR_1: 'BLUE', STR_VAR_2: outcome('Draw') }));
     ResetQuestLog(t.state);
-    linkEvent('QL_EVENT_LINK_BATTLED_MULTI', { outcome: d('B_OUTCOME_WON'), playerNames: [name('LEAF'), name('BLUE'), name('GARYMAX')] });
+    linkEvent('QL_EVENT_LINK_BATTLED_MULTI', { outcome: d('B_OUTCOME_WON') - 1, playerNames: [name('LEAF'), name('BLUE'), name('GARYMAX')] });
     expect(eventWords('QL_EVENT_LINK_BATTLED_MULTI').length).toBe(13);
     expect(load('QL_EVENT_LINK_BATTLED_MULTI')).toBe(
       fill('gText_QuestLog_MultiBattleWithPeopleResultedInOutcome', { D0: 'RED', D1: 'LEAF', D2: 'BLUE', D3: 'GARYMAX', D4: outcome('Win') }),
