@@ -1,6 +1,7 @@
 // The postgame's specials (W-sevii, POSTGAME_PLAN.md), spread into SPECIALS: field_specials.c's
 // BrailleCursorToggle (the braille messages' cursor, `braillemessage_wait`), UpdateLoreleiDollCollection and
-// StickerManGetBragFlags (Four Island), field_tasks.c's SetIcefallCaveCrackedIceMetatiles (world/fieldTasks.ts). The braille commands themselves
+// StickerManGetBragFlags (Four Island), field_tasks.c's SetIcefallCaveCrackedIceMetatiles (world/fieldTasks.ts), Resort
+// Gorgeous's request and save_location.c's SetPostgameFlags (Five Island and Celio). The braille commands themselves
 // (`braillemessage`, `getbraillestringwidth`) are in ScriptEngine.ts. No Phaser import here: the cursor is drawn
 // through the field's scene (ScriptHost.listMenuHost()).
 
