@@ -214,16 +214,18 @@ export class WeatherSpriteRenderer {
   }
 
   private frame(o: WeatherOam): Frame | undefined {
-    const key = `${TEXTURE_PREFIX}_${o.tag}_${o.tileNum}_${o.width}x${o.height}`;
+    const key = `${TEXTURE_PREFIX}_${o.image ?? o.tag}_${o.tileNum}_${o.width}x${o.height}`;
     const cached = this.frames.get(key);
-    const sheet = weatherSpriteSheet(o.tag);
-    if (!sheet) return undefined;
+    // A sheet's frame starts at its tile offset; a template's image (the snowflakes) is the frame's tiles
+    const data = o.image ?? weatherSpriteSheet(o.tag)?.data;
+    if (!data) return undefined;
     if (cached) return cached;
-    const tiles = gfx(sheet.data);
+    const tiles = gfx(data);
+    const firstTile = o.image ? 0 : o.tileNum;
     const indices = new Uint8Array(o.width * o.height);
     const tilesW = o.width / 8;
     for (let t = 0; t < tilesW * (o.height / 8); t++) {
-      const base = (o.tileNum + t) * 32;
+      const base = (firstTile + t) * 32;
       const tx = (t % tilesW) * 8;
       const ty = Math.floor(t / tilesW) * 8;
       for (let i = 0; i < 64; i++) {

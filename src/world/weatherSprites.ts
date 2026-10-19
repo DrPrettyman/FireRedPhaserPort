@@ -62,6 +62,15 @@ export const WEATHER_GFX = [
   'gWeatherSandstormTiles',
 ];
 
+/**
+ * A template whose frames are images (TAG_NONE with `images` in the C: sSnowflakeSpriteImages): the images by gfx
+ * symbol. The anims' frame numbers index them (oam.tileNum holds the image's index here, where the GBA copies the
+ * image's tiles to the sprite's own tiles: RequestSpriteFrameImageCopy).
+ */
+export interface WeatherSpriteTemplate extends SpriteTemplate {
+  imageSymbols?: readonly string[];
+}
+
 /** struct SpriteSheet, with the tiles as their gfx symbol. */
 export interface WeatherSpriteSheet {
   data: string;
@@ -185,8 +194,10 @@ export interface WeatherOam {
   /** The sprite's id (its slot). */
   id: number;
   tag: number;
-  /** The frame: a tile offset into the tag's sheet. */
+  /** The frame: a tile offset into the tag's sheet (or the image's index, for a template with images). */
   tileNum: number;
+  /** A template with images (WeatherSpriteTemplate.imageSymbols): the frame's image. */
+  image?: string;
   width: number;
   height: number;
   /** The top-left corner on screen: OAM's 9-bit x and 8-bit y, wrapped as the PPU wraps them. */
@@ -242,6 +253,7 @@ export function BuildWeatherOam(spriteCoordOffsetX: number, spriteCoordOffsetY: 
       id,
       tag: s.template.tileTag,
       tileNum: s.oam.tileNum,
+      image: (s.template as WeatherSpriteTemplate).imageSymbols?.[s.oam.tileNum],
       width,
       height,
       x: oamX >= 256 ? oamX - 512 : oamX,

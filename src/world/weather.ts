@@ -8,8 +8,9 @@
 // (POSTGAME_PLAN.md decision 1); WEATHER_UNDERWATER shares the fog's callbacks in FRLG's sWeatherFuncs, so it runs
 // too. The rain weathers (RAIN, RAIN_THUNDERSTORM, DOWNPOUR: world/weatherRain.ts) no FRLG map reaches are ported as
 // the C has them (GAPS_PLAN.md batch 13), with field_weather.c's sound half (SetRainStrengthFromSoundEffect's SE3
-// loops, PlayRainStoppingSoundEffect). Asking for any other weather logs once and runs as WEATHER_NONE (clouds, snow,
-// ash, sandstorm, diagonal fog, underwater bubbles, drought).
+// loops, PlayRainStoppingSoundEffect), and so are SNOW, VOLCANIC_ASH and SANDSTORM (world/weatherSnow.ts,
+// world/weatherAsh.ts, world/weatherSandstorm.ts). Asking for any other weather logs once and runs as WEATHER_NONE
+// (clouds, diagonal fog, underwater bubbles, drought).
 //
 // The weathers' sprites (but the horizontal fog's, world/fogHorizontal.ts) are world/weatherSprites.ts's: the
 // weathers create them there, the field runs their callbacks (AnimateWeatherSprites) and draws them
@@ -27,7 +28,10 @@
 import { state } from '../battle/env';
 import { IsSpecialSEPlaying, PlaySE } from '../gba/sound';
 import type { Sprite } from '../gba/sprite';
+import { ASH } from './weatherAsh';
 import { DOWNPOUR, RAIN, THUNDERSTORM } from './weatherRain';
+import { SANDSTORM } from './weatherSandstorm';
+import { SNOW } from './weatherSnow';
 import { ResetWeatherSprites, setWeatherSpritePalette } from './weatherSprites';
 
 // The gamma types of sBasePaletteGammaTypes (field_weather.c's anonymous enum)
@@ -164,6 +168,31 @@ const sWeather = {
   thunderSkipShort: 0,
   thunderShortRetries: 0,
   thunderTriggered: false,
+  // WEATHER_SNOW (world/weatherSnow.ts; the C's snowflakeSprites share the sprites union with the rain's)
+  snowflakeSprites: Array.from({ length: 101 }, (): Sprite | null => null),
+  snowflakeVisibleCounter: 0,
+  /** Never incremented (WaitSnowflakeSprite), never reset: EWRAM's 0. */
+  snowflakeTimer: 0,
+  snowflakeSpriteCount: 0,
+  targetSnowflakeSpriteCount: 0,
+  // WEATHER_VOLCANIC_ASH (world/weatherAsh.ts)
+  ashSprites: Array.from({ length: 20 }, (): Sprite | null => null),
+  ashBaseSpritesX: 0,
+  ashUnused: 0,
+  ashSpritesCreated: false,
+  // WEATHER_SANDSTORM (world/weatherSandstorm.ts)
+  sandstormSprites1: Array.from({ length: 20 }, (): Sprite | null => null),
+  sandstormSprites2: Array.from({ length: 5 }, (): Sprite | null => null),
+  /** u32 */
+  sandstormXOffset: 0,
+  /** u32 */
+  sandstormYOffset: 0,
+  sandstormBaseSpritesX: 0,
+  sandstormPosY: 0,
+  sandstormWaveIndex: 0,
+  sandstormWaveCounter: 0,
+  sandstormSpritesCreated: false,
+  sandstormSwirlSpritesCreated: false,
 };
 
 /** gWeatherPtr: the weathers' modules (world/weatherRain.ts, ...) work on it as the C's do. */
@@ -324,7 +353,18 @@ export function fogHorizontalScrollPosX(): number | undefined {
  */
 let PORTED: Record<string, WeatherCallbacks> | undefined;
 const ported = (): Record<string, WeatherCallbacks> =>
-  (PORTED ??= { None: NONE, Sunny: SUNNY, Shade: SHADE, FogHorizontal: FOG_HORIZONTAL, Rain: RAIN, Thunderstorm: THUNDERSTORM, Downpour: DOWNPOUR });
+  (PORTED ??= {
+    None: NONE,
+    Sunny: SUNNY,
+    Shade: SHADE,
+    FogHorizontal: FOG_HORIZONTAL,
+    Rain: RAIN,
+    Thunderstorm: THUNDERSTORM,
+    Downpour: DOWNPOUR,
+    Snow: SNOW,
+    Ash: ASH,
+    Sandstorm: SANDSTORM,
+  });
 
 const loggedUnported = new Set<number>();
 
@@ -366,8 +406,11 @@ export function StartWeather(): void {
   ResetWeatherSprites();
   sWeather.rainSpriteCount = 0;
   sWeather.curRainSpriteIndex = 0;
-  // (cloudSpritesCreated, snowflakeSpriteCount, ashSpritesCreated, fogDSpritesCreated, sandstormSpritesCreated,
-  // sandstormSwirlSpritesCreated, bubblesSpritesCreated: their weathers aren't ported)
+  sWeather.snowflakeSpriteCount = 0;
+  sWeather.ashSpritesCreated = false;
+  sWeather.sandstormSpritesCreated = false;
+  sWeather.sandstormSwirlSpritesCreated = false;
+  // (cloudSpritesCreated, fogDSpritesCreated, bubblesSpritesCreated: their weathers aren't ported)
   if (sWeather.fogHSpritesCreated) host?.destroyFogHorizontalSprites();
   sWeather.fogHSpritesCreated = false;
   Weather_SetBlendCoeffs(16, 0);
@@ -699,6 +742,15 @@ export function Weather_UpdateBlend(): boolean {
   }
   host?.setBlendAlpha(sWeather.currBlendEVA, sWeather.currBlendEVB);
   return sWeather.currBlendEVA === sWeather.targetBlendEVA && sWeather.currBlendEVB === sWeather.targetBlendEVB;
+}
+
+/**
+ * SetGpuReg(REG_OFFSET_BLDALPHA, BLDALPHA_BLEND(eva, evb)) outside Weather_SetBlendCoeffs / _UpdateBlend (Ash_InitVars'
+ * BLDALPHA_BLEND(64, 63), Ash_Finish's 0): the register's 5-bit fields take the low bits (64 → EVA 0, 63 → EVB 31,
+ * which the PPU takes as 16). gWeatherPtr's coefficients don't change.
+ */
+export function SetWeatherBldAlpha(eva: number, evb: number): void {
+  host?.setBlendAlpha(eva & 0x1f, evb & 0x1f);
 }
 
 /** BLDALPHA as the weather last wrote it (the GBA layer's copy of the field takes it over). */
