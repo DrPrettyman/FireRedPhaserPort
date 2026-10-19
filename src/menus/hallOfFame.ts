@@ -5,7 +5,8 @@
 //
 // The screen runs on whichever GBA host is up (FieldMenuScene 'hallOfFame' / 'hallOfFamePc'); `hofEnv` is what it
 // needs from outside: saving, and where it goes when it's done (SetWarpsToRollCredits' warp, ReturnFromHallOfFamePC).
-// No audio: MUS_HALL_OF_FAME, the cries, SE_SAVE and SE_APPLAUSE are silent.
+// The sounds are the C's through gba/sound.ts: MUS_HALL_OF_FAME, SE_SAVE, the cries (no wait on them: the per-mon
+// timers run alongside), SE_APPLAUSE, FadeOutBGM(4) and the credits warp's DoWarp music fade and wait.
 
 import { K } from '../battle/constants';
 import { bdata, pokemon, state } from '../battle/env';
@@ -114,7 +115,20 @@ import { EOS, GetMonNickname, gStringVar1, speciesName, StringExpandPlaceholders
 import { CreateMonPicSprite_HandleDeoxys, CreateTrainerPicSprite, FreeAndDestroyMonPicSprite, FreeAndDestroyTrainerPicSprite, PlayerGenderToFrontTrainerPicId, ResetAllPicSprites } from './picSprites';
 import { BeginPCScreenEffect_TurnOff, BeginPCScreenEffect_TurnOn, IsPCScreenEffectRunning_TurnOff, IsPCScreenEffectRunning_TurnOn } from './pcScreenEffect';
 import { CreateTopBarWindowLoadPalette, DestroyTopBarWindow, TopBarWindowPrintString, TopBarWindowPrintTwoStrings } from '../gba/topBarWindow';
-import { MUSIC_DISABLE_KEEP, SetDisableMapMusicChangeOnMapLoad } from '../gba/sound'; // SetWarpsToRollCredits (W-sound 3)
+import { gMPlayInfo_BGM, m4aMPlayVolumeControl } from '../audio/m4a';
+import { TRACKS_ALL } from '../audio/m4aInternal';
+import {
+  BGMusicStopped,
+  FadeOutBGM,
+  IsCryPlayingOrClearCrySongs,
+  MUSIC_DISABLE_KEEP,
+  PlayBGM,
+  PlayCry_Normal,
+  PlaySE,
+  SetDisableMapMusicChangeOnMapLoad,
+  StopCryAndClearCrySongs,
+} from '../gba/sound';
+import { TryFadeOutOldMapMusic, type MapMusicHeader } from '../gba/overworldMusic';
 
 const PARTY_SIZE = 6;
 const HALL_OF_FAME_BG_PAL = RGB(22, 24, 29);
@@ -127,6 +141,8 @@ export const hofEnv = {
   trySavingData: (_saveType: number): number => SAVE_STATUS_OK,
   /** SetWarpDestination(mapId, warpId, x, y) + DoWarp + ResetInitialPlayerAvatarState: off the GBA layer into the map. */
   doWarp: (_mapId: string, _warpId: number, _x: number, _y: number): void => {},
+  /** GetDestinationWarpMapHeader for DoWarp's TryFadeOutOldMapMusic (loaded: the port's map headers aren't in ROM). */
+  loadMapHeader: (_mapId: string): Promise<MapMusicHeader | undefined> => Promise.resolve(undefined),
   /** ReturnFromHallOfFamePC: CB2_ReturnToField with gFieldCallback = ReshowPCMenuAfterHallOfFamePC. */
   returnFromHallOfFamePC: (): void => {},
 };
@@ -298,7 +314,7 @@ function InitHallOfFameScreen(): boolean {
       UpdatePaletteFade();
       if (!gPaletteFade.active) {
         SetMainCallback2(CB2_HofIdle);
-        // PlayBGM(MUS_HALL_OF_FAME): no audio
+        PlayBGM(K.MUS_HALL_OF_FAME);
         return false;
       }
       break;
@@ -372,7 +388,7 @@ function Task_Hof_TrySaveData(taskId: number): void {
   // gGameContinueCallback = CB2_DoHallOfFameScreenDontSaveData (for DoSaveFailedScreen, not ported)
   const status = hofEnv.trySavingData(SAVE_HALL_OF_FAME);
   testEvent('hallOfFameSaved', { status });
-  // PlaySE(SE_SAVE): no audio
+  PlaySE(K.SE_SAVE);
   gTasks[taskId].func = Task_Hof_DelayAfterSave;
   gTasks[taskId].data[tFrameCount] = 32;
 }
@@ -409,7 +425,7 @@ function Task_Hof_PlayMonCryAndPrintInfo(taskId: number): void {
   const currMonId = d[tDisplayedMonId];
   const currMon = sHofMonPtr![0][currMonId];
   if (gSprites[d[tMonSpriteId(currMonId)]].data[0]) {
-    // PlayCry_Normal(species, 0) unless it's an egg: no audio
+    if (currMon.species !== K.SPECIES_EGG) PlayCry_Normal(currMon.species, 0);
     HallOfFame_PrintMonInfo(currMon);
     testEvent('hallOfFameMon', { slot: currMonId, species: currMon.species });
     d[tFrameCount] = 120;
@@ -444,7 +460,7 @@ function Task_Hof_PaletteFadeAndPrintWelcomeText(taskId: number): void {
   for (let i = 0; i < PARTY_SIZE; i++) if (d[tMonSpriteId(i)] !== 0xff) gSprites[d[tMonSpriteId(i)]].oam.priority = 0;
   HallOfFame_PrintWelcomeText();
   testEvent('hallOfFameWelcome');
-  // PlaySE(SE_APPLAUSE): no audio
+  PlaySE(K.SE_APPLAUSE);
   d[tFrameCount] = 400;
   gTasks[taskId].func = Task_Hof_ApplauseAndConfetti;
 }
@@ -507,7 +523,7 @@ function Task_Hof_WaitAndPrintPlayerInfo(taskId: number): void {
 
 function Task_Hof_ExitOnKeyPressed(taskId: number): void {
   if (JOY_NEW(A_BUTTON)) {
-    // FadeOutBGM(4): no audio
+    FadeOutBGM(4);
     gTasks[taskId].func = Task_Hof_HandlePaletteOnExit;
   }
 }
@@ -545,7 +561,54 @@ function SetWarpsToRollCredits(): void {
   state.setVar('VAR_MAP_SCENE_INDIGO_PLATEAU_EXTERIOR', 1);
   state.setFlag('FLAG_DONT_SHOW_MAP_NAME_POPUP', true);
   SetDisableMapMusicChangeOnMapLoad(MUSIC_DISABLE_KEEP); // gDisableMapMusicChangeOnMapLoad = 2
-  hofEnv.doWarp('MAP_INDIGO_PLATEAU_EXTERIOR', -1, 11, 6);
+  DoWarp('MAP_INDIGO_PLATEAU_EXTERIOR', -1, 11, 6);
+}
+
+/**
+ * DoWarp (field_fadetransition.c) as it runs under the Hall of Fame's CB2: TryFadeOutOldMapMusic, WarpFadeOutScreen
+ * (the screen is black already), PlaySE(SE_EXIT) (skipped: gDisableMapMusicChangeOnMapLoad is set), then
+ * Task_Teleport2Warp waits for the fade and BGMusicStopped before WarpIntoMap (`hofEnv.doWarp`). The destination's
+ * header loads first (one or two frames; on the GBA it's in ROM).
+ */
+function DoWarp(mapId: string, warpId: number, x: number, y: number): void {
+  let header: MapMusicHeader | undefined | null = null;
+  void hofEnv.loadMapHeader(mapId).then((h) => {
+    header = h;
+  });
+  const taskId = CreateTask(Task_Teleport2Warp, 10);
+  const d = gTasks[taskId].data;
+  d[0] = 0;
+  // the task's arguments (sWarpDestination)
+  warpDest = { mapId, warpId, x, y, header: () => header };
+}
+
+let warpDest: { mapId: string; warpId: number; x: number; y: number; header: () => MapMusicHeader | undefined | null } | null = null;
+
+/** Task_Teleport2Warp, after DoWarp's music fade (the header's load stands in for its synchronous lookup). */
+function Task_Teleport2Warp(taskId: number): void {
+  const d = gTasks[taskId].data;
+  const w = warpDest!;
+  switch (d[0]) {
+    case 0: {
+      const header = w.header();
+      if (header === null) return; // still loading
+      if (header) TryFadeOutOldMapMusic(header);
+      PlaySE(K.SE_EXIT);
+      d[0]++;
+      break;
+    }
+    case 1: // FreezeObjectEvents; LockPlayerFieldControls
+      d[0]++;
+      break;
+    case 2:
+      if (!gPaletteFade.active && BGMusicStopped()) d[0]++;
+      break;
+    case 3:
+      DestroyTask(taskId);
+      warpDest = null;
+      hofEnv.doWarp(w.mapId, w.warpId, w.x, w.y);
+      break;
+  }
 }
 
 // ------------------------------------------------------------------ the Hall of Fame PC
@@ -657,7 +720,10 @@ function Task_HofPC_PrintMonInfo(taskId: number): void {
   sSelectedPaletteIndices = ((0x10000 << currMonSprite.oam.paletteNum) ^ 0xffff0000) >>> 0;
   BlendPalettesUnfaded(sSelectedPaletteIndices, 0xc, HALL_OF_FAME_BG_PAL);
   const currMon = savedTeam[d[tCurrMonId]];
-  // StopCryAndClearCrySongs + PlayCry_Normal unless it's an egg: no audio
+  if (currMon.species !== K.SPECIES_EGG) {
+    StopCryAndClearCrySongs();
+    PlayCry_Normal(currMon.species, 0);
+  }
   HallOfFame_PrintMonInfo(currMon);
   testEvent('hallOfFamePcMon', { team: d[tCurrTeamNo], page: d[tCurrPageNo], slot: d[tCurrMonId], species: currMon.species });
   gTasks[taskId].func = Task_HofPC_HandleInput;
@@ -676,10 +742,19 @@ function Task_HofPC_HandleInput(taskId: number): void {
       if (d[tCurrPageNo] !== 0) d[tCurrPageNo]--;
       gTasks[taskId].func = Task_HofPC_DrawSpritesPrintText;
     } else {
-      // no more teams to view, turn off hall of fame PC (IsCryPlayingOrClearCrySongs: no audio)
+      // no more teams to view, turn off hall of fame PC
+      if (IsCryPlayingOrClearCrySongs()) {
+        StopCryAndClearCrySongs();
+        m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 0x100);
+      }
       gTasks[taskId].func = Task_HofPC_HandlePaletteOnExit;
     }
   } else if (JOY_NEW(B_BUTTON)) {
+    // turn off hall of fame PC
+    if (IsCryPlayingOrClearCrySongs()) {
+      StopCryAndClearCrySongs();
+      m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 0x100);
+    }
     gTasks[taskId].func = Task_HofPC_HandlePaletteOnExit;
   } else if (JOY_NEW(DPAD_UP) && d[tCurrMonId] !== 0) {
     d[tCurrMonId]--;

@@ -153,6 +153,10 @@ export class FieldMenuScene extends GbaHostScene {
       await loadGfx(hallOfFameGfxSymbols(teams, start.state.playerGender === 'female' ? K.FEMALE : K.MALE));
       hofEnv.trySavingData = (saveType) => TrySavingData(saveType, start.state);
       hofEnv.doWarp = (mapId, warpId, x, y) => this.exit(false, { mapId, warpId, x, y });
+      hofEnv.loadMapHeader = (mapId) => {
+        const name = assets.mapNameForId(mapId);
+        return name ? assets.loadMap(name) : Promise.resolve(undefined);
+      };
       hofEnv.returnFromHallOfFamePC = () => this.exit(false);
       resetHardware();
     }

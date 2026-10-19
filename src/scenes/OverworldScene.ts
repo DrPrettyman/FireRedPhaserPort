@@ -1914,7 +1914,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
           launched = true;
           this.messageBox.hide();
           this.runFieldMenu({ menu: 'hallOfFamePc' }, () => {
-            // ReshowPCMenuAfterHallOfFamePC: CreatePCMenu, ScriptMenu_DisplayPCStartupPrompt, fade in
+            // ReshowPCMenuAfterHallOfFamePC: Overworld_PlaySpecialMapMusic, CreatePCMenu,
+            // ScriptMenu_DisplayPCStartupPrompt, fade in
+            Overworld_PlaySpecialMapMusic();
             menu = this.openPcMenu();
             this.messageBox.show(this.charmap.encode(this.assets.strings.Text_AccessWhichPC ?? '$'), 'neutral', false, true);
             this.screenFade.begin(d.require('FADE_FROM_BLACK'));

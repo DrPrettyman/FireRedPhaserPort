@@ -10,8 +10,9 @@
 // sPokedexScreenData.state = 0`), each task a `switch (state)`. The area page (DexScreen_DrawMonAreaPage) is in
 // menus/pokedexArea.ts.
 //
-// The data (gPokedexEntries, the orders, the categories, the footprints) comes from menus/pokedex.ts. No audio:
-// the SE_* and cry calls are no-ops.
+// The data (gPokedexEntries, the orders, the categories, the footprints) comes from menus/pokedex.ts. The sounds are
+// the C's (gba/sound.ts): the BGM at half volume while the Pokédex is open, SE_SELECT, SE_BALL_TRAY_ENTER and the
+// cries (PlayCry_NormalNoDucking: no wait on them).
 
 import { K } from '../battle/constants';
 import { charmap, state } from '../battle/env';
@@ -60,7 +61,7 @@ import { A_BUTTON, B_BUTTON, DPAD_DOWN, DPAD_LEFT, DPAD_RIGHT, DPAD_UP, gMain, J
 import { DecompressAndCopyTileDataToVram, TEXT_COLOR_LIGHT_GRAY, TEXT_COLOR_TRANSPARENT, TEXT_COLOR_WHITE } from '../gba/menu';
 import { BeginNormalPaletteFade, BG_PLTT_ID, gPaletteFade, LoadPalette, OBJ_PLTT_ID, PLTT_ID, PLTT_SIZE_4BPP, ResetPaletteFade, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
 import { ScanlineEffect_Stop } from '../gba/scanline';
-import { PlayCry_NormalNoDucking, PlaySE } from '../gba/sound';
+import { BGMVolumeMax_EnableHelpSystemReduction, PlayCry_NormalNoDucking, PlaySE, SetBGMVolume_SuppressHelpSystemReduction } from '../gba/sound';
 import { AnimateSprites, BuildOamBuffer, ProcessSpriteCopyRequests, ResetSpriteData } from '../gba/sprite';
 import { CreateTask, DestroyTask, gTasks, ResetTasks, RunTasks } from '../gba/task';
 import {
@@ -528,7 +529,7 @@ export function DexScreen_LoadResources(): void {
   d.numOwnedNational = DexScreen_GetDexCount(FLAG_GET_CAUGHT, 1);
   d.numSeenKanto = DexScreen_GetDexCount(FLAG_GET_SEEN, 0);
   d.numOwnedKanto = DexScreen_GetDexCount(FLAG_GET_CAUGHT, 0);
-  // SetBGMVolume_SuppressHelpSystemReduction(0x80): no audio
+  SetBGMVolume_SuppressHelpSystemReduction(0x80);
   for (let bg = 0; bg < 4; bg++) {
     ChangeBgX(bg, 0, 0);
     ChangeBgY(bg, 0, 0);
@@ -570,7 +571,7 @@ function DoClosePokedex(): boolean {
       sPokedexScreenData = null;
       FreeAllWindowBuffers();
       for (let bg = 0; bg < 4; bg++) UnsetBgTilemapBuffer(bg);
-      // BGMVolumeMax_EnableHelpSystemReduction: no audio
+      BGMVolumeMax_EnableHelpSystemReduction();
       break;
   }
   return true;

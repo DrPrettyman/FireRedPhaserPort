@@ -6,7 +6,8 @@
 //
 // The field hosts it on its GBA layer (world/fieldGbaScreen.ts): `creditsEnv` loads the maps there and moves the
 // camera. The GBA loads a map within one frame; here the load is asynchronous, so a map scene can start a frame or
-// two later than on the GBA (always behind a black screen). No audio: MUS_CREDITS and the cries are silent.
+// two later than on the GBA (always behind a black screen). MUS_CREDITS comes from the Indigo Plateau's ON_TRANSITION
+// script (`playbgm MUS_CREDITS, 0`), the mon scenes' cries from here (PlayCry_NormalNoDucking: no wait on them).
 
 import { K } from '../battle/constants';
 import { monPalSymbols, monPicSymbol, LoadSpecialPokePic, GetMonSpritePalFromSpeciesAndPersonality } from '../battle/gfx';
@@ -81,7 +82,7 @@ import {
 } from '../gba/window';
 import { FONT_NORMAL } from '../text/Font';
 import { text } from './common';
-import { MUSIC_DISABLE_KEEP, MUSIC_DISABLE_OFF, SetDisableMapMusicChangeOnMapLoad } from '../gba/sound'; // gDisableMapMusicChangeOnMapLoad (W-sound 3)
+import { MUSIC_DISABLE_KEEP, MUSIC_DISABLE_OFF, PlayCry_NormalNoDucking, SetDisableMapMusicChangeOnMapLoad } from '../gba/sound';
 
 const FONT_NORMAL_COPY_1 = 1;
 
@@ -658,6 +659,12 @@ function LoadMonPicInWindow(species: number, otId: number, personality: number, 
   LoadPalette(GetMonSpritePalFromSpeciesAndPersonality(species, otId, personality), BG_PLTT_ID(paletteSlot), PLTT_SIZE_4BPP);
 }
 
+/** GetCreditsMonSpecies */
+function GetCreditsMonSpecies(whichMon: number): number {
+  const mon = sCreditsMons[whichMon];
+  return mon ? K[mon.species] : K.SPECIES_NONE;
+}
+
 function LoadCreditsMonPic(whichMon: number): void {
   const mon = sCreditsMons[whichMon];
   InitWindows(mon.windows);
@@ -757,7 +764,7 @@ function DoCreditsMonScene(): boolean {
       else {
         HideBg(2);
         ShowBg(1);
-        // PlayCry_NormalNoDucking: no audio
+        PlayCry_NormalNoDucking(GetCreditsMonSpecies(m.whichMon), 0, K.CRY_VOLUME_RS, K.CRY_PRIORITY_NORMAL);
         m.creditsMonTimer = 128;
         m.subseqno++;
       }

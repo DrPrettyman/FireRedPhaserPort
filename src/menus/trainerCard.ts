@@ -9,7 +9,7 @@
 // the card squashes to a line and opens again, BG0VOFS set per scanline). A on the front flips to the back; on the
 // back B flips back to the front and A closes; B on the front closes.
 //
-// No audio: the SE_CARD_* calls are no-ops.
+// The SE_CARD_* sounds are the C's (gba/sound.ts); the opening waits for SE_CARD_OPEN (!IsSEPlaying).
 
 import { constant, K } from '../battle/constants';
 import { bdata, charmap, state } from '../battle/env';

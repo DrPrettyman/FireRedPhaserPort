@@ -10,6 +10,7 @@ import type { Assets } from '../data/assets';
 import { loadGfx } from '../gba/gfx';
 import { resetHardware } from '../gba/hw';
 import { gMain, SetMainCallback1, SetMainCallback2, SetVBlankCallback } from '../gba/main';
+import { PlaySE } from '../gba/sound';
 import { menuEnv } from '../gba/menu';
 import { CB2_SaveClearScreen_Init, clearSaveDataEnv } from '../menus/clearSaveDataScreen';
 import { CB2_InitMainMenu, mainMenuEnv, mainMenuGfxSymbols } from '../menus/mainMenu';
@@ -132,12 +133,13 @@ export class MainMenuScene extends GbaHostScene {
     testHooks.applyTestOptions(state); // ?textSpeed=
     initBattleEnv(await sharedBattleData(), assets.scripts.defines, pokemon, state, charmap);
     setTextStrings(assets.strings);
-    // The ball-open particles call the battle's audio hooks (no audio yet) and nothing else
+    // Oak's speech's ball-open particles (oak_speech.c:1356, CreatePokeballSpriteToReleaseMon's particles) play
+    // SE_BALL_OPEN through the battle's playSE hook: PlaySE, as pokeball.c does
     setBattleUi({
       joyNew: () => false,
       joyHeld: () => false,
       anyNewKeys: () => false,
-      playSE: () => {},
+      playSE: (songId) => PlaySE(songId),
       playCry: () => {},
       playBGM: () => {},
       playFanfare: () => {},
