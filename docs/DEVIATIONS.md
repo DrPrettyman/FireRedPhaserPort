@@ -163,8 +163,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (BlendPalettes / BeginNormalPaletteFade on PALETTES_BG only) is the field's fade overlay, which whitens the
     objects and the rock's fragments too for its 16 frames. Its and FLDEFF_MOVE_DEOXYS_ROCK's map num / group
     arguments are ignored (the object is looked up on the current map; `setfieldeffectargument` can't evaluate
-    `MAP_NUM(...)`). ApplyGlobalFieldPaletteTint (the quest log's tints) is a no-op. Navel Rock's summit's
-    `setweather 0` / `doweather` log once until field weather is ported (W-weather).
+    `MAP_NUM(...)`). ApplyGlobalFieldPaletteTint (the quest log's tints) is a no-op.
   - `setmaplayoutindex` (World.setCurrentLayout): the swapped layout replaces the current map's chunk after
     ON_TRANSITION rather than being picked before the grid is first built (same result; ON_TRANSITION can't see
     the grid on the GBA either). gSaveBlock1Ptr->mapLayoutId is saved inside the save's `location`

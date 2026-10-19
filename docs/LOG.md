@@ -3444,6 +3444,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   down), the fragments 32 / 24 px apart in their first frame, SE_THUNDER2 then SE_THUNDER, the rock's flag, DEOXYS
   30), plus hallOfFame, listMenuFlash (the elevator's shake) and sideSpecials (the fall warp's shake) for the shared
   code.
+
 ### W-weather 1: field weather's framework and Shade (POSTGAME_PLAN.md batch 10)
 
 - `world/weather.ts`: field_weather.c's state (gWeatherPtr), StartWeather, SetNextWeather /
