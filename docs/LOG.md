@@ -3409,3 +3409,38 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   and the PR's own e2e files; the full suite runs exactly once per batch, at the end on master, and failures there
   are rerun file by file. Docs-only changes run nothing.
 - Verified: docs only.
+
+### The event tickets, Navel Rock, Birth Island (W-events unit 1, batch 10)
+
+- The tickets: `GiveEventTickets` (menus/hallOfFame.ts), EnterHallOfFame's `#if REVISION >= 0xA` block: the Aurora
+  and Mystic Tickets with FLAG_ENABLE_SHIP_BIRTH_ISLAND / _NAVEL_ROCK and FLAG_RECEIVED_*_TICKET while the bag has no
+  Aurora Ticket (no ribbons in the port, so the Champion Ribbon condition counts as met). A deliberate QOL change
+  (POSTGAME_PLAN.md decision 2), in DEVIATIONS' own section; the "REVISION 0 gives no tickets" notes are gone.
+- `script/eventIslandSpecials.ts` (EVENT_ISLAND_SPECIALS): ShakeScreen / Task_ShakeScreen / Task_EndScreenShake
+  (shared: W-sevii's Dotted Hole and Tanoby Key use it next batch), LoopWingFlapSound / Task_WingFlapSound,
+  DoDeoxysTriangleInteraction (Task_DoDeoxysTriangleInteraction, MoveDeoxysObject, Task_WaitDeoxysFieldEffect),
+  SetDeoxysTrianglePalette, and IncrementBirthIslandRockStepCount, which nothing called yet (the step caps need it:
+  now in OverworldScene's tookStep).
+- The camera pan has a horizontal half now: `setCameraPanning(dy, dx = 0)` (ScriptHost, OverworldScene: the follow
+  offset's x), `field().avatar.cameraPanX`. The elevator, fall warp and Deoxys rock use the same call.
+- `world/deoxysRock.ts`: the triangle's palette (sDeoxysObjectPals through extract_gfx.py's new
+  graphics/field_specials/ prefix; colours 0-3 over gObjectEventPal_Meteorite, the rock redrawn into a canvas texture),
+  FLDEFF_MOVE_DEOXYS_ROCK (not ported before: FldEff_MoveDeoxysRock, Task_MoveDeoxysRock_Step; ObjectEvent gained
+  shiftObjectEventCoords / shiftStillObjectEventCoords / setSpriteOffset) and FLDEFF_DESTROY_DEOXYS_ROCK
+  (Task_DestroyDeoxysRock's three states with Task_DeoxysRockCameraShake in the same field task, in priority order,
+  the white flash, the four fragments from sRockFragment_* at screen coordinates). Five gaps off
+  scriptCoverageGaps.ts (ShakeScreen, LoopWingFlapSound, DoDeoxysTriangleInteraction, SetDeoxysTrianglePalette,
+  FLDEFF_DESTROY_DEOXYS_ROCK).
+- Found on the way: Vermilion's ticket texts are `msgbox`es that wait for a button at their end, which
+  seagallopHelpers' `waitForMenu` (it presses only at page breaks) doesn't pass: the test mashes to the ferry question
+  first. seagallop.test.ts' comment no longer says the tickets aren't ported.
+- Left: Navel Rock's summit's `setweather 0` / `doweather` (W-weather) log once; the flash is the fade overlay over
+  the objects too (DEVIATIONS).
+- Verified: typecheck; `npm test` (583 in 43 files); e2e `tests/e2e/eventIslands.test.ts` (5: the Hall of Fame's
+  tickets and not twice; Vermilion's MULTICHOICE_SEVII_NAVEL_BIRTH, both texts, HI-SPEED 10 to Navel Rock, back, 12
+  to Birth Island; Lugia's two shakes tick by tick ([-3, -3, 3, 3, -3, -3] each, two SE_M_STRENGTH) and LUGIA 70;
+  Ho-Oh's six wing flaps 34 / 35 frames apart and HO_OH 70; the triangle: a failed corner back to the start
+  (SE_M_CONFUSE_RAY), ten corners within their caps with the palette and position each time, the shake (±4 dying
+  down), the fragments 32 / 24 px apart in their first frame, SE_THUNDER2 then SE_THUNDER, the rock's flag, DEOXYS
+  30), plus hallOfFame, listMenuFlash (the elevator's shake) and sideSpecials (the fall warp's shake) for the shared
+  code.

@@ -158,9 +158,13 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Wild encounters: GAME_STAT_* counters aren't kept.
   - Scripted wild battles (`dowildbattle`, StartLegendaryBattle): no GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES. `seteventmon` (CreateEnemyEventMon) doesn't set
     MON_DATA_MODERN_FATEFUL_ENCOUNTER (the port keeps no such field; IsBattlerModernFatefulEncounter is always
-    TRUE, so it makes no difference). Navel Rock and Birth Island need the Mystery Gift event tickets, which can't
-    be had, so only a dev start reaches Lugia, Ho-Oh and Deoxys; Navel Rock's `special ShakeScreen` (and the
-    other ShakeScreen users) isn't ported and warns once.
+    TRUE, so it makes no difference).
+  - The event islands (script/eventIslandSpecials.ts, world/deoxysRock.ts): FLDEFF_DESTROY_DEOXYS_ROCK's white flash
+    (BlendPalettes / BeginNormalPaletteFade on PALETTES_BG only) is the field's fade overlay, which whitens the
+    objects and the rock's fragments too for its 16 frames. Its and FLDEFF_MOVE_DEOXYS_ROCK's map num / group
+    arguments are ignored (the object is looked up on the current map; `setfieldeffectargument` can't evaluate
+    `MAP_NUM(...)`). ApplyGlobalFieldPaletteTint (the quest log's tints) is a no-op. Navel Rock's summit's
+    `setweather 0` / `doweather` log once until field weather is ported (W-weather).
   - `setmaplayoutindex` (World.setCurrentLayout): the swapped layout replaces the current map's chunk after
     ON_TRANSITION rather than being picked before the grid is first built (same result; ON_TRANSITION can't see
     the grid on the GBA either). gSaveBlock1Ptr->mapLayoutId is saved inside the save's `location`
@@ -267,7 +271,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu.
   - Interaction metatiles whose scripts need unported screens/specials (Trainer Tower clock, cable club
   - Hall of Fame (menus/hallOfFame.ts): no Champion
-    Ribbons (mons have no ribbons; REVISION 0 gives no event tickets either); the help system isn't toggled and the
+    Ribbons (mons have no ribbons; the event tickets come anyway: see "Deliberate QOL changes"); the help system isn't toggled and the
     quest log isn't saved; a failed save carries on (no DoSaveFailedScreen / gGameContinueCallback).
     Other game stats than GAME_STAT_ENTERED_HOF and
     GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted.
@@ -423,6 +427,12 @@ Places where we choose to differ from the GBA on purpose (not placeholders). Kee
     scroll off screen, and a trainer among them can still spot you; here a neighbour's trainers never do.
   - Future: any other per-object logic should likewise check that an object belongs to the current map where the
     GBA would only have current-map objects alive.
+- **The Hall of Fame gives the event tickets** (`GiveEventTickets` in menus/hallOfFame.ts; POSTGAME_PLAN.md decision
+  2). The port follows REVISION 0, where the Mystic and Aurora Tickets (Navel Rock, Birth Island) come only through
+  Mystery Gift (link content). EnterHallOfFame's `#if REVISION >= 0xA` block (FireRed 1.1) gives both, with
+  FLAG_ENABLE_SHIP_NAVEL_ROCK / _BIRTH_ISLAND and FLAG_RECEIVED_MYSTIC_TICKET / _AURORA_TICKET, when a party mon
+  gets its first Champion Ribbon and the bag has no Aurora Ticket. The port has no ribbons, so it gives them on any
+  entry while the bag has no Aurora Ticket; saves past the Hall of Fame get them on their next entry.
 - **A mute key, M** (`input/Input.ts` listenForOutputKeys, `audio/output.ts`; AUDIO_PLAN.md decision 10). The GBA
   has no volume control; M toggles all sound output on and off. It only silences the output: the m4a engine runs
   on, so nothing times differently. The setting is kept in localStorage (`firered-phaser:audio-muted`), not in

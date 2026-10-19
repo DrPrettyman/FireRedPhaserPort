@@ -545,6 +545,25 @@ this is the next level down. When you add or change a subsystem, update its entr
   for new ferry tests: `tests/e2e/seagallopHelpers.ts` (`warp`, `rideFerry` / `checkRide`, `sail` (checks the
   HI-SPEED number), `waitForMenu`, `talkToHarborSailor`, `harborState`). Quick look: `?map=VermilionCity&x=23&y=31` with
   VAR_MAP_SCENE_VERMILION_CITY 3 and VAR_MAP_SCENE_ONE_ISLAND_POKEMON_CENTER_1F >= 1, walk down onto the ticket check.
+- **Event islands (Navel Rock, Birth Island) and ShakeScreen:** the tickets come from the Hall of Fame
+  (`GiveEventTickets` in `menus/hallOfFame.ts`, EnterHallOfFame's REVISION 0xA block; a QOL change, see
+  DEVIATIONS). `script/eventIslandSpecials.ts` (EVENT_ISLAND_SPECIALS, spread into SPECIALS) has field_specials.c's
+  ShakeScreen, LoopWingFlapSound, DoDeoxysTriangleInteraction / MoveDeoxysObject, SetDeoxysTrianglePalette and
+  IncrementBirthIslandRockStepCount (called from OverworldScene's tookStep, beside RunMassageCooldownStepCounter).
+  **ShakeScreen** is for any script: VAR_0x8004 / 0x8005 the vertical / horizontal pan, 0x8006 the flips, 0x8007 the
+  frames between them; it runs as a field task (`host.startFieldTask`) on `host.setCameraPanning(dy, dx)`, the same
+  pan the elevator (AnimateElevator), the fall warp and the Deoxys rock use (OverworldScene.setCameraPanning: the
+  Phaser camera's follow offset; `field().avatar.cameraPanX` / `cameraPanY` are the probes). `world/deoxysRock.ts`
+  has the triangle's palette (LoadDeoxysObjectPal: sDeoxysObjectPals, extracted by extract_gfx.py's
+  graphics/field_specials/ prefix, over gObjectEventPal_Meteorite, redrawn into the `deoxys_rock` texture that the
+  rock object switches to) and the natives of FLDEFF_MOVE_DEOXYS_ROCK (ObjectEvent.shiftObjectEventCoords +
+  setSpriteOffset for the slide) and FLDEFF_DESTROY_DEOXYS_ROCK (the shake, the flash, the fragments at screen
+  coordinates); host `setDeoxysRockHost` from OverworldScene. Events: `deoxysRockPalette` (num), `deoxysRockMoved`,
+  `deoxysRockFragments` (their first frame), `deoxysRockDestroyed`; probe `destroyDeoxysRockProbe()` in the module.
+  Test: `tests/e2e/eventIslands.test.ts` (the tickets, Vermilion's ticket menu to both islands, Lugia's shakes,
+  Ho-Oh's wing flaps, the triangle's ten corners with a failed one, the rock and Deoxys). Quick looks:
+  `?map=NavelRock_Base&x=10&y=16` (face up), `?map=NavelRock_Summit&x=9&y=13` (step up),
+  `?map=BirthIsland_Exterior&x=15&y=13` (face up; the corners and where to stand are in the test's TRIANGLE).
 - **TM case:** `menus/tmCase.ts` is tm_case.c. `InitTMCase(type, exitCallback, allowSelectClose)` runs on whichever
   GBA host has the bag (FieldMenuScene); `menuGfxSymbols` preloads `TM_CASE_GFX`. Ways in: the bag's KEY ITEMS → TM
   CASE → OPEN (`FieldUseFunc_TmCase` in menus/itemUse.ts → TMCASE_FIELD, back to CB2_BagMenuFromStartMenu), the
