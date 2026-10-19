@@ -19,7 +19,6 @@ const WEATHER_NONE = 0;
 const WEATHER_RAIN = 3;
 const WEATHER_RAIN_THUNDERSTORM = 5;
 const WEATHER_DOWNPOUR = 13;
-const WEATHER_PAL_STATE_IDLE = 3;
 /** The rain sheet's tag (field_weather.h GFXTAG_RAIN). */
 const GFXTAG_RAIN = 0x1206;
 
