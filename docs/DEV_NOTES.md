@@ -70,8 +70,9 @@ this is the next level down. When you add or change a subsystem, update its entr
   tests/e2e/leagueLighting.test.ts (dev start `?map=PokemonLeague_LoreleisRoom&x=6&y=12` or
   `PokemonLeague_ChampionsRoom&x=6&y=19`).
 - **Field weather:** `world/weather.ts` is field_weather.c / field_weather_util.c and FRLG's weathers of
-  field_weather_effects.c (None, Sunny, Shade, FogHorizontal; `PORTED` is keyed by sWeatherFuncs' row names, so
-  WEATHER_UNDERWATER runs the fog's callbacks as in FRLG; the rest run None's and log once). The
+  field_weather_effects.c (None, Sunny, Shade, FogHorizontal; Rain, Thunderstorm and Downpour in `world/weatherRain.ts`;
+  `PORTED` is keyed by sWeatherFuncs' row names, so WEATHER_UNDERWATER runs the fog's callbacks as in FRLG; the rest
+  run None's and log once). The
   tables come from `public/gen/weather.json` (tools/extract_field.py `extract_weather`: sBasePaletteGammaTypes, the
   sWeatherFuncs row names, the loadfadedpal field effect palette tags); the gamma tables are built by
   BuildGammaShiftTables as in the C. The saved weather is `GameState.weather` (gSaveBlock1Ptr->weather, save
@@ -100,13 +101,46 @@ this is the next level down. When you add or change a subsystem, update its entr
     The GBA layer's copy of the field (world/fieldGbaScreen.ts, battle transitions) takes them through
     `FieldGbaSource.fog` as semi-transparent OBJ pixels (`ObjBitmapLayer.semi` in gba/ppu.ts) and BLDALPHA from
     `weatherBlendAlpha()`.
+  - **The weather sprite layer** (W-weather 1; every weather's sprites but the horizontal fog's):
+    `world/weatherSprites.ts` is the weathers' share of gSprites, no Phaser: `LoadSpriteSheet({ data: gfx symbol,
+    size, tag })`, `CreateSprite` / `CreateSpriteAtEnd(template, x, y, subpriority)` (a gba/sprite.ts SpriteTemplate
+    with tileTag GFXTAG_* and a callback; the id indexes `gWeatherSprites`, MAX_SPRITES = none), `DestroySprite`,
+    `FreeSpriteTilesByTag`; the sprites are gba/sprite.ts `Sprite`s (data[], x / y / x2 / y2, invisible,
+    coordOffsetEnabled, StartSpriteAnim, oam.priority / objMode). `tickField` runs `AnimateWeatherSprites()` right
+    after the weather task and the fog (each callback, then AnimateSprite); `update()` calls the renderer's `draw()`
+    once a render frame, which takes `BuildWeatherOam(gSpriteCoordOffsetX, Y)` (UpdateOamCoords + SortSprites).
+    `world/weatherSpriteRenderer.ts` draws ST_OAM_OBJ_NORMAL sprites as Phaser images at MapChunk.objectDepth and
+    composites the ST_OAM_OBJ_BLEND ones of each priority / subpriority into a MULTIPLY (EVB / 16 where opaque) and
+    an ADD (colour x EVA / 16) screen texture (its header). Frames are the sheet's tiles at the anim's tile offset in
+    the weather palette (`setWeatherSpritePalette` / weather.ts `LoadCustomWeatherSpritePalette(symbol)`) through
+    `objGammaTable('alt')`. StartWeather clears the layer (`ResetWeatherSprites`: the map load's ResetSpriteData).
+    `WEATHER_GFX` lists every weather sheet and palette (preloaded at boot). The GBA layer's copy of the field
+    (battle transitions) takes them through `FieldGbaSource.weatherSprites` (semi-transparent OBJ pixels for BLEND).
+    **Adding a weather (units 2-3):** a module like `world/weatherRain.ts` (its InitVars / InitAll / Main / Finish
+    working on `gWeatherPtr` (weather.ts' struct: add its fields there, and reset its sprite counters in StartWeather
+    as the C does), its templates and callbacks on the layer; `Weather_SetBlendCoeffs` / `_SetTargetBlendCoeffs` /
+    `_UpdateBlend`, `WeatherShiftGammaIfPalStateIdle`, `WeatherBeginGammaFade`, `spriteCoordOffsetX / Y` are
+    exported), then its row in weather.ts' `ported()`. GFXTAG_* / PALTAG_WEATHER are in weatherSprites.ts.
+  - **The rain weathers** (`world/weatherRain.ts`): Rain_* (24 raindrops, 10 shown), Thunderstorm_* (16; the
+    lightning's gamma 19 flashes, SE_THUNDER / SE_THUNDER2) and Downpour_* (24, Thunderstorm_Main / _Finish).
+    field_weather.c's sound half is in weather.ts: SetRainStrengthFromSoundEffect (the SE3 loops, from the InitVars)
+    and PlayRainStoppingSoundEffect (SetNextWeather, SetCurrentAndNextWeather, OverworldScene's `warpTo` for DoWarp /
+    DoDiveWarp / Task_DoorWarp / Task_StairWarp, `openFieldMenu` for the start menu's five screens, world/dive.ts'
+    DoDiveWarp, menus/seagallop.ts' Task_Seagallop_3). The battle's ABILITYEFFECT_SWITCH_IN_WEATHER takes
+    GetCurrentWeather() at the battle's start (BattleStart.overworldWeather).
   Commands: `setweather`, `doweather`, `resetweather`. Probes:
   `__test.weather(slot?, colorIndex?, texture?)` (state, gamma index, BLDALPHA's EVA / EVB, fogHScrollPosX, BG palette
   `slot` unfaded / shown, an atlas pixel drawn with it, a sheet pixel now / as loaded), `__test.fog(px?, py?,
   visible?)` (the fog sprites' screen positions, EVA / EVB, the fog's colour at a screen pixel, gSpriteCoordOffset,
   the GBA layer's semi-transparent pixels; `visible` hides it to read the field under it), `__test.screenPixel(x, y)`
-  (a rendered pixel, read at the end of the next render). Tests: tests/unit/weather.test.ts (tables, the task, the
-  fog's blend steps, scroll, fade in and finish), tests/e2e/weather.test.ts (dev starts: `?map=ViridianForest`,
+  (a rendered pixel, read at the end of the next render; one at a time: Phaser keeps one request per render),
+  `__test.doWeather(weather)` (setweather + doweather), `__test.weatherSprites(px?, py?, visible?)` (the layer's OAM
+  now, BLDALPHA, the front sprite's colour at a pixel, the GBA layer's semi pixels; `visible` hides them),
+  `__test.weatherTestSprite({ x, y, blend, eva, evb })` (a still 64x64 ash frame on the layer, test-only). Tests:
+  tests/unit/weather.test.ts (tables, the task, the fog's blend steps, scroll, fade in and finish),
+  tests/unit/weatherRain.test.ts (the rain's set-up / finish frame by frame, a raindrop against the C's arithmetic,
+  the SE3 calls, BuildWeatherOam), tests/e2e/weatherRain.test.ts (`PalletTown_PlayersHouse_2F` (6, 6): rain,
+  thunderstorm, downpour, the stop, a warp out, a battle in rain, the layer's blend), tests/e2e/weather.test.ts (dev starts: `?map=ViridianForest`,
   `?map=NavelRock_Summit&x=9&y=13`, `?map=SevenIsland_TanobyRuins&x=120&y=11` then up into the Monean Chamber,
   `?map=PokemonTower_3F&x=5&y=10` (the stairs to 2F at (4, 10) are a push warp: `t.enterWarp()`; column 6 is
   gravestones), `?map=FiveIsland_LostCave_Room1&x=8&y=4`).
@@ -2046,8 +2080,8 @@ or extend them:
 - **Not here:** the warp tasks' sounds (Escape Rope, Dig, Teleport, the fall arrival, Fly's music) and map music
   ("Map music"), the cries' timing (W-sound 2), the bike bell (item_use.c: menus/itemUse.ts). Not in the port: escalators,
   the Lavaridge warps, FldEff_NpcFlyOut, Birth Island's rock (SE_THUNDER), ShakeScreen, LoopWingFlapSound, the
-  Acro Bike and secret base mats (field_player_avatar.c's SE_BIKE_HOP / SE_WARP_IN), the mailbox, the rain weathers' sounds
-  (POSTGAME_PLAN.md decision 1).
+  Acro Bike and secret base mats (field_player_avatar.c's SE_BIKE_HOP / SE_WARP_IN), the mailbox. The rain weathers'
+  sounds are the weather's ("Field weather").
 - **Tests:** `tests/e2e/fieldSounds.test.ts` (a bump's SE_WALL_HIT, a ledge's SE_LEDGE, talking's SE_SELECT, Bill's
   `opendoor` SE_SLIDING_DOOR, the bedroom PC's SE_PC_ON without SE_SELECT, START's SE_WIN_OPEN and the menu's
   SE_SELECTs, the save dialog closing SE_SAVE's length + 60 frames after it, the heal machine's SE_BALLs 25 frames

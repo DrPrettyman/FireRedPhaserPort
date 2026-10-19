@@ -4356,3 +4356,43 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   Shock's dim BG palettes 1-3 change, 0 and 4 don't, and the healthbox palette doesn't.
 - Also: specials.ts' NO_OP comment said "quest log"; it now holds only link-play specials.
 - Typecheck, unit tests and tests/e2e/battleAnims.test.ts.
+
+### W-weather 1 (GAPS_PLAN.md batch 13): the weather sprite layer, Rain, Thunderstorm, Downpour, the rain sounds
+
+- **The weather sprite layer** (for every weather's sprites but the horizontal fog's; units 2-3 reuse it):
+  `world/weatherSprites.ts` (no Phaser) is the weathers' share of gSprites with sprite.c's calls (LoadSpriteSheet,
+  CreateSprite / CreateSpriteAtEnd, DestroySprite, FreeSpriteTilesByTag, AnimateSprites, BuildOamBuffer's
+  UpdateOamCoords and SortSprites), on gba/sprite.ts' `Sprite` and its AnimateSprite / StartSpriteAnim.
+  `world/weatherSpriteRenderer.ts` draws it once a render frame: ST_OAM_OBJ_NORMAL sprites as images at their OAM
+  priority's depth, ST_OAM_OBJ_BLEND ones composited per priority / subpriority into a MULTIPLY (EVB / 16 where
+  opaque) and an ADD (colour x EVA / 16) screen texture: BLDALPHA for sprites with transparent pixels, which the
+  fog's screen-wide MULTIPLY couldn't do. The ADD pass sits half a 5-bit step low so the 8-bit sum is within half a
+  step of the PPU's floored 5-bit sum (a plain sum was 6 off at EVA 10). The GBA layer's copy of the field (battle
+  transitions) takes the sprites among the objects by depth, the blended ones as semi-transparent OBJ pixels.
+- **Rain, Thunderstorm, Downpour** (`world/weatherRain.ts`, field_weather_effects.c): the rain sprites
+  (sRainSpriteTemplate, StartRainSpriteFall's ISO_RANDOMIZE2, UpdateRainSprite, WaitRainSprite,
+  InitRainSpriteMovement, CreateRainSprite, UpdateVisibleRainSprites, DestroyRainSprites, the splash anims),
+  Thunderstorm_Main's states (the lightning through WeatherShiftGammaIfPalStateIdle(19) / WeatherBeginGammaFade,
+  SetThunderCounter, UpdateThunderSound), Downpour_* with Thunderstorm_Main / _Finish; `PORTED` gains their rows
+  (built on first use: the weather modules import weather.ts). FadeScreen and FadeInScreenWithWeather take the rain
+  weathers (and SNOW, as the C lists it) through FadeInScreen_RainShowShade.
+- **The sounds** (field_weather.c): SetRainStrengthFromSoundEffect (the SE3 loops SE_RAIN / SE_DOWNPOUR /
+  SE_THUNDERSTORM from the InitVars, not while fading out) and PlayRainStoppingSoundEffect at the C's call sites
+  the port has: SetNextWeather, SetCurrentAndNextWeather, OverworldScene `warpTo` (DoWarp, DoDiveWarp, Task_DoorWarp,
+  Task_StairWarp), `openFieldMenu` (the start menu's Pokédex, Pokémon, Bag, trainer card and Option),
+  world/dive.ts' DoDiveWarp, menus/seagallop.ts' Task_Seagallop_3. Not: SetCurrentAndNextWeatherNoDelay (static,
+  never called), StartMenuLinkPlayerCallback (link). AUDIO_PLAN.md's rain-SE deferral and the "no field weather"
+  notes (DEVIATIONS, seagallop.ts, dive.ts, OverworldScene) are gone.
+- **Fix on the way:** a battle took the map header's weather for ABILITYEFFECT_SWITCH_IN_WEATHER
+  (`BattleStart.overworldWeather`), not GetCurrentWeather (gWeatherPtr->currWeather): a `setweather` / `doweather`
+  change didn't reach the battle. FRLG's maps never differ there (no rain), so nothing visible changed.
+- Test hooks: `doWeather`, `weatherSprites`, `weatherTestSprite` (dev/testHooks.ts). Exported for units 2-3:
+  `gWeatherPtr`, the blend functions, WeatherShiftGammaIfPalStateIdle, WeatherBeginGammaFade,
+  LoadCustomWeatherSpritePalette, spriteCoordOffsetX / Y, WEATHER_PAL_STATE_*.
+- Verified: typecheck; unit tests (tests/unit/weatherRain.test.ts: the rain's set-up and finish frame by frame, a
+  raindrop's fall against ISO_RANDOMIZE2 in BigInt, the SE3 calls with gba/sound mocked, BuildWeatherOam's order and
+  wrapping); e2e tests/e2e/weatherRain.test.ts (rain: SE_RAIN on SE3, the gamma steps 20 frames apart, 24 drops / 10
+  shown, the fall and splash per tick, the camera; the stop: SE_RAIN_STOP, a drop hidden every 9 frames; thunderstorm:
+  the gamma 19 flash and SE_THUNDER(2); downpour; a stair warp's SE_RAIN_STOP before SE_EXIT; a wild battle's rain
+  message; the blend of a test sprite read back from the screen, and its semi pixels on the GBA layer in a battle
+  transition), plus weather, mapPreview, fieldSounds, seagallop, dive and transitions.

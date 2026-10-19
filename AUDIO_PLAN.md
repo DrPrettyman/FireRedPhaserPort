@@ -270,7 +270,7 @@ counter stands in.
 | `waitmoncry`, IsCryFinished, IsCryPlaying(OrClearCrySongs) | the cry track's channel link: until FINE after `length` ticks, or the sample's end (not the release): sequencer + mixer state. Numbers below | scrcmd.c:2097, evolution_scene.c (6), trade_scene.c (2), daycare.c, oak_speech.c, battle_anim_sound_tasks.c (4), the battle controllers (8: the opponent's intro cry before the battle starts), hall_of_fame.c (2), pokeball.c, pokemon_summary_screen.c | finished at once: battle intros, the Hall of Fame and evolutions go faster than on the GBA |
 | BGMusicStopped, IsNotWaitingForBGMStop | the BGM fade-out (16 × speed frames) and MapMusicMain's states 5-7 | field_fadetransition.c (5 warp tasks: `!WaitWarpFadeOutScreen() && BGMusicStopped()`), field_effect.c (5: Fly, Dig, Teleport, Escape Rope), field_screen_effect.c, seagallop.c, overworld.c, title_screen.c, pokemon_jump.c | not checked: warps wait only for the palette fade. On the GBA a warp into a map with other music waits 32 frames (indoors) or 64 (outdoors) for the music |
 | IsBGMStopped / IsBGMPlaying | the BGM player | trade_scene.c, pokeball.c | not ported |
-| IsSpecialSEPlaying | SE3 | field_weather.c (rain stopping) | not ported |
+| IsSpecialSEPlaying | SE3 | field_weather.c (rain stopping) | `gba/sound.ts`; PlayRainStoppingSoundEffect (world/weather.ts) |
 
 **How long a cry holds a wait.** From section 1: the cry is a TIE at key 60 plus the mode's pitch, held for
 `length` ticks (one a frame), so it is "playing" for min(length + 1, 1 + sample frames) frames after the call,
@@ -613,7 +613,7 @@ W-m4a 3 is split in two (W-m4a 3, the mixer; W-out 1, the browser output), so ba
    field_player_avatar.c (13), field_control_avatar.c (6), field_specials.c (13: elevators, ...), doors
    (`opendoor` / field_door.c), player_pc.c (10), start_menu.c (14: the save dialog), itemfinder.c,
    vs_seeker.c, ss_anne.c, seagallop.c, trainer_see.c, fldeff_poison.c: ~110 calls, nearly all missing in the
-   port. (The weather loops on SE3 wait for field weather, which the port doesn't have yet.)
+   port. (The weather loops on SE3 came with the rain weathers: GAPS_PLAN.md batch 13, W-weather 1.)
 5. **Call sites: battle I (controllers, scripts, music).** battle_controller_player.c (48 in C / 17 live in the
    port), _oak_old_man.c (16 / 7), _opponent.c (9 / 4, incl. the intro cry wait), _safari.c (9 / 5),
    battle_script_commands.c (21 / 15), battle_main.c (11 / 1: the battle music, victory music), battle_setup.c
@@ -780,7 +780,6 @@ full suite through `/Users/joshua/Coding/PokemonProjects/.e2e-full.lock` (decisi
 are gone; the ambient cries, the controllers' IsBattleSEPlaying and PlayerHandleCmd23's BattleStopLowHpSound were
 the last ports; the other "silent" entries in docs/DEVIATIONS.md were stale (their screens already made the C's
 calls). What stays deferred, one line each (docs/DEVIATIONS.md keeps the approximations, "Not in this plan" the rest):
-- Field weather's SE3 loops (SE_RAIN, SE_THUNDERSTORM, SE_DOWNPOUR) and PlayRainStoppingSoundEffect: no field weather.
 - The help system's BGM halving: no help system.
 - The quest log's playback (its muted BGM, PlaySE and fanfare skips, PlayCry_Script's skip): no quest log.
 - Link play: the cable club / Union Room / wireless minigames, the link trade's FadeOutBGM / IsBGMStopped wait,
@@ -1003,9 +1002,6 @@ None open (question 1 became decision 15).
 
 ## Not in this plan
 
-Field weather's sounds (field_weather.c / field_weather_effects.c: SE_RAIN, SE_THUNDERSTORM, SE_DOWNPOUR and
-their stops on SE3, PlayRainStoppingSoundEffect): the port has no field weather yet; whoever ports it adds them.
-
 The help system's BGM halving (no help system yet: `SetBGMVolume_SuppressHelpSystemReduction` stays a volume call
 with nothing reducing it), the quest log's playback muting (no quest log), link play and the wireless minigames'
 sounds (dodrio_berry_picking.c, pokemon_jump.c, berry_crush.c, union_room.c), the intro movie's sound (intro.c
@@ -1030,7 +1026,7 @@ unit that owns a file re-counts it.
 | W-sound 4 | ui/SaveDialog.ts, ui/StartMenu.ts | start_menu.c | 14 | 1 | 3 |
 | W-sound 4 | script/ScriptEngine.ts (`opendoor`), world/doors.ts | scrcmd.c:2126 (GetDoorSoundEffect), field_fadetransition.c's door SEs | 1 + 8 | 0 | 1 |
 | W-sound 4 | entities/FieldEffects.ts, entities/FieldPoisonEffect.ts | trainer_see.c, fldeff_poison.c | 0 + 1 | 2 | 2 + 1 |
-| deferred (no field weather in the port) | none | field_weather.c, field_weather_effects.c (the rain / thunder SE3 loops) | 9 + 3 | none | none |
+| W-weather 1 (GAPS_PLAN.md batch 13) | world/weather.ts, world/weatherRain.ts | field_weather.c, field_weather_effects.c (the rain / thunder SE3 loops, PlayRainStoppingSoundEffect) | 9 + 3 | 0 | 0 |
 | W-sound 5 | battle/controllerPlayer.ts, controllerOakOldMan.ts, controllerOpponent.ts, controllerSafari.ts, controllerCommon.ts | battle_controller_player.c, _oak_old_man.c, _opponent.c, _safari.c | 48 + 16 + 9 + 9 | 17 + 7 + 4 + 5 + 1 | 0 + 2 + 1 + 1 |
 | W-sound 5 | battle/bsCommands1-4.ts, battle/main.ts, battle/transition.ts, battle/battleUi.ts, scenes/BattleScene.ts | battle_script_commands.c, battle_main.c, battle_setup.c, battle_transition.c | 21 + 11 + 1 + 1 | 15 + 1 + 0 + 4 + 4 | 3 + 2 + 1 + 3 |
 | W-sound 6 | battle/gfx.ts, battle/battleInterface.ts | pokeball.c, battle_gfx_sfx_util.c, battle_interface.c | 23 + 8 + 3 | 3 + 2 | 1 |

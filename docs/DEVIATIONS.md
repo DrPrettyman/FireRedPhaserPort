@@ -36,8 +36,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     its text like `messageautoscroll` does, as a plain field message (no auto-scroll; the profile's two lines fit one
     box). InitEasyChatPhrases clears additionalPhrases only
     (the C's non-UBFIX loop clears 64 bytes, into the Mauville old man's data that's re-initialized right after).
-  - Seagallop ferry (menus/seagallop.ts, script/ferrySpecials.ts): no PlayRainStoppingSoundEffect (it only
-    sounds in rain, which isn't ported: POSTGAME_PLAN.md decision 1); no quest log (DrawSeagallopDestinationMenu's
+  - Seagallop ferry (menus/seagallop.ts, script/ferrySpecials.ts): no quest log (DrawSeagallopDestinationMenu's
     QL_AvoidDisplay). The script that ran DoSeagallopFerryScene stays in its `waitstate` until the scene warps, then
     runs on to its `end` (in C, CB2_LoadMap's ScriptContext_Init drops it). The scene's WarpFadeOutScreen is a plain palette fade to
     black (FadeScreen's white fade is for underwater maps, and no harbor is one).
@@ -213,8 +212,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     user, so it lives in surf.ts rather than on the ObjectEvent, and the player's sprite y2 it sets is applied
     to the Phaser sprite directly (ObjectEvent's depth ignores that 1 px). After a battle or field menu the blob
     is made again (the GBA rebuilds every sprite), so its animation restarts.
-  - Dive (world/dive.ts; an R/S leftover no FRLG map reaches): no PlayRainStoppingSoundEffect (rain isn't
-    ported). DiveFieldEffect_ShowMon waits for the banner's graphics to load, as Waterfall's
+  - Dive (world/dive.ts; an R/S leftover no FRLG map reaches): DiveFieldEffect_ShowMon waits for the banner's graphics to load, as Waterfall's
     does. `setdivewarp` (ScrCmd_setdivewarp) isn't ported (no FRLG script uses it), so sFixedDiveWarp is always the
     dummy warp and a map without a dive/emerge connection never dives. As in the C, that case leaves the player
     locked (DiveFieldEffect_Init's preventStep and _ShowMon's LockPlayerFieldControls are never undone).
@@ -380,7 +378,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (gTextFlags.autoScroll, link / recorded battles) aren't ported.
   - Map music (gba/overworldMusic.ts, overworld.c's music block): the warps load the destination's header before
     their fade starts (WarpFadeOutScreen and TryFadeOutOldMapMusic wait for it; it's cached after SetupWarp, so
-    usually the same frame). The warps' PlayRainStoppingSoundEffect isn't ported (rain isn't). DoStairWarp
+    usually the same frame). DoStairWarp
     runs as DoWarp (no stair walk: its TryFadeOutOldMapMusic and SE_EXIT come at once rather than after the
     player's step and delay). `warpdoor` (unused in FRLG) goes straight to Task_DoorWarp's warp: no door SE or
     animation. The Hall of Fame's DoWarp (SetWarpsToRollCredits, menus/hallOfFame.ts) loads the
@@ -394,7 +392,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     union room / link-return warps (DoCableClubWarp, ReturnFromLinkRoom, DoUnionRoomWarp) aren't ported (no link
     play).
   - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical. In a shaded map the
-    fade in is the weather's (FadeInScreen_RainShowShade: 16 frames, `delay` unused): the palettes are at gamma index
+    fade in is the weather's (FadeInScreen_RainShowShade: 16 frames, `delay` unused; the rain weathers too): the palettes are at gamma index
     3 under the overlay from the first step and the overlay follows its blend coefficient, where the C blends the
     shifted colours toward the fade colour (ApplyGammaShiftWithBlend). In the fog it's FadeInScreen_FogHorizontal's
     16 frames the same way (ApplyFogBlend), with the fog's sprites under the overlay too.
@@ -485,9 +483,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     visiting trainer's door never opens; the battle room's specials (SetEReaderTrainerGfxId, StartSpecialBattle,
     ReducePlayerPartyToThree, the party save / load) stay link gaps.
   - Field weather (world/weather.ts, W-weather units 1 and 2): WEATHER_NONE, SUNNY, SHADE and FOG_HORIZONTAL are
-    ported (and UNDERWATER, which shares the fog's callbacks); the weathers no FRLG map or script reaches (rain, snow,
-    thunder, ash, sandstorm, diagonal fog, drought, downpour, bubbles) run as WEATHER_NONE and log once
-    (POSTGAME_PLAN.md decision 1); their saved number is kept. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
+    ported (and UNDERWATER, which shares the fog's callbacks), and RAIN, RAIN_THUNDERSTORM and DOWNPOUR (batch 13,
+    world/weatherRain.ts); the other weathers no FRLG map or script reaches (clouds, snow, ash, sandstorm, diagonal
+    fog, drought, bubbles) run as WEATHER_NONE and log once (POSTGAME_PLAN.md decision 1); their saved number is
+    kept. SetCurrentAndNextWeatherNoDelay (static, never called in FRLG) isn't ported. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
     the field's sprite sheets redrawn in place (world/weatherTextures.ts: `spr_*` GAMMA_ALT, their reflection sheets
     and the loadfadedpal field effects GAMMA_NORMAL), not to palette RAM: a connected map with another secondary
     tileset isn't shifted until it's the current map. FadeScreen's fade-out copy of the shifted palettes into the
@@ -517,6 +516,19 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     the vertical pan's 32 + 8; the horizontal pan (sHorizontalCameraPan) is 0 on the field. The GBA layer's copy of
     the field (battle transitions) draws the fog as semi-transparent OBJ pixels behind the priority-2 objects, with
     the weather's BLDALPHA, which the PPU blends as the GBA does.
+  - The weather sprite layer (world/weatherSprites.ts, world/weatherSpriteRenderer.ts, batch 13): the weathers'
+    sprites have a pool of their own (MAX_SPRITES slots: CreateSpriteAtEnd from the top, CreateSprite from the
+    bottom); on the GBA they share gSprites with the field's objects, so a weather that wants many sprites could run
+    short there sooner. They're drawn once a render frame from the OAM of that moment (at 60 Hz, every tick).
+    ST_OAM_OBJ_BLEND sprites: the GPU blends them in two passes (MULTIPLY by EVB / 16 where the sprite is opaque, then
+    ADD of its colours times EVA / 16, half a 5-bit step lower), on 8-bit colours, so a pixel can be half a step of
+    the 5-bit channel off the PPU's (the e2e test allows 5 of 255). The PPU has one OBJ pixel per dot, so an object
+    behind a blended weather pixel is hidden and the BG under it blended; here what's under it, objects too, is
+    blended (the blended sprites among themselves are exact: the front one's pixel wins). The weather palette's
+    UpdateSpritePaletteWithWeather states are the gamma row (the screen fades are the overlay's, as for the
+    objects), and StartWeather's ApplyGlobalFieldPaletteTint (the quest log's playback tint) doesn't reach it: no
+    weather with sprites is recorded by the quest log, no FRLG map having one. The GBA layer's copy of the field
+    puts the weathers' sprites in its OBJ layer among the objects by depth, the blended ones semi-transparent.
 - **Data:** Castform has no front pic (its `front.png` isn't in the decomp; it's built from per-form images).
 
 ## Deliberate QOL changes
