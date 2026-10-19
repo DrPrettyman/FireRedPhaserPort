@@ -57,8 +57,7 @@ import {
   TranslateAnimHorizontalArc,
   TranslateAnimVerticalArc,
 } from './animMons';
-import { m4aMPlayAllStop } from '../../audio/m4a';
-import { PlaySE, PlaySE12WithPanning } from '../../gba/sound';
+import { m4aMPlayAllStop, PlaySE, PlaySE12WithPanning } from '../../gba/sound';
 import { animSpriteTemplate, animTagGfx, LoadAnimSpriteGfx } from './battleAnim';
 import { anim, ARG_RET_ID, DestroyAnimSprite, DestroyAnimVisualTask, gBattleAnimArgs, registerAnimExtraGfx } from './state';
 

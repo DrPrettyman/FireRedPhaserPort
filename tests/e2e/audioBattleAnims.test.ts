@@ -33,26 +33,27 @@ function songTicks(name: string): number {
   throw new Error(`${name} doesn't end`);
 }
 
-test("Tackle's SE is panned to the target's side, and the anim waits for it to end", async () => {
+test("an attack's SEs are panned by the attacker's side, and Tackle's anim waits for its SE to end", async () => {
   // Mewtwo (faster) tackles first: the attacker is on the player's side, so BattleAnimAdjustPanning keeps
-  // SOUND_PAN_TARGET; then Snorlax's Tackle, from the opponent's side onto the player's: the pan is negated.
+  // SOUND_PAN_TARGET. Then Snorlax's Shadow Punch (it never misses), from the opponent's side onto the player's:
+  // the pans are negated (SOUND_PAN_ATTACKER's +64 clamped to SOUND_PAN_TARGET).
   const game = await session.start({ ...ROUTE1, party: [{ species: 'MEWTWO', level: 100, moves: ['TACKLE'] }] });
-  await game.eval((t) => t.startWildBattle({ species: 'SNORLAX', level: 100, moves: ['TACKLE'] }));
+  await game.eval((t) => t.startWildBattle({ species: 'SNORLAX', level: 100, moves: ['SHADOW_PUNCH'] }));
   const since = await useMoveSlot(game, 0, 0);
   await game.waitForActionMenu();
   const events = await game.events(since);
-  const tackles = events.filter((e) => e.type === 'battleAnim' && e.label === 'Move_TACKLE');
-  const ends = events.filter((e) => e.type === 'battleAnimEnd' && e.label === 'Move_TACKLE');
-  const ses = (await game.eval((t, s) => t.audioEvents(s), since)).filter((e) => e.name === 'SE_M_COMET_PUNCH');
-  expect(tackles.map((e) => e.attacker)).toEqual([0, 1]);
-  expect(ses).toMatchObject([
-    { type: 'se', player: 'SE1', pan: SOUND_PAN_TARGET, started: true },
-    { type: 'se', player: 'SE1', pan: -SOUND_PAN_TARGET, started: true },
+  const anims = events.filter((e) => e.type === 'battleAnim' && /^Move_(TACKLE|SHADOW_PUNCH)$/.test(e.label as string));
+  expect(anims.map((e) => [e.label, e.attacker])).toEqual([['Move_TACKLE', 0], ['Move_SHADOW_PUNCH', 1]]);
+  const audio = (await game.eval((t, s) => t.audioEvents(s), since)).filter((e) => /^SE_M_(COMET_PUNCH|JUMP_KICK)$/.test(e.name));
+  expect(audio).toMatchObject([
+    { name: 'SE_M_COMET_PUNCH', player: 'SE1', pan: SOUND_PAN_TARGET, started: true }, // Tackle
+    { name: 'SE_M_JUMP_KICK', pan: SOUND_PAN_TARGET }, // Shadow Punch's SOUND_PAN_ATTACKER: negated to 64, clamped
+    { name: 'SE_M_COMET_PUNCH', pan: -SOUND_PAN_TARGET }, // and its SOUND_PAN_TARGET
   ]);
-  // Cmd_end: the visuals are done before the SE is, so `end` waits for IsSEPlaying. The SE started in frame s has
-  // its last tick in frame s + len - 1's sound hook, and Cmd_end sees it stopped in frame s + len's logic.
-  const len = songTicks('SE_M_COMET_PUNCH');
-  expect(ends.map((e) => (e.frame as number) - (ses.shift()!.frame as number))).toEqual([len, len]);
+  // Cmd_end: Tackle's visuals are done before its SE is, so `end` waits for IsSEPlaying. The SE started in frame s
+  // has its last tick in frame s + len - 1's sound hook, and Cmd_end sees it stopped in frame s + len's logic.
+  const end = events.find((e) => e.type === 'battleAnimEnd' && e.label === 'Move_TACKLE')!;
+  expect((end.frame as number) - audio[0].frame).toBe(songTicks('SE_M_COMET_PUNCH'));
 });
 
 test("Growl plays the attacker's cry twice (CRY_MODE_GROWL_1, then _2 once the first stops), panned to its side", async () => {

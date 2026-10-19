@@ -3125,3 +3125,38 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   LFSR / noise clock / wave samples, volumes, banks / mixing / the circuit's timing and resync, then the extracted
   SEs and songs); `tests/e2e/audioOutput.test.ts` + 1 (SE_SELECT alone reaches the worklet's speakers; checked to
   fail with the PSG switched off). Typecheck clean; unit 577 in 42 files; e2e audioOutput 5, audio 2.
+### W-sound 6b: the battle anim engine's sounds (AUDIO_PLAN.md batch D)
+
+- `src/battle/anim/` calls `gba/sound.ts` directly, with the C's arguments; battleAnim.ts's PlaySE12WithPanning
+  wrapper (→ BattleScene's no-op `ui.playSE`, pan dropped) is gone, and so are ghost.ts's and special.ts's
+  `ui.playSE` stand-ins. battle_anim.c: `playse` (PlaySE), `playsewithpan` / `loopsewithpan` / `waitplaysewithpan`
+  / the three `panse` commands (PlaySE12WithPanning with BattleAnimAdjustPanning's / _2's pan), `setpan` and
+  Task_PanFromInitialToTarget (SE12PanpotControl; the last step now lands on the target pan, as the C), `stopsound`
+  (m4aMPlayStop of SE1 and SE2), Cmd_end and Cmd_waitsound's IsSEPlaying wait (sSoundAnimFramesToWait: up to 90
+  frames, then SE1 / SE2 stopped), gMovesWithQuietBGM (read from the anim ROM image: Sing, Perish Song, Grass
+  Whistle set the BGM to 128 at launch; Cmd_end sets 256). battle_anim_sound_tasks.c: SoundTask_PlaySE1WithPanning
+  / _PlaySE2WithPanning now play on their own player (PlaySE1 / PlaySE2WithPanning, they were both PlaySE12); the
+  cries (PlayCry_ByMode with the species and CRY_MODE_HIGH_PITCH / GROWL_1-2 / ROAR_1-2 / ECHO_START-END) and their
+  IsCryPlaying waits were already live (W-sound 2). effects3.ts's Encore SE is PlaySE1WithPanning, as in the C.
+  battle_anim_special.c: the ball SEs (SE_BALL_THROW panned 0, SE_BALL_OPEN, SE_BALL_TRADE, the four bounces,
+  SE_BALL, SE_BALL_CLICK, SE_SHINY panned to the battler's side) and the click's m4aMPlayAllStop +
+  PlaySE(MUS_CAUGHT_INTRO). The 27 PlaySE12WithPanning / PlaySE1WithPanning / PlaySE calls in the type files were
+  checked against the C: all pass the C's pan (BattleAnimAdjustPanning(...), gAnimCustomPanning, or the task's
+  stored pan).
+- Waits that now take their GBA length: every anim whose SE outlasts its visuals ends in the frame after the SE's
+  last tick (Tackle: SE_M_COMET_PUNCH, 26 frames from its start), up to 90 frames; `waitsound` the same.
+- Races fixed on the way (both read something short-lived from Node): battleAnims.2d's Teleport read the
+  attacker's sprite after the anim's end, when the battle (ending ~150 ticks later) could already be gone; it now
+  reads it in the page in the tick after the end. battleAnims.3e3b's Snatch polled for the attacker's copy
+  (up ~40 ticks) from Node and missed it under load; now watched in the page.
+- Found on the way: after merging master (W-sound 7a), special.ts uses sound.ts's `m4aMPlayAllStop` (it reports a
+  `stop` per live player). The first version of the pan test had the foe use Tackle, which can miss (no anim):
+  it uses Shadow Punch now, which never does.
+- Tick budgets raised: none (the full suite passed with only the two races above fixed).
+- Verified: typecheck; `npm test` (42 files, 577 tests, after merging master); new `tests/e2e/audioBattleAnims.test.ts`
+  (4: Tackle's SE pan from the player's side and its anim ending exactly SE_M_COMET_PUNCH's 26 frames after the
+  SE's start, Shadow Punch's pans from the opponent's side; Growl's two Rattata cries in CRY_MODE_GROWL_1 / _2 at
+  SOUND_PAN_ATTACKER, no cry playing at the anim's end; Perish Song's BGM at volume 32 of 64 from its launch to its
+  end, 64 after; a Master Ball's twelve SEs in order and MUS_CAUGHT_INTRO with the BGM and SE1 stopped); every
+  battleAnims*.test.ts and wildBattle.test.ts; **the full e2e suite once (before merging master): 64 files, 411
+  tests, all passed, 26 min**; after the merge audioBattleAnims (twice), battleAnims, wildBattle, audio.
