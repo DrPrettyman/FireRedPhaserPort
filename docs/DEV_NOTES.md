@@ -1526,7 +1526,6 @@ or extend them:
   FadeOutMapMusic's fade before the end, MUS_ROUTE1 after; a level-100 win without victory music; Rick:
   MUS_ENCOUNTER_BOY, MUS_VS_TRAINER, MUS_VICTORY_TRAINER, MUS_VIRIDIAN_FOREST after; Lorelei's mugshot SE_MUGSHOT;
   Zapdos's MUS_VS_LEGEND; the Poké Flute's `waitfanfare` holding "...awoke!" until MUS_POKE_FLUTE's 450 frames end).
-### Scene sounds (W-sound 7a, 7b)
 - **Balls, the low HP beep, the trays (W-sound 6a):** `battle/gfx.ts` holds pokeball.c's send-out cry
   (SpriteCB_ReleaseMonFromBall → Task_PlayCryWhenReleasedFromBall: pan ±25, NORMAL / WEAK, the doubles intro's
   DOUBLES-then-NORMAL pair and its BGM volume 128) and battle_main.c's wild-mon cry (SpriteCB_MoveWildMonToRight:
@@ -1538,7 +1537,7 @@ or extend them:
   are battle_anim_special.c's (`battle/anim/special.ts`). Tests: `tests/e2e/audioBattleBalls.test.ts` (send-out
   and wild cries with pan / mode, a weak cry, the trays, the beep starting on a hit / at a send-out and stopping on
   a Potion / a switch / the victory music, a double battle's intro cries on Victory Road 3F).
-### Scene sounds (W-sound 7a)
+### Scene sounds (W-sound 7a, 7b)
 
 - **Where:** each C call at its port function, through `gba/sound.ts` with the C's arguments.
   `menus/evolutionScene.ts` (evolution_scene.c): m4aMPlayAllStop on entry (EvolutionScene) and on a cancel, the
