@@ -2,7 +2,8 @@
 // mon (a BLDY scanline effect), Charizard fading in from grey, the WIN0 slide that brings in the copyright and
 // border BGs, the white flashes, then the run scene: "PRESS START" blinking, flames rising from the bottom and
 // the slash of light across the logo (an OBJ-window sprite lightening BG0). A/START: the cry, a fade to white and
-// the main menu (CB2_InitMainMenu); 2700 frames without input restart the title; B+SELECT+UP opens the clear save
+// the main menu (CB2_InitMainMenu); 2700 frames without input go back to the copyright screen and the intro
+// (menus/intro.ts), which end on the title screen again; B+SELECT+UP opens the clear save
 // data screen. A host scene (scenes/MainMenuScene.ts) fills in `titleScreenEnv` and runs CB2_InitTitleScreen.
 
 import { ChangeBgX, HideBg, InitBgsFromTemplates, ResetBgsAndClearDma3BusyFlags, ShowBg, type BgTemplate } from '../gba/bg';
@@ -106,6 +107,7 @@ import {
 } from '../gba/sprite';
 import { CreateTask, DestroyTask, FindTaskIdByFunc, FuncIsActiveTask, GetWordTaskArg, gTasks, ResetTasks, RunTasks, SetWordTaskArg, TASK_NONE, type TaskFunc } from '../gba/task';
 import { testEvent } from '../dev/testHooks';
+import { CB2_InitCopyrightScreenAfterTitleScreen } from './intro';
 import { CB2_InitMainMenu } from './mainMenu';
 
 /** What the title screen reads from outside title_screen.c. */
@@ -543,17 +545,9 @@ function SetTitleScreenScene_Restart(data: Int16Array): void {
     case 4:
       // HelpSystem_Disable: no help system
       DestroyTask(FindTaskIdByFunc(Task_TitleScreenMain));
-      SetMainCallback2(CB2_InitCopyrightScreenAfterTitleScreen);
+      SetMainCallback2(CB2_InitCopyrightScreenAfterTitleScreen); // the copyright screen and the intro (menus/intro.ts)
       break;
   }
-}
-
-/**
- * CB2_InitCopyrightScreenAfterTitleScreen (intro.c): the copyright screen and the Game Freak / Nidorino movie,
- * which end on the title screen again. intro.c isn't ported, so this goes straight back to the title screen.
- */
-function CB2_InitCopyrightScreenAfterTitleScreen(): void {
-  SetMainCallback2(CB2_InitTitleScreen);
 }
 
 function SetTitleScreenScene_Cry(data: Int16Array): void {
