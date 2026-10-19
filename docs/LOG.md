@@ -3153,3 +3153,30 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   LFSR / noise clock / wave samples, volumes, banks / mixing / the circuit's timing and resync, then the extracted
   SEs and songs); `tests/e2e/audioOutput.test.ts` + 1 (SE_SELECT alone reaches the worklet's speakers; checked to
   fail with the PSG switched off). Typecheck clean; unit 577 in 42 files; e2e audioOutput 5, audio 2.
+
+### W-ref 2: the port's audio against the ROM (AUDIO_PLAN.md batch D, unit 10)
+
+- Exact check on the rev 1 ROM in mGBA (GDB stub, W-ref 1's freeze and start; scripts in `wref-scratch/wref2/`,
+  method in docs/DEV_NOTES.md "ROM reference measurements"): per frame, the DirectSound slot m4a mixed, the four
+  CgbChannel structs, SoundInfo's header and the sound registers as mGBA reads them back (incl. NR52's channel-on
+  bits against the port's synth), for 31 items (6 BGMs 900 frames each, MUS_PALLET mono, 2 fanfares, 13 SEs incl.
+  the six PSG-only ones and 4 battle anim SEs, 9 cries in NORMAL / FAINT / ENCOUNTER / GROWL_1 / ECHO_START and
+  mono), against the port's engine run headless on the same job list: **identical in every frame** (~9,100 frames).
+  A one-frame shift was checked to show up in every field.
+- Listening: real mGBA audio can't be recorded headless with what's installed (the Qt app records from its GUI
+  only), so the reference is the ROM's FIFO bytes plus an independent model of mGBA's PSG C, driven by the port's
+  register writes. Results table in AUDIO_PLAN.md section 6 "W-ref"; the A/B page with the WAVs is
+  `wref-scratch/wref2/index.html`. Cries and DirectSound SEs within 0.01-0.2 dB, envelope r ≥ 0.97; PSG SEs
+  within 0.5 dB, r ≥ 0.996; BGMs within 0.2 dB overall.
+- Fixed: the PSG synth averaged each output sample over its cycles (a box filter), which cancels fast noise
+  (NR43 0x00: a 524 kHz LFSR clock): SE_FLEE's noise frames were ~10 dB down (the SE −1.6 dB, envelope r 0.947).
+  SoundCircuit now has the synth point-sample the PSG every 256 cycles (65,536 Hz, SOUNDBIAS's resolution, as the
+  GBA's DAC and mGBA) and hold it, averaged to the output's samples (`PsgSynth.dacInterval`; 0 keeps the box for
+  the hand-worked tests): SE_FLEE −0.5 dB, r 0.996; SE_EXIT r 0.989 → 0.997. CPU: +~15% for the synth.
+- Left (AUDIO_PLAN.md): the BGMs' per-frame envelope wanders ±2 dB around the reference (r 0.86-0.95; not the
+  squares' duty phase, tried), MUS_VS_WILD / MUS_VS_TRAINER 10-14% darker; the writes land 0.8 ms early in the frame
+  (docs/DEVIATIONS.md). Next: split the audio comparison per PSG channel.
+- Tests: `tests/unit/psgSynth.test.ts` + 1 (fast noise through the DAC: every sample 0 or 15, held per tick, against
+  the box's cancelled average); the circuit tests skip each frame's first sample (it can hold the previous frame's
+  last DAC tick) and get 30 s timeouts (they're CPU-heavy; the machine's load ran them past 5 s). Typecheck clean;
+  unit 578 in 42 files; e2e audio, audioOutput, audioCries, audioScenes 13 passed.

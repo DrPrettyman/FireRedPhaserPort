@@ -1177,10 +1177,14 @@ The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScri
   after a `reset()`, or frames missed) `loadState(state)` (registers latched, every channel off); then each write
   in order at the frame's start (`PsgSynth.write`: NRx4 bit 7 restarts, NRx2 bits 3-7 are the DAC, NR30's bank and
   64-sample mode, NR52 bit 7 resets NR10-NR51); then `render` plays 280,896 cycles as 896 samples. Each sample:
-  the frame sequencer's steps due (512 Hz: lengths at 0/2/4/6, square 1's sweep at 2/6, envelopes at 7), each
-  channel's average output over the sample's 313.5 cycles (0-15: squares 16 × (2048 − f) cycles a duty step, the
-  wave 8 × (2048 − f) a sample, noise 32 or 64r << s cycles an LFSR clock), routed by NR51, × 8 × (NR50 + 1), / 4,
-  8 or 16 by SOUNDCNT_H's share (a channel at 15 adds 240 at 100%). The circuit adds the previous frame's FIFO
+  the frame sequencer's steps due (512 Hz: lengths at 0/2/4/6, square 1's sweep at 2/6, envelopes at 7), then the
+  DAC's point samples (every 0x200 >> SOUNDBIAS's resolution = 256 cycles, 65,536 Hz, as the GBA and mGBA: each
+  channel's level at that cycle, held to the next tick; `dacInterval`, set by SoundCircuit) averaged over the
+  sample's 313.5 cycles (channel levels 0-15: squares 16 × (2048 − f) cycles a duty step, the wave 8 × (2048 − f) a
+  sample, noise 32 or 64r << s cycles an LFSR clock), routed by NR51, × 8 × (NR50 + 1), / 4, 8 or 16 by SOUNDCNT_H's
+  share (a channel at 15 adds 240 at 100%). Point sampling matters for fast noise (NR43 0x00: a 524 kHz clock): a
+  plain average over the sample cancels it out, the GBA's DAC aliases it at full level (W-ref 2: SE_FLEE was 10 dB
+  down in its noise frames). `PsgSynth.render` with `dacInterval` 0 is the plain average (the hand-worked tests). The circuit adds the previous frame's FIFO
   samples (×4 / ×2 by SOUNDCNT_H, the register as it stands now) and goes through `dacOutput(level, SOUNDBIAS)`.
 - **Behaviour worth knowing:** PSG levels are unsigned (a sounding channel adds DC, as on the GBA); a square's duty
   position free-runs (a restart doesn't move it; from power-on its timer counts 16 × 2048 cycles); the wave RAM
@@ -1236,6 +1240,27 @@ or extend them:
   (FINE and stop frames), 10 looping songs (the frames of track 0's first three GOTOs, watched through
   `gMPlayJumpTable[1]`), 8 species' cries in 5 modes (IsPokemonCryPlaying) and the cry song's end per mode. To add
   a number, measure it the same way and add a row; a mismatch is an engine bug or a difference in what is counted.
+- **W-ref 2: the output per frame, and the listening comparison** (scripts in `wref-scratch/wref2/`, outside the
+  repos; results in AUDIO_PLAN.md section 6 "W-ref"). Same mGBA, freeze and start method. `capture.py` (through
+  `run.sh`, which starts mGBA with `-C fpsTarget=100000 -C audioSync=0 -C videoSync=0 -C mute=1 -g`; set TCP_NODELAY
+  on the socket) runs a job list (`jobs.py`: songs by id, `PlayCry_ByMode`, `SetPokemonCryStereo` at 0x081DE844,
+  found by its literal pool with REG_SOUNDCNT_H and SOUND_INFO_PTR) and stops at every m4aSoundMain entry (~100 ms a
+  frame: 900 frames ≈ 90 s) to read: SoundInfo's first 16 bytes (`*0x03007FF0`; pcmDmaCounter at +4, c15 at +10),
+  the slot the previous frame mixed (`pcmBuffer` = SoundInfo + 0x350, slot from that frame's counter as
+  `PcmSlotOffset`; FIFO B at + 1,584), the four CgbChannel structs (SoundInfo + 28 → 4 × 64 bytes) and the sound
+  registers 0x4000060-0x40000AF as mGBA reads them back (write-only bits read 0: NRx3, NRx4's low bits; NR52's low
+  bits are the channels' on flags; wave RAM is the bank not playing). Jobs end with the song's stop and 60 idle
+  frames. `port_capture.ts` (run from the worktree: `npx vite-node --root /Users/joshua/Coding/PokemonProjects
+  <path>`, since vite-node won't load a file outside its root) replays the same job list headless, syncing
+  pcmDmaCounter and c15 to the ROM's at each start, and writes the same records plus each job's speakers WAV and
+  PSG writes; `compare.py` compares them field by field (the registers through mGBA's read masks, NR52 against the
+  port's synth's `on` flags). A one-frame shift shows up in every field (checked), so "identical" means identical.
+  The listening part: mGBA's Qt app records only from its GUI and nothing headless is installed, so `mgba_model.py`
+  renders a reference from the ROM's own FIFO bytes plus an independent model of mGBA's PSG (gb_audio.c /
+  gba_audio.c's GB_AUDIO_GBA paths in `Scratch/mgba-ref`: point samples every 256 cycles, a stopped channel holds
+  its level, the writes ~14,000 cycles into the frame) driven by the port's PSG writes; `analyze.py` compares it
+  with the port's WAV after a 20 Hz DC blocker and a 20 kHz band limit; `make_page.py` builds `index.html`.
+  Nothing from the ROM goes into the repo: only pass / fail facts and dB numbers the port computes itself.
 ### Audio output
 
 - **Where:** `src/audio/output.ts` (the AudioContext, the worklet node, autoplay, visibility, mute, `pushFrame`, the

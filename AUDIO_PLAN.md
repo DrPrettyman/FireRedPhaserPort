@@ -811,6 +811,42 @@ whole mix.
    (they name the ROM path and RAM addresses); the PR says how they worked, so W-ref 2 can redo them.
 2. **The listening comparison (later, after W-m4a 4).** The same scenes recorded from mGBA and from the port, for
    the user to listen to (PSG timbre, reverb, the mono mix); a song's loudness envelope and note onsets compared.
+   **Done (W-ref 2)**: method in docs/DEV_NOTES.md "ROM reference measurements"; the A/B page is
+   `wref-scratch/wref2/index.html` (outside the repos). Two comparisons per item: (a) **exact**, on the ROM in mGBA
+   against the port's engine, per frame: the DirectSound slot m4a mixed (224 bytes per FIFO), the four CgbChannel
+   structs (frequency, envelope, flags, pan ...), SoundInfo's header and the sound registers as mGBA reads them back
+   (incl. NR52's channel-on bits, against the port's synth); (b) **audio**, the port's speakers against a reference
+   made of the ROM's own FIFO bytes plus the PSG rendered by an independent model of mGBA's PSG C (real mGBA audio
+   can't be recorded headless with what's installed), compared after a DC blocker and a 20 kHz band limit:
+   loudness (dB of the RMS), the per-frame RMS envelope (correlation r, worst sounding frame), the frames that sound,
+   brightness (spectral centroid) and the strongest pitch. Neither side normalized.
+
+   | Item | Exact (frames) | Audio vs the mGBA model | Fixed / left |
+   | --- | --- | --- | --- |
+   | MUS_TITLE | identical (900) | +0.04 dB, r 0.989, centroid 690 / 684 Hz, pitch equal | matches |
+   | MUS_PALLET | identical (900) | +0.17 dB, r 0.89 (±2 dB per frame), strongest peak 220 / 247 Hz | left: the per-frame wander (not the squares' duty phase: tried) |
+   | MUS_PALLET mono | identical (400; SOUNDCNT_H, CgbModVol's both-sides NR51) | +0.12 dB, r 0.86, L = R | as stereo |
+   | MUS_ROUTE1 | identical (900) | −0.15 dB, r 0.94, centroid 738 / 763 | left: as MUS_PALLET |
+   | MUS_POKE_CENTER | identical (900) | +0.02 dB, r 0.992 | matches |
+   | MUS_VS_WILD | identical (900) | +0.03 dB, r 0.95, centroid 645 / 751 Hz (port 14% darker) | left: darker (noise drums?) |
+   | MUS_VS_TRAINER | identical (900) | −0.01 dB, r 0.92, centroid 840 / 932 Hz (10% darker) | left: as MUS_VS_WILD |
+   | MUS_LEVEL_UP, MUS_OBTAIN_ITEM | identical (90, 200) | −0.45 / +0.06 dB, r 0.990 / 0.999, frames 7-66 / 12-132 both | matches |
+   | SE_SELECT, SE_DOOR, SE_PC_ON (PSG) | identical (120 each) | −0.21 / −0.15 / −0.14 dB, r ≥ 0.998, same frames, ~7% darker | matches (darker: the output rate) |
+   | SE_EXIT (PSG, noise) | identical | −0.33 dB, r 0.997 (box filter: 0.989) | fixed: DAC point sampling |
+   | SE_FLEE (PSG, noise at NR43 0x00) | identical | −0.49 dB, r 0.996; box filter: −1.62 dB, r 0.947, noise frames ~10 dB down | fixed: DAC point sampling |
+   | SE_WALL_HIT (PSG) | identical | −0.05 dB, r 0.996, the reference rings 1 frame longer | left: writes at the frame start (0.8 ms early) |
+   | SE_SAVE, SE_EXP, SE_BALL_OPEN | identical | +0.12 / +0.01 / +0.17 dB, r 0.985 / 1.0 / 0.998 | matches (SE_BALL_OPEN's noise brighter with the fix) |
+   | SE_M_THUNDERBOLT, _FLAMETHROWER, _GUST, _SCRATCH | identical | within 0.1 dB, r ≥ 0.97 | matches |
+   | Cries: Pidgey, Pikachu, Charizard, Jynx NORMAL; Pikachu FAINT; Charizard ENCOUNTER; Pikachu mono | identical (DPCM decode = the WAVs) | within 0.01 dB, r 1.0 | matches |
+   | Reversed cries: Pikachu GROWL_1, Charizard ECHO_START | identical (60 each) | 0.00 dB, r 1.0 | matches |
+
+   The engine (sequencer, mixer, CgbSound, the cry setters, the mono bit) is exact on every item (31 items, ~9,100
+   frames); what differs is the synth's rendering of the PSG, and only slightly. The reversed cries end before the
+   read reaches the sample's first byte, so docs/DEVIATIONS.md's reverse-interpolation exception wasn't exercised.
+   Left for W-ref 2b: the music's per-frame envelope wander (±2 dB, r 0.86-0.95 on MUS_PALLET, MUS_ROUTE1,
+   MUS_VS_*) and MUS_VS_WILD / MUS_VS_TRAINER 10-14% darker: split the comparison per PSG channel (mute a channel's
+   writes in both renders) to find which channel and whether it's the port's synth or the model; the writes'
+   0.8 ms offset within the frame (small).
 
 Details for both. Input: the ROM path, which the user gave as
    `/Users/joshua/Coding/PokemonProjects/pret/PokemonFireRed.gba` (outside both git repos). Its SHA-1
