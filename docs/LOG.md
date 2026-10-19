@@ -3846,3 +3846,32 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   screen; audioOutput.test.ts's headless check boots with `intro: true` (only needs the page up). The frame counts
   showed BeginNormalPaletteFade doing the fade's first step itself and the intro task first running the frame
   after CB2_SetUpIntro creates it, as in the C.
+
+### W-kanto 2: the National Dex in Kanto (GAPS_PLAN.md batch 11)
+
+- Checked every IsNationalPokedexEnabled branch outside the Pokédex against the C: main_menu.c's PrintDexCount,
+  save_menu_util.c's SaveStatToString, trainer_card.c's GetCaughtMonsCount, prof_pc.c's GetPokedexCount,
+  party_menu.c's MonCanEvolve, pokemon.c's GetEvolutionTargetSpecies (EVO_TRADE_ITEM) and SpeciesToPokedexNum,
+  evolution_scene.c's Task_EvolutionScene cancel, easy_chat.c's groups, hall_of_fame.c. (trade.c's
+  CanTradeSelectedMon and link.c are link play; Task_TradeEvolutionScene isn't ported: no FRLG in-game trade
+  evolves.)
+- Fixed: the port had two National Dex checks. The trainer card, the Pokédex screen, Easy Chat and Oak's rating used
+  the C's (the magic, VAR_NATIONAL_DEX = 0x6258 and FLAG_SYS_NATIONAL_DEX); the save window, the main menu's
+  CONTINUE count, MonCanEvolve, GetEvolutionTargetSpecies, the evolution scene and the Hall of Fame read the magic
+  alone. Now one `state/nationalDex.ts` (IsNationalPokedexEnabled over GameState or a save file's view:
+  SaveBlockView gained `getVar`), and every site calls it.
+- Fixed: the summary screen showed a non-Kanto mon's national number before the National Dex; BufferMonInfo now
+  calls SpeciesToPokedexNum (shared with the Hall of Fame, whose local copy is gone), which gives "No. ???".
+- The Elite Four / Champion rematch teams (FLAG_SYS_CAN_LINK_WITH_RS) and the Kanto NPCs that branch on
+  FLAG_SYS_GAME_CLEAR / the National Dex (Oak's lab and its aides, the fan club, Celadon's tea lady, the Indigo
+  Plateau door guard and gossipers, Daisy) were right: scripts the interpreter runs as written.
+- postgameHelpers: `rainbowPassState` enables the National Dex as EnableNationalPokedex does (it set only the
+  magic); `finishScript` takes the button to mash.
+- Verified: typecheck; unit (new tests/unit/nationalDex.test.ts: 4; save.test.ts: a save file's dex count needs all
+  three); e2e new tests/e2e/postgameKantoNational.test.ts (5 tests, ~75 s): the trainer card and the save window
+  at 10 with the magic alone and 12 with the National Dex, CONTINUE at 12 after saving; a Sun Stone does nothing to
+  Gloom and Golbat's Rare Candy evolution stops itself without the National Dex, both evolve with it; Lance after
+  the Hall of Fame (rematch intro, TRAINER_ELITE_FOUR_LANCE, Gyarados Lv. 56); Lorelei (TRAINER_ELITE_FOUR_LORELEI_2,
+  Dewgong Lv. 64) and the Champion (TRAINER_CHAMPION_REMATCH_*, Heracross Lv. 72) with the network machine on;
+  Oak rating 70 Kanto / 71 national, the aides, the fan club's worker, the tea lady once, the Indigo Plateau guard
+  in the doorway (Lorelei away) and back at her post.

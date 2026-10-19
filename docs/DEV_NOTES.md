@@ -314,7 +314,20 @@ this is the next level down. When you add or change a subsystem, update its entr
   for the next map to be idle (a cave's preview screen may come first). Tests: tests/e2e/postgameKanto.test.ts
   (Cerulean Cave from the entrance: 1F north shore → Surf → land at (10, 16) → (24, 11) → 2F (5, 6) → 1F (1, 7) →
   B1F, Surf from (17, 19) to land below Mewtwo; Mewtwo caught / beaten / run from),
-  tests/e2e/postgameKantoLegendaries.test.ts (the birds, Lugia, Ho-Oh, Deoxys).
+  tests/e2e/postgameKantoLegendaries.test.ts (the birds, Lugia, Ho-Oh, Deoxys). `finishScript(game, 'B')` mashes B
+  (a YES/NO answered NO).
+  **The National Dex outside the Pokédex** (W-kanto 2): every branch goes through `state/nationalDex.ts`'s
+  IsNationalPokedexEnabled (event_data.c: `state.nationalDexEnabled`, the save block's magic, *and* VAR_NATIONAL_DEX
+  = 0x6258 *and* FLAG_SYS_NATIONAL_DEX) and SpeciesToPokedexNum (0xFFFF past Kanto without it: the summary
+  screen's "No. ???", the Hall of Fame); `script/specials.ts`' isNationalDexEnabled delegates to it, and
+  `ui/saveMenuUtil.ts`' SaveBlockView has `getVar` so a save file's view (the main menu's CONTINUE) checks the same.
+  Never read `state.nationalDexEnabled` alone; a test that turns the National Dex on sets all three, as
+  EnableNationalPokedex does (`rainbowPassState` does). Tests: tests/unit/nationalDex.test.ts (the check,
+  SpeciesToPokedexNum, GetEvolutionTargetSpecies' EVO_MODE_TRADE item), tests/unit/save.test.ts (a save file's dex
+  count), tests/e2e/postgameKantoNational.test.ts (the trainer card, save window and CONTINUE counts; MonCanEvolve
+  and the evolution scene's cancel past SPECIES_MEW; Lance's GAME_CLEAR intro with his first team, Lorelei's and
+  the Champion's FLAG_SYS_CAN_LINK_WITH_RS rematch teams; Oak's national rating, his aides, the fan club, the tea
+  lady, the Indigo Plateau door guard). Daisy's grooming: sideSpecials.test.ts.
   **Six Island** (W-sevii 3): the size records are pokemon_size_record.c in `script/pokemonSizeRecord.ts` (the table,
   GetMonSizeHash from the personality and IVs, GetMonSize from the Pokédex height, FormatMonSizeRecord in inches,
   CompareMonSize / GetMonSizeRecordInfo on a record var holding the biggest mon's hash; `withPokedexData` waits for

@@ -176,12 +176,15 @@ export async function runFromBattle(game: Game) {
   await game.mashUntil((t) => t.events().some((e) => e.type === 'battleEnd'), { what: 'the battle to end', ...SCENE });
 }
 
-/** Mash A through what the script does after the battle until the field is free; the field messages seen. */
-export async function finishScript(game: Game) {
-  const r = await game.eval(async (t) => {
-    const res = await (t as any).mash((u: any) => u.idle() && !u.field()!.script && !u.field()!.fading, 'A', 60000, []);
+/**
+ * Mash A (or `button`: B answers a YES/NO with NO) through what the script does until the field is free; the field
+ * messages seen.
+ */
+export async function finishScript(game: Game, button: 'A' | 'B' = 'A') {
+  const r = await game.eval(async (t, b) => {
+    const res = await (t as any).mash((u: any) => u.idle() && !u.field()!.script && !u.field()!.fading, b, 60000, []);
     return (res.messages as string[]).map((m) => m.replace(/\s+/g, ' '));
-  });
+  }, button);
   return r;
 }
 
