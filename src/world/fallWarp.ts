@@ -10,6 +10,7 @@ import { registerSpecials } from '../script/specials';
 import { DoDiveWarp } from './dive';
 import { fieldMoveHost, LockPlayerFieldControls, UnlockPlayerFieldControls, CreateTask } from './fieldMoves';
 import { objectDepth } from './MapChunk';
+import { QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode } from './questLogPlayback';
 import {
   avatarField,
   GetPlayerFacingDirection,
@@ -51,6 +52,7 @@ function FieldCB_FallWarpExit(): void {
   Overworld_PlaySpecialMapMusic();
   const host = fieldMoveHost();
   const fadeIn = host.warpFadeInScreen();
+  QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode();
   LockPlayerFieldControls();
   avatarField().freezeObjectEvents();
   const player = playerObj();

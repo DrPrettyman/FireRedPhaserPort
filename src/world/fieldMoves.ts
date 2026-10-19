@@ -51,6 +51,7 @@ import { SetUpFieldMove_Strength } from './strength'; // fldeff_strength.c (W-st
 import { registerFallWarp } from './fallWarp'; // DoFallWarp (W-misc)
 import { registerDive } from './dive'; // FLDEFF_USE_DIVE (W-unused)
 import { Overworld_PlaySpecialMapMusic } from '../gba/overworldMusic';
+import { QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode } from './questLogPlayback';
 
 /** What the field moves need from the field (OverworldScene). */
 export interface FieldMoveHost {
@@ -877,6 +878,7 @@ function warpIntoMap(dest: { map: string; x: number; y: number } | undefined, fi
 function FieldCallback_TeleportIn(): void {
   Overworld_PlaySpecialMapMusic();
   const fadeIn = field().warpFadeInScreen();
+  QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode();
   LockPlayerFieldControls();
   avatarField().freezeObjectEvents();
   const player = playerObj();
@@ -1038,6 +1040,7 @@ function SpinObjectEvent(player: ObjectEvent, spin: { delay: number; turns: numb
 function FieldCallback_EscapeRopeExit(): void {
   Overworld_PlaySpecialMapMusic();
   const fadeIn = field().warpFadeInScreen();
+  QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode();
   LockPlayerFieldControls();
   avatarField().freezeObjectEvents();
   const player = playerObj();

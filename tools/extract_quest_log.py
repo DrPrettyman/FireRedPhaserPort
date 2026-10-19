@@ -9,6 +9,9 @@
 - eventCmdSizes: sQuestLogEventCmdSizes as {QL_EVENT_*: bytes} (CMD_HEADER_SIZE folded in).
 - specialEncounterSpecies: IsSpeciesFromSpecialEncounter's SPECIES_* cases.
 - storyTrainerClasses: ShouldRegisterEvent_HandleBeatStoryTrainer's TRAINER_CLASS_* (the classes that register).
+- locationNameTexts / departedTextIds / departedTexts / gymCityMapSecs: LoadEvent_DepartedLocation's tables
+  (sLocationNameTexts and sLocationToDepartedTextId by QL_LOCATION_*, sDepartedLocationTexts by QL_DEPARTED_*,
+  sGymCityMapSecs by badge).
 """
 
 import json
@@ -57,6 +60,11 @@ def extract_quest_log(decomp, out):
     special_species = re.findall(r"case (SPECIES_\w+):", _function_body(events, "IsSpeciesFromSpecialEncounter"))
     story_classes = re.findall(r"TRAINER_CLASS_\w+", _function_body(events, "ShouldRegisterEvent_HandleBeatStoryTrainer"))
 
+    location_names = dict(re.findall(r"\[(QL_LOCATION_\w+)\]\s*=\s*(\w+)", _array_body(events, "sLocationNameTexts")))
+    departed_ids = dict(re.findall(r"\[(QL_LOCATION_\w+)\]\s*=\s*(QL_DEPARTED_\w+)", _array_body(events, "sLocationToDepartedTextId")))
+    departed_texts = dict(re.findall(r"\[(QL_DEPARTED_\w+)\]\s*=\s*(\w+)", _array_body(events, "sDepartedLocationTexts")))
+    gym_mapsecs = re.findall(r"MAPSEC_\w+", re.search(r"sGymCityMapSecs\[[^\]]*\]\s*=\s*\{(.*?)\};", events, re.S).group(1))
+
     data = {
         "maps": maps,
         "insideOutsidePairs": pairs,
@@ -66,5 +74,9 @@ def extract_quest_log(decomp, out):
         "eventCmdSizes": sizes,
         "specialEncounterSpecies": special_species,
         "storyTrainerClasses": story_classes,
+        "locationNameTexts": location_names,
+        "departedTextIds": departed_ids,
+        "departedTexts": departed_texts,
+        "gymCityMapSecs": gym_mapsecs,
     }
     (out / "questLog.json").write_text(json.dumps(data, separators=(",", ":")))

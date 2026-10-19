@@ -31,6 +31,8 @@ class TileStore {
   readonly unfaded: number[][];
   /** Palette slots that no longer match the atlas PNGs (`loadBgPalette`). */
   readonly modifiedPalettes = new Set<number>();
+  /** The quest log's sPalettesBackup: the colours a tinted load had before the tint (QuestLog_BackUpPalette). */
+  readonly backup: (number[] | undefined)[] = [];
 
   constructor(
     readonly name: string,
@@ -260,6 +262,9 @@ function toCanvasTexture(textures: Phaser.Textures.TextureManager, key: string):
 const stores = new Map<string, TileStore>();
 const atlases = new Map<string, AtlasCanvas>();
 
+/** The quest log's gGlobalFieldTintMode on the map's palette loads (`setBgPaletteTint`). */
+let bgTint: { tint: (colors: number[]) => number[]; backup: boolean; makeLive: () => void } | undefined;
+
 /**
  * The field's BG VRAM as far as the overworld needs it: each loaded tileset's tiles, which tile
  * animations overwrite, and the atlases drawn from them.
@@ -354,12 +359,49 @@ export const tilesetVram = {
    */
   resetBgPalettes(): void {
     for (const store of stores.values()) {
-      store.basePalettes.forEach((p, slot) => (store.unfaded[slot] = p));
-      for (const slot of [...store.modifiedPalettes]) {
-        store.modifiedPalettes.delete(slot);
-        store.palettes[slot] = store.basePalettes[slot];
+      store.basePalettes.forEach((p, slot) => {
+        // LoadTilesetPalette's ApplyGlobalTintToPaletteEntries: the tint on gPlttBufferUnfaded and Faded both
+        const colors = bgTint ? bgTint.tint(p) : p;
+        if (bgTint?.backup) store.backup[slot] = p; // QuestLog_BackUpPalette
+        store.unfaded[slot] = colors;
+        if (sameColors(store.palettes[slot], colors)) return;
+        store.palettes[slot] = colors;
+        if (colors === p || sameColors(p, colors)) store.modifiedPalettes.delete(slot);
+        else store.modifiedPalettes.add(slot);
         redrawPalette(store, slot);
-      }
+      });
+    }
+    bgTint?.makeLive(); // the current pair's atlases show the tinted palettes (the PNGs are untinted)
+  },
+
+  /**
+   * The quest log's tint (fieldmap.c's ApplyGlobalTintToPaletteEntries, gGlobalFieldTintMode): `resetBgPalettes`
+   * (LoadMapTilesetPalettes) loads the map's palettes through `tint` from now on, backing up the untinted colours if
+   * `backup` (QL_TINT_BACKUP_GRAYSCALE); `makeLive` makes the current pair's atlases canvases. Undefined: no tint.
+   */
+  setBgPaletteTint(tint: ((colors: number[]) => number[]) | undefined, backup = false, makeLive: () => void = () => {}): void {
+    bgTint = tint ? { tint, backup, makeLive } : undefined;
+  },
+
+  /** sPalettesBackup's copy of a map BG palette (the untinted colours), or gPlttBufferUnfaded's if none was backed up. */
+  bgPaletteBackup(pair: TilesetPair, slot: number): number[] | undefined {
+    const store = stores.get(slot < NUM_PALS_IN_PRIMARY ? pair.info.primary : pair.info.secondary);
+    return store ? (store.backup[slot] ?? store.unfaded[slot]) : undefined;
+  },
+
+  /** Only gPlttBufferUnfaded's copy of a map BG palette (the slot shows what it showed). */
+  setBgPaletteUnfaded(pair: TilesetPair, slot: number, colors: number[]): void {
+    const store = stores.get(slot < NUM_PALS_IN_PRIMARY ? pair.info.primary : pair.info.secondary);
+    if (store) store.unfaded[slot] = colors;
+  },
+
+  /** Task_EndQuestLog's CpuCopy16(sPalettesBackup, gPlttBufferUnfaded): the backed-up colours back (unfaded only). */
+  restoreBgPaletteBackups(): void {
+    for (const store of stores.values()) {
+      store.backup.forEach((p, slot) => {
+        if (p) store.unfaded[slot] = p;
+      });
+      store.backup.length = 0;
     }
   },
 

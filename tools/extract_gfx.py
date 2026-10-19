@@ -78,6 +78,7 @@ GFX_PREFIXES = (
     "graphics/field_specials/",  # field_specials.c's sDeoxysObjectPals, Birth Island's triangle (W-events)
     "graphics/battle_records/",  # battle_records.c, the Trainer Tower's TIME BOARD and the link records (W-ttower)
     "graphics/fame_checker/",  # fame_checker.c, the Fame Checker (W-fame)
+    "graphics/quest_log/",  # quest_log.c's sDescriptionWindow_Gfx, the playback's description window (W-qlog)
     "graphics/mail/",  # mail.c, the mail screen (W-mail)
     "graphics/teachy_tv/",  # teachy_tv.c, the Teachy TV screen (W-teachy)
     "data/tilesets/",
