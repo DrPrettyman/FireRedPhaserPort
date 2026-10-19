@@ -3572,6 +3572,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   miscSpecials.test.ts, and the Heracross specials through POSTGAME_SPECIALS); e2e postgameSixIsland.test.ts (4)
   and sideSpecials.test.ts (the Magikarp record on the moved code), postgameSixIsland.test.ts again after merging
   master (4 passed, ~6 min: the sweep's 29 battles are most of it).
+
 ### W-ttower 2: the Trainer Tower's battles (POSTGAME_PLAN.md batch 10)
 
 - `world/trainerTower.ts`: unit 1's DoTrainerTowerBattle stand-in replaced by the C's: gBattleTypeFlags TRAINER |
@@ -3658,3 +3659,39 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   GBA layer at BLDALPHA (12, 8) and back after the battle; the Lost Cave fogged), pokemonTower.test.ts and
   transitions.test.ts (15 passed with weather), battleAnims "a ghost dodges the ball" (3F). Screenshots of 3F on the
   field and mid-transition show the fog.
+
+### W-sevii 4: Five Island and the Sapphire back to Celio (POSTGAME_PLAN.md batch 11)
+
+- `script/postgameSpecials.ts` (its own block at the end): SampleResortGorgeousMonAndReward (SampleResortGorgeousMon:
+  100 random tries for a seen species, then down from the last try, wrapping past Bulbasaur;
+  SampleResortGorgeousReward: a Luxury Ball 70%, else sResortGorgeousDeluxeRewards), IncrementResortGorgeousStepCounter
+  (called on every step from `OverworldScene.processPlayerFieldInput`, beside IncrementBirthIslandRockStepCount, as
+  ProcessPlayerFieldInput does), SetPostgameFlags (CHAMPION_SAVEWARP, gcnLinkFlags bits 1-3 and 15) and
+  SetUnlockedPokedexFlags (gcnLinkFlags bits 0, 4, 5; was a no-op). Both gap lines are off
+  tests/unit/scriptCoverageGaps.ts.
+- Save version 9: `GameState.gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) in the save; a version-8 save loads with 0.
+  CHAMPION_SAVEWARP lives in the already-saved specialSaveWarpFlags; the C reads it only in union_room.c's
+  IsTryingToTradeAcrossVersionTooSoon (wireless link), so nothing else changes (the continue warp reads only
+  CONTINUE_GAME_WARP).
+- Fixed on the way: the `compare` macro's operand. `goto_if_eq` & co., `compare` and `case` read their value through
+  VarGet semantics (anything from 0x4000 up a var), so Selphy's `goto_if_eq VAR_RESORT_GORGEOUS_REQUESTED_MON, 0xFFFF`
+  compared with an unset var (0) and she was "tired of waiting" at the first visit. event.inc's macro picks
+  compare_var_to_var only for VARS_START..VARS_END and SPECIAL_VARS_START..SPECIAL_VARS_END; ScriptEngine's
+  `compareArg` does the same. A scan of the decomp's scripts finds no other comparison it changes.
+- Nothing else needed fixing: the Meadow's trainers and password door (setmetatile + DrawWholeMapView, SE_PIN), the
+  warehouse's spinners, coord trigger, admins (the arrows for re-entry on the switch and ON_LOAD), Gideon, Celio's
+  network machine scene, InitRoamer, the Lost Cave's Selphy scene and her warp home, Resort Gorgeous's door scene,
+  the butler, the Memorial Pillar, the Cerulean Cave guard's flag and Mewtwo's StartLegendaryBattle ran as they were.
+  (There is no FLAG_LEARNED_GOLDEEN_NEED_LOG: the first password is only text; the door checks
+  FLAG_LEARNED_YES_NAH_CHANSEY alone.)
+- Verified: typecheck; unit 626 passed (tests/unit/fiveIsland.test.ts: the request only ever picks a seen species,
+  the rewards, an open request kept, 249/250 steps, SetPostgameFlags / SetUnlockedPokedexFlags; saveData.test.ts:
+  gcnLinkFlags round-trips, a version-8 save loads); e2e tests/e2e/postgameFiveIsland.test.ts 2 passed (the Meadow's
+  Rocket by sight, the door with one password and then two, the warehouse's grunt, both admins and the arrows,
+  Gideon and the Sapphire, the door still open on the next load, Celio: the machine's metatiles, SE_CLICK / SE_PC_ON,
+  the flags, SetPostgameFlags' bits, the roamer; save + CONTINUE keeps them and ON_LOAD turns the machine on; VAR 7
+  on the next visit; Cerulean City's guard gone and the cave entered; Mewtwo's battle start. The Lost Cave fogged,
+  Selphy's scene and battle, the warp home and her door scene; her request for the only seen mon, asked again
+  without it, 249 steps keep it and the 250th ends it, "tired of waiting" and a new request, the reward with a
+  Pikachu in the party, her goodbye; the Memorial Pillar's Lemonade for TM42), saveContinue.test.ts (6) and
+  eventIslands.test.ts (5: the step hook).

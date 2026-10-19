@@ -47,6 +47,8 @@ export class GameState {
   continueGameWarp?: WarpData;
   /** gSaveBlock2Ptr->specialSaveWarpFlags (CONTINUE_GAME_WARP, ...): NewGameInitData clears it. */
   specialSaveWarpFlags = 0;
+  /** gSaveBlock2Ptr->gcnLinkFlags (SetUnlockedPokedexFlags, SetPostgameFlags: save_location.c): NewGameInitData clears it. */
+  gcnLinkFlags = 0;
   /**
    * Where the player stood when the game was last saved: gSaveBlock1Ptr->location's map, gSaveBlock1Ptr->pos
    * (map-local) and the player object's facing and avatar flags (SaveObjectEvents). Unlike the GBA, which keeps

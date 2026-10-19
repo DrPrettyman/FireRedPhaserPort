@@ -41,3 +41,5 @@ export const VARS_START = 0x4000;
 export const TEMP_VARS_START = 0x4000;
 export const TEMP_VARS_END = 0x400f;
 export const SPECIAL_VARS_START = 0x8000;
+export const VARS_END = 0x40ff;
+export const SPECIAL_VARS_END = 0x8014;
