@@ -233,8 +233,9 @@ export function waveLevel(sample: number, volume: number): number {
 
 /**
  * The PSG. `write` takes the engine's register writes in order; `render` plays it forward, filling per-sample PSG
- * levels in the DAC's 10-bit units (what the GBA adds to the FIFOs' ×4 / ×2), each the average over the sample's
- * cycles (a box filter, so the fast channels don't alias; the GBA's 8-bit PWM samples it at 65,536 Hz).
+ * levels in the DAC's 10-bit units (what the GBA adds to the FIFOs' ×4 / ×2): with `dacInterval` (SoundCircuit) as
+ * the GBA's 8-bit PWM takes it, point samples at 65,536 Hz held and averaged to the output's samples; without, each
+ * the channels' average over the sample's cycles (a box filter).
  *
  * `regs` mirrors the engine's register file (soundRegs.ts: latched values, wave RAM writes in the bank the CPU
  * reaches) so the output can tell whether it missed writes (`matchesState`) and pick up from a frame's `state`.

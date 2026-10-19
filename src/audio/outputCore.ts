@@ -19,8 +19,8 @@ export const PORT_FRAME_RATE = 60;
  */
 export const PCM_INPUT_RATE = PCM_SAMPLES_PER_VBLANK * PORT_FRAME_RATE;
 /**
- * The sound circuit's output: 4 samples per FIFO sample (896 per frame), each the PSG's average over its 313.5
- * cycles plus the FIFO sample it holds. The GBA's DAC runs at 65,536 Hz (SOUNDBIAS_H 0x40: 8 bits); this keeps a
+ * The sound circuit's output: 4 samples per FIFO sample (896 per frame), each the PSG as the DAC samples it (every
+ * 256 cycles, held) averaged over its 313.5 cycles, plus the FIFO sample it holds. The GBA's DAC runs at 65,536 Hz (SOUNDBIAS_H 0x40: 8 bits); this keeps a
  * whole number of samples per FIFO sample instead (docs/DEVIATIONS.md).
  */
 export const DAC_OVERSAMPLE = 4;
