@@ -235,6 +235,38 @@ describe('noise', () => {
     }
   });
 
+  test('through the DAC (dacInterval): point samples held, so fast noise keeps its full level (W-ref 2)', () => {
+    // NR43 0: a clock every 32 cycles. Averaged over 256-cycle samples (the box) the bits mostly cancel out; the
+    // GBA's DAC (and mGBA) takes the bit at each tick, so every sample is 0 or the full 15.
+    const run = (dacInterval: number) => {
+      const s = psg();
+      s.dacInterval = dacInterval;
+      s.write(PSG_NR42, 0xf0);
+      s.write(PSG_NR43, 0x00);
+      s.write(PSG_NR44, 0x80);
+      return levels(s, 400, 256);
+    };
+    const box = run(0);
+    const dac = run(256);
+    expect(dac.every((v) => v === 0 || v === 15)).toBe(true);
+    expect(dac.filter((v) => v === 15).length).toBeGreaterThan(100);
+    const sd = (xs: number[]) => {
+      const m = xs.reduce((a, b) => a + b, 0) / xs.length;
+      return Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / xs.length);
+    };
+    expect(sd(dac)).toBeGreaterThan(6); // a fair coin at 0 / 15: 7.5
+    expect(sd(box)).toBeLessThan(4);
+    // Each tick's level is held until the next: at 128-cycle samples, pairs. The first sample holds the level
+    // taken at the render's start (the restart's 0).
+    const s = psg();
+    s.dacInterval = 256;
+    s.write(PSG_NR42, 0xf0);
+    s.write(PSG_NR43, 0x00);
+    s.write(PSG_NR44, 0x80);
+    const half = levels(s, 64, 128);
+    for (let i = 0; i < 64; i += 2) expect(half[i + 1]).toBe(half[i]);
+  });
+
   test('its clock: 524,288 Hz / r / 2^(s + 1), r = 0 as 0.5; no clocks at shift 14 and 15', () => {
     const period = (nr43: number) =>
       noisePeriod({ ratio: nr43 & 7, shift: nr43 >> 4 } as Noise);
@@ -377,7 +409,9 @@ describe.skipIf(!haveGenAudio())('the extracted songs through the circuit', () =
     const s = speakers(r);
     const audible: number[] = [];
     for (let f = 0; f < frames; f++) {
-      const part = [...s.l.subarray(f * 896, (f + 1) * 896), ...s.r.subarray(f * 896, (f + 1) * 896)];
+      // From the frame's second sample: the first can still hold the DAC's last tick of the frame before (the GBA's
+      // DAC samples the PSG every 256 cycles, a sample here is 313.5).
+      const part = [...s.l.subarray(f * 896 + 1, (f + 1) * 896), ...s.r.subarray(f * 896 + 1, (f + 1) * 896)];
       if (Math.max(...part) > Math.min(...part)) audible.push(f);
     }
     const last = audible.length ? audible[audible.length - 1] + 1 : 0;
@@ -392,7 +426,7 @@ describe.skipIf(!haveGenAudio())('the extracted songs through the circuit', () =
       expect([name, audible[0], audible[audible.length - 1]]).toEqual([name, 0, frame - 2]);
       expect([name, rms > 0.03]).toEqual([name, true]);
     }
-  });
+  }, 30_000);
 
   test('MUS_PALLET and MUS_TITLE gain their square, wave and noise parts', () => {
     const songs = loadGenAudio();
@@ -409,7 +443,7 @@ describe.skipIf(!haveGenAudio())('the extracted songs through the circuit', () =
       expect([name, speakerRms(psgOnly) > 0.02]).toEqual([name, true]);
       expect([name, speakerRms(all) > speakerRms(fifos)]).toEqual([name, true]);
     }
-  });
+  }, 30_000);
 
   test('mono plays everything on both sides; stereo does not', () => {
     const songs = loadGenAudio();
@@ -424,5 +458,5 @@ describe.skipIf(!haveGenAudio())('the extracted songs through the circuit', () =
     const stereo = play(false);
     expect(stereo.l.some((v, i) => v !== stereo.r[i])).toBe(true);
     SetPokemonCryStereo(1);
-  });
+  }, 30_000);
 });

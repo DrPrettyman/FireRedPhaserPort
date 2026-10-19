@@ -9,6 +9,8 @@ import { Assets } from './data/assets';
 import { loadAudioData } from './audio/audioData';
 import { AgbMainSoundInit } from './audio/frame';
 import { BattleScene, type BattleStart } from './scenes/BattleScene';
+import { PlayMapChosenOrBattleBGM } from './battle/battleBgm';
+import { initConstants } from './battle/constants';
 import { PokemonData, readPokemonConstants, type Pokemon } from './pokemon/Pokemon';
 import { Defines } from './script/Defines';
 import { GameState } from './state/GameState';
@@ -69,11 +71,15 @@ class BattleTestBoot extends Phaser.Scene {
     await assets.loadTextTextures(this);
     const tables: BattleTablesData = await (await fetch('gen/battle/tables.json')).json();
     this.registry.set('assets', assets);
+    trainerClasses = tables.trainers.map((t) => t?.trainerClass ?? 0);
     this.onReady(assets, tables.trainers.flatMap((t, i) => (t && i > 0 ? [t.id] : [])));
   }
 }
 
 const clean = (name: string) => name.replace(/\$$/, '');
+
+/** gTrainers[i].trainerClass, for the battle music before the battle data is loaded */
+let trainerClasses: number[] = [];
 
 class Harness {
   private defines: Defines;
@@ -319,6 +325,10 @@ class Harness {
     this.lastOutcome = undefined;
     const scenes = this.game.scene;
     if (scenes.isActive('Battle')) scenes.stop('Battle');
+    // CreateBattleStartTask's PlayMapChosenOrBattleBGM(0): the battle's music, as the field starts it (no
+    // transition here). K reads the defines before BattleScene's initBattleEnv has run.
+    initConstants(this.assets.scripts.defines);
+    PlayMapChosenOrBattleBGM(0, start.battleTypeFlags, trainer ? (trainerClasses[start.trainerBattleOpponent_A] ?? 0) : 0);
     scenes.start('Battle', start);
     this.setStatus('Battle running…');
     (document.activeElement as HTMLElement | null)?.blur();

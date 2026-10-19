@@ -66,6 +66,7 @@ import {
 import { SetHBlankCallback, SetVBlankCallback } from '../gba/main';
 import { BeginNormalPaletteFade, BG_PLTT_ID, BlendPalettes, gPaletteFade, gPlttBufferFaded, gPlttBufferUnfaded, LoadPalette, PLTT_SIZE_4BPP, TransferPlttBuffer } from '../gba/palette';
 import { gScanlineEffectRegBuffers, ScanlineEffect_Clear } from '../gba/scanline';
+import { PlaySE } from '../gba/sound';
 import {
   AFFINEANIMCMD_FRAME,
   AFFINEANIMCMD_JUMP,
@@ -1217,7 +1218,7 @@ function Mugshot_StartOpponentSlide(task: Task): boolean {
   SetTrainerPicSlideDirection(task.data[tPlayerSpriteId], 1);
   // Start opponent slide
   IncrementTrainerPicState(task.data[tOpponentSpriteId]);
-  // PlaySE(SE_MUGSHOT): no audio yet
+  PlaySE(K.SE_MUGSHOT);
   T().vblankDma++;
   return false;
 }
