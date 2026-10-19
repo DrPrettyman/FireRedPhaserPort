@@ -3127,6 +3127,37 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   four channels and the PSG-only SEs' off frames. Typecheck clean, unit 560 in 41 files; e2e audio, audioCries,
   audioOutput, mapMusic, fieldSounds: 20 passed.
 
+### W-sound 5b: the battle controllers' sounds (AUDIO_PLAN.md batch D, unit 4)
+
+- Every sound call of battle_controller_player.c, _opponent.c, _oak_old_man.c and _safari.c now calls gba/sound.ts
+  (or audio/m4a.ts) with the C's arguments instead of BattleScene's `ui.play*`: the menus' SE_SELECT (action, move,
+  target, move switching, the Old Man's simulated input, Safari's menu), SE_FAINT panned by side (PlaySE12WithPanning
+  SOUND_PAN_ATTACKER / _TARGET), CONTROLLER_PLAYSE (panned by side; the Oak/Old Man controller's plain PlaySE),
+  PLAYFANFARE, the player's PLAYBGM, FAINTINGCRY (PlayCry_ByMode(species, ∓25, CRY_MODE_FAINT) for the player and
+  opponent, PlayCry_Normal(species, 25) for Oak/Old Man and Safari), Cmd55's FadeOutMapMusic(5) (Oak/Old Man,
+  Safari, and the player's link-only one with its BeginFastPaletteFade), SE_EXP and its m4aSongNumStop when the
+  exp bar is full (controllerCommon.ts).
+- Waits: Intro_WaitForShinyAnimAndHealthbox (player, opponent) and SwitchIn_HandleSoundAndEnd hold until
+  !IsCryPlayingOrClearCrySongs() and then set the BGM volume back to 256 (m4aMPlayContinue in multi battles);
+  Task_PlayerController_RestoreBgmAfterCry (exported from controllerPlayer.ts) runs after the Oak/Old Man intro.
+- Found on the way: Task_CreateLevelUpVerticalStripes wasn't ported (the player's DestroyExpTask... went straight
+  to CompleteOnInactiveTextPrinter): it now runs with its BG move and SE_RS_SHOP; the stripes themselves
+  (pokemon_special_anim_scene.c's CreateLevelUpVerticalSpritesTask) are a DEVIATIONS entry. The player's
+  PlayerHandleCmd55 had dropped FadeOutMapMusic(5) / BeginFastPaletteFade(3) (link battles only).
+- The cries the waits wait on come from gfx.ts (pokeball.c / battle_main.c: W-sound 6a), through W-sound 5a's
+  `ui.playCry` pass-through until then. W-sound 5a's pass-through commit was cherry-picked to run the tests and
+  reverted before the PR.
+- Verified: typecheck; `npm test`; `tests/e2e/audioBattleControllers.test.ts` (4: the wild intro leaves
+  Intro_WaitForShinyAnimAndHealthbox only after MEWTWO's send-out cry stops, and fails with the wait taken out; 4
+  SE_SELECTs from the menus; SE_FAINT at SOUND_PAN_TARGET and the CRY_MODE_FAINT cry; SE_EXP stopped well before its
+  100 frames; the Old Man's SE_SELECTs 64 frames apart and the catch's speed-5 fade), wildBattle, trainerBattle,
+  scriptedBattles, battleAnims, newGame (39 passed); the full e2e suite once (below).
+- Full e2e suite (with 5a's pass-through cherry-picked, so the send-out cries play; load up to ~300 from another
+  worker's run): 411 tests in 64 files, 408 passed, 26.6 min. Failures, none in the controllers: listMenuFlash's
+  dark-cave Blur transition (fails on the base commit 2fbcf54 too), battleAnims.2d's Teleport (reads `t.battle()`
+  from Node after the anim ended: the battle can be over by then, tests/README.md rule 5) and battleAnims.3e3b's
+  Snatch (polls a short-lived sprite from Node; timed out under load; on the rerun Memento timed out instead).
+  Tick budgets raised: none.
 ### W-m4a 4b: the PSG synth, music complete (AUDIO_PLAN.md batch D, unit 2)
 
 - New `src/audio/psgSynth.ts` (`PsgSynth`): the GBA's four PSG channels driven by the engine's register writes

@@ -73,6 +73,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (src/battle/anim/) call gba/sound.ts directly, so their panned SEs, the anims' SE waits (Cmd_end,
     `waitsound`), the sound tasks' cries and IsCryPlaying waits, the quiet BGM of Sing / Perish Song / Grass
     Whistle and the caught jingle time as on the GBA.
+  - Battles: the calls not yet moved to gba/sound.ts (battle/gfx.ts, battleInterface, the anims' `ui.playSE`) go
+    through BattleScene's `ui.play*` pass-throughs (AUDIO_PLAN.md decision 21): PlaySE without the C's panning, and
+    `ui.playCry` is PlayCry_Normal(species, 0), without the C's cry mode or pan (the intro's CRY_MODE_ENCOUNTER, the
+    wild mon's pan 25) (W-sound 6a, 6b). The controllers (battle/controller*.ts) call gba/sound.ts with the C's pans
+    and cry modes, and their cry waits (the intro's and switch-in's IsCryPlayingOrClearCrySongs,
+    Task_PlayerController_RestoreBgmAfterCry) time as on the GBA. No low HP beep, so the victory music's
+    BattleStopLowHpSound is a TODO (W-sound 6a). The battle anims' sound tasks call gba/sound.ts directly, so Howl /
+    Roar / Growl / Hyper Voice's cries and their IsCryPlaying waits time as on the GBA.
   - Field sounds: puddles: UpdateFeetInFlowingWaterFieldEffect's SE_PUDDLE checks the splash's `invisible`, which
     the port never sets for an object off screen (UpdateObjectEventSpriteInvisibility's bounds check).
   - Audio output (audio/output.ts, audio/worklet.ts): the PCM plays at 224 samples per 60 Hz frame, 13,440 Hz,
@@ -151,6 +159,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     overworld's ScreenFade.
   - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;
     HP-as-text (SwapHpBarsWithHpText) and link/multi battles aren't implemented.
+  - Battles: the level-up's vertical stripes (CreateLevelUpVerticalSpritesTask, pokemon_special_anim_scene.c) aren't
+    drawn: Task_CreateLevelUpVerticalStripes (controllerCommon.ts) moves the mon to the BG and plays SE_RS_SHOP, then
+    goes on at once where the GBA waits ~35-65 frames for the 18 stripes to rise. The link battles' end
+    (SetBattleEndCallbacks with its m4aSongNumStop(SE_LOW_HEALTH)) isn't ported.
   - Map preview screens (Mt. Moon, Rock Tunnel, Viridian Forest...) aren't ported: warps into those sections fade
     to black like the GBA and go straight to the map, without the banner (or the flash that follows it).
   - Wild encounters: GAME_STAT_* counters aren't kept.
