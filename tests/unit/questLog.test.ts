@@ -7,7 +7,9 @@ import { initConstants } from '../../src/battle/constants';
 import type { ObjectEventData } from '../../src/data/types';
 import { fromSaveData, SAVE_VERSION, toSaveData, upgradeSave, type SaveData } from '../../src/state/saveData';
 import type { Direction } from '../../src/world/direction';
+import type { ObjectEvent } from '../../src/entities/ObjectEvent';
 import {
+  clearQuestLogFieldInput,
   decodeQuestLogScript,
   emptyQuestLogAction,
   fieldInputFromU32,
@@ -19,9 +21,12 @@ import {
   OBJECT_EVENT_TEMPLATES_COUNT,
   OBJECT_EVENTS_COUNT,
   QL_FinishRecordingScene,
+  QL_InitSceneActions,
   QL_RecordFieldInput,
   QL_ResetOnSoftReset,
   QL_TryRunActions,
+  QL_UpdateObject,
+  questLogFieldInput,
   QL_SCRIPT_LENGTH,
   QuestLog_CutRecording,
   QuestLogRecordNPCStep,
@@ -403,5 +408,66 @@ describe('the save', () => {
     const upgraded = upgradeSave(v11 as SaveData);
     expect(upgraded.version).toBe(SAVE_VERSION);
     expect(fromSaveData(upgraded, newGame().state).questLog.every((s) => s.startType === 0)).toBe(true);
+  });
+});
+
+describe('playback (QL_TryRunActions RUNNING, QL_UpdateObject)', () => {
+  test('a recorded scene plays back: each action after its recorded frames, the NPC by local id, the input', () => {
+    SetQuestLogEvent(d('QL_EVENT_DEPARTED'), departed('QL_LOCATION_HOME'));
+    frame(5);
+    QuestLogRecordPlayerStep(d('MOVEMENT_ACTION_WALK_NORMAL_RIGHT'));
+    frame(16);
+    QuestLogRecordNPCStep(3, 0, 3, d('MOVEMENT_ACTION_WALK_NORMAL_DOWN'));
+    frame(7);
+    QL_RecordFieldInput({ pressedAButton: true, dpadDirection: d('DIR_EAST') });
+    frame(1);
+    SaveQuestLogData();
+    const recorded = decodeQuestLogScript(scene(0).script).filter((c) => [d('QL_EVENT_MOVEMENT'), d('QL_EVENT_INPUT')].includes(c.id));
+    expect(recorded.map((c) => c.id)).toEqual(['QL_EVENT_MOVEMENT', 'QL_EVENT_INPUT', 'QL_EVENT_MOVEMENT', 'QL_EVENT_MOVEMENT', 'QL_EVENT_INPUT'].map(d));
+
+    // CONTINUE: the scene's actions from the top (ResetActions(RUNNING) queues the first for the player)
+    QL_ResetOnSoftReset();
+    QL_InitSceneActions();
+    expect(gQL.playbackState).toBe(d('QL_PLAYBACK_STATE_RUNNING'));
+    const held: { frame: number; who: string; action: number }[] = [];
+    const inputs: { frame: number; a: boolean; dir: number }[] = [];
+    const obj = (who: string) => ({ setHeldMovement: (action: number) => (held.push({ frame: f, who, action }), false) }) as unknown as ObjectEvent;
+    const player = obj('player');
+    const npc = obj('npc3');
+    let f = 0;
+    for (; f < 200 && gQL.playbackState !== d('QL_PLAYBACK_STATE_STOPPED'); f++) {
+      QL_TryRunActions();
+      const input = questLogFieldInput();
+      if (input.pressedAButton) inputs.push({ frame: f, a: true, dir: input.dpadDirection });
+      clearQuestLogFieldInput();
+      QL_UpdateObject(player, d('LOCALID_PLAYER'), true);
+      QL_UpdateObject(npc, 3, false);
+    }
+    expect(gQL.playbackState).toBe(d('QL_PLAYBACK_STATE_STOPPED')); // SCENE_END
+    expect(held.map((h) => [h.who, h.action])).toEqual([
+      ['player', d('MOVEMENT_ACTION_FACE_DOWN')],
+      ['player', d('MOVEMENT_ACTION_WALK_NORMAL_RIGHT')],
+      ['npc3', d('MOVEMENT_ACTION_WALK_NORMAL_DOWN')],
+    ]);
+    // each action comes its recorded duration (frames with the controls free) after the one before
+    const dur = recorded.map((c) => c.words[1]);
+    expect(held[1].frame - held[0].frame).toBe(dur[1] + dur[2] + (dur[1] ? 1 : 0) + (dur[2] ? 1 : 0));
+    expect(held[2].frame - held[1].frame).toBe(dur[3] + (dur[3] ? 1 : 0));
+    expect(inputs).toEqual([{ frame: held[2].frame + dur[4] + (dur[4] ? 1 : 0), a: true, dir: d('DIR_EAST') }]);
+  });
+
+  test('locked controls hold the actions back (RecordHeadAtEndOfEntryOrScriptContext2Enabled)', () => {
+    SetQuestLogEvent(d('QL_EVENT_DEPARTED'), departed('QL_LOCATION_HOME'));
+    frame(4);
+    QuestLogRecordPlayerStep(d('MOVEMENT_ACTION_WALK_NORMAL_UP'));
+    SaveQuestLogData();
+    QL_ResetOnSoftReset();
+    QL_InitSceneActions();
+    locked = true;
+    for (let i = 0; i < 50; i++) QL_TryRunActions();
+    expect(gQL.curActionIdx).toBeLessThan(3);
+    locked = false;
+    for (let i = 0; i < 50; i++) QL_TryRunActions();
+    expect(gQL.playbackState).toBe(d('QL_PLAYBACK_STATE_STOPPED'));
   });
 });
