@@ -3796,6 +3796,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   every map's ON_RESUME / ON_TRANSITION, the GetBattleOutcome branches.
 - Verified: typecheck; unit 630 passed; e2e postgameKanto.test.ts (3 passed, ~85 s), postgameKantoLegendaries.test.ts
   (9 passed, ~2.5 min), scriptedBattles.test.ts (6) and trainerBattle.test.ts (3) for the message box change.
+
 ### W-help 1: the help system's engine and menus (help_system_util.c, help_system.c)
 
 - `ui/helpSystem.ts` (help_system_util.c: RunHelpSystemCallback's states 0-8, SaveCallbacks with DMA0 stopped,
