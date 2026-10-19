@@ -42,7 +42,7 @@ function registeredItemFieldFunc(itemId: number): (taskId: number) => void {
   const name = ItemId_GetFieldFunc(itemId);
   const func = FIELD_USE_FUNCS[name];
   if (func) return func;
-  // The Fame Checker (no screen yet): log, and give the controls back.
+  // A field func that isn't ported: log, and give the controls back.
   return (taskId) => {
     console.warn(`[item_use] ${name} from the field (SELECT) is not implemented`);
     DestroyTask(taskId);

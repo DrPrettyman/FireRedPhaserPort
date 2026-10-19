@@ -30,6 +30,7 @@ import { prepareMenus } from '../menus/host';
 import { prepareTeachyTv } from '../menus/teachyTv';
 import { CB2_BagMenuFromStartMenu, GoToBagMenu } from '../menus/itemMenu';
 import { setObjectEventGraphicsInfo } from '../menus/objectEventGraphics';
+import { fameCheckerGfxSymbols } from '../menus/fameChecker';
 import { DoNamingScreen, NAMING_SCREEN_BOX, namingScreenGfxSymbols } from '../menus/namingScreen';
 import { EnterPokeStorage, pokemonStorageGfxSymbols } from '../menus/pokemonStorage';
 import { ItemPc_Init, itemPcGfxSymbols } from '../menus/itemPc';
@@ -132,6 +133,11 @@ export class FieldMenuScene extends GbaHostScene {
     if (start.menu === 'party' || start.menu === 'bag' || start.menu === 'townMap') {
       await loadGfx(regionMapGfxSymbols(start.menu === 'bag' && start.state.bag.has(K.ITEM_TOWN_MAP, 1)));
     }
+    // The Fame Checker from the bag or registered for SELECT (FieldUseFunc_FameChecker): its graphics, the trainer
+    // pics and the flavor texts' object events.
+    setObjectEventGraphicsInfo(assets.sprites);
+    const fameCheckerFrom = start.menu === 'bag' || (start.menu === 'itemFromField' && start.state.registeredItem === K.ITEM_FAME_CHECKER);
+    if (fameCheckerFrom && start.state.bag.has(K.ITEM_FAME_CHECKER, 1)) await loadGfx(fameCheckerGfxSymbols());
     // The Pokédex (StartMenuPokedexCallback): its data and graphics.
     if (start.menu === 'pokedex') {
       await loadPokedexData('gen');

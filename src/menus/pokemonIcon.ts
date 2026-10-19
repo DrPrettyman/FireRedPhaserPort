@@ -54,6 +54,24 @@ export function CreateMonIcon(species: number, callback: SpriteCallback, x: numb
   return spriteId;
 }
 
+/** CreateMonIcon_HandleDeoxys: an icon for an icon species as it is (the Unown letters past NUM_SPECIES too: the mail screen). */
+export function CreateMonIcon_HandleDeoxys(species: number, callback: SpriteCallback, x: number, y: number, subpriority: number, extra: boolean): number {
+  const spriteId = CreateMonIconSprite(GetMonIconTiles(species, extra), callback, POKE_ICON_BASE_PAL_TAG + paletteIndex(species), x, y, subpriority);
+  UpdateMonIconFrame(gSprites[spriteId]);
+  return spriteId;
+}
+
+/** LoadMonIconPalette: the icon species' palette, unless its tag is loaded already (no NUM_SPECIES check, unlike SafeLoadMonIconPalette). */
+export function LoadMonIconPalette(species: number): void {
+  const palIndex = paletteIndex(species);
+  if (IndexOfSpritePaletteTag(POKE_ICON_BASE_PAL_TAG + palIndex) === 0xff) LoadSpritePalette({ data: monIconPalette(palIndex), tag: POKE_ICON_BASE_PAL_TAG + palIndex });
+}
+
+/** FreeMonIconPalette */
+export function FreeMonIconPalette(species: number): void {
+  FreeSpritePaletteByTag(POKE_ICON_BASE_PAL_TAG + paletteIndex(species));
+}
+
 export function GetIconSpecies(species: number, personality: number): number {
   if (species === K.SPECIES_UNOWN) {
     let letter = GetUnownLetterByPersonality(personality);

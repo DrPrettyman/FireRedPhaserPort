@@ -1,8 +1,8 @@
 // item_use.c: what Use does for each item, from the bag (tasks' data[3] == 0), from the field with SELECT
 // (a registered key item: UseRegisteredKeyItemOnField in menus/registeredItem.ts runs the field func as a task
 // with data[3] == 1) and in battle. The functions are looked up by the names in the item table (fieldUseFunc /
-// battleUseFunc). Uses that need overworld systems that don't exist yet (Fame Checker, mail) aren't
-// in the tables; the bag logs them. Berries used from the berry pouch run these with the pouch's task, and hand
+// battleUseFunc). A use missing from the tables is logged by the bag.
+// Berries used from the berry pouch run these with the pouch's task, and hand
 // back to the pouch instead of the bag.
 
 import { K } from '../battle/constants';
@@ -45,8 +45,11 @@ import {
   Task_ReturnToBagFromContextMenu,
 } from './itemMenu';
 import { SpecialVar } from './itemMenuState';
+import { ReadMail } from './mail';
+import { newMail } from '../world/mail';
 import { InitRegionMapWithExitCB, REGIONMAP_TYPE_NORMAL, regionMapGfxSymbols } from './regionMap';
 import { InitTMCase, TMCASE_FIELD } from './tmCase';
+import { UseFameChecker } from './fameChecker';
 import { InitTeachyTvController } from './teachyTv';
 import {
   BERRYPOUCH_FROMBATTLE,
@@ -306,6 +309,21 @@ export function fieldFuncs(): ItemUseFieldFuncs {
   return sFieldFuncs as ItemUseFieldFuncs;
 }
 
+/** FieldUseFunc_Mail: CHECK on a mail item shows a blank mail of its type (CB2_CheckMail), back to the bag. */
+function FieldUseFunc_Mail(taskId: number): void {
+  ItemMenu_SetExitCallback(CB2_CheckMail);
+  ItemMenu_StartFadeToExitCallback(taskId);
+}
+
+/**
+ * CB2_CheckMail: the C's struct Mail is an uninitialised local with only itemId set; no message is shown, and its
+ * species is taken as SPECIES_NONE (so Bead / Dream Mail show no icon).
+ */
+function CB2_CheckMail(): void {
+  const mail = { ...newMail(state.defines), species: K.SPECIES_NONE, itemId: SpecialVar.ItemId };
+  ReadMail(mail, CB2_BagMenuFromStartMenu, false);
+}
+
 /** FieldUseFunc_Rod: only facing water you can fish in (CanFish, world/fishing.ts). */
 function FieldUseFunc_Rod(taskId: number): void {
   if (fieldFuncs().CanFish()) {
@@ -485,6 +503,30 @@ function BattleUseFunc_BerryPouch(taskId: number): void {
 /** InitBerryPouchFromBattle */
 function InitBerryPouchFromBattle(): void {
   InitBerryPouch(BERRYPOUCH_FROMBATTLE, CB2_BagMenuFromBattle, 0);
+}
+
+/**
+ * FieldUseFunc_FameChecker: from the bag, the Fame Checker, which returns to the bag; with SELECT, the Fame Checker
+ * from the field (Task_UseFameCheckerFromField), which SELECT closes too and which returns to the field. (No quest
+ * log: ItemUse_SetQuestLogEvent.)
+ */
+function FieldUseFunc_FameChecker(taskId: number): void {
+  if (gTasks[taskId].data[3] === 0) {
+    ItemMenu_SetExitCallback(UseFameCheckerFromBag);
+    ItemMenu_StartFadeToExitCallback(taskId);
+  } else {
+    FadeToScreenFromField(taskId, Task_UseFameCheckerFromField);
+  }
+}
+
+/** UseFameCheckerFromBag (its graphics are preloaded with the bag's when the bag has the Fame Checker) */
+function UseFameCheckerFromBag(): void {
+  UseFameChecker(CB2_BagMenuFromStartMenu);
+}
+
+/** Task_UseFameCheckerFromField (FieldMenuScene preloads its graphics for the registered Fame Checker) */
+function Task_UseFameCheckerFromField(taskId: number): void {
+  OpenScreenFromFieldOnceFaded(taskId, () => UseFameChecker(CB2_ReturnToField), []);
 }
 
 function FieldUseFunc_CoinCase(taskId: number): void {
@@ -762,6 +804,7 @@ function FieldUseFunc_OakStopsYou(taskId: number): void {
 /** Field use functions by name (ItemId_GetFieldFunc) */
 export const FIELD_USE_FUNCS: Record<string, TaskFunc> = {
   FieldUseFunc_Bike,
+  FieldUseFunc_Mail,
   FieldUseFunc_Rod,
   ItemUseOutOfBattle_EscapeRope,
   FieldUseFunc_VsSeeker,
@@ -769,6 +812,7 @@ export const FIELD_USE_FUNCS: Record<string, TaskFunc> = {
   FieldUseFunc_TownMap,
   FieldUseFunc_TmCase,
   FieldUseFunc_BerryPouch,
+  FieldUseFunc_FameChecker,
   FieldUseFunc_TeachyTv,
   FieldUseFunc_CoinCase,
   FieldUseFunc_PowderJar,

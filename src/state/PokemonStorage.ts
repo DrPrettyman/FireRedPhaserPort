@@ -4,8 +4,8 @@
 
 import type { Pokemon, PokemonData } from '../pokemon/Pokemon';
 
-/** The fields struct Pokemon adds to struct BoxPokemon (recomputed by BoxMonToMon). */
-export const PARTY_ONLY_FIELDS = ['level', 'status', 'hp', 'maxHP', 'stats'] as const;
+/** The fields struct Pokemon adds to struct BoxPokemon (recomputed by BoxMonToMon; its mail is MAIL_NONE). */
+export const PARTY_ONLY_FIELDS = ['level', 'status', 'hp', 'maxHP', 'stats', 'mail'] as const;
 
 /** struct BoxPokemon: a Pokemon without its party fields. An empty slot (SPECIES_NONE) is null. */
 export type BoxPokemon = Omit<Pokemon, (typeof PARTY_ONLY_FIELDS)[number]>;
@@ -27,7 +27,7 @@ export function boxMonFromMon(mon: BoxPokemon): BoxPokemon {
 
 /**
  * BoxMonToMon: status, HP and max HP zeroed, then CalculateMonStats, which (with both HPs 0) sets HP to the new
- * max: a mon taken out of a box is always fully healed. (MON_DATA_MAIL isn't modelled.)
+ * max: a mon taken out of a box is always fully healed. MON_DATA_MAIL is MAIL_NONE (no `mail`).
  */
 export function boxMonToMon(data: PokemonData, boxMon: BoxPokemon): Pokemon {
   const mon: Pokemon = {

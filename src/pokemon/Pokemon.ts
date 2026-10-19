@@ -79,6 +79,8 @@ export interface Pokemon {
   hp: number;
   maxHP: number;
   stats: StatBlock;
+  /** MON_DATA_MAIL: the held mail's gSaveBlock1Ptr->mail slot (world/mail.ts); absent = MAIL_NONE. Party only. */
+  mail?: number;
 }
 
 export interface CreateMonOptions {
