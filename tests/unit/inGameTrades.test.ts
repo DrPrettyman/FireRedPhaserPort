@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, test } from 'vitest';
 import type { Pokemon } from '../../src/pokemon/Pokemon';
 import type { SpecialEnv } from '../../src/script/specials';
 import { SPECIALS } from '../../src/script/specials';
-import { BufferInGameTradeMonName, initInGameTrades, TradeMons, type TradesData } from '../../src/script/tradeSpecials';
+import { BufferInGameTradeMonName, gLinkPartnerMail, initInGameTrades, TradeMons, type TradesData } from '../../src/script/tradeSpecials';
+import { GiveMailToMon } from '../../src/world/mail';
 import { newGame, readGen, type TestGame } from './gameData';
 
 let t: TestGame;
@@ -104,7 +105,8 @@ describe('in-game trade specials (trade_scene.c)', () => {
     expect(t.state.enemyParty[0].otGender).toBe('female');
     t.state.setVar('VAR_0x8004', t.d('INGAME_TRADE_JYNX'));
     run('CreateInGameTradePokemon', env().e);
-    expect(t.state.enemyParty[0].heldItem).toBe(t.d('ITEM_FAB_MAIL')); // the mail's message isn't modelled
+    expect(t.state.enemyParty[0].heldItem).toBe(t.d('ITEM_FAB_MAIL'));
+    expect(t.state.enemyParty[0].mail).toBe(0); // gLinkPartnerMail[0]
     t.state.setVar('VAR_0x8004', t.d('INGAME_TRADE_ELECTRODE'));
     run('CreateInGameTradePokemon', env().e);
     expect(t.state.enemyParty[0].abilityNum).toBe(1);
@@ -126,6 +128,47 @@ describe('in-game trade specials (trade_scene.c)', () => {
     expect(t.state.dexCaught.has(dex)).toBe(true);
     expect(t.state.stringVars[0]).toEqual(name('MIMIEN'));
     expect(t.state.stringVars[1]).toEqual(name('MR. MIME'));
+  });
+});
+
+describe("DONTAE's Jynx and its Fab Mail (GetInGameTradeMail)", () => {
+  beforeEach(() => {
+    t.state.party.push(ownMon('POLIWHIRL', 20), ownMon('PIDGEY', 9));
+    t.state.setVar('VAR_0x8004', t.d('INGAME_TRADE_JYNX'));
+    t.state.setVar('VAR_0x8005', 0);
+  });
+
+  test('sInGameTradeMailMessages: one message, in easy chat words', () => {
+    const ec = (group: string, index: number) => (t.d(`EC_GROUP_${group}`) << 9) | index;
+    const { mailMessages } = readGen<TradesData>('trades.json');
+    expect(mailMessages).toHaveLength(1);
+    // THAT'S A HEALTHY JYNX! BE KIND TO IT (EC_POKEMON(JYNX) is the species in EC_GROUP_POKEMON)
+    expect(mailMessages[0]).toHaveLength(9);
+    expect(mailMessages[0][3]).toBe(ec('POKEMON', species('JYNX')));
+  });
+
+  test('CreateInGameTradePokemon: the mail into gLinkPartnerMail[0], from DONTAE, OT id big-endian; TradeMons gives it a slot', () => {
+    run('CreateInGameTradePokemon', env().e);
+    const trade = readGen<TradesData>('trades.json').ingameTrades[t.d('INGAME_TRADE_JYNX')];
+    const mail = gLinkPartnerMail[0];
+    expect(mail.words).toEqual(readGen<TradesData>('trades.json').mailMessages[trade.mailNum]);
+    expect(t.charmap.decodePlain(mail.playerName)).toBe('DONTAE');
+    expect(mail.playerName).toHaveLength(8);
+    const id = trade.otId >>> 0;
+    expect(mail.trainerId).toEqual([id >>> 24, (id >>> 16) & 0xff, (id >>> 8) & 0xff, id & 0xff]);
+    expect(mail.species).toBe(species('JYNX'));
+    expect(mail.itemId).toBe(t.d('ITEM_FAB_MAIL'));
+
+    // The party's PIDGEY holds a mail in slot 0; POLIWHIRL (slot 0 of the party) holds one in slot 1, which leaves with it.
+    GiveMailToMon(t.state, t.state.party[1], t.d('ITEM_WOOD_MAIL'));
+    GiveMailToMon(t.state, t.state.party[0], t.d('ITEM_BEAD_MAIL'));
+    TradeMons(t.state, 0, 0);
+    const jynx = t.state.party[0];
+    expect(jynx.species).toBe(species('JYNX'));
+    expect(jynx.heldItem).toBe(t.d('ITEM_FAB_MAIL'));
+    expect(jynx.mail).toBe(1); // the slot POLIWHIRL's mail freed (ClearMailStruct)
+    expect(t.state.mail[1]).toEqual(mail);
+    expect(t.state.mail[0].itemId).toBe(t.d('ITEM_WOOD_MAIL'));
   });
 });
 

@@ -2438,18 +2438,23 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const d = this.defines;
     const menu = new PlayerPcMenu(this, this.fonts, this.buttons, {
       text: (symbol) => this.charmap.encode(this.assets.strings[symbol] ?? '?$'),
+      state: this.state,
       countItemsInPc: () => CountItemsInPC(this.state.pcItems, d.require('ITEM_NONE')),
-      countPcMail: () => 0,
       displayItemMessageOnField: (str) => {
         this.messageBox.show(str);
         return () => !this.messageBox.isPrinting;
       },
+      hideMessage: () => this.messageBox.hide(),
       showDescription: (str) => this.messageBox.show(str, 'neutral', false, true),
       fadeToBlack: () => this.fadeScreen(d.require('FADE_TO_BLACK')),
       enter: (screen, onReturn) => {
         this.messageBox.hide(); // CleanupOverworldWindowsAndTilemaps
         if (screen === 'itemPc') ItemPc_SetInitializedFlag(false); // Task_WithdrawItemBeginFade
         this.runFieldMenu({ menu: screen }, () => onReturn());
+      },
+      enterScreen: (init, gfxSymbols, onReturn) => {
+        this.messageBox.hide(); // CleanupOverworldWindowsAndTilemaps
+        this.runFieldMenu({ menu: 'itemFromField', itemScreen: { init, gfxSymbols } }, () => onReturn());
       },
       fadeInFromBlack: () => this.fadeScreen(d.require('FADE_FROM_BLACK')),
     }, notInRoom);

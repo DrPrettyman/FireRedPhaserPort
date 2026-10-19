@@ -83,7 +83,7 @@ test('leaving the house starts a scene; the steps are recorded; saving closes it
   expect(ql.state).toBe(0);
   expect(ql.currentSceneNum).toBe(1);
   const saved = await savedGame(game);
-  expect(saved.version).toBe(12);
+  expect(saved.version).toBeGreaterThanOrEqual(12); // 12 brought the scenes
   expect(saved.questLog.length).toBe(4);
   const scene = saved.questLog[0];
   expect(scene).toMatchObject({ startType: START_WARP, mapGroup: 3, mapNum: 0, warpId: 0, x: 6, y: 7 });

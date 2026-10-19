@@ -4053,6 +4053,39 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   registeredItems, fieldItems. Screenshots of the list, a flavor text, a silhouette and Brock's pic match the GBA's
   layout.
 
+### W-mail 2: the PC mailbox, the daycare's mail, the in-game trade's mail (FIELD_ITEMS_PLAN.md, batch 12)
+
+- player_pc.c's mailbox in `ui/PlayerPcMenu.ts` and mailbox_pc.c in the new `ui/MailboxPc.ts` (field overlays):
+  Task_PlayerPcMailbox ("There's no MAIL here." when CountPCMail is 0), PCMailCompaction, the list (the writers'
+  names by ItemPrintFunc, CANCEL, eight rows, upText_Y 10, the scroll arrows past seven mails), "What would you like
+  to do with X's MAIL?" (trailing spaces cut), READ (ReadMail on FieldMenuScene through the host's new
+  `enterScreen`, back through CB2_ReturnToMailbox), MOVE TO BAG (YES / NO, "The BAG is full." or "The MAIL was
+  returned to the BAG with its message erased."), GIVE (party_menu.c's ChooseMonToGiveMailFromMailbox and
+  TryGiveMailToSelectedMon for PARTY_ACTION_GIVE_MAILBOX_MAIL, back through
+  CB2_ReturnToMailboxPc_UpdateScrollVariables), EXIT; the mailbox's help contexts. `gPlayerPcMenuManager` (world/mail.ts)
+  has cursorPos / itemsAbove / count / pageItems now; CountPCMail, PCMailCompaction and SELECTED_MAIL (`selectedPcMail`)
+  are there too. OverworldScene's PlayerPcMenu host passes the state (no `countPcMail: () => 0`) and `hideMessage`.
+- daycare.c's struct DayCareMail (`DaycareMon.mail?`, absent = cleared): StorePokemonInDaycare's MonHasMail branch
+  (the message, the player's name, the nickname; TakeMailFromMon), TakeSelectedPokemonFromDaycare's GiveMailToMon2,
+  ShiftDaycareSlots moving it up, ClearDaycareMonMail, BufferDayCareMonReceivedMail and the special
+  DaycareMonReceivedMail (no FRLG script calls it). Save version 13 (12 at first; renumbered at the merge after W-qlog 1's 12): the daycare mons' `mail`; upgrading a version 12
+  save frees the party mail slots no party mon points at (a mon left in a daycare before kept its mail item but leaked
+  its slot).
+- trade_scene.c's GetInGameTradeMail (sInGameTradeMailMessages through extract_trades.py's `mailMessages`; the OT id
+  big-endian as the C writes it) into gLinkPartnerMail[0] with the mon's mail id 0, and TradeMons' mail lines (the
+  player's mon's slot cleared, the partner mail given to the mon received): DONTAE's Jynx's Fab Mail now reads
+  "THAT'S A HEALTHY JYNX! BE KIND TO IT" from DONTAE.
+- field_specials.c's mail lines (UpdateTrainerCardPhotoIcons' SpeciesToMailSpecies) were already on world/mail.ts
+  since unit 1.
+- Fixed on the way: the player's PC menus printed their items at the font's maxLetterWidth (10 px) instead of
+  GetMenuCursorDimensionByFont(FONT_NORMAL, 0) (8). The duplicated save and item-use lines in DEVIATIONS.md (merge
+  leftovers) are tidied.
+- Tests: tests/unit/mail.test.ts (+3: CountPCMail / PCMailCompaction, SELECTED_MAIL, the version 11 upgrade),
+  daycare.test.ts (+5: the mail into the daycare and back, another item kept, ShiftDaycareSlots, DaycareMonReceivedMail,
+  the save), inGameTrades.test.ts (+2: the trade mail message, GetInGameTradeMail and TradeMons); tests/e2e/mail.test.ts
+  (+4: the mailbox empty / READ / MOVE TO BAG with the bag full and not / GIVE; ten mails scrolled to the last and
+  read; a mon with mail through the Route 5 daycare and read after; DONTAE's Fab Mail read after the trade), passed
+  three times in a row; daycare, inGameTrades and pcStorage e2e pass.
 ### W-qlog 1: the quest log's recording and the scenes in the save (QUEST_LOG_PLAN.md QL1, batch 12)
 
 - New `world/questLog.ts` (quest_log.c's recording half), `questLogEvents.ts` (quest_log_events.c: the u16 command

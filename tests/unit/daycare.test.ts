@@ -2,7 +2,10 @@
 // Expected levels come from GROWTH_MEDIUM_FAST (exp = level³) and Rattata's learnset in the decomp (Quick Attack
 // at 7, Hyper Fang at 13).
 
-import { beforeAll, beforeEach, expect, test } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, test } from 'vitest';
+import { GameState } from '../../src/state/GameState';
+import { fromSaveData, toSaveData } from '../../src/state/saveData';
+import { ClearMailData, GiveMailToMon, MonHasMail, type Mail } from '../../src/world/mail';
 import type { Pokemon } from '../../src/pokemon/Pokemon';
 import { gPartyMenu } from '../../src/menus/partyMenu';
 import { SPECIALS, type SpecialEnv } from '../../src/script/specials';
@@ -147,4 +150,94 @@ test('GetSelectedMonNicknameAndSpecies', () => {
   gPartyMenu.slotId = 1;
   expect(run('GetSelectedMonNicknameAndSpecies')).toBe(t.d('SPECIES_RATTATA'));
   expect(str(0)).toBe('RATTY');
+});
+
+// ------------------------------------------------------------------ struct DayCareMail (W-mail unit 2)
+
+describe('a mon left holding mail (struct DayCareMail)', () => {
+  /** Party slot 1 (RATTATA) holding a Retro Mail with words [7, 8], written by RED. */
+  function giveMail(): Mail {
+    ClearMailData(t.state);
+    t.state.playerName = 'RED';
+    const id = GiveMailToMon(t.state, t.state.party[1], t.d('ITEM_RETRO_MAIL'));
+    t.state.mail[id].words.splice(0, 2, 7, 8);
+    return structuredClone(t.state.mail[id]);
+  }
+
+  test('StorePokemonInDaycare moves the mail into the DaycareMon; TakeSelectedPokemonFromDaycare gives it back', () => {
+    const mail = giveMail();
+    t.state.party[1].nickname = t.charmap.encodePlain('RATTY');
+    putMonInRoute5Daycare(t.state, 1);
+    const daycareMon = t.state.route5DayCareMon;
+    expect(daycareMon.mon!.heldItem).toBe(t.d('ITEM_NONE')); // TakeMailFromMon
+    expect(daycareMon.mail!.message).toEqual(mail);
+    expect(t.charmap.decodePlain(daycareMon.mail!.OT_name)).toBe('RED');
+    expect(daycareMon.mail!.OT_name).toHaveLength(8);
+    expect(t.charmap.decodePlain(daycareMon.mail!.monName)).toBe('RATTY');
+    expect(daycareMon.mail!.monName).toHaveLength(11);
+    expect(t.state.mail[0].itemId).toBe(t.d('ITEM_NONE')); // the party slot is free
+    // The party's PIDGEY takes slot 0 meanwhile: the mail comes back into the next free one.
+    GiveMailToMon(t.state, t.state.party[0], t.d('ITEM_WOOD_MAIL'));
+    takePokemonFromRoute5Daycare(t.state);
+    const rattata = t.state.party[1];
+    expect(rattata.heldItem).toBe(t.d('ITEM_RETRO_MAIL'));
+    expect(rattata.mail).toBe(1);
+    expect(t.state.mail[1]).toEqual(mail);
+    expect(MonHasMail(t.state.defines, rattata)).toBe(true);
+    expect(t.state.route5DayCareMon).toEqual({ mon: null, steps: 0 }); // ClearDaycareMonMail
+  });
+
+  test('a mon holding another item keeps it, with no DayCareMail', () => {
+    ClearMailData(t.state);
+    t.state.party[1].heldItem = t.d('ITEM_POTION');
+    putMonInRoute5Daycare(t.state, 1);
+    expect(t.state.route5DayCareMon.mon!.heldItem).toBe(t.d('ITEM_POTION'));
+    expect(t.state.route5DayCareMon.mail).toBeUndefined();
+  });
+
+  test('the Four Island daycare: taking out the first mon moves the second up with its mail (ShiftDaycareSlots)', () => {
+    const mail = giveMail();
+    gPartyMenu.slotId = 0;
+    run('StoreSelectedPokemonInDaycare'); // PIDGEY, no mail: slot 0
+    gPartyMenu.slotId = 0;
+    run('StoreSelectedPokemonInDaycare'); // RATTATA with its mail: slot 1
+    expect(t.state.daycare.mons[0].mail).toBeUndefined();
+    expect(t.state.daycare.mons[1].mail!.message).toEqual(mail);
+    t.state.setVar('VAR_0x8004', 0);
+    run('TakePokemonFromDaycare');
+    expect(t.state.daycare.mons[0].mon!.species).toBe(t.d('SPECIES_RATTATA'));
+    expect(t.state.daycare.mons[0].mail!.message).toEqual(mail);
+    expect(t.state.daycare.mons[1]).toEqual({ mon: null, steps: 0 });
+    run('TakePokemonFromDaycare');
+    expect(t.state.party.map((m) => [m.species, m.heldItem])).toEqual([
+      [t.d('SPECIES_PIDGEY'), 0],
+      [t.d('SPECIES_RATTATA'), t.d('ITEM_RETRO_MAIL')],
+    ]);
+    expect(t.state.mail[t.state.party[1].mail!]).toEqual(mail);
+  });
+
+  test('DaycareMonReceivedMail: TRUE (names buffered) only when the nickname or the player differs from the stored ones', () => {
+    giveMail();
+    t.state.party[1].nickname = t.charmap.encodePlain('RATTY');
+    gPartyMenu.slotId = 1;
+    run('StoreSelectedPokemonInDaycare');
+    t.state.setVar('VAR_0x8004', 0);
+    expect(run('DaycareMonReceivedMail')).toBe(0);
+    t.state.daycare.mons[0].mon!.nickname = t.charmap.encodePlain('RAT');
+    expect(run('DaycareMonReceivedMail')).toBe(1);
+    expect([str(0), str(1), str(2)]).toEqual(['RAT', 'RED', 'RATTY']);
+    t.state.setVar('VAR_0x8004', 1); // the empty slot
+    expect(run('DaycareMonReceivedMail')).toBe(0);
+  });
+
+  test('the DayCareMail survives the save', () => {
+    const mail = giveMail();
+    putMonInRoute5Daycare(t.state, 1);
+    const data = JSON.parse(JSON.stringify(toSaveData(t.state)));
+    const fresh = new GameState(t.state.defines, [], t.pokemon, {});
+    fromSaveData(data, fresh);
+    expect(fresh.route5DayCareMon.mail).toEqual(t.state.route5DayCareMon.mail);
+    expect(fresh.route5DayCareMon.mail!.message).toEqual(mail);
+    expect(fresh.daycare.mons[0].mail).toBeUndefined();
+  });
 });

@@ -60,6 +60,7 @@ import { battleRecordsProbe } from '../menus/battleRecords';
 import { diplomaProbe } from '../menus/diploma';
 import { easyChatProbe } from '../menus/easyChatScreen';
 import { mailProbe } from '../menus/mail';
+import { mailboxProbe } from '../ui/PlayerPcMenu';
 import { seagallopProbe } from '../menus/seagallop';
 import type { SSAnneProbe } from '../world/ssAnne';
 import { questLogTestProbe } from '../world/questLog';
@@ -667,6 +668,8 @@ function createApi(game: Phaser.Game) {
       const p = mailProbe();
       return p && { ...p, lines: p.lines.map(decode), authorName: decode(p.authorName) };
     },
+    /** The player's PC mailbox (ui/PlayerPcMenu.ts, W-mail) while the PC is on: the task phase, the list's state. */
+    mailbox: () => mailboxProbe(),
     /** The Seagallop ferry scene (menus/seagallop.ts) while it's up: setup state, frames, BG3's x, the ferry, wakes. */
     seagallop: () => seagallopProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */

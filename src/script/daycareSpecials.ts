@@ -9,6 +9,7 @@ import { ChooseMonForDaycare, GetCursorSelectionMonId } from '../menus/partyMenu
 import { ShowDaycareLevelMenu } from '../ui/DaycareLevelMenu';
 import {
   boxMonNickname,
+  daycareMonReceivedMail,
   getCostToWithdrawRoute5DaycareMon,
   getDaycareCost,
   getDaycareMonNicknames,
@@ -119,6 +120,14 @@ export const DAYCARE_SPECIALS: Record<string, Special> = {
   /** RejectEggFromDayCare: the pending egg is gone. */
   RejectEggFromDayCare({ state }) {
     rejectEggFromDayCare(state);
+  },
+
+  /**
+   * DaycareMonReceivedMail: whether slot VAR_0x8004's mon holds mail from someone else or under another nickname
+   * (gStringVar1 its nickname, gStringVar2 / 3 the stored OT name and nickname). No FRLG script calls it.
+   */
+  DaycareMonReceivedMail({ state }) {
+    return daycareMonReceivedMail(state) ? 1 : 0;
   },
 
   /** SetDaycareCompatibilityString: gStringVar4 = how well the two get along. */
