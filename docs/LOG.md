@@ -3125,3 +3125,31 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   LFSR / noise clock / wave samples, volumes, banks / mixing / the circuit's timing and resync, then the extracted
   SEs and songs); `tests/e2e/audioOutput.test.ts` + 1 (SE_SELECT alone reaches the worklet's speakers; checked to
   fail with the PSG switched off). Typecheck clean; unit 577 in 42 files; e2e audioOutput 5, audio 2.
+
+### W-sound 7b: the Hall of Fame, the credits, the Pokédex, the bag, the title screen, the main menu, the trainer card
+
+- Recounted against the C (AUDIO_PLAN.md appendix A): hall_of_fame.c + hof_pc.c 14 calls, 0 live before; credits.c
+  1 (+ the two gDisableMapMusicChangeOnMapLoad writes, live); pokedex_screen.c 12, 10 live; item_menu.c 37, the 24
+  outside Teachy TV's tutorials (not ported) live; item_use.c 7, all live (the bike bell, the Poké Flute's fanfare);
+  title_screen.c 7, live but the REVISION 0 berry fix's m4aMPlayAllStop; main_menu.c 3, live but
+  Task_MysteryGiftError's (no Mystery Gift); trainer_card.c 7, all live (only the header comment was stale).
+- **Hall of Fame** (`menus/hallOfFame.ts`): PlayBGM(MUS_HALL_OF_FAME), SE_SAVE, the cries (PlayCry_Normal, not for
+  eggs), SE_APPLAUSE, FadeOutBGM(4). SetWarpsToRollCredits' DoWarp now runs as the C's under the screen's CB2:
+  TryFadeOutOldMapMusic (the room plays MUS_SLOW_PALLET, Indigo Plateau MUS_VICTORY_ROAD, so FadeOutMapMusic(4)),
+  PlaySE(SE_EXIT) (skipped: MUSIC_DISABLE_KEEP), Task_Teleport2Warp's `!gPaletteFade.active && BGMusicStopped()`
+  wait, then the warp; the destination header comes from the new `hofEnv.loadMapHeader` (FieldMenuScene). The Hall
+  of Fame PC: StopCryAndClearCrySongs + PlayCry_Normal per mon, IsCryPlayingOrClearCrySongs → StopCryAndClearCrySongs
+  + m4aMPlayVolumeControl(BGM, 0x100) on A / B out; ReshowPCMenuAfterHallOfFamePC's Overworld_PlaySpecialMapMusic
+  in OverworldScene.openHallOfFamePc (the music never changes there, so it's a no-op in practice).
+- **Credits** (`menus/credits.ts`): PlayCry_NormalNoDucking(GetCreditsMonSpecies, 0, CRY_VOLUME_RS,
+  CRY_PRIORITY_NORMAL) in the mon scenes. MUS_CREDITS was already live (Indigo Plateau's `playbgm`).
+- **Pokédex** (`menus/pokedexScreen.ts`): SetBGMVolume_SuppressHelpSystemReduction(0x80) /
+  BGMVolumeMax_EnableHelpSystemReduction. FRLG's Pokédex has no SE_DEX_* sounds (only region_map.c uses them);
+  `pokedexArea.ts` has no sound calls in the C.
+- **Main menu** (`scenes/MainMenuScene.ts`): the stand-in BattleUi's `playSE` is PlaySE (Oak's speech's ball-open
+  particles' SE_BALL_OPEN).
+- docs/DEVIATIONS.md: the Hall of Fame, Pokédex, trainer card, credits, title screen and main menu entries lose
+  their audio clauses; the Hall of Fame DoWarp approximation now says what's left (the header's load, no
+  WarpFadeOutScreen).
+- The Hall of Fame's cries don't hold anything in the C (the 120-frame timer runs alongside); the only wait this
+  unit adds is DoWarp's BGMusicStopped (a frame: the BGM has faded out under the screen's fade already).
