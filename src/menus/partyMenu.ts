@@ -129,7 +129,7 @@ import {
   type WindowTemplate,
 } from '../gba/window';
 import type { Pokemon } from '../pokemon/Pokemon';
-import { animTable } from '../battle/gfx';
+import { animTable, HandleBattleLowHpMusicChange } from '../battle/gfx';
 import { GetLastViewedMonIndex, GetMoveSlotToReplace, ShowPokemonSummaryScreen, ShowSelectMovePokemonSummaryScreen } from './summaryScreen';
 import {
   AddBagItem,
@@ -3245,7 +3245,7 @@ function Task_DisplayHPRestoredMessage(taskId: number): void {
   gStringVar1.set(GetMonNickname(P(gPartyMenu.slotId)));
   DisplayPartyMenuMessage(ExpandToStringVar4(text('gText_PkmnHPRestoredByVar2')), false);
   ScheduleBgCopyTilemapToVram(2);
-  // HandleBattleLowHpMusicChange: no audio
+  HandleBattleLowHpMusicChange();
   gTasks[taskId].func = Task_ClosePartyMenuAfterText;
 }
 

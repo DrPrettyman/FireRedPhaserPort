@@ -3255,6 +3255,27 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   battleAnims*.test.ts and wildBattle.test.ts; **the full e2e suite once (before merging master): 64 files, 411
   tests, all passed, 26 min**; after the merge audioBattleAnims (twice), battleAnims, wildBattle, audio.
 
+### W-sound 6a: pokeball.c's, battle_gfx_sfx_util.c's and battle_interface.c's sounds (AUDIO_PLAN.md batch D, unit 5)
+
+- **Send-out cries** (`battle/gfx.ts`, pokeball.c): SpriteCB_ReleaseMonFromBall starts Task_PlayCryWhenReleasedFromBall
+  (pan 25 for the opponent's side, -25 for the player's; CRY_MODE_NORMAL, or CRY_MODE_WEAK when
+  ShouldPlayNormalMonCry says no) in the task's fifth run after the ball opens. In a double battle's intro the left mons' cries
+  are PlayCry_ReleaseDouble(CRY_MODE_DOUBLES / _WEAK_DOUBLES) after StopCryAndClearCrySongs, the right ones' wait 6
+  frames, then for !IsCryPlayingOrClearCrySongs, then 3 more, and play CRY_MODE_NORMAL / _WEAK; the left ones also set
+  the BGM to volume 128 (a multi battle stops it). The task keeps the mon as its side and party index where the C
+  keeps its pointer in data[3..4]. pokeball.c's unused throw path (DoPokeballSendOutAnimation with a throw case other
+  than the two send-outs: SpriteCB_BallThrow*, SE_BALL_THROW, the bounces, SE_BALL, MUS_CAUGHT_INTRO) has no caller in
+  the C and stays unported; the real ball throw's sounds are battle_anim_special.c's (W-sound 6b).
+- **The wild mon's cry** (battle_main.c's SpriteCB_MoveWildMonToRight, in gfx.ts): PlayCry_Normal(species, 25).
+- **The low HP beep** (battle_gfx_sfx_util.c): HandleLowHpMusicChange plays SE_LOW_HEALTH (a looping song on SE3)
+  when a player's mon drops into the red, unless its partner already beeps, and m4aSongNumStop's it when the mon
+  leaves the red (in a double battle once neither is); BattleStopLowHpSound; HandleBattleLowHpMusicChange (new),
+  called by party_menu.c's Task_DisplayHPRestoredMessage (`menus/partyMenu.ts`). IsBattleSEPlaying (new): the
+  controllers' wait for an SE before a move / status anim, 30 calls at most, then m4aMPlayStop of SE1 and SE2.
+- **The ball trays** (`battle/battleInterface.ts`, battle_interface.c): PlaySE12WithPanning(SE_BALL_TRAY_ENTER, 0)
+  and each ball's PlaySE1WithPanning(SE_BALL_TRAY_BALL) / PlaySE2WithPanning(SE_BALL_TRAY_EXIT) at
+  SOUND_PAN_ATTACKER (the opponent's) / SOUND_PAN_TARGET, replacing `ui.playSE`. gfx.ts and battleInterface.ts no
+  longer use BattleUi.
 ### W-ref 2: the port's audio against the ROM (AUDIO_PLAN.md batch D, unit 10)
 
 - Exact check on the rev 1 ROM in mGBA (GDB stub, W-ref 1's freeze and start; scripts in `wref-scratch/wref2/`,
@@ -3281,6 +3302,15 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the box's cancelled average); the circuit tests skip each frame's first sample (it can hold the previous frame's
   last DAC tick) and get 30 s timeouts (they're CPU-heavy; the machine's load ran them past 5 s). Typecheck clean;
   unit 578 in 42 files; e2e audio, audioOutput, audioCries, audioScenes 13 passed.
+- 5a's TODOs: BattleStopLowHpSound before the victory music in `battle/main.ts` (HandleEndTurn_BattleWon) and
+  `battle/bsCommands2.ts` (getexp's MUS_VICTORY_WILD). Left for the controllers' owner (W-sound 5b / 8): their
+  IsBattleSEPlaying calls and PlayerHandleCmd23's BattleStopLowHpSound (docs/DEVIATIONS.md).
+- Tests: typecheck clean; unit 580 (m4a.test's "every song ends" and scriptCoverage timed out once at load ~100,
+  green on rerun); new `tests/e2e/audioBattleBalls.test.ts` (7: wild and send-out cries with pan / mode, a weak cry,
+  the trainer's and player's trays, the beep starting on a hit and at a send-out and stopping on a Potion, a switch
+  and the victory music, a double battle's intro cries and BGM volume on Victory Road 3F), audioBattle 6, wildBattle,
+  trainerBattle, battleAnims, berryPouch, scriptedBattles green. The full suite wasn't run (the lock was held; the
+  coordinator runs it at the end of the batch), so no tick budgets were raised.
 - After merging master with W-sound 5a (#104: the controllers' cries are real): audioBattleAnims' Growl test counts
   only the CRY_MODE_GROWL_1 / _2 cries (the send-out and intro cries come first now), and its Perish Song test
   waits for the intro cry's BGM ducking to end before its mark. battleAnims.2d's Memento polled for the shadow

@@ -40,7 +40,7 @@ import { SetControllerToSafari } from './controllerSafari';
 import { battleControllerDummy, setControllerToPlayer } from './controllerPlayer';
 import { bdata, g, gBattleMoves, gSpeciesInfo, itemHoldEffect, itemHoldEffectParam, mem, pokemon, state } from './env';
 import { bit } from './globals';
-import { clearBattleMonForms, FreeMonSpritesGfx } from './gfx';
+import { BattleStopLowHpSound, clearBattleMonForms, FreeMonSpritesGfx } from './gfx';
 import { bufferBattlePartyCurrentOrderBySide, getPartyIdFromBattlePartyId, switchPartyMonSlots } from './partyOrder';
 import {
   adjustFriendship,
@@ -1247,11 +1247,11 @@ function runTurnActionsFunctions(): void {
 function handleEndTurn_BattleWon(): void {
   g.currentActionFuncId = 0;
   if (g.battleTypeFlags & (K.BATTLE_TYPE_TRAINER_TOWER | K.BATTLE_TYPE_EREADER_TRAINER | K.BATTLE_TYPE_BATTLE_TOWER)) {
-    // TODO(W-sound 6a): BattleStopLowHpSound (battle_gfx_sfx_util.c, battle/gfx.ts)
+    BattleStopLowHpSound();
     PlayBGM(K.MUS_VICTORY_TRAINER);
     g.battlescriptCurrInstr = bs('BattleScript_BattleTowerTrainerBattleWon');
   } else if (g.battleTypeFlags & K.BATTLE_TYPE_TRAINER && !(g.battleTypeFlags & K.BATTLE_TYPE_LINK)) {
-    // TODO(W-sound 6a): BattleStopLowHpSound (battle_gfx_sfx_util.c, battle/gfx.ts)
+    BattleStopLowHpSound();
     g.battlescriptCurrInstr = bs('BattleScript_LocalTrainerBattleWon');
     switch (bdata.tables.trainers[g.trainerBattleOpponent_A]!.trainerClass) {
       case K.TRAINER_CLASS_LEADER:

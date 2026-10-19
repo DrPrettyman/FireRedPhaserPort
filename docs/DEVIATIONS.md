@@ -65,15 +65,13 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Raise-hand movement types (entities/NpcBrain.ts, MOVEMENT_TYPE_RAISE_HAND_AND_*): leaving one zeroes the
     sprite's x2/y2 (the GBA keeps them unless ResetMovementOfRematchableTrainers zeroes them); a frozen jumper
     (any, not only `lock`'s selected object) lands before it holds still.
-  - Battles: the calls not yet moved to gba/sound.ts (battle/gfx.ts, battleInterface) go through BattleScene's
-    `ui.play*` pass-throughs (AUDIO_PLAN.md decision 21): PlaySE without the C's panning, and `ui.playCry` is
-    PlayCry_Normal(species, 0), without the C's cry mode or pan (the wild mon's pan 25) (W-sound 6a). The controllers
-    (battle/controller*.ts) call gba/sound.ts with the C's pans and cry modes, and their cry waits (the intro's and
-    switch-in's IsCryPlayingOrClearCrySongs, Task_PlayerController_RestoreBgmAfterCry) time as on the GBA. No low HP
-    beep, so the victory music's BattleStopLowHpSound is a TODO (W-sound 6a). The battle anims (src/battle/anim/)
-    call gba/sound.ts directly, so their panned SEs, the anims' SE waits (Cmd_end, `waitsound`), the sound tasks'
-    cries and IsCryPlaying waits, the quiet BGM of Sing / Perish Song / Grass Whistle and the caught jingle time as
-    on the GBA.
+  - Battles: every battle file calls gba/sound.ts with the C's pans and cry modes (BattleScene's `ui.play*`
+    pass-throughs, AUDIO_PLAN.md decision 21, are left for W-sound 8 to delete), and the waits (the controllers'
+    intro and switch-in cries, Task_PlayerController_RestoreBgmAfterCry, the anims' SE waits, the sound tasks'
+    cries, the quiet BGM of Sing / Perish Song / Grass Whistle, the caught jingle) time as on the GBA. The
+    controllers don't call IsBattleSEPlaying yet (battle/gfx.ts has it: a move / status anim doesn't wait up to 30
+    frames for an SE to end, and doesn't stop SE1 / SE2 after), and PlayerHandleCmd23 doesn't call
+    BattleStopLowHpSound (controller files, W-sound 8).
   - Field sounds: puddles: UpdateFeetInFlowingWaterFieldEffect's SE_PUDDLE checks the splash's `invisible`, which
     the port never sets for an object off screen (UpdateObjectEventSpriteInvisibility's bounds check).
   - Audio output (audio/output.ts, audio/worklet.ts): the PCM plays at 224 samples per 60 Hz frame, 13,440 Hz,
