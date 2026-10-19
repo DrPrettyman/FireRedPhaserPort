@@ -41,18 +41,22 @@ test('the Hall of Fame: MUS_HALL_OF_FAME, SE_SAVE, a cry per mon on its timer, S
   const game = await session.start({ start: 'after-rival', map: 'PokemonLeague_HallOfFame', x: 5, y: 12, party: PARTY, speed: 16 });
   expect(await bgm(game)).toMatchObject({ song: 'MUS_SLOW_PALLET', playing: true });
   const since = await game.mark();
-  await game.mashUntil((t) => t.events().some((e) => e.type === 'hallOfFameSaved'), { what: 'the Hall of Fame save', maxFrames: 40000 });
   // The first cry ducks the BGM (PlayCry_Normal: volume 85, Task_DuckBGMForPokemonCry restores it after the cry);
-  // the screen doesn't wait for it: its 120-frame timer runs alongside
-  const duck = await game.eval(async (t) => {
-    // read inside the predicate: the page can run several ticks before the awaiting code goes on
+  // the screen doesn't wait for it: its 120-frame timer runs alongside. Watched tick by tick inside one mash (Oak's
+  // text in the room needs A; the screen ignores A until the player's info, and the mash stops in that tick)
+  const duck = (await game.eval((t) => {
     let ducked: number | null = null;
-    await t.until(() => t.audio().cry.duckTaskActive && (ducked = t.audio().players.BGM.volume) !== null, 3600);
-    await t.until(() => !t.audio().cry.duckTaskActive, 600);
-    return { ducked, restored: t.audio().players.BGM.volume };
-  });
+    let restored: number | null = null;
+    return t
+      .mash((api: any) => {
+        const cry = api.audio().cry;
+        if (cry.duckTaskActive && ducked === null) ducked = api.audio().players.BGM.volume;
+        else if (!cry.duckTaskActive && ducked !== null && restored === null) restored = api.audio().players.BGM.volume;
+        return api.events().some((e: { type: string }) => e.type === 'hallOfFamePlayerInfo');
+      }, 'A', 40000)
+      .then(() => ({ ducked, restored }));
+  })) as { ducked: number | null; restored: number | null };
   expect(duck).toEqual({ ducked: 85 >> 2, restored: 64 });
-  await game.eval((t) => t.until(() => t.events().some((e) => e.type === 'hallOfFamePlayerInfo'), 6000));
   await game.press('A');
   await game.waitFor((t) => t.field()?.map === 'IndigoPlateau_Exterior', { what: 'Indigo Plateau' });
   const charizard = await define(game, 'SPECIES_CHARIZARD');
