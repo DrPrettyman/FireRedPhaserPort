@@ -410,20 +410,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (AUDIO_PLAN.md decision 4; the decoded blocks equal the WAVs). The mixing is skipped (bookkeeping only) while
     the output doesn't want frames (headless, `?audio=0`), and samples.bin loads only when the output is on.
     ReloadSave's SetPokemonCryStereo (reset_save_heap.c, the link's save reload) has no caller: no link play.
-  - Field weather (world/weather.ts, W-weather units 1 and 2): WEATHER_NONE, SUNNY, SHADE and FOG_HORIZONTAL are
-    ported (and UNDERWATER, which shares the fog's callbacks); the weathers no FRLG map or script reaches (rain, snow,
-    thunder, ash, sandstorm, diagonal fog, drought, downpour, bubbles) run as WEATHER_NONE and log once
-    (POSTGAME_PLAN.md decision 1); their saved number is kept. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
   - Braille (`text/TextPrinter.ts`, `script/postgameSpecials.ts`): FONT_BRAILLE prints through RenderText's
     control-code handling, not FontFunc_Braille's smaller set (braille_text.c prints CLEAR / SKIP / CLEAR_TO /
     MIN_LETTER_SPACING's argument as a glyph and ignores {FONT}); FRLG's braille strings use none of them.
     BrailleCursorToggle's text cursor is a field image moved by a field task (SpriteCB_TextCursor once a frame), not an
     OAM sprite; the quest log's playback, which skips it, isn't ported.
-  - Field weather (world/weather.ts, W-weather unit 1): only WEATHER_NONE, SUNNY and SHADE are ported.
-    WEATHER_FOG_HORIZONTAL (Pokémon Tower 3F-7F and the Lost Cave's 14 rooms) runs as WEATHER_NONE until
-    W-weather unit 2, and the weathers no FRLG map or script reaches (rain, snow, thunder, ash, sandstorm, diagonal
-    fog, underwater, drought, downpour, bubbles) run as WEATHER_NONE and log once (POSTGAME_PLAN.md decision 1);
-    their saved number is kept. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
+  - Field weather (world/weather.ts, W-weather units 1 and 2): WEATHER_NONE, SUNNY, SHADE and FOG_HORIZONTAL are
+    ported (and UNDERWATER, which shares the fog's callbacks); the weathers no FRLG map or script reaches (rain, snow,
+    thunder, ash, sandstorm, diagonal fog, drought, downpour, bubbles) run as WEATHER_NONE and log once
+    (POSTGAME_PLAN.md decision 1); their saved number is kept. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
     the field's sprite sheets redrawn in place (world/weatherTextures.ts: `spr_*` GAMMA_ALT, their reflection sheets
     and the loadfadedpal field effects GAMMA_NORMAL), not to palette RAM: a connected map with another secondary
     tileset isn't shifted until it's the current map. FadeScreen's fade-out copy of the shifted palettes into the
