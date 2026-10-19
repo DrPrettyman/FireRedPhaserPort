@@ -6,7 +6,8 @@ order a player meets it: back to One Island (Oak's National Dex, Celio asks for 
 (the Ruby), the Rainbow Pass and the Sevii Islands 4-7 (the Sapphire quest: Four, Six, Five Island, back to Celio),
 Seven Island (the Tanoby Ruins), the Trainer Tower, then the event islands (Navel Rock, Birth Island). Field weather
 comes in with it (decision 1). `tests/unit/scriptCoverageGaps.ts` is the backlog: its 42 `postgame` gaps, and each
-unit takes its own off the list.
+unit takes its own off the list. **The plan is complete:** every unit ran in batch 10 (PRs #114-#125, "Batch 10
+result" below); no postgame gap is left.
 
 ## What was checked
 
@@ -166,8 +167,24 @@ effect, the tickets in `menus/hallOfFame.ts`, `tests/e2e/eventIslands.test.ts`.
 
 | Batch | Workers | Why together |
 |---|---|---|
-| 10 | W-sevii (1, 2), W-weather (1, 2), W-ttower (1, 2), W-events (1) | One unit of each to start (four workers), then the next unit of each workstream as the first merges |
-| 11 | W-sevii (3, 4, 5), W-ttower (3 if left) | The Sapphire quest and Seven Island, once weather and ShakeScreen are in |
+| 10 (done, PRs #114-#125) | W-sevii (1-5), W-weather (1, 2), W-ttower (1-3), W-events (1) | Planned as one unit of each, then the next unit as the first merged; batch 11's units (W-sevii 3-5, W-ttower 3) started in the slots that freed up (decision 7) |
+
+### Batch 10 result
+
+Merged: #114 the plan; #115 W-weather 1 (the framework, Shade, saved weather; save version 7); #116 W-events 1
+(the tickets, ShakeScreen, Navel Rock, Birth Island); #117 W-ttower 1 (the tower's data and functions, the timer;
+save version 8); #118 W-sevii 1 (braille, Oak's National Dex to the Rainbow Pass; `waitbuttonpress` waits a frame
+before checking, as the C); #119 W-weather 2 (horizontal fog); #120 W-sevii 2 (Four Island, Icefall Cave, step
+callbacks, `warphole`); #121 W-ttower 2 (the tower's battles); #122 W-sevii 4 (Five Island, Celio's Sapphire,
+SetPostgameFlags; save version 9; `compare` / `goto_if_*` read an operand as a var only in the var ranges, which
+Selphy's 0xFFFF check needed); #123 W-sevii 3 (Six Island, the Heracross record, `disable_anim` / `restore_anim`);
+#124 W-sevii 5 (Seven Island, the Tanoby Key and chambers; Unown letter pics preloaded for battle;
+ValidateEReaderTrainer); #125 W-ttower 3 (battle_records.c, both pages; the full climb). The end-of-batch e2e run
+found one race in a test (postgameSevenIsland's chambers, fixed in the STATUS PR).
+
+Left after this plan: map preview screens (every postgame cave has one), the help system, link play (incl. the
+Seven Island house's e-Reader room), the unused weathers, a Kanto-wide postgame sweep (Cerulean Cave beyond
+Mewtwo's battle start).
 
 What's left after this plan: map preview screens (the postgame caves have them), the help system, link play, the
 unused weathers.
@@ -202,3 +219,7 @@ Workers never run the full e2e suite; it runs once at the end of the batch, on m
    every upgrade step, so a version-6 save still loads.
 6. **ShakeScreen belongs to W-events** (coordinator, revisit if you disagree): Navel Rock's base is its first user
    in this batch; W-sevii's Sapphire room and Tanoby Key (batch 11) reuse it.
+7. **Batch 11's units ran in batch 10** (coordinator, revisit if you disagree): W-events finished early and the
+   first units merged within the hour, so W-sevii 3, 4 and 5 ran in parallel (each in its own block of
+   postgameSpecials.ts, setting the earlier units' story state inline in its test) and W-ttower 3 took the last
+   free slot. Never more than four workers at once.

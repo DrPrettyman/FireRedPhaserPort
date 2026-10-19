@@ -114,6 +114,10 @@ A test fails if the page throws or logs `console.error`. When a test fails, the 
 9. Don't assert real-time output statistics (the audio worklet's `dropped` / `underruns`): the browser's frame
    loop stalls under load and ticks several frames at once, so they depend on the machine, not the code
    (audioOutput's tone test failed this way at load ~90 in batch 9).
+10. Don't dev-start on a map with trainers and then teleport (`warp`, `t.warpTo`) elsewhere: a trainer can spot
+   the player while the start loads, and its EventScript_DoTrainerBattleFromApproach carries on into the next map
+   and never ends there (postgameSevenIsland's chambers, batch 10). Start on the map you test, or wait for the
+   field to be idle with no script before the warp.
 
 Runs are close to deterministic, not exactly: the RNG is seeded, but the number of logic ticks between
 two harness calls depends on wall-clock time. Write scenarios that hold whatever the dice say.

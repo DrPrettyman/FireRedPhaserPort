@@ -297,7 +297,10 @@ const CHAMBERS: [string, string][] = [
 ];
 
 test('the seven chambers: dark while the ruins are locked, then lit, each with its own Unown letters by slot', async () => {
-  const game = await session.start({ start: 'after-rival', map: 'SevenIsland_TanobyRuins', x: 120, y: 11, party: [MEWTWO] });
+  // Start inside a chamber, not on the ruins: a ruins trainer could spot the player as the dev start loads, and the
+  // test's warp would then carry EventScript_DoTrainerBattleFromApproach into the chamber (the end-of-batch run hit it)
+  const game = await session.start({ start: 'after-rival', map: 'SevenIsland_TanobyRuins_MoneanChamber', x: 11, y: 15, party: [MEWTWO] });
+  await game.waitIdle();
   for (const unlocked of [false, true]) {
     await game.eval((t, u) => t.state!.setFlag('FLAG_SYS_UNLOCKED_TANOBY_RUINS', u), unlocked);
     for (const [chamber, letters] of CHAMBERS) {

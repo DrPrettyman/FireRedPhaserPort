@@ -3749,3 +3749,25 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   (the Trainer Tower lobby's battle records, W-ttower's). One link gap fewer (ValidateEReaderTrainer).
 - Verified (after merging master): typecheck; unit 629 passed; e2e postgameSevenIsland.test.ts (6 passed, ~7 min: most of it the sweep's
   battles) and wildBattle.test.ts (3 passed: the battle's preload).
+
+### Batch 10 merge: the postgame (POSTGAME_PLAN.md, PRs #114-#125)
+
+- Merged in this order: #114 the plan (docs), #115 W-weather 1, #116 W-events 1, #117 W-ttower 1, #118 W-sevii 1,
+  #119 W-weather 2, #120 W-sevii 2, #121 W-ttower 2, #122 W-sevii 4, #123 W-sevii 3, #124 W-sevii 5, #125
+  W-ttower 3. W-sevii 3-5 and W-ttower 3 were planned for batch 11 and ran in slots that freed up (POSTGAME_PLAN.md
+  decision 7).
+- Conflict resolutions: `script/specials.ts` (the spread lines, both sides kept), `scriptCoverageGaps.ts` (each
+  side's removals kept; the postgame section is empty now), `script/postgameSpecials.ts` (units 3 and 4's blocks
+  both kept, the header comment merged), the save version (W-weather took 7, W-ttower 8, W-sevii 4 9, each with its
+  upgrade step). Union merges of docs/DEVIATIONS.md restored W-weather 1's field weather entry twice (once split
+  around the braille entry): unit 2's text kept once each time. docs/LOG.md lost the blank line before entries in
+  union merges: restored.
+- A race fixed at merge: weather.test.ts probed right after a dev start, before the weather's own fade in had run
+  (the field goes idle first): `startedIdle` waits for WEATHER_PAL_STATE_IDLE. The same file's Tanoby test failed
+  once in a merge run at load ~79 (log lost) and passed in five reruns; it passed in the end-of-batch run.
+- Tests per merge: typecheck, unit tests and the PR's own e2e files (plus eventIslands / trainerTower /
+  weather where a merge touched them). The full e2e suite ran once, on master at #125: 474 passed, 1 failed
+  (postgameSevenIsland's seven chambers: the dev start on SevenIsland_TanobyRuins let a ruins trainer spot the
+  player, and the test's warp carried EventScript_DoTrainerBattleFromApproach into the chamber, where it never
+  ended). Fixed by starting inside a chamber; the file rerun alone: 6 passed. tests/README.md item 10 names the
+  pattern.

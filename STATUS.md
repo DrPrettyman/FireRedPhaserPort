@@ -20,7 +20,11 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
   (`story.test.ts`, `storyCeladonSaffron.test.ts`, `storyLeague.test.ts`: Misty to Giovanni, Bill, the S.S. Anne,
   the Rocket Hideout, Pokémon Tower, Silph Co., the Safari Zone, Cinnabar, Route 22/23, the Elite Four and the
   Champion); the ending (Hall of Fame room → Hall of Fame → credits → reset → CONTINUE in Pallet Town); Bill's
-  Sevii 1-3 trip after Blaine (`seviiQuest.test.ts`: Celio, the bikers, Lostelle, back to Cinnabar).
+  Sevii 1-3 trip after Blaine (`seviiQuest.test.ts`: Celio, the bikers, Lostelle, back to Cinnabar); the postgame
+  (`postgame*.test.ts`: Oak's National Dex, Kindle Road, Mt. Ember and the Ruby, the Rainbow Pass, Four Island and
+  Icefall Cave, Six Island's Dotted Hole and the Sapphire theft, Five Island's Rocket Warehouse and Celio's network
+  machine, Seven Island's Tanoby Key and chambers; `trainerTower.test.ts`: a full climb; `eventIslands.test.ts`:
+  Lugia, Ho-Oh, Deoxys).
 
 ## Next up
 
@@ -31,12 +35,19 @@ registers are identical frame by frame on 31 songs, SEs and cries; the listening
 `/Users/joshua/Coding/PokemonProjects/wref-scratch/wref2/index.html`). Every call site the plan lists makes its
 sound: the field, map music (saved), the battle (music in the transition, the controllers, scripts, balls, the low
 HP beep, the anims' panned SEs and waits), the scenes (evolution, eggs, trades, Hall of Fame, credits, Pokédex,
-title), the ambient cries. Every audio wait times as on the GBA. Deferred: field weather's sounds (no field
-weather), the help system, quest log and link play (AUDIO_PLAN.md "Batch D result").
+title), the ambient cries. Every audio wait times as on the GBA. Deferred: the rain weathers' sounds (no FRLG
+map has rain), the help system, quest log and link play (AUDIO_PLAN.md "Batch D result").
 
-Next: the postgame, planned in [POSTGAME_PLAN.md](POSTGAME_PLAN.md) (Sevii 4-7, Mt. Ember, Trainer Tower, the
-event islands, and FRLG's field weather; `tests/unit/scriptCoverageGaps.ts` lists its 42 gaps), then the open work
-below (the intro movie, map previews, the help system).
+**The postgame is done** ([POSTGAME_PLAN.md](POSTGAME_PLAN.md) complete in one batch, batch 10: PRs #114-#125). The
+42 postgame gaps are ported: braille, field weather (FRLG's Shade and horizontal fog: Viridian Forest, Pokémon Tower,
+the Mansion, Berry Forest, the Lost Cave, the Tanoby chambers, Navel Rock), Icefall Cave's ice (field_tasks.c step
+callbacks, `warphole`), the Heracross record, Resort Gorgeous, SetPostgameFlags, the Trainer Tower (trainer_tower.c,
+its battles, the records board, battle_records.c), ShakeScreen, the event islands (the tickets from the Hall of
+Fame as in REVISION 0xA, a deliberate QOL change; Lugia, Ho-Oh, the Deoxys triangle). Save version 9.
+
+Next: the open work below. The map preview screens are the most visible gap left (every postgame cave has one);
+then the help system and the intro movie. A Kanto-wide postgame sweep (the National Dex's Kanto changes, Cerulean
+Cave beyond Mewtwo's battle start) is still open.
 
 [SIDE_PLAN.md](SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
 `bufferdecorationname` (and the other decoration commands) and FLDEFF_USE_DIVE with DoDiveWarp, ported as FRLG's C
@@ -59,18 +70,17 @@ the trainer card, and headless story checks from Brock to the Hall of Fame.
 No known main-path blockers are left: the story checks found and fixed four (Lt. Surge's trash cans, the Rocket
 Hideout's `call_if_defeated` barrier, `GetQuestLogState` leaving VAR_RESULT stale so `trainerbattle_no_intro`
 could skip its battle, every nurse's YES/NO throwing on a constant expression). `tests/unit/scriptCoverageGaps.ts`
-lists what the scripts use that isn't ported: 0 main, 0 side, 42 postgame, 44 link (what FRLG compiles but never
+lists what the scripts use that isn't ported: 0 main, 0 side, 0 postgame, 43 link (what FRLG compiles but never
 reaches, the decoration commands and Dive, is ported as the C has it).
 
 Other open work:
 
-- Field weather (field_weather.c, field_weather_effects.c: rain, snow, fog, ... and their SE3 sounds).
 - The intro movie (intro.c) before the title screen.
 - The L/R help system (help_system.c) behind OPTIONS_BUTTON_MODE_HELP.
 - Map preview screens (map_preview_screen.c): TryDoMapTransition already knows where they'd run.
 - Other bag items that need field systems: Fame Checker, Teachy TV, mail.
-- Link play (the cable club's link specials are stand-ins that never find a partner), the event tickets for Navel
-  Rock / Birth Island, `special ShakeScreen`.
+- Link play (the cable club's link specials are stand-ins that never find a partner; the Seven Island house's
+  e-Reader battle room).
 - More e2e scenarios (see the checklist's Tests section).
 - Mail (the in-game trade's held mail, the daycare's mail) and contest conditions/sheen aren't modelled.
 
@@ -245,6 +255,14 @@ Loose ends:
 - [x] Warp screen effects: WarpFadeOutScreen / WarpFadeInScreen (white in and out of caves), the cave flash
   transitions (FlashTransition_Enter / _Exit from CB2_DoChangeMap), the barn door wipe leaving through a door
 - [ ] Map preview screens (map_preview_screen.c: the cave/forest name banners)
+- [x] Field weather (field_weather.c, field_weather_util.c, field_weather_effects.c' FRLG weathers): None, Sunny,
+  Shade (the gamma shift on the field's palettes and sheets), horizontal fog (the sprites, BLDALPHA blend);
+  `setweather` / `doweather` / `resetweather`, the saved weather. Rain, snow and the other unused weathers aren't
+  ported (POSTGAME_PLAN.md decision 1)
+- [x] The postgame (POSTGAME_PLAN.md): braille (FONT_BRAILLE, `braillemessage`, BrailleCursorToggle), field_tasks.c's
+  step callbacks (Icefall Cave's ice), `warphole`, ShakeScreen, the Trainer Tower (trainer_tower.c, its battles,
+  battle_records.c), the event islands (tickets, Lugia, Ho-Oh, the Deoxys triangle and rock effects), the postgame
+  specials (Heracross record, Resort Gorgeous, Lorelei's dolls, the sticker man, SetPostgameFlags)
 - [x] Evolution scene (evolution_scene.c, evolution_graphics.c): after a battle (TryEvolvePokemon), from a Rare Candy
   or an evolution stone; holding B stops it; Crobat-style evolutions stop without the National Dex; learning the
   new species' move (incl. forgetting one through the summary screen); Nincada's Shedinja. TradeEvolutionScene
@@ -252,7 +270,8 @@ Loose ends:
 - [x] Audio playback (AUDIO_PLAN.md): the m4a engine (`src/audio/`: sequencer, notes, channels, envelopes, the cry
   song, the DirectSound mixer and reverb, CgbSound and the PSG synth) runs every frame; sound.c (`gba/sound.ts`);
   map music (`gba/overworldMusic.ts`, savedMusic, the ambient cries); the field's, battle's and scenes' calls; the
-  AudioWorklet output with autoplay and the mute key M. Field weather's sounds wait for field weather
+  AudioWorklet output with autoplay and the mute key M. The rain weathers and their sounds aren't ported (no FRLG
+  map has them)
 - [x] Naming screen (naming_screen.c): every template (player, rival, PC box, nickname, caught mon); opened by
   ChangePokemonNickname from scripts and by the battle's nickname prompt after a catch
 - [x] Title screen (title_screen.c, clear save data screen) and Oak's speech (oak_speech.c); intro.c isn't ported
@@ -270,7 +289,8 @@ Loose ends:
   Rope, VS Seeker, Itemfinder, registered items, options, trainer card, the story gym by gym; move tutors /
   deleter / relearner, in-game trades and the Name Rater, the Game Corner, Oak's rating and the fossils, the
   daycares, eggs and hatching, holes and the other side specials; the Seagallop ferry from every harbor and the
-  Sevii 1-3 quest, the S.S. Anne (ticket check, departure, the dock after), the league lighting, Easy Chat
+  Sevii 1-3 quest, the S.S. Anne (ticket check, departure, the dock after), the league lighting, Easy Chat; field
+  weather; the postgame from Oak's National Dex to Seven Island, the Trainer Tower, the event islands
 - [x] Script coverage unit test: every script command, special, std script, movement action and field effect the
   scripts use, against the port's tables; known gaps tagged in `tests/unit/scriptCoverageGaps.ts`
 - [ ] More scenarios: party menu from the start menu, items in battle, level-up move learning, the Old Man
