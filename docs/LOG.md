@@ -4276,6 +4276,11 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the list on the same option with the player's bag and registered item as before. Screenshots of the TM case demo
   (dimmed list, the TM types text) and the REGISTER bag checked by eye. Typecheck, 741 unit tests; teachyTv,
   tmCase and registeredItems e2e (17 tests) pass, three times (after merging master at c8bd734 the last).
+- Merged after QL4a (#147), whose FieldUseFunc_TeachyTv records ItemUse_SetQuestLogEvent: DEVIATIONS' Teachy TV
+  entry ("no quest log event") went with the field demos', and the union merge's duplicated party menu / TM case
+  lines were tidied (the PC mailbox's GIVE is in since W-mail 2; the TM case keeps only RecordItemTransaction for
+  QL4b).
+
 ### W-qlog-calls: the menus' quest log calls (QUEST_LOG_PLAN.md QL4a, batch 12)
 
 - item_use.c's ItemUse_SetQuestLogEvent in world/questLogEvents.ts, called where the C calls it: the field uses in
