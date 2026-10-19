@@ -4274,5 +4274,5 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   0 → TEACHY TV → the player's in REGISTER), with the player's own TM05 and registered BICYCLE in the before / after
   check; a new one quits with B from his bag (TMs), his TM case (mid-scroll) and his bag after REGISTER, each back to
   the list on the same option with the player's bag and registered item as before. Screenshots of the TM case demo
-  (dimmed list, the TM types text) and the REGISTER bag checked by eye. Typecheck, 731 unit tests; teachyTv,
-  tmCase and registeredItems e2e (17 tests) pass on origin/master 8ab44b9.
+  (dimmed list, the TM types text) and the REGISTER bag checked by eye. Typecheck, 741 unit tests; teachyTv,
+  tmCase and registeredItems e2e (17 tests) pass, three times (after merging master at c8bd734 the last).
