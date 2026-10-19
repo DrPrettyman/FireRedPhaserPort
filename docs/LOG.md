@@ -3201,3 +3201,12 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the box's cancelled average); the circuit tests skip each frame's first sample (it can hold the previous frame's
   last DAC tick) and get 30 s timeouts (they're CPU-heavy; the machine's load ran them past 5 s). Typecheck clean;
   unit 578 in 42 files; e2e audio, audioOutput, audioCries, audioScenes 13 passed.
+- 5a's TODOs: BattleStopLowHpSound before the victory music in `battle/main.ts` (HandleEndTurn_BattleWon) and
+  `battle/bsCommands2.ts` (getexp's MUS_VICTORY_WILD). Left for the controllers' owner (W-sound 5b / 8): their
+  IsBattleSEPlaying calls and PlayerHandleCmd23's BattleStopLowHpSound (docs/DEVIATIONS.md).
+- Tests: typecheck clean; unit 580 (m4a.test's "every song ends" and scriptCoverage timed out once at load ~100,
+  green on rerun); new `tests/e2e/audioBattleBalls.test.ts` (7: wild and send-out cries with pan / mode, a weak cry,
+  the trainer's and player's trays, the beep starting on a hit and at a send-out and stopping on a Potion, a switch
+  and the victory music, a double battle's intro cries and BGM volume on Victory Road 3F), audioBattle 6, wildBattle,
+  trainerBattle, battleAnims, berryPouch, scriptedBattles green. The full suite wasn't run (the lock was held; the
+  coordinator runs it at the end of the batch), so no tick budgets were raised.
