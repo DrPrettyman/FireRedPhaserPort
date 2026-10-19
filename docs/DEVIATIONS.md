@@ -65,8 +65,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Raise-hand movement types (entities/NpcBrain.ts, MOVEMENT_TYPE_RAISE_HAND_AND_*): leaving one zeroes the
     sprite's x2/y2 (the GBA keeps them unless ResetMovementOfRematchableTrainers zeroes them); a frozen jumper
     (any, not only `lock`'s selected object) lands before it holds still.
-  - Battles: no audio through BattleScene's `ui.play*` (the controllers' and scripts' SEs, cries and music are
-    no-ops until W-sound 5-6, so their cry waits end at once); the battle anims' sound tasks call gba/sound.ts
+  - Battles: the battle scripts', battle/gfx.ts's, battleInterface's and the anims' sounds still go through
+    BattleScene's `ui.play*` (W-sound 5a, 6a, 6b); the controllers (battle/controller*.ts) call gba/sound.ts with the
+    C's pans and cry modes, and their cry waits (the intro's and switch-in's IsCryPlayingOrClearCrySongs,
+    Task_PlayerController_RestoreBgmAfterCry) time as on the GBA. The battle anims' sound tasks call gba/sound.ts
     directly, so Howl / Roar / Growl / Hyper Voice's cries and their IsCryPlaying waits time as on the GBA.
   - Field sounds: puddles: UpdateFeetInFlowingWaterFieldEffect's SE_PUDDLE checks the splash's `invisible`, which
     the port never sets for an object off screen (UpdateObjectEventSpriteInvisibility's bounds check).
@@ -132,6 +134,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     overworld's ScreenFade.
   - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;
     HP-as-text (SwapHpBarsWithHpText) and link/multi battles aren't implemented.
+  - Battles: the level-up's vertical stripes (CreateLevelUpVerticalSpritesTask, pokemon_special_anim_scene.c) aren't
+    drawn: Task_CreateLevelUpVerticalStripes (controllerCommon.ts) moves the mon to the BG and plays SE_RS_SHOP, then
+    goes on at once where the GBA waits ~35-65 frames for the 18 stripes to rise. The link battles' end
+    (SetBattleEndCallbacks with its m4aSongNumStop(SE_LOW_HEALTH)) isn't ported.
   - Battle transitions: no SE_MUGSHOT, and the battle music doesn't start with the transition.
   - Map preview screens (Mt. Moon, Rock Tunnel, Viridian Forest...) aren't ported: warps into those sections fade
     to black like the GBA and go straight to the map, without the banner (or the flash that follows it).

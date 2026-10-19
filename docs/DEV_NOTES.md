@@ -1398,6 +1398,27 @@ or extend them:
   SE_SELECTs, the save dialog closing SE_SAVE's length + 60 frames after it, the heal machine's SE_BALLs 25 frames
   apart, MUS_HEAL 32 frames after the last, the effect running until the fanfare task resumes the BGM).
 
+### Battle sounds: the controllers (W-sound 5b)
+
+- **Where:** each controller calls `gba/sound.ts` (and `audio/m4a.ts` for m4aMPlayContinue / m4aMPlayVolumeControl /
+  m4aSongNumStop) as its C file does, with the C's pans and cry modes: `battle/controllerPlayer.ts`
+  (battle_controller_player.c), `controllerOpponent.ts`, `controllerOakOldMan.ts`, `controllerSafari.ts`; the exp
+  bar's SE_EXP (PlaySE, then m4aSongNumStop when the bar is full) and Task_CreateLevelUpVerticalStripes' SE_RS_SHOP
+  are in `controllerCommon.ts`. The menus' SE_SELECT (action, move, target, move switching, the Old Man's
+  simulated input, Safari's menu), SE_FAINT (PlaySE12WithPanning: SOUND_PAN_ATTACKER for the player's side,
+  SOUND_PAN_TARGET for the foe's), CONTROLLER_PLAYSE (panned by side, except the Oak/Old Man controller's plain
+  PlaySE), PLAYFANFARE, PLAYBGM (the player's only; the others just complete), FAINTINGCRY (player / opponent:
+  PlayCry_ByMode(species, -25 / 25, CRY_MODE_FAINT); Oak/Old Man and Safari: PlayCry_Normal(species, 25)), Cmd55's
+  FadeOutMapMusic(5).
+- **Waits:** Intro_WaitForShinyAnimAndHealthbox (player, opponent) and SwitchIn_HandleSoundAndEnd hold until
+  `!IsCryPlayingOrClearCrySongs()` (the send-out cry), then put the BGM back to 256 (m4aMPlayContinue in multi
+  battles). The Oak/Old Man intro doesn't wait: it starts Task_PlayerController_RestoreBgmAfterCry (exported by
+  controllerPlayer.ts). The cries themselves come from pokeball.c / battle_main.c's ports (`gfx.ts`, W-sound 6a).
+- **Tests:** `tests/e2e/audioBattleControllers.test.ts` (a wild battle's intro leaves Intro_WaitForShinyAnimAndHealthbox
+  only after MEWTWO's send-out cry stops; 4 SE_SELECTs from the action and move menus; a fainting PIDGEY's SE_FAINT
+  at SOUND_PAN_TARGET and CRY_MODE_FAINT cry; SE_EXP stopped well before its 100 frames; the Old Man's two
+  SE_SELECTs 64 frames apart and the catch's speed-5 fade).
+
 ## Game state
 
 - **PC boxes and save data:** `state/PokemonStorage.ts` is struct PokemonStorage (`state.storage`: 14 boxes of 30
