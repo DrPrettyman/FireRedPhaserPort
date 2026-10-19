@@ -1124,7 +1124,7 @@ EXTRA_DEFINE_HEADERS = (
     "include/battle_main.h", "include/battle_script_commands.h", "include/gba/types.h", "include/gba/defines.h", "include/menu.h", "include/pokemon_icon.h", "include/pokedex.h", "include/berry.h",
     "include/item.h", "include/item_menu.h", "include/item_menu_icons.h", "include/list_menu.h", "include/menu_helpers.h",
     "include/menu_indicators.h", "include/money.h", "include/party_menu.h", "include/new_menu_helpers.h", "include/item_use.h",
-    "include/task.h", "include/pokemon_summary_screen.h", "include/mon_markings.h", "include/data.h",
+    "include/task.h", "include/pokemon_summary_screen.h", "include/mon_markings.h", "include/data.h", "include/map_preview_screen.h",
     "include/naming_screen.h", "include/pokemon_storage_system.h", "include/pokemon_storage_system_internal.h", "include/battle_transition.h",
     # field_player_avatar.c / bike.c: PLAYER_AVATAR_FLAG_*, COLLISION_*, T_*, running states, BIKE_*
     "include/global.fieldmap.h", "include/bike.h",

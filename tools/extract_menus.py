@@ -11,6 +11,7 @@
 - menuInfoIcons: sMenuInfoIcons (list_menu.c) as [width, height, tile offset]
 - namingKeyboardChars: sKeyboardChars (naming_screen.c) by KEYBOARD_* page, four raw `__()` rows each
 - regionMap: region_map.c's tables (see region_map_data)
+- mapPreviewScreens: map_preview_screen.c's sMapPreviewScreenData (see map_preview_screen_data)
 - pokedexArea: wild_pokemon_area.c's and pokedex_area_markers.c's tables (see pokedex_area_data)
 """
 
@@ -82,8 +83,7 @@ def region_map_data(decomp, defines):
     """region_map.c's data: sRegionMapSections_* (data/region_map/region_map_layout_*.h) as [layer][y][x]
     mapsecs per REGIONMAP_*, sMapSectionTopLeftCorners / sMapSectionDimensions (region_map_sections.json),
     sSeviiMapsecs, sMapFlyDestinations ([MAP_* id, HEAL_LOCATION_* number]), sDungeonInfo ([mapsec, desc
-    string label]) and map_preview_screen.c's sMapPreviewScreenData ([mapsec, flag, tiles, tilemap, palette
-    symbols]), all indexed as in the C (mapsec tables by mapsec - KANTO_MAPSEC_START); mapNums: MAP_NUM() of
+    string label]), all indexed as in the C (mapsec tables by mapsec - KANTO_MAPSEC_START); mapNums: MAP_NUM() of
     every MAP_* id (data/maps/map_groups.json), which the player position overrides compare."""
     src = decomp / "src"
     rm_c = (src / "region_map.c").read_text()
@@ -122,14 +122,6 @@ def region_map_data(decomp, defines):
     fly = by_index(designated_entries(c_array_body(rm_c, "sMapFlyDestinations")), defines, fly_dest)
     dungeon_info = [[defines[i], d] for i, d in re.findall(r"\.id\s*=\s*(MAPSEC_\w+),\s*\.name\s*=\s*\w+,\s*\.desc\s*=\s*(\w+)", c_array_body(rm_c, "sDungeonInfo"))]
 
-    mps = (src / "map_preview_screen.c").read_text()
-    previews = [
-        [defines[sec], flag, tiles, tilemap, pal]
-        for sec, flag, tiles, tilemap, pal in re.findall(
-            r"\.mapsec\s*=\s*(\w+),\s*\.type\s*=\s*\w+,\s*\.flagId\s*=\s*(\w+),\s*\.tilesptr\s*=\s*(\w+),\s*\.tilemapptr\s*=\s*(\w+),\s*\.palptr\s*=\s*(\w+)",
-            c_array_body(mps, "sMapPreviewScreenData"),
-        )
-    ]
     map_nums = {}
     groups = json.loads((decomp / "data/maps/map_groups.json").read_text())
     for group in groups["group_order"]:
@@ -143,8 +135,20 @@ def region_map_data(decomp, defines):
         "seviiMapsecs": sevii,
         "flyDestinations": fly,
         "dungeonInfo": dungeon_info,
-        "mapPreviews": previews,
     }
+
+
+def map_preview_screen_data(decomp, defines):
+    """map_preview_screen.c's sMapPreviewScreenData in order (MPS_*): {mapsec, type (MPS_TYPE_*), flagId (FLAG_*
+    name), tilesptr, tilemapptr, palptr (graphics symbols)}."""
+    mps = (decomp / "src/map_preview_screen.c").read_text()
+    return [
+        {"mapsec": defines[sec], "type": defines[typ], "flagId": flag, "tilesptr": tiles, "tilemapptr": tilemap, "palptr": pal}
+        for sec, typ, flag, tiles, tilemap, pal in re.findall(
+            r"\.mapsec\s*=\s*(\w+),\s*\.type\s*=\s*(\w+),\s*\.flagId\s*=\s*(\w+),\s*\.tilesptr\s*=\s*(\w+),\s*\.tilemapptr\s*=\s*(\w+),\s*\.palptr\s*=\s*(\w+)",
+            c_array_body(mps, "sMapPreviewScreenData"),
+        )
+    ]
 
 
 def pokedex_area_data(decomp, defines):
@@ -259,6 +263,7 @@ def extract_menus(decomp, out):
         "evolutions": evolutions,
         "namingKeyboardChars": naming_keyboard_chars(decomp),
         "regionMap": region_map_data(decomp, defines),
+        "mapPreviewScreens": map_preview_screen_data(decomp, defines),
         "pokedexArea": pokedex_area_data(decomp, defines),
     }
     (out / "menus.json").write_text(json.dumps(data, separators=(",", ":")))

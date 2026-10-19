@@ -305,7 +305,16 @@ this is the next level down. When you add or change a subsystem, update its entr
   Postgame e2e helpers: `tests/e2e/postgameHelpers.ts` (`afterHallOfFame` for the story state after the Hall of
   Fame and the Sevii 1-3 trip, `fillPokedex(n)`, `scriptsSince`, `battlesSince`, `rainbowPassState` for the state
   postgame.test.ts ends in, `talk(x, y, dir)`); set OPTIONS' battle style to SET
-  (`state.battleStyleSet`) when mashing trainer battles with two or more in the party.
+  (`state.battleStyleSet`) when mashing trainer battles with two or more in the party. For the legendaries' battles
+  (W-kanto): `foeOf` (the foe's species and level once it's out), `throwFirstBall` (BAG → POKé BALLS → the first
+  ball, NO to the nickname; returns a "transferred to ... PC" message if there was one), `fightToEnd`,
+  `runFromBattle`, `outcomeSince` (B_OUTCOME_*), `finishScript` (mash to a free field; the messages seen),
+  `objectsWith(gfx)`; `followRoute` walks a route that needs Surf (`['to', x, y]`, `['surf', dir]`, `['land', dir]`:
+  waits for the Surf field effects, which the field counts as idle) and `takeWarp(x, y)` walks onto a warp and waits
+  for the next map to be idle (a cave's preview screen may come first). Tests: tests/e2e/postgameKanto.test.ts
+  (Cerulean Cave from the entrance: 1F north shore → Surf → land at (10, 16) → (24, 11) → 2F (5, 6) → 1F (1, 7) →
+  B1F, Surf from (17, 19) to land below Mewtwo; Mewtwo caught / beaten / run from),
+  tests/e2e/postgameKantoLegendaries.test.ts (the birds, Lugia, Ho-Oh, Deoxys).
   **Six Island** (W-sevii 3): the size records are pokemon_size_record.c in `script/pokemonSizeRecord.ts` (the table,
   GetMonSizeHash from the personality and IVs, GetMonSize from the Pokédex height, FormatMonSizeRecord in inches,
   CompareMonSize / GetMonSizeRecordInfo on a record var holding the biggest mon's hash; `withPokedexData` waits for
@@ -459,7 +468,30 @@ this is the next level down. When you add or change a subsystem, update its entr
   IsBattleTransitionDone) and has a bare mode for CB2_DoChangeMap's cave flash screens (`world/mapTransition.ts`,
   also MapTransitionIsEnter/IsExit). Warps go WarpFadeOutScreen (with TryFadeOutOldMapMusic and SE_EXIT, waiting
   for BGMusicStopped too: "Map music") → doChangeMap → SetUpWarpExitTask in `OverworldScene.warpTo`. `__test.forceBattleTransition('SWIRL')` makes the next battles use one transition.
-  The map preview screens are the obvious next piece: TryDoMapTransition already knows where they'd run.
+  TryDoMapTransition runs a cave's map preview screen (below) before its flash.
+- **Map preview screens:** `world/mapPreviewScreen.ts` is map_preview_screen.c (no Phaser: unit-testable).
+  sMapPreviewScreenData is menus.json `mapPreviewScreens` (tools/extract_menus.py `map_preview_screen_data`; MPS_TYPE_*
+  from include/map_preview_screen.h in the defines); the region map's dungeon previews read it through
+  GetDungeonMapPreviewScreenInfo / `mapPreviewPalette`. Two kinds, by the destination's region map section when it
+  differs from the warp's origin (MapHasPreviewScreen_HandleQLState2 is MapHasPreviewScreen: no quest log):
+  - MPS_TYPE_CAVE: `world/mapTransition.ts` TryDoMapTransition → RunMapPreviewScreen / Task_MapPreviewScreen_0 on
+    the GBA layer during CB2_DoChangeMap (FieldGbaScreen's bare mode), ending in Task_FlashTransition_Enter_1. B held
+    ends it early (OverworldScene.doChangeMap calls ReadKeys while it waits). CB2_DoChangeMap first puts back what the
+    field's InitOverworldBgs / InitStandardTextBoxWindows leave on the GBA side (`InitFieldBg0AndWindows`).
+  - MPS_TYPE_FOREST: `OverworldScene.showMapNameOnWarpArrival` (LoadMapInStepsLocal's state 12) calls
+    MapPreview_InitFieldBg0, MapPreview_LoadGfx and MapPreview_StartForestTransition instead of the name popup. The
+    task is a field task; `world/mapPreviewLayer.ts` (Phaser) draws BG0 (the PPU's render) over the field at
+    DEPTH_FADE - 10 with the MULTIPLY / ADD blend (as the fog). The warp exits wait for
+    `fieldFadeTransitionBackgroundEffectIsFinished` (no screen fade and ForestMapPreviewScreenIsRunning, which is TRUE
+    once the task is gone), so the field stays `busy` while the banner is up.
+  Durations: MapPreview_GetDuration, 120 frames on the first visit and 40 after: a cave reads its FLAG_WORLD_MAP_*
+  (still clear during CB2_DoChangeMap), a forest sHasVisitedMapBefore, which `setworldmapflag` (ScriptEngine →
+  MapPreview_SetFlag) sets when the flag was clear. The preview graphics are preloaded with the field's
+  (`mapPreviewGfxSymbols`). Probes: `__test.mapPreview()` (kind, mapsec, the task's state, timer, duration, the forest's
+  EVA / EVB), `__test.changeMapTask()` (CB2_DoChangeMap's task by name); event `mapPreview` {kind, mapsec, duration}.
+  Tests: tests/unit/mapPreview.test.ts, tests/e2e/mapPreview.test.ts (Route 4 `?map=Route4&x=19&y=6` up into Mt. Moon;
+  `?map=Route2_ViridianForest_SouthEntrance&x=7&y=2` up into Viridian Forest; `?map=FourIsland&x=38&y=13` after the
+  rival's scene, up into Icefall Cave; `?map=MtMoon_1F&x=5&y=7` up to B1F for none).
 - **Trainer sight:** `world/trainerSee.ts` (checkForTrainersWantingBattle + the TrainerApproach task), run from
   `OverworldScene.tick` on every frame the controls are free (mid-step too, against the step's destination).
   ScriptEngine.setUpTrainerBattleFromApproach is ConfigureAndSetUpOneTrainerBattle; `special EndTrainerApproach`
@@ -583,7 +615,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   `host.wildBattleTransition(mon)` is GetWildBattleTransition. `dowildbattle` (StartScriptedWildBattle) and
   StartLegendaryBattle share `runScriptedWildBattle` (CB2_EndScriptedWildBattle): `returnToField` runs the map's
   ON_RESUME script while FLAG_SYS_SPECIAL_WILD_BATTLE is still set (that's how Snorlax and caught legendaries
-  disappear: `removeobject VAR_LAST_TALKED`), then the script reads `specialvar GetBattleOutcome`
+  disappear: `removeobject VAR_LAST_TALKED`; InitFieldMessageBox: the message box the script left up before the
+  battle is hidden), then the script reads `specialvar GetBattleOutcome`
   (`state.battleOutcome`). `seteventmon` expands to `special CreateEnemyEventMon` (Navel Rock's Lugia and Ho-Oh,
   Birth Island's Deoxys), which leaves its mon in `state.enemyParty` like `setwildbattle`. Every battle start (OverworldScene.runBattle) does Task_BattleStart's
   RestartWildEncounterImmunitySteps. Tests: tests/e2e/pokemonTower.test.ts (walk onto the 6F trigger at 11,15),
@@ -849,17 +882,23 @@ this is the next level down. When you add or change a subsystem, update its entr
   with `SetIntroCB(ptr, next)` (state back to 0). A / START / SELECT switch to IntroCB_ExitToTitleScreen (it
   fills the palette black and starts CB2_InitTitleScreen). Ported: IntroCB_Init, the Game Freak scene
   (IntroCB_GF_OpenWindow / _Star / _RevealName / _RevealLogo, GFScene_* and the star / sparkle / logo sprites;
-  "presents" is REVISION 1's, so it isn't shown), LoadFightSceneSpriteGraphics. **Scenes 1-3 (W-intro unit 2)**
-  go in where `IntroCB_Scene1` is a stub: port IntroCB_Scene1 → IntroCB_Scene2 → IntroCB_Scene3_Entrance →
-  _Fight with SetIntroCB, as in the C; the IntroSequenceData fields, the fight scene's tags and
-  LoadFightSceneSpriteGraphics are there, and `introGfxSymbols()` lists (and MainMenuScene preloads) every
-  graphics/intro INCBIN. menu2.c's StartBlendTask / IsBlendTaskActive are `gba/menu2.ts`. `introEnv` (filled by
-  MainMenuScene): `define`, `loadGameSave` / `savedOptionsSound` (the main menu's), `sineTable` (gSineTable, from
-  the battle data's tables, which MainMenuScene loads for it). Sounds through gba/sound.ts as the C plays them
-  (PlaySE(MUS_GAME_FREAK)). Probe `t.intro()` (screen 'copyright' | 'setUp' | 'intro', the callback's name,
+  "presents" is REVISION 1's, so it isn't shown), LoadFightSceneSpriteGraphics, and scenes 1-3: IntroCB_Scene1
+  (the grass and the forest's "zoom": frames stacked on 256x512 text BGs, picked with ChangeBgY), IntroCB_Scene2
+  (the wide shot's pan, then the close-up), IntroCB_Scene3_Entrance / _Fight (Gengar is BG0 scrolled by tasks until
+  it turns into four affine sprites for the zoom; Nidorino is one affine sprite whose callbacks are the cry, the
+  recoil, the hops and the attack; Scene3_Task_GengarAttack reads `sIntro` where the C keeps the pointer in its task
+  data). The GF scene's WIN1 letterbox stays on through all of them. `introGfxSymbols()` lists (and MainMenuScene
+  preloads) every graphics/intro INCBIN. menu2.c's StartBlendTask / IsBlendTaskActive are `gba/menu2.ts`.
+  `introEnv` (filled by MainMenuScene): `define`, `loadGameSave` / `savedOptionsSound` (the main menu's),
+  `sineTable` (gSineTable, from the battle data's tables, which MainMenuScene loads for it; the scenes read it as
+  `Sin(i)`, not battle/trig.ts). Sounds through gba/sound.ts as the C plays them (PlaySE(MUS_GAME_FREAK),
+  m4aSongNumStart(MUS_INTRO_FIGHT), PlayCry_ByMode(SPECIES_NIDORINO, 0x3F, CRY_MODE_DOUBLES)). The whole movie is
+  about 1420 frames (24 s) from the copyright screen to the title screen. Probe `t.intro()` (screen 'copyright' |
+  'setUp' | 'intro', the callback's name,
   state, timer, sprites in use); events `copyrightScreen` (`cb2`: after bootup or after the title screen) and
   `introCB` (`cb`: each SetIntroCB). Tests: tests/e2e/intro.test.ts (harness option `intro: true`: boot like the
-  game and return once the copyright screen is up; it checks each callback's frame count against the C).
+  game and return once the copyright screen is up; it checks each callback's frame count against the C, the
+  music's and the cry's frames, and skips from the GF scene and from scene 3).
 - **Oak's speech (NEW GAME):** `menus/oakSpeech.ts` is oak_speech.c: StartNewGameScene, the controls guide, the
   Pikachu intro, Oak with Nidoran♀ (`CreatePokeballSpriteToReleaseMon` / `CreateTradePokeballSprite`, now in
   battle/gfx.ts's pokeball.c section), BOY / GIRL, the names (the naming screen, or the rival presets), "Let's go!"
@@ -908,7 +947,7 @@ this is the next level down. When you add or change a subsystem, update its entr
   their headers) is handed over with `setRegionMapField`, which `prepareFieldMoveMenu` / `prepareRegionMap`
   (world/fieldMoves.ts) fill before the party menu, the bag or a wall map opens. Tables: menus.json `regionMap`
   (tools/extract_menus.py: layouts, section corners/sizes, sSeviiMapsecs, sMapFlyDestinations, sDungeonInfo,
-  sMapPreviewScreenData, MAP_NUMs); graphics: graphics/region_map/ and graphics/map_preview/
+  MAP_NUMs; the previews' table is world/mapPreviewScreen.ts's); graphics: graphics/region_map/ and graphics/map_preview/
   (`regionMapGfxSymbols`, preloaded by FieldMenuScene). The screen re-copies its tilemaps at VBlank (see
   DEVIATIONS: the port's DMA is immediate). Probe `__test.regionMap()` (type, task, `ready`, cursor, `moving`,
   player icon, section and its MAPSECTYPE_*, fly icons, map name, top bar text). Tests: tests/e2e/fly.test.ts.

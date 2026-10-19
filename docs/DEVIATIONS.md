@@ -119,7 +119,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Region map / Fly (menus/regionMap.ts, world/fly.ts): the bird of Fly always uses the extracted bird sheet's own palette (Red's), where the GBA draws it in OBJ
     palette 0, the player's (Leaf's frames would use hers). gExitStairsMovementDisabled isn't kept (no stair
     walk-out). The dungeon previews' third palette is zero-filled: the C loads 3 palettes from 2-palette data,
-    reading on into the ROM (no preview tilemap uses it). Where the C reads a NULL sMapCursor (naming the section
+    reading on into the ROM (no preview tilemap uses it; the same for the map preview screens). Where the C reads a NULL sMapCursor (naming the section
     before the cursor exists, CB2_OpenRegionMap / UpdateMapsecNameBox), the port reads MAPSEC_NONE.
   - Field moves (world/fieldMoves.ts, world/fieldMoveShowMon.ts): no GAME_STAT_USED_CUT / _ROCK_SMASH. The field
     effect scripts' palette commands (loadfadedpal, ...) do nothing: the field's sprites are Phaser textures. A
@@ -158,8 +158,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     drawn: Task_CreateLevelUpVerticalStripes (controllerCommon.ts) moves the mon to the BG and plays SE_RS_SHOP, then
     goes on at once where the GBA waits ~35-65 frames for the 18 stripes to rise. The link battles' end
     (SetBattleEndCallbacks with its m4aSongNumStop(SE_LOW_HEALTH)) isn't ported.
-  - Map preview screens (Mt. Moon, Rock Tunnel, Viridian Forest...) aren't ported: warps into those sections fade
-    to black like the GBA and go straight to the map, without the banner (or the flash that follows it).
+  - Map preview screens (world/mapPreviewScreen.ts, W-preview): the forest banner (Task_RunMapPreviewScreenForest)
+    is the field's BG0 over a Phaser field, so BLDALPHA's blend of it over the field is done by the GPU as the fog's
+    is (a screen-sized EVB / 16 grey rectangle in MULTIPLY mode, then the PPU's render of BG0 with its colours times
+    EVA / 16 in ADD mode; the banner has no transparent pixel): 8-bit arithmetic, a pixel can be a 5-bit step off.
+    Its state 1 FadeInFromBlack lands on the warp's fade in, still running: the port's screen fade ignores a second
+    FadeScreen, where the C sets the BG palettes black for a frame (palette_bg_faded_fill_black) and, in a weather
+    that fades in itself (Viridian Forest's Shade), restarts that fade (~2 frames longer before the banner's count
+    starts). The previews' third palette is zero-filled as the region map's (below). The GPU registers the task saves
+    and restores (BG0 priority, DISPCNT, BLDCNT, WININ, WINOUT) aren't the Phaser field's, so they're left alone.
   - Wild encounters: GAME_STAT_* counters aren't kept.
   - Scripted wild battles (`dowildbattle`, StartLegendaryBattle): no GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES. `seteventmon` (CreateEnemyEventMon) doesn't set
     MON_DATA_MODERN_FATEFUL_ENCOUNTER (the port keeps no such field; IsBattlerModernFatefulEncounter is always
@@ -244,9 +251,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     slot, no backup; an unreadable slot is SAVE_STATUS_INVALID ("The save file has been deleted...").
   - Copyright screen and intro (menus/intro.ts, intro.c): the GameCube multiboot the copyright screen listens for
     (Pokémon Colosseum's link over the GBA cable: SerialCB_CopyrightScreen, GameCubeMultiBoot_*, sGcmb) isn't
-    ported; no GameCube ever answers, so the screen always fades out after its 140 frames. The intro movie stops
-    after the Game Freak scene: scenes 1-3 (the grass, the forest pan, Gengar and Nidorino's fight; IntroCB_Scene1
-    on) aren't ported yet (W-intro unit 2), so IntroCB_Scene1 goes straight to IntroCB_ExitToTitleScreen.
+    ported; no GameCube ever answers, so the screen always fades out after its 140 frames.
     LoadSpritePalettes(sFightSceneSpritePalettes) reads past the array's end without BUGFIX (no {0} entry); the
     port loads its five palettes only.
   - Title screen (menus/titleScreen.ts): StartTimer1 / SeedRngAndSetTrainerId don't seed the RNG from the time spent on the title

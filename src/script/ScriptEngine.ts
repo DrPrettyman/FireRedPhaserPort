@@ -18,6 +18,7 @@ import { GetRematchTrainerId, IsTrainerReadyForRematch, ShouldTryRematchBattle, 
 import type { FieldTask } from '../world/elevator';
 import type { ListMenuHost } from '../ui/FieldListMenu';
 import { SetFlashLevel } from '../world/flash';
+import { MapPreview_SetFlag } from '../world/mapPreviewScreen';
 import { DoCurrentWeather, SetSavedWeather, SetSavedWeatherFromCurrMapHeader } from '../world/weather';
 import { SPECIALS, StartScriptedWildBattle, type SpecialEnv } from './specials';
 import { PlaySlotMachineFromScript, registerGameCornerFieldEffects } from './gameCornerSpecials';
@@ -801,7 +802,7 @@ export class ScriptEngine {
       ctx.cmp = this.state.getFlag(a[0]) ? Cmp.Equal : Cmp.Less; // goto_if TRUE tests EQ against 1
     },
     setworldmapflag(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
-      this.state.setFlag(a[0], true);
+      MapPreview_SetFlag(a[0], this.state); // QuestLog_RecordEnteredMap: no quest log
     },
     setvar(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       this.state.setVar(a[0], this.defines.get(a[1]) ?? this.host.resolveLocalId(a[1]) ?? 0);

@@ -3772,6 +3772,58 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   ended). Fixed by starting inside a chamber; the file rerun alone: 6 passed. tests/README.md item 10 names the
   pattern.
 
+### W-preview: the map preview screens (GAPS_PLAN.md batch 11)
+
+- New `world/mapPreviewScreen.ts`: map_preview_screen.c whole (sMapPreviewScreenData from menus.json
+  `mapPreviewScreens`, MapHasPreviewScreen / _HandleQLState2, MapPreview_InitBgs / LoadGfx / Unload /
+  IsGfxLoadFinished / CreateMapNameWindow, MapPreview_StartForestTransition, Task_RunMapPreviewScreenForest,
+  ForestMapPreviewScreenIsRunning, GetDungeonMapPreviewScreenInfo, MapPreview_GetDuration, MapPreview_SetFlag) and
+  `world/mapPreviewLayer.ts` (the forest banner's BG0 blended over the Phaser field, MULTIPLY / ADD as the fog).
+  `world/mapTransition.ts`: fldeff_flash.c's RunMapPreviewScreen / Task_MapPreviewScreen_0 from TryDoMapTransition,
+  handing over to Task_FlashTransition_Enter_1; its hand-written section table is gone. The forest hook is
+  OverworldScene.showMapNameOnWarpArrival (LoadMapInStepsLocal's state 12); the warp exits wait for
+  FieldFadeTransitionBackgroundEffectIsFinished (the fade and ForestMapPreviewScreenIsRunning). `setworldmapflag`
+  goes through MapPreview_SetFlag. The region map's copy of the table and GetDungeonMapPreviewScreenInfo moved onto
+  the new module. Extractor: `map_preview_screen_data` (menus.json `mapPreviewScreens`, with the type the region
+  map's table lacked) and include/map_preview_screen.h in the defines (MPS_TYPE_*).
+- No quest log, so MapHasPreviewScreen_HandleQLState2 takes the non-playback path (MapHasPreviewScreen).
+- Found on the way: the C's AddWindow keeps the preview's BG0 tilemap only because the field's InitWindows left BG0
+  a window tilemap buffer; the port's GBA side has no field windows, so `InitFieldBg0AndWindows` puts back what
+  InitOverworldBgs / InitStandardTextBoxWindows leave (else AddWindow swaps in an empty tilemap). The cave screen's
+  B check needs gMain's keys: OverworldScene.doChangeMap calls ReadKeys while CB2_DoChangeMap runs.
+- Verified: typecheck; unit (tests/unit/mapPreview.test.ts new); e2e mapPreview.test.ts (new: Mt. Moon's banner held
+  121 frames in state 4 for its 120-frame duration then 41 for 40 on the second visit, the change-map tasks
+  Task_MapPreviewScreen_0 → Task_FlashTransition_Enter_1..3, B cutting it short, Viridian Forest's banner held 121
+  frames after the Shade's fade in and blended out in 47, the field busy meanwhile and no name popup, 41 on the
+  second visit, Icefall Cave's banner, none from Mt. Moon 1F to B1F), transitions, weather, fly, and the story tests
+  that warp into forest sections (storyCeladonSaffron's Game Corner stairs to the Rocket Hideout, storyLeague's
+  Safari Zone gate). Screenshots of both banners checked by eye (the name window and the art as on the GBA).
+
+### W-kanto 1: Cerulean Cave and the legendaries' battles to the end (GAPS_PLAN.md batch 11)
+
+- Played headless: Cerulean Cave from Cerulean City's entrance (the guard hidden by FLAG_HIDE_CERULEAN_CAVE_GUARD)
+  through 1F (Surf across the lake), 2F and 1F's north-west corner down to B1F, Surf round to Mewtwo, and Mewtwo's
+  StartLegendaryBattle to its end: caught with a full party (Text_MonSentToBoxInBillsPC, BOX1), ON_RESUME's
+  CeruleanCave_B1F_EventScript_TryRemoveMewtwo, FLAG_FOUGHT_MEWTWO, MUS_ROCKET_HIDEOUT back, gone on the next visit;
+  beaten (CeruleanCave_B1F_EventScript_DefeatedMewtwo → EventScript_RemoveStaticMon's fade, never back); run from
+  (EventScript_MonFlewAway, back on the next visit). Moltres, Articuno and Zapdos caught; Moltres teleported away
+  from (B_OUTCOME_PLAYER_TELEPORTED, back on the next visit); Lugia caught and beaten (FLAG_LUGIA_FLEW_AWAY, stays
+  away); Ho-Oh caught (VAR_TEMP_1 keeps the coord event off) and run from (where Movement_HoOhApproach left it, the
+  script's `setweather 0` kept through the battle, WEATHER_SHADE again on the next visit); Deoxys caught (the
+  triangle's last touch; no Deoxys, no rock on the next visit).
+- Fixed: the field message box stayed up through a scripted battle. Mewtwo's "Mew!", the birds' "Gyaoo!" and the
+  like (`message` + `waitbuttonpress`, then StartLegendaryBattle) were still on screen when the field faded back
+  in after the battle, and through EventScript_RemoveStaticMon's fades, until `release`. On the GBA,
+  CB2_ReturnToField → InitOverworldBgs → InitFieldMessageBox (overworld.c) makes the field's windows anew with the
+  message box hidden; `returnToField` (OverworldScene.runBattle) now hides it. Trainer and wild battles return the
+  same way.
+- Test state: `afterHallOfFame` now sets FLAG_SYS_NOT_SOMEONES_PC (Route25_SeaCottage: Bill met), so the postgame's
+  PC texts say BILL'S PC as they would.
+- Everything else ran as the scripts have it: StartLegendaryBattle's music and BLUR, CB2_EndScriptedWildBattle,
+  every map's ON_RESUME / ON_TRANSITION, the GetBattleOutcome branches.
+- Verified: typecheck; unit 630 passed; e2e postgameKanto.test.ts (3 passed, ~85 s), postgameKantoLegendaries.test.ts
+  (9 passed, ~2.5 min), scriptedBattles.test.ts (6) and trainerBattle.test.ts (3) for the message box change.
+
 ### W-help 1: the help system's engine and menus (help_system_util.c, help_system.c)
 
 - `ui/helpSystem.ts` (help_system_util.c: RunHelpSystemCallback's states 0-8, SaveCallbacks with DMA0 stopped,
@@ -3849,3 +3901,21 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   PC, a wild battle (and the bag in it keeping the battle's context), plus Surf's context on and off the water.
   Unit: SetHelpContextForBattle by battle type, the help specials. Ran helpSystem, titleScreen, intro, surf and
   inGameTrades e2e files.
+### W-intro 2: the intro's scenes 1-3 (batch 11)
+
+- `menus/intro.ts` ports the rest of intro.c: IntroCB_Scene1 (Scene1_Task_AnimateGrass, Scene1_StartGrassScrolling,
+  Scene1_Task_BgZoom), IntroCB_Scene2 (Scene2_Task_PanForest / _PanMons, Scene2_CreateMonSprites /
+  _DestroyMonSprites), IntroCB_Scene3_Entrance and IntroCB_Scene3_Fight with every Scene3_* task and function
+  (the BG scroll, Gengar's bounce, entrance and attack, the swipes, the grass, Nidorino's entrance, cry, recoil and
+  its dust, hops and attack, the zooms) and the sprite callbacks; sBgTemplates_Scene1/2/3, the sprite templates and
+  anims. m4aSongNumStart(MUS_INTRO_FIGHT) and PlayCry_ByMode(SPECIES_NIDORINO, 0x3F, CRY_MODE_DOUBLES) through
+  gba/sound.ts. The movie now ends on IntroCB_ExitToTitleScreen after the fight. No shared files changed: gba/bg.ts
+  already had ChangeBgX / ChangeBgY / GetBgX, and the scenes use no affine BG.
+- Tests: tests/e2e/intro.test.ts's callback order is the whole movie (boot, the title screen's timeout); a new
+  full-movie test checks each scene's frame count against the C, worked out by hand from intro.c (scene 1 47,
+  scene 2 138, scene 3's entrance 60, the fight 501: the fades, Gengar's scroll vs Nidorino's slide, the cry, the
+  attack landing on its 31st frame, the recoil and hops, Gengar's 30-frame bounce), MUS_INTRO_FIGHT on scene 1's
+  17th frame and Nidorino's cry on the fight's 41st, with screenshots of each scene; another skips with A during
+  Gengar's attack (MUS_TITLE takes over from MUS_INTRO_FIGHT). The port matched every hand count on the first run.
+  The full movie adds about 750 frames to each `title: true` boot (well inside the 60 s waits): titleScreen.test.ts,
+  audioOutput.test.ts and audioScenes2.test.ts's title test pass unchanged.
