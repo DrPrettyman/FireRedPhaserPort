@@ -85,6 +85,7 @@ import {
   WeatherTask,
 } from '../world/weather';
 import { WeatherTextures } from '../world/weatherTextures';
+import { FogHorizontal } from '../world/fogHorizontal';
 import { leagueLightingProbe, loadLeagueLightingData, registerLeagueLighting, ResetLeagueLightingTasks, setLeagueLightingHost, StopPokemonLeagueLightingEffectTask } from '../world/leagueLighting';
 import { tilesetVram } from '../world/TilesetVram';
 import { ShopMenu, type ShopHost } from '../ui/ShopMenu';
@@ -99,6 +100,7 @@ import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
 import { gFieldCallback, gFieldCallback2, type FieldCallbackHost } from '../menus/fieldCallbacks';
 import { RunMassageCooldownStepCounter } from '../script/miscSpecials';
 import { IncrementBirthIslandRockStepCount } from '../script/eventIslandSpecials';
+import { SetUpFieldTasks, Task_RunPerStepCallback, type PerStepCallbackHost } from '../world/fieldTasks'; // W-sevii
 import { DEOXYS_ROCK_GFX, registerDeoxysRock, setDeoxysRockHost } from '../world/deoxysRock';
 import { UseRegisteredKeyItemOnField } from '../menus/registeredItem';
 import { activeFieldEffects, setFieldEffectScriptHost, setFieldEffectScripts } from '../world/fieldEffectScripts';
@@ -233,6 +235,15 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private screenFade!: ScreenFade;
   /** The weather's gamma shift on the field's sprite sheets (world/weatherTextures.ts). */
   private weatherTextures!: WeatherTextures;
+  /** WEATHER_FOG_HORIZONTAL's sprites (world/fogHorizontal.ts). */
+  private fog!: FogHorizontal;
+  /** The camera's left edge in world pixels as of the last camera update (cameraTop's counterpart). */
+  private cameraLeft = 0;
+  /**
+   * The camera's top-left when InitObjectEventsLocal zeroed gTotalCameraPixelOffsetX / Y (a warp's map load,
+   * ResumeMap): gSpriteCoordOffsetX / Y count the camera's movement from there.
+   */
+  private cameraOrigin = { left: 0, top: 0 };
   /** The field on the GBA layer, while a battle transition (or a cave's map change screen) runs. */
   private gbaScreen!: FieldGbaScreen;
   private fieldEffects!: FieldEffects;
@@ -247,6 +258,16 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private elevatorWindow?: MenuWindow;
   /** Tasks started by specials that run on their own, after the script each frame (RunTasks). */
   private fieldTasks: FieldTask[] = [];
+  /** What field_tasks.c's per-step callbacks read and change (world/fieldTasks.ts), map-local. */
+  private readonly perStepCallbackHost: PerStepCallbackHost = {
+    state: () => this.state,
+    playerDestCoords: () => {
+      const { x, y } = this.player.current; // PlayerGetDestCoords
+      return { x: x - this.world.current.originX, y: y - this.world.current.originY };
+    },
+    metatileBehaviorAt: (x, y) => this.world.tileAt(x + this.world.current.originX, y + this.world.current.originY).behavior,
+    setMetatileIdAt: (x, y, metatile) => this.setMetatile(x, y, metatile, false),
+  };
   /** Flash's darkness in caves (world/flash.ts) */
   private flash!: FieldFlash;
   /** The facing a map load was asked for (undefined: GetInitialPlayerAvatarState's). */
@@ -340,6 +361,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     await loadSlotMachineData('gen'); // sSlotMachineIndices, for GetRandomSlotMachineId
     await loadLeagueLightingData('gen'); // the Elite Four / Champion rooms' lighting palettes and timers
     await loadWeatherData('gen'); // field_weather.c's tables
+    await FogHorizontal.load(); // the fog's tiles and the weather palette
     await this.assets.loadFieldEffectTextures(this);
     const field = this.field;
     const behaviorAt = (x: number, y: number) => this.world.tileAt(x, y).behavior;
@@ -601,6 +623,20 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /**
+   * Dev: the fog for `__test.fog()`: its sprites' screen positions, the blend, the fog's colour at screen pixel
+   * (px, py), gSpriteCoordOffsetX / Y as the fog takes them, and the GBA layer's semi-transparent OBJ pixels. `visible`
+   * shows or hides the fog (to read the field under it).
+   */
+  testFog(px?: number, py?: number, visible?: boolean) {
+    if (visible !== undefined) this.fog.setVisible(visible);
+    return {
+      ...this.fog.probe(px, py),
+      spriteCoordOffset: { x: -(this.cameraLeft - this.cameraOrigin.left), y: -(this.field.cameraTop - this.cameraOrigin.top) - 40 },
+      gbaSemiPixels: this.gbaScreen.semiObjPixels(),
+    };
+  }
+
+  /**
    * field_weather.c on the field: the palettes the weather shifts (the current map's BG palettes through tilesetVram,
    * the sprite sheets through WeatherTextures) and FadeScreen's weather half in the screen fade.
    */
@@ -611,10 +647,19 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         .map(([name]) => name),
     ));
     const pair = () => this.assets.tilesetPair(this.world.current.data.tilesetPair);
+    // UpdateCameraPanning: gSpriteCoordOffsetX = gTotalCameraPixelOffsetX - sHorizontalCameraPan (0 on the field),
+    // gSpriteCoordOffsetY = gTotalCameraPixelOffsetY - sVerticalCameraPan (32) - 8; cameraTop has the pan in it
+    const spriteCoordOffsetX = () => -(this.cameraLeft - this.cameraOrigin.left);
+    const spriteCoordOffsetY = () => -(this.field.cameraTop - this.cameraOrigin.top) - 32 - 8;
+    this.fog = new FogHorizontal({ scene: this, spriteCoordOffsetY });
     setWeatherHost({
       bgPaletteUnfaded: (slot) => (slot < 13 && this.world.current ? tilesetVram.bgPaletteUnfaded(pair(), slot) : undefined),
       setBgPaletteFaded: (slot, colors) => tilesetVram.loadBgPaletteFaded(this.textures, pair(), slot, colors),
       setObjPaletteGamma: (normal, alt) => this.weatherTextures.setTables(normal, alt),
+      setBlendAlpha: (eva, evb) => this.fog.setBlendAlpha(eva, evb),
+      createFogHorizontalSprites: () => this.fog.create(),
+      destroyFogHorizontalSprites: () => this.fog.destroy(),
+      spriteCoordOffsetX,
     });
     setWeatherPaletteFadeActive(() => this.screenFade.active);
     this.screenFade.weather = {
@@ -629,6 +674,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    */
   private startWeatherOnResumeMap(): void {
     this.weatherTextures.reset();
+    this.cameraOrigin = { left: this.cameraLeft, top: this.field.cameraTop }; // InitObjectEventsLocal
     StartWeather();
     ResumePausedWeather();
   }
@@ -748,12 +794,15 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const tasks = this.fieldTasks;
     this.fieldTasks = [];
     this.fieldTasks = [...tasks.filter((t) => !t.tick()), ...this.fieldTasks];
+    // Task_RunPerStepCallback (priority 80, created before Task_RunTimeBasedEvents): world/fieldTasks.ts
+    if (!this.busy) Task_RunPerStepCallback(this.perStepCallbackHost);
     // Task_RunTimeBasedEvents (priority 80): the ambient cries, while ArePlayerFieldControlsLocked is FALSE
     if (!this.busy && !this.warping && !this.scripts.running && this.overlay === undefined && this.controlsLocked === 0 && this.trainerApproach === undefined) {
       UpdateAmbientCry(this.ambientCry);
     }
     this.flash.tick(); // UpdateFlashLevelEffect / Task_WaitForFlashUpdate (priority 80)
     WeatherTask(); // Task_WeatherInit / Task_WeatherMain (priority 80)
+    this.fog.update(); // AnimateSprites' FogHorizontalSpriteCallback, against last frame's camera
     this.messageBox.tick();
     this.screenFade.tick();
     this.monPic?.tick();
@@ -809,7 +858,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * 32 px vertical pan and 8). The Phaser camera is framed the same way by CAMERA_FOLLOW_OFFSET_Y.
    */
   private updateFieldCamera(): void {
-    this.field.cameraTop = (this.cameraObject ?? this.player).feetY - CAMERA_FOLLOW_OFFSET_Y + this.cameraPanY - this.cameras.main.height / 2;
+    const focus = this.cameraObject ?? this.player;
+    this.field.cameraTop = focus.feetY - CAMERA_FOLLOW_OFFSET_Y + this.cameraPanY - this.cameras.main.height / 2;
+    this.cameraLeft = focus.anchor.x - this.cameras.main.width / 2;
   }
 
   /** FieldGetPlayerInput: which buttons count this frame, given where the player is in their step. */
@@ -1555,6 +1606,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       } else {
         this.startWeatherOnResumeMap();
       }
+      if (warped) SetUpFieldTasks(); // ResumeMap's ResetTasks + SetUpFieldTasks (a connection keeps the task)
       const resume = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_RESUME');
       if (resume) this.scripts.runImmediately(resume);
       if (warped) tilesetVram.resetBgPalettes();
@@ -2137,7 +2189,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /** The current map on the GBA layer for the credits: their camera, and no objects (ResetSpriteData). */
   private creditsGbaSource(): FieldGbaSource {
-    return { ...this.fieldGbaSource(), camera: () => ({ ...this.creditsCamera! }), sprites: () => [], flashLevel: 0 };
+    return { ...this.fieldGbaSource(), camera: () => ({ ...this.creditsCamera! }), sprites: () => [], fog: () => undefined, flashLevel: 0 };
   }
 
   /**
@@ -2406,8 +2458,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * Scripted non-trainer battles (StartOldManTutorialBattle etc.): gEnemyParty is set up by the caller. `song`
    * is CreateBattleStartTask's (0: the battle's default music).
    */
-  startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number, song = 0): TrainerBattleRun {
-    return this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty }, transition, song);
+  startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number, song = 0, battleStartTask = true): TrainerBattleRun {
+    return this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty }, transition, song, battleStartTask);
   }
 
   /** GetBattleTransitionTypeByMap: TRANSITION_TYPE_NORMAL (0), _CAVE (1), _FLASH (2) or _WATER (3). */
@@ -2574,6 +2626,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     setup: Pick<BattleStart, 'battleTypeFlags' | 'trainerBattleOpponent_A' | 'trainerBattleMode' | 'rivalBattleFlags' | 'defeatSpeech' | 'victorySpeech' | 'enemyParty'>,
     transition: number,
     song = 0,
+    battleStartTask = true,
   ): TrainerBattleRun {
     const d = this.defines;
     PlayMapChosenOrBattleBGM(song, setup.battleTypeFlags, bdata.tables.trainers[setup.trainerBattleOpponent_A]?.trainerClass ?? 0);
@@ -2606,8 +2659,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     };
     return {
       done: () => {
-        // Task_BattleStart: the transition waits for FldEffPoison to finish (and here for its graphics)
-        if (phase === 'poison' && !this.poisonEffect && loaded) {
+        // Task_BattleStart: the transition waits for FldEffPoison to finish (and here for its graphics); another
+        // task (Task_DoTrainerTowerBattle) starts it at once
+        if (phase === 'poison' && (!battleStartTask || !this.poisonEffect) && loaded) {
           phase = 'transition';
           testEvent('battleTransition', { transition });
           this.gbaScreen.start(source);
@@ -2619,8 +2673,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
           // Every palette is black now (FadeScreenBlack); the field stays black behind the battle.
           this.gbaScreen.stop();
           this.screenFade.fill(false);
-          this.wild.resetEncounterRateModifiers(); // RestartWildEncounterImmunitySteps
-          this.state.setVar('VAR_POISON_STEP_COUNTER', 0); // ClearPoisonStepCounter
+          if (battleStartTask) {
+            this.wild.resetEncounterRateModifiers(); // RestartWildEncounterImmunitySteps
+            this.state.setVar('VAR_POISON_STEP_COUNTER', 0); // ClearPoisonStepCounter
+          }
           testEvent('battleStart', { flags: start.battleTypeFlags, trainer: start.trainerBattleOpponent_A });
           this.scene.launch('Battle', start);
           this.scene.sleep();
@@ -2653,6 +2709,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       layerType: (metatile) => pair.layerType(metatile),
       camera: () => ({ x: Math.round(cam.worldView.x), y: Math.round(cam.worldView.y) }),
       sprites: () => this.fieldSprites(),
+      fog: () => this.fog.gbaLayer(),
       flashLevel: Overworld_GetFlashLevel(this.state),
     };
   }
@@ -2674,6 +2731,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     ResetWeatherTask();
     this.startWeatherOnResumeMap();
     this.ambientCry = { state: 0, delayCounter: 0 }; // and SetUpFieldTasks' new Task_RunTimeBasedEvents
+    SetUpFieldTasks(); // and its new Task_RunPerStepCallback (world/fieldTasks.ts)
     ReturnPlayerAvatarToField(); // SpawnObjectEventsOnReturnToField
     this.objectsFrozen = false; // FieldCB_ReturnToFieldNoScript's UnfreezeObjectEvents (a rod's bite froze them)
     this.player.clearHeldMovementIfFinished(); // (a finished step isn't processed again after a battle)

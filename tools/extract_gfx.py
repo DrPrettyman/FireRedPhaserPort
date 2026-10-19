@@ -19,8 +19,8 @@ from extract import read_jasc
 # Graphics the ported code loads (battle UI, terrain, Pokémon/trainer pics and icons, balls, battle
 # anims, party menu, bag and item icons, summary screen and mon markings, the shop's buy menu, the naming
 # screen, the PC storage system and item PC, the evolution scene, the field's tilesets and object event pics, which the buy menu's map view draws from VRAM,
-# field effect pics, door animation tiles, the cave entrance transition, and the weather fog and palette that
-# Haze and Mist Ball load, the main menu's palettes, the title screen and Oak's speech, the Hall of Fame and the
+# field effect pics, door animation tiles, the cave entrance transition, and the weather graphics (the fog and palette that
+# Haze and Mist Ball load and the field's horizontal fog draws), the main menu's palettes, the title screen and Oak's speech, the Hall of Fame and the
 # credits, the region map (town map / fly map) with the dungeon map previews it shows, the TM case, the berry
 # pouch, and the Pokédex (pokedex_screen.c with the mons' footprints, the area page's maps and
 # pokedex_area_markers.c's markers), the Itemfinder's arrows and star (itemfinder.c), and the trainer card

@@ -1,6 +1,7 @@
 // The postgame's specials (W-sevii, POSTGAME_PLAN.md), spread into SPECIALS: field_specials.c's
-// BrailleCursorToggle (the braille messages' cursor, `braillemessage_wait`); Six Island's Heracross record
-// (pokemon_size_record.c, in pokemonSizeRecord.ts). The braille commands themselves
+// BrailleCursorToggle (the braille messages' cursor, `braillemessage_wait`), UpdateLoreleiDollCollection and
+// StickerManGetBragFlags (Four Island), field_tasks.c's SetIcefallCaveCrackedIceMetatiles (world/fieldTasks.ts),
+// Six Island's Heracross record (pokemon_size_record.c, in pokemonSizeRecord.ts). The braille commands themselves
 // (`braillemessage`, `getbraillestringwidth`) are in ScriptEngine.ts. No Phaser import here: the cursor is drawn
 // through the field's scene (ScriptHost.listMenuHost()).
 
@@ -8,6 +9,7 @@ import type Phaser from 'phaser';
 import { gfx, gfx16 } from '../gba/gfx';
 import { DEPTH_UI } from '../text/TextWindow';
 import type { FieldTask } from '../world/elevator';
+import { SetIcefallCaveCrackedIceMetatiles } from '../world/fieldTasks';
 import { CompareHeracrossSize, GetHeracrossSizeRecordInfo } from './pokemonSizeRecord';
 import type { Special } from './specials';
 
@@ -131,6 +133,48 @@ export const POSTGAME_SPECIALS: Record<string, Special> = {
     } else if (sBrailleTextCursor) {
       DestroyFieldTextCursor(sBrailleTextCursor);
     }
+  },
+  /** SetIcefallCaveCrackedIceMetatiles (field_tasks.c; FourIsland_IcefallCave_1F's ON_LOAD) */
+  SetIcefallCaveCrackedIceMetatiles({ state, host }) {
+    SetIcefallCaveCrackedIceMetatiles(state, (x, y, metatile) => host.setMetatile(x, y, metatile, false));
+  },
+
+  /**
+   * UpdateLoreleiDollCollection (field_specials.c; FourIsland_LoreleisHouse's ON_TRANSITION): from 25 Hall of Fame
+   * entries (GAME_STAT_ENTERED_HOF) on, one more doll every 25, up to the Lapras doll at 200.
+   */
+  UpdateLoreleiDollCollection({ state }) {
+    const numHofClears = state.getGameStat(state.defines.require('GAME_STAT_ENTERED_HOF'));
+    if (numHofClears < 25) return;
+    state.setFlag('FLAG_HIDE_LORELEI_HOUSE_MEOWTH_DOLL', false);
+    const dolls: [number, string][] = [
+      [50, 'FLAG_HIDE_LORELEI_HOUSE_CHANSEY_DOLL'],
+      [75, 'FLAG_HIDE_LORELEIS_HOUSE_NIDORAN_F_DOLL'],
+      [100, 'FLAG_HIDE_LORELEI_HOUSE_JIGGLYPUFF_DOLL'],
+      [125, 'FLAG_HIDE_LORELEIS_HOUSE_NIDORAN_M_DOLL'],
+      [150, 'FLAG_HIDE_LORELEIS_HOUSE_FEAROW_DOLL'],
+      [175, 'FLAG_HIDE_LORELEIS_HOUSE_PIDGEOT_DOLL'],
+      [200, 'FLAG_HIDE_LORELEIS_HOUSE_LAPRAS_DOLL'],
+    ];
+    for (const [n, flag] of dolls) if (numHofClears >= n) state.setFlag(flag, false);
+  },
+
+  /**
+   * StickerManGetBragFlags (field_specials.c; FourIsland_House2_EventScript_StickerMan's `specialvar VAR_0x8008`):
+   * VAR_0x8004 = Hall of Fame entries, VAR_0x8005 = eggs hatched (capped at 0xFFFF), VAR_0x8006 = link battle wins;
+   * bit 0, 1, 2 set for each that isn't 0.
+   */
+  StickerManGetBragFlags({ state }) {
+    const stat = (name: string) => state.getGameStat(state.defines.require(name));
+    state.setVar('VAR_0x8004', stat('GAME_STAT_ENTERED_HOF'));
+    const numEggs = stat('GAME_STAT_HATCHED_EGGS');
+    state.setVar('VAR_0x8006', stat('GAME_STAT_LINK_BATTLE_WINS'));
+    state.setVar('VAR_0x8005', numEggs > 0xffff ? 0xffff : numEggs);
+    let result = 0;
+    if (state.getVar('VAR_0x8004') !== 0) result |= 1 << 0;
+    if (state.getVar('VAR_0x8005') !== 0) result |= 1 << 1;
+    if (state.getVar('VAR_0x8006') !== 0) result |= 1 << 2;
+    return result;
   },
 
   // W-sevii unit 3, Six Island: the Water Path beauty's Heracross record (pokemon_size_record.c)

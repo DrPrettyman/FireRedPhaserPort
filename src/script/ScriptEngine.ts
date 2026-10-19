@@ -1,4 +1,5 @@
-import { avatarField, ClearPlayerHeldMovement, IsFreezePlayerFinished } from '../world/playerAvatar';
+import { avatarField, ClearPlayerHeldMovement, IsFreezePlayerFinished, ResetInitialPlayerAvatarState } from '../world/playerAvatar';
+import { ActivatePerStepCallback } from '../world/fieldTasks'; // setstepcallback (W-sevii)
 import type { ObjectEvent } from '../entities/ObjectEvent';
 import type { Button, Input } from '../input/Input';
 import type { NamingScreenRequest } from '../scenes/FieldMenuScene';
@@ -155,7 +156,8 @@ export interface ScriptHost {
   /** ClearRematchStateByTrainerId (world/vsSeeker.ts), at the end of every trainer battle. */
   clearRematchStateByTrainerId?(trainer: number): void;
   /** A non-trainer battle against `enemyParty` (gEnemyParty) behind a B_TRANSITION_*, e.g. StartOldManTutorialBattle. */
-  startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number, song?: number): TrainerBattleRun;
+  /** `battleStartTask` false: the caller's own task starts the transition (Task_DoTrainerTowerBattle), not Task_BattleStart. */
+  startScriptedBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number, song?: number, battleStartTask?: boolean): TrainerBattleRun;
   /** GetWildBattleTransition against gEnemyParty[0] = `enemy`. */
   wildBattleTransition(enemy: Pokemon): number;
   /** FieldEffectStart for an effect over `obj` (the emote icons); false if it isn't ported. */
@@ -1014,6 +1016,27 @@ export class ScriptEngine {
     /** ScrCmd_warpsilent: DoDiveWarp (no SE_EXIT) */
     warpsilent(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
       this.doWarp(ctx, a, 'silent');
+    },
+    /**
+     * ScrCmd_warphole (W-sevii): SetWarpDestination(map, WARP_ID_NONE, the player's destination coords), then DoFallWarp
+     * (world/fallWarp.ts, as `special DoFallWarp`) and ResetInitialPlayerAvatarState; the `waitstate` after it never
+     * ends (the map load ends the script). MAP_UNDEFINED is SetWarpDestinationToFixedHoleWarp, which only R/S's
+     * `setholewarp` sets (no FRLG script; only the unused EventScript_FallDownHole reaches it): logged, no warp.
+     */
+    warphole(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      if (a[0] === 'MAP_UNDEFINED') {
+        console.warn('[script] warphole MAP_UNDEFINED: sFixedHoleWarp (setholewarp) is not ported');
+        ctx.done = true;
+        return;
+      }
+      const { x, y } = this.host.playerLocal(); // PlayerGetDestCoords
+      this.host.setWarpDestination(a[0], -1, x, y);
+      this.callSpecial('DoFallWarp');
+      ResetInitialPlayerAvatarState();
+    },
+    /** ScrCmd_setstepcallback: ActivatePerStepCallback (world/fieldTasks.ts; W-sevii) */
+    setstepcallback(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      ActivatePerStepCallback(this.state.value(a[0]));
     },
     /** ScrCmd_warpdoor: DoDoorWarp; the port goes straight to Task_DoorWarp's warp (no door anim; no FRLG script uses it) */
     warpdoor(this: ScriptEngine, ctx: ScriptContext, a: string[]) {

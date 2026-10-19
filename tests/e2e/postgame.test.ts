@@ -7,7 +7,7 @@
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
 import { checkRide, sail, talkToHarborSailor } from './seagallopHelpers';
-import { afterHallOfFame, battlesSince, fillPokedex, MEWTWO, SCENE, scriptsSince, warp } from './postgameHelpers';
+import { afterHallOfFame, battlesSince, fillPokedex, MEWTWO, SCENE, scriptsSince, talk, warp } from './postgameHelpers';
 
 const session = useGame();
 
@@ -19,15 +19,6 @@ function messageBytes(game: Game) {
     const box = (window as any).game.scene.getScene('Overworld').messageBox;
     return box.visible ? (box.text as number[]) : undefined;
   });
-}
-
-/** At map-local (x, y) facing `dir`, press A: the object or bg event there starts. */
-async function talk(game: Game, x: number, y: number, dir: 'up' | 'down' | 'left' | 'right') {
-  await game.eval(async (t, x, y, dir) => {
-    await t.walkTo(x, y);
-    await t.face(dir);
-  }, x, y, dir);
-  await game.press('A');
 }
 
 test("Oak's National Dex, Celio's Ruby, Kindle Road, Mt. Ember, the Rainbow Pass", async () => {

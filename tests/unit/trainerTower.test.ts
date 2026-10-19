@@ -6,9 +6,19 @@ import { gMain, VBlankCounter1Update } from '../../src/gba/main';
 import { gStringVar4 } from '../../src/menus/common';
 import { ConvertEasyChatWordsToString, CopyEasyChatWord } from '../../src/menus/easyChat';
 import type { FontsData } from '../../src/text/Font';
+import type { Pokemon } from '../../src/pokemon/Pokemon';
 import {
   CallTrainerTowerFunc,
   currentTrainerTowerRecord,
+  FreeTrainerTowerBattleStruct,
+  GetPartyMaxLevel,
+  GetTrainerTowerOpponentClass,
+  GetTrainerTowerOpponentLoseText,
+  GetTrainerTowerOpponentName,
+  GetTrainerTowerOpponentWinText,
+  GetTrainerTowerTrainerFrontSpriteId,
+  InitTrainerTowerBattleStruct,
+  trainerTowerOpponentPicId,
   initTrainerTowerData,
   setTrainerTowerStringWidth,
   trainerTowerData,
@@ -20,7 +30,7 @@ import { newGame, readGen, type TestGame } from './gameData';
 
 let t: TestGame;
 const warnings: string[] = [];
-const standIns: unknown[] = [];
+const battles: { flags: number; party: Pokemon[]; transition: number }[] = [];
 
 /** GetStringWidth(FONT_NORMAL, str, -1) from fonts.json's glyph widths: the widest line. */
 function normalWidth(str: number[]): number {
@@ -45,7 +55,7 @@ beforeAll(() => {
 beforeEach(() => {
   t = newGame();
   warnings.length = 0;
-  standIns.length = 0;
+  battles.length = 0;
   gMain.vblankCounter1 = null;
   on('LAYOUT_TRAINER_TOWER_LOBBY');
 });
@@ -61,7 +71,7 @@ function call(func: string, v8005?: number, v8006?: number): number {
   t.state.setVar('VAR_0x8004', t.d(`TRAINER_TOWER_FUNC_${func}`));
   if (v8005 !== undefined) t.state.setVar('VAR_0x8005', v8005);
   if (v8006 !== undefined) t.state.setVar('VAR_0x8006', v8006);
-  CallTrainerTowerFunc({ state: t.state, warnOnce: (_k, m) => warnings.push(m), battleStandIn: (i) => standIns.push(i) });
+  CallTrainerTowerFunc({ state: t.state, warnOnce: (_k, m) => warnings.push(m), startTowerBattle: (flags, party, transition) => battles.push({ flags, party, transition }) });
   return t.state.getVar('VAR_RESULT');
 }
 
@@ -296,13 +306,107 @@ describe('the floors', () => {
     const short = trainerTowerData().floors.sTrainerTowerFloor_Single_4.trainers[0].speechWin;
     expect(TT_ConvertEasyChatMessageToString(t.state, short)).toEqual(ConvertEasyChatWordsToString(t.state, short, 3, 2));
   });
+});
 
-  test('DoTrainerTowerBattle is a stand-in: reported, counted as won', () => {
+describe('the battles (DoTrainerTowerBattle, BuildEnemyParty, the battle\'s opponent)', () => {
+  /** A party mon of `species` at `level`. */
+  const partyMon = (species: string, level: number) =>
+    t.pokemon.createMon(t.d(`SPECIES_${species}`), level, { otId: 1, otName: 'RED', otGender: 'male', metLocation: 'MAPSEC_NONE' });
+
+  /** `ttower_dobattle` on `layout` with VAR_TEMP_1 = `trainer`: the battle it starts. */
+  function doBattle(layout: string, trainer: number) {
+    on(layout);
+    t.state.setVar('VAR_TEMP_1', trainer);
+    battles.length = 0;
+    call('DO_BATTLE');
+    expect(battles).toHaveLength(1);
+    return battles[0];
+  }
+
+  test('a Single floor: two of the trainer\'s mons at the party\'s top level, TRAINER | TRAINER_TOWER', () => {
+    t.state.party = [partyMon('PIDGEY', 30), partyMon('RATTATA', 50), partyMon('MEW', 70)];
+    t.state.party[2].isEgg = true; // GetPartyMaxLevel leaves eggs out
+    expect(GetPartyMaxLevel(t.state)).toBe(50);
     start('SINGLE');
+    const before = JSON.stringify(trainerTowerData().floors.sTrainerTowerFloor_Single_1);
+    const b = doBattle('LAYOUT_TRAINER_TOWER_1F', 0);
+    expect(b.flags).toBe(t.d('BATTLE_TYPE_TRAINER') | t.d('BATTLE_TYPE_TRAINER_TOWER'));
+    // sSingleBattleChallengeMonIdxs[0] = {0, 2}: ALBERTO's FERALIGATR and his third mon
+    const trainer = trainerTowerData().floors.sTrainerTowerFloor_Single_1.trainers[0];
+    expect(b.party.map((m) => m.species)).toEqual([trainer.mons[0].species, trainer.mons[2].species]);
+    expect(b.party.map((m) => m.level)).toEqual([50, 50]);
+    expect(t.state.enemyParty).toBe(b.party);
+    // The data is untouched (the C sets the level in its own copy)
+    expect(JSON.stringify(trainerTowerData().floors.sTrainerTowerFloor_Single_1)).toBe(before);
+    // Lv50 FERALIGATR, 15 IVs, 255 Atk / 100 SpA / 155 SpD EVs, personality 50 (Hardy: no nature change); base stats
+    // 85 / 105 / 100 / 78 / 79 / 83: floor((2B + IV + EV/4) * L / 100) + 5, HP + L + 10
+    const fer = b.party[0];
+    expect(fer.species).toBe(t.d('SPECIES_FERALIGATR'));
+    const stat = (base: number, ev: number) => Math.floor(((2 * base + 15 + Math.floor(ev / 4)) * 50) / 100) + 5;
+    expect(fer.maxHP).toBe(Math.floor(((2 * 85 + 15) * 50) / 100) + 50 + 10);
+    expect(fer.hp).toBe(fer.maxHP);
+    expect(fer.stats).toMatchObject({ attack: stat(105, 255), defense: stat(100, 0), speed: stat(78, 0), spAttack: stat(79, 100), spDefense: stat(83, 155) });
+    expect(fer).toMatchObject({ personality: 50, otId: trainer.mons[0].otId, heldItem: trainer.mons[0].heldItem, friendship: 255, moves: trainer.mons[0].moves });
+    expect(fer.pp).toEqual(fer.moves.map((m) => t.pokemon.moves[m].pp));
+    expect(t.charmap.decodePlain(fer.nickname)).toBe('FERALIGATR');
+    // BattleSetup_GetBattleTowerBattleTransition: the enemy's Lv50 against the lead's Lv30. The enemy is at the party's
+    // top level, never below the lead's, so the tower always gets the big Poké Ball
+    expect(b.transition).toBe(t.d('B_TRANSITION_BIG_POKEBALL'));
+    t.state.party[0] = partyMon('PIDGEY', 60);
+    expect(doBattle('LAYOUT_TRAINER_TOWER_1F', 0).transition).toBe(t.d('B_TRANSITION_BIG_POKEBALL'));
+  });
+
+  test('the mons go by floors cleared; a Double floor takes one of each trainer\'s, a Knockout one of VAR_TEMP_1\'s', () => {
+    t.state.party = [partyMon('PIDGEY', 40)];
+    const d = trainerTowerData();
+    start('SINGLE');
+    record().floorsCleared = 3;
+    let b = doBattle('LAYOUT_TRAINER_TOWER_4F', 0);
+    const single4 = d.floors[d.sets[0][3]].trainers[0];
+    expect(b.party.map((m) => m.species)).toEqual(d.singleBattleChallengeMonIdxs[3].map((i) => single4.mons[i].species));
+
+    start('DOUBLE');
+    record().floorsCleared = 1;
+    b = doBattle('LAYOUT_TRAINER_TOWER_2F', 0);
+    expect(b.flags).toBe(t.d('BATTLE_TYPE_TRAINER') | t.d('BATTLE_TYPE_TRAINER_TOWER') | t.d('BATTLE_TYPE_DOUBLE'));
+    const double2 = d.floors[d.sets[1][1]];
+    const [i0, i1] = d.doubleBattleChallengeMonIdxs[1];
+    expect(b.party.map((m) => [m.species, m.level])).toEqual([
+      [double2.trainers[0].mons[i0].species, 40],
+      [double2.trainers[1].mons[i1].species, 40],
+    ]);
+
+    start('KNOCKOUT');
+    record().floorsCleared = 2;
+    b = doBattle('LAYOUT_TRAINER_TOWER_3F', 1);
+    const ko3 = d.floors[d.sets[2][2]];
+    expect(b.flags).toBe(t.d('BATTLE_TYPE_TRAINER') | t.d('BATTLE_TYPE_TRAINER_TOWER'));
+    expect(b.party.map((m) => m.species)).toEqual([ko3.trainers[1].mons[d.knockoutChallengeMonIdxs[2][1]].species]);
+  });
+
+  test('InitTrainerTowerBattleStruct: the class, name, pic and both trainers\' end-of-battle texts', () => {
+    const d = trainerTowerData();
+    start('DOUBLE');
     on('LAYOUT_TRAINER_TOWER_1F');
     t.state.setVar('VAR_TEMP_1', 0);
-    expect(call('DO_BATTLE', 0)).toBe(t.d('B_OUTCOME_WON'));
-    expect(standIns).toEqual([{ challengeType: 0, floor: 0, trainer: 0 }]);
-    expect(warnings).toHaveLength(1);
+    gMain.vblankCounter1 = null;
+    InitTrainerTowerBattleStruct(t.state);
+    expect(gMain.vblankCounter1).toBe(record()); // the timer counts during the battle
+    const floor = d.floors[d.sets[1][0]];
+    const [tr0, tr1] = floor.trainers;
+    expect(GetTrainerTowerOpponentName()).toBe(tr0.name);
+    expect(GetTrainerTowerOpponentClass()).toBe(d.facilityClassToTrainerClass[tr0.facilityClass]);
+    expect(GetTrainerTowerOpponentClass()).toBe(t.d('TRAINER_CLASS_TWINS')); // JEN & KIRA
+    expect(GetTrainerTowerTrainerFrontSpriteId()).toBe(t.d('TRAINER_PIC_TWINS'));
+    expect(trainerTowerOpponentPicId(t.state)).toBe(t.d('TRAINER_PIC_TWINS'));
+    const text = (words: number[]) => TT_ConvertEasyChatMessageToString(t.state, words);
+    expect(GetTrainerTowerOpponentWinText(t.state, 0)).toEqual(text(tr0.speechWin));
+    expect(GetTrainerTowerOpponentLoseText(t.state, 1)).toEqual(text(tr1.speechLose));
+    expect(gStringVar4).toEqual(text(tr1.speechLose));
+    expect(t.state.getVar('VAR_TEMP_3')).toBe(1);
+    expect(GetTrainerTowerOpponentWinText(t.state, 1)).toEqual(text(tr1.speechWin));
+    expect(GetTrainerTowerOpponentLoseText(t.state, 0)).toEqual(text(tr0.speechLose));
+    FreeTrainerTowerBattleStruct();
+    expect(() => GetTrainerTowerOpponentName()).toThrow();
   });
 });

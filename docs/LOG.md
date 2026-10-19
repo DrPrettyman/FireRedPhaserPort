@@ -3553,8 +3553,8 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - pokemon_size_record.c is its own module, `script/pokemonSizeRecord.ts` (moved out of miscSpecials.ts, which keeps
   the Magikarp specials): sBigMonSizeTable, GetMonSizeHash, GetMonSize, FormatMonSizeRecord (inches),
   CompareMonSize, GetMonSizeRecordInfo, and the Heracross specials CompareHeracrossSize / GetHeracrossSizeRecordInfo
-  on VAR_HERACROSS_SIZE_RECORD, registered in POSTGAME_SPECIALS. Off scriptCoverageGaps.ts (38 postgame gaps left
-  before W-sevii 2's).
+  on VAR_HERACROSS_SIZE_RECORD, registered in POSTGAME_SPECIALS. Off scriptCoverageGaps.ts (3 postgame gaps left
+  with W-sevii 2 and W-ttower 2 merged: SampleResortGorgeousMonAndReward, SetPostgameFlags, ShowBattleRecords).
 - Played headless (`tests/e2e/postgameSixIsland.test.ts`, from afterHallOfFame + the Rainbow Pass state): Six
   Island's Pokémon Center rival scene (MUS_ENCOUNTER_RIVAL, VAR_MAP_SCENE_SIX_ISLAND_POKEMON_CENTER_1F and
   VAR_MAP_SCENE_FOUR_ISLAND 1, the rival removed, not again); Ruin Valley's scientist in front of the door (until
@@ -3571,3 +3571,89 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Verified: typecheck; unit 615 (tests/unit/pokemonSizeRecord.test.ts: the hash and sizes moved from
   miscSpecials.test.ts, and the Heracross specials through POSTGAME_SPECIALS); e2e postgameSixIsland.test.ts (4)
   and sideSpecials.test.ts (the Magikarp record on the moved code).
+### W-ttower 2: the Trainer Tower's battles (POSTGAME_PLAN.md batch 10)
+
+- `world/trainerTower.ts`: unit 1's DoTrainerTowerBattle stand-in replaced by the C's: gBattleTypeFlags TRAINER |
+  TRAINER_TOWER (| DOUBLE on a doubles floor), gTrainerBattleOpponent_A 0, BuildEnemyParty (the mon tables indexed by
+  floors cleared; each floor mon copied before its level is set, the floors being the loaded JSON), GetPartyMaxLevel,
+  CreateBattleTowerMon (pokemon.c: CreateMon with IVs 0, the preset personality and OT id, no Random() call, then
+  moves, PP bonuses, item, nickname, friendship, EVs, ability bit, IVs, CalculateMonStats),
+  BattleSetup_GetBattleTowerBattleTransition (the foes are at the party's top level, so it is always the big Poké
+  Ball), Task_DoTrainerTowerBattle / CB2_EndTrainerTowerBattle (`env.startTowerBattle`: back to the field whatever
+  the outcome, no white-out; PlayMapChosenOrBattleBGM(0)), and the battle's side: InitTrainerTowerBattleStruct /
+  FreeTrainerTowerBattleStruct (sTrainerTowerOpponent; the timer counts on during the battle),
+  GetTrainerTowerOpponentClass / Name / WinText / LoseText (both trainers on a doubles floor), GetTrainerTowerTrainerFrontSpriteId.
+- `src/battle/`: AllocateBattleResources / FreeBattleResources call the tower's struct functions (main.ts);
+  battle/message.ts's trainer class, name, win / lose texts and B_TXT_TRAINER2_LOSE_TEXT / _WIN_TEXT for the tower;
+  controllerOpponent.ts's trainer pic. The other BATTLE_TYPE_TRAINER_TOWER checks the decomp has (getexp, Thief,
+  Trick, the AI's flags and items, the terrain, HandleEndTurn_BattleWon / FinishBattle, CreateNPCTrainerParty) were
+  already ported. `scenes/BattleScene.ts` loads the tower trainer's pic with the battle's graphics.
+- Shared: `host.startScriptedBattle` takes `battleStartTask` (false for the tower's own task: no FldEffPoison wait,
+  no ClearPoisonStepCounter / RestartWildEncounterImmunitySteps), ScriptEngine.ts's ScriptHost and OverworldScene.
+- The test event `trainerTowerBattle` is gone (the battle's own `battleStart` / `battleEnd` report it). Stand-in
+  removed from docs/DEVIATIONS.md.
+- Verified: typecheck; unit 610 passed (tests/unit/trainerTower.test.ts: BuildEnemyParty for each challenge type
+  against the decomp's tables, the data left alone, a Lv50 FERALIGATR's stats against the stat formula by hand, the
+  transition, InitTrainerTowerBattleStruct's class / name / pic / both trainers' texts); e2e
+  tests/e2e/trainerTower.test.ts (a Single floor won: SAILOR ALBERTO, his pic, FERALIGATR and KANGASKHAN at the
+  party's Lv70 with a Lv5 RATTATA along, the lose text after "Player defeated"; the doubles on 1F (TWINS JEN & KIRA)
+  and 2F (CRUSH KIN JO & HALEY: both lose texts in order, sDoubleBattleChallengeMonIdxs[1]); a Knockout floor's three
+  battles; a loss: the win text, no white-out, healed, the receptionist ends the challenge), plus trainerBattle and
+  scriptedBattles. Found on the way: the "Will you change POKéMON?" prompt between a single trainer's two mons eats
+  the mash's A (the test sets the SET battle style).
+
+### W-sevii 2: Four Island and Icefall Cave (POSTGAME_PLAN.md batch 10)
+
+- `world/fieldTasks.ts` (new): field_tasks.c's per-step callback task. SetUpFieldTasks (a fresh STEP_CB_DUMMY task
+  where ResumeMap makes one: OverworldScene's `onMapLoaded` on a warp before ON_RESUME, `resumeMap()`),
+  ActivatePerStepCallback, Task_RunPerStepCallback (once a frame from `tickField`, beside the ambient cries),
+  sPerStepCallbacks with IcefallCaveIcePerStepCallback (thin ice cracks 5 frames after the step onto it, cracked ice
+  breaks and sets VAR_TEMP_1; SE_ICE_CRACK / SE_ICE_BREAK), MarkIcePuzzleCoordVisited / sIcefallCaveIceCoords
+  (FLAG_TEMP_1-9) and SetIcefallCaveCrackedIceMetatiles. The ash grass and cracked floor callbacks (R/S leftovers)
+  log once.
+- Script commands `setstepcallback` and `warphole` (SetWarpDestination to the player's spot on the named map, then
+  `special DoFallWarp` and ResetInitialPlayerAvatarState; MAP_UNDEFINED's fixed hole warp logs).
+- `script/postgameSpecials.ts`: SetIcefallCaveCrackedIceMetatiles, UpdateLoreleiDollCollection (a doll every 25
+  Hall of Fame entries), StickerManGetBragFlags. All five are off tests/unit/scriptCoverageGaps.ts.
+- tests/e2e/postgameHelpers.ts: `afterHallOfFame` also counts GAME_STAT_ENTERED_HOF 1 (the Hall of Fame's save);
+  `rainbowPassState` (where postgame.test.ts ends) and `talk` (moved from postgame.test.ts).
+- Nothing else needed fixing on the way: the rival scene, the sticker man's multichoice and fanfare, the back room's
+  scene (its trainerbattle_no_intro, Lapras's cry, the Rockets' exit) and the Seagallop to Four Island ran as they
+  were.
+- Verified: typecheck; unit (tests/unit/fieldTasks.test.ts: the ice's frame timing and flags, the cracked-ice
+  special, the doll thresholds, the brag flags); e2e tests/e2e/postgameFourIsland.test.ts (the ferry from Three
+  Island, the rival scene, the sticker man's HALL OF FAME brag, Icefall Cave 1F's ice cracking on the first step and
+  breaking on the second with their SEs, a save + CONTINUE keeping the cracked ice, the fall to B1F at the same spot,
+  the ice whole again on the next visit, the back room's scene to its end and Lorelei hidden on the next visit,
+  Lorelei's Meowth doll at 25 entries and her text), plus postgame.test.ts (the helper) and sideSpecials.test.ts
+  (the fall warps).
+
+### W-weather 2: the horizontal fog (POSTGAME_PLAN.md batch 10)
+
+- `world/weather.ts`: WEATHER_FOG_HORIZONTAL (FogHorizontal_InitVars / _InitAll / _Main / _Finish, its scroll:
+  fogHScrollPosX from gSpriteCoordOffsetX, a pixel left every 4 frames), the blend coefficients
+  (Weather_SetBlendCoeffs, Weather_SetTargetBlendCoeffs, Weather_UpdateBlend: REG_BLDALPHA through the host),
+  StartWeather's blend and sprite reset, FadeScreen's Weather_SetBlendCoeffs, FadeInScreen_FogHorizontal and
+  ApplyFogBlend (the BG palettes as loaded, the GAMMA_NORMAL sheets lightened: BlendPalette(12, RGB(28, 31, 28))).
+  FogHorizontal is in `PORTED`, so WEATHER_UNDERWATER runs it too, as FRLG's sWeatherFuncs has it.
+- `world/fogHorizontal.ts` (new): the fog's 20 sprites (gWeatherFogHorizontalTiles in gDefaultWeatherSpritePalette,
+  already extracted by tools/extract_gfx.py), FogHorizontalSpriteCallback's placement and wrap, and the blend over the
+  field: the GPU in two passes (a MULTIPLY rectangle of EVB / 16, the sprites in ADD mode at EVA / 16), between BG2 and
+  the priority-2 objects. `world/weatherTextures.ts` takes per-channel tables beside the gamma shift's one.
+- The GBA layer's copy of the field (battle transitions): the fog as semi-transparent OBJ pixels behind the priority-2
+  objects (`ObjBitmapLayer.semi`, which gba/ppu.ts now copies into its OBJ line) with the weather's BLDALPHA.
+- OverworldScene: the fog's host (sprites, BLDALPHA, gSpriteCoordOffsetX / Y as the camera's movement since the last
+  InitObjectEventsLocal, `cameraLeft` beside `cameraTop`), its update after the weather task, `FieldGbaSource.fog`.
+  Probes `__test.fog()` and `__test.screenPixel()` (Phaser's WebGL snapshotPixel reads screen row y - 1: the hook
+  asks for y + 1).
+- docs/DEVIATIONS.md: the "fog runs as NONE until unit 2" note gone; the fog's blend, lightened sheets and camera
+  offset written up.
+- Verified: typecheck; unit 593 passed (tests/unit/weather.test.ts: the fog's blend steps (0, 16) → (12, 8) in one
+  frame, the 17 fade-in frames, the drift, a tile's scroll, the 95-frame finish to (0, 16) and the sprites' end, a warp
+  out, WEATHER_UNDERWATER's (4, 16)); e2e weather.test.ts 7 passed (Pokémon Tower 3F: the sprites cover the screen
+  at (12, 8), four rendered pixels against min(255, fog * 12 / 16 + field * 8 / 16) read with the fog hidden and
+  shown, the player unfogged, 4 pixels of drift in 16 frames, a step up / left moving the fog 16 pixels, the stairs
+  to 2F lifting it, back up fading it in with the sprites up from the start; a battle transition with the fog on the
+  GBA layer at BLDALPHA (12, 8) and back after the battle; the Lost Cave fogged), pokemonTower.test.ts and
+  transitions.test.ts (15 passed with weather), battleAnims "a ghost dodges the ball" (3F). Screenshots of 3F on the
+  field and mid-transition show the fog.

@@ -70,8 +70,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   tests/e2e/leagueLighting.test.ts (dev start `?map=PokemonLeague_LoreleisRoom&x=6&y=12` or
   `PokemonLeague_ChampionsRoom&x=6&y=19`).
 - **Field weather:** `world/weather.ts` is field_weather.c / field_weather_util.c and FRLG's weathers of
-  field_weather_effects.c (None, Sunny, Shade; FogHorizontal is W-weather unit 2: add its callbacks to `PORTED`, make
-  `fadesInWithWeatherPalettes` and FadeInScreenWithWeather take it, and its sprites go in a module of their own). The
+  field_weather_effects.c (None, Sunny, Shade, FogHorizontal; `PORTED` is keyed by sWeatherFuncs' row names, so
+  WEATHER_UNDERWATER runs the fog's callbacks as in FRLG; the rest run None's and log once). The
   tables come from `public/gen/weather.json` (tools/extract_field.py `extract_weather`: sBasePaletteGammaTypes, the
   sWeatherFuncs row names, the loadfadedpal field effect palette tags); the gamma tables are built by
   BuildGammaShiftTables as in the C. The saved weather is `GameState.weather` (gSaveBlock1Ptr->weather, save
@@ -81,13 +81,35 @@ this is the next level down. When you add or change a subsystem, update its entr
   after its palette reload, `resumeMap` (battles, menus, CONTINUE) the same as a warp, `WeatherTask()` in
   `tickField` (priority 80). The host (`setUpWeather`) shifts the current map's BG palettes 0-12 through
   `tilesetVram.loadBgPaletteFaded` and the sprite sheets through `world/weatherTextures.ts` (the sheet's texture
-  source becomes a canvas, redrawn through the table; Phaser's ADD event shifts sheets loaded later). FadeScreen's
-  weather half is `ScreenFade.weather`: a fade in where the weather fades the screen itself (Shade) follows
-  `WeatherFadeInBlend` instead of a palette fade. Commands: `setweather`, `doweather`, `resetweather`. Probe:
-  `__test.weather(slot?, colorIndex?, texture?)` (state, gamma index, BG palette `slot` unfaded / shown, an atlas
-  pixel drawn with it, a sheet pixel now / as loaded). Tests: tests/unit/weather.test.ts (tables, the task),
-  tests/e2e/weather.test.ts (dev starts: `?map=ViridianForest`, `?map=NavelRock_Summit&x=9&y=13`,
-  `?map=SevenIsland_TanobyRuins&x=120&y=11` then up into the Monean Chamber).
+  source becomes a canvas, redrawn through channel tables: one for a gamma shift, one per channel for the fog's
+  lightening; Phaser's ADD event redraws sheets loaded later). FadeScreen's
+  weather half is `ScreenFade.weather`: a fade in where the weather fades the screen itself (Shade, the fog) follows
+  `WeatherFadeInBlend` instead of a palette fade.
+  - **The fog** (WEATHER_FOG_HORIZONTAL: Pokémon Tower 3F-7F, the Lost Cave): weather.ts has FogHorizontal_* (the
+    scroll: fogHScrollPosX, a pixel left every 4 frames on top of gSpriteCoordOffsetX), the blend coefficients
+    (Weather_SetBlendCoeffs / _SetTargetBlendCoeffs / _UpdateBlend: the host's `setBlendAlpha` is REG_BLDALPHA),
+    FadeInScreen_FogHorizontal and ApplyFogBlend (the BG palettes as loaded, the GAMMA_NORMAL sheets lightened toward
+    RGB(28, 31, 28)). The sprites are `world/fogHorizontal.ts` (FogHorizontal: CreateFogHorizontalSprites /
+    DestroyFogHorizontalSprites through the host, FogHorizontalSpriteCallback in `update()`, which `tickField` runs
+    right after the weather task, before the camera moves). Its header says how the blend is drawn (MULTIPLY then ADD
+    at depth `FogHorizontal.DEPTH`, between BG2 and the priority-2 objects). The tiles and palette are
+    gWeatherFogHorizontalTiles / gDefaultWeatherSpritePalette (tools/extract_gfx.py's `graphics/weather/`).
+    gSpriteCoordOffsetX / Y are the camera's movement since `startWeatherOnResumeMap` (InitObjectEventsLocal's
+    reset; OverworldScene `cameraOrigin`), less 40 vertically. StartWeather drops the sprites (the GBA's map load
+    freed them), so a warp or a battle builds them anew (FogHorizontal_InitAll: sprites and blend (12, 8) at once).
+    The GBA layer's copy of the field (world/fieldGbaScreen.ts, battle transitions) takes them through
+    `FieldGbaSource.fog` as semi-transparent OBJ pixels (`ObjBitmapLayer.semi` in gba/ppu.ts) and BLDALPHA from
+    `weatherBlendAlpha()`.
+  Commands: `setweather`, `doweather`, `resetweather`. Probes:
+  `__test.weather(slot?, colorIndex?, texture?)` (state, gamma index, BLDALPHA's EVA / EVB, fogHScrollPosX, BG palette
+  `slot` unfaded / shown, an atlas pixel drawn with it, a sheet pixel now / as loaded), `__test.fog(px?, py?,
+  visible?)` (the fog sprites' screen positions, EVA / EVB, the fog's colour at a screen pixel, gSpriteCoordOffset,
+  the GBA layer's semi-transparent pixels; `visible` hides it to read the field under it), `__test.screenPixel(x, y)`
+  (a rendered pixel, read at the end of the next render). Tests: tests/unit/weather.test.ts (tables, the task, the
+  fog's blend steps, scroll, fade in and finish), tests/e2e/weather.test.ts (dev starts: `?map=ViridianForest`,
+  `?map=NavelRock_Summit&x=9&y=13`, `?map=SevenIsland_TanobyRuins&x=120&y=11` then up into the Monean Chamber,
+  `?map=PokemonTower_3F&x=5&y=10` (the stairs to 2F at (4, 10) are a push warp: `t.enterWarp()`; column 6 is
+  gravestones), `?map=FiveIsland_LostCave_Room1&x=8&y=4`).
 - **Map layouts (`setmaplayoutindex`):** maps carry `layoutId` (gMapHeader.mapLayoutId) and `GameState.mapLayoutId`
   is gSaveBlock1Ptr->mapLayoutId: `onMapLoaded` sets it from the header before ON_TRANSITION (LoadCurrentMapData),
   the script command changes it (SetCurrentMapLayout), and `initMapLayout` then swaps the current chunk's grid,
@@ -109,12 +131,22 @@ this is the next level down. When you add or change a subsystem, update its entr
   timer is gMain.vblankCounter1 (gba/main.ts), counted by VBlankCounter1Update once per tick in OverworldScene.tick
   and GbaHostScene's loop (like the play time). The speeches go to gStringVar4 (menus/common.ts), which
   `msgbox gStringVar4` prints; TT_ConvertEasyChatMessageToString measures with the field's FONT_NORMAL
-  (`setTrainerTowerStringWidth`, set by OverworldScene). For unit 2 (the battles): DoTrainerTowerBattle is a stand-in
-  (`trainerTowerBattle` test event, VAR_RESULT B_OUTCOME_WON); InitTrainerTowerBattleStruct / BuildEnemyParty /
-  GetTrainerTowerOpponent* aren't ported yet; the floors in sTrainerTowerState are shared with the data, so
-  BuildEnemyParty must copy a mon before setting its level. Tests: tests/unit/trainerTower.test.ts,
-  tests/e2e/trainerTower.test.ts (`?start=after-rival&map=TrainerTower_Lobby&x=9&y=9`, up onto the entry trigger,
-  YES, the challenge type; the stairs at (9, 2); 1F's singles trigger (10, 13), doubles (9, 12)). Probe:
+  (`setTrainerTowerStringWidth`, set by OverworldScene). **The battles:** DoTrainerTowerBattle builds gEnemyParty
+  (BuildEnemyParty: CreateBattleTowerMon on a *copy* of each floor mon, since the floors in sTrainerTowerState are
+  the loaded data; at GetPartyMaxLevel; the mon tables are indexed by floors cleared) into `state.enemyParty` and
+  calls `env.startTowerBattle` (script/trainerTowerSpecials.ts: `host.startScriptedBattle(flags, party, transition,
+  0, false)`, `false` = its own task, not Task_BattleStart: no poison wait, no ClearPoisonStepCounter; the special's
+  wait state is CB2_EndTrainerTowerBattle's return to the field, never a white-out). The battle side:
+  `allocateBattleResources` / FreeBattleResources (battle/main.ts) call InitTrainerTowerBattleStruct /
+  FreeTrainerTowerBattleStruct (sTrainerTowerOpponent, module state in world/trainerTower.ts);
+  battle/message.ts's B_TXT_TRAINER1_CLASS / _NAME / _LOSE_TEXT / _WIN_TEXT and B_TXT_TRAINER2_* (doubles) and
+  controllerOpponent.ts's `opponentTrainerPicId` read GetTrainerTowerOpponent* / GetTrainerTowerTrainerFrontSpriteId;
+  BattleScene loads that pic up front (`trainerTowerOpponentPicId`, before CB2_InitBattle). The other
+  BATTLE_TYPE_TRAINER_TOWER checks (no exp, no Thief / Trick, AI flags, terrain, the won / lost scripts) were already
+  in the battle port. Tests: tests/unit/trainerTower.test.ts, tests/e2e/trainerTower.test.ts
+  (`?start=after-rival&map=TrainerTower_Lobby&x=9&y=9`, up onto the entry trigger, YES, the challenge type; the
+  stairs at (9, 2), 1F → 2F at (15, 6); every floor's singles / knockout trigger (10, 13), doubles (9, 12); the
+  e2e's `watchBattles` records each battle's messages, foes and sprite palette tags tick by tick). Probe:
   `t.state.trainerTower[t.state.towerChallengeId]`.
 - **Silph Co. card key doors** (data/scripts/silphco_doors.inc) need nothing of their own: ON_LOAD closes them with
   `setmetatile`, the bg events open them (FLAG_HIDE_SILPH_CO_5F_CARD_KEY, `special SetHiddenItemFlag`). Test spot:
@@ -260,7 +292,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   module in the page). Tests: tests/unit/braille.test.ts, tests/e2e/postgame.test.ts (Mt. Ember's Ruby Path B4F
   from (4, 8) and B5F from (7, 3), facing north). Quick look: `?map=MtEmber_RubyPath_B5F&x=7&y=3`, face up, A.
   Postgame e2e helpers: `tests/e2e/postgameHelpers.ts` (`afterHallOfFame` for the story state after the Hall of
-  Fame and the Sevii 1-3 trip, `fillPokedex(n)`, `scriptsSince`, `battlesSince`); set OPTIONS' battle style to SET
+  Fame and the Sevii 1-3 trip, `fillPokedex(n)`, `scriptsSince`, `battlesSince`, `rainbowPassState` for the state
+  postgame.test.ts ends in, `talk(x, y, dir)`); set OPTIONS' battle style to SET
   (`state.battleStyleSet`) when mashing trainer battles with two or more in the party.
   **Six Island** (W-sevii 3): the size records are pokemon_size_record.c in `script/pokemonSizeRecord.ts` (the table,
   GetMonSizeHash from the personality and IVs, GetMonSize from the Pokédex height, FormatMonSizeRecord in inches,
@@ -275,6 +308,21 @@ this is the next level down. When you add or change a subsystem, update its entr
   its `battleTrainer` gets to a trainer that wanders or walks), tests/unit/pokemonSizeRecord.test.ts. Quick looks:
   `?map=SixIsland_RuinValley&x=24&y=25` (face up; the scientist stands there until FLAG_HIDE_RUIN_VALLEY_SCIENTIST),
   `?map=SixIsland_DottedHole_SapphireRoom&x=7&y=8` (face up), `?map=SixIsland_WaterPath_House1&x=3&y=5`.
+  Four Island (unit 2): UpdateLoreleiDollCollection and StickerManGetBragFlags read the game stats
+  (GAME_STAT_ENTERED_HOF etc.: `state.setGameStat` in a test); `warphole` (ScriptEngine) sets the warp destination to
+  the player's spot on the named map and calls `special DoFallWarp` (world/fallWarp.ts). Tests:
+  tests/unit/fieldTasks.test.ts, tests/e2e/postgameFourIsland.test.ts. Quick look: `?map=FourIsland_IcefallCave_1F&x=8&y=15`,
+  walk up twice.
+- **Step callbacks (field_tasks.c):** `world/fieldTasks.ts` (no Phaser). Task_RunPerStepCallback runs once a frame
+  from `OverworldScene.tickField` (beside Task_RunTimeBasedEvents' ambient cries, not while a map loads) with a
+  `PerStepCallbackHost` (map-local coords: PlayerGetDestCoords, the behavior at a cell, MapGridSetMetatileIdAt +
+  draw). `SetUpFieldTasks()` gives a fresh STEP_CB_DUMMY task where ResumeMap does (a warp's `onMapLoaded` before
+  ON_RESUME, `resumeMap()` after a battle / menu / CONTINUE); a connection keeps it. `setstepcallback` is
+  ActivatePerStepCallback. STEP_CB_ICE (Icefall Cave 1F's ON_RESUME) is IcefallCaveIcePerStepCallback: thin ice the
+  player steps onto cracks 5 frames later (SE_ICE_CRACK, FLAG_TEMP_1-9 for sIcefallCaveIceCoords), cracked ice breaks
+  (SE_ICE_BREAK, VAR_TEMP_1 1 for the map's FallDownHole); ON_LOAD's SetIcefallCaveCrackedIceMetatiles
+  (script/postgameSpecials.ts) re-cracks from the temp flags (a CONTINUE keeps them, a warp clears them). Test events
+  `iceCracked` / `iceBroken` (x, y); probe `perStepCallbackProbe()` (import the module in the page).
 - **Daycare:** `world/daycare.ts` is daycare.c except the hatching scene: `GameState.route5DayCareMon` (struct
   DaycareMon: a BoxPokemon or null, u32 steps; no mail) and `GameState.daycare` (struct DayCare, the Four Island
   daycare: two DaycareMons, the u16 offspringPersonality, the u8 egg-cycle stepCounter), both saved (SAVE_VERSION
@@ -1568,7 +1616,8 @@ or extend them:
 - **Not here:** the warp tasks' sounds (Escape Rope, Dig, Teleport, the fall arrival, Fly's music) and map music
   ("Map music"), the cries' timing (W-sound 2), the bike bell (item_use.c: menus/itemUse.ts). Not in the port: escalators,
   the Lavaridge warps, FldEff_NpcFlyOut, Birth Island's rock (SE_THUNDER), ShakeScreen, LoopWingFlapSound, the
-  Acro Bike and secret base mats (field_player_avatar.c's SE_BIKE_HOP / SE_WARP_IN), the mailbox, field weather.
+  Acro Bike and secret base mats (field_player_avatar.c's SE_BIKE_HOP / SE_WARP_IN), the mailbox, the rain weathers' sounds
+  (POSTGAME_PLAN.md decision 1).
 - **Tests:** `tests/e2e/fieldSounds.test.ts` (a bump's SE_WALL_HIT, a ledge's SE_LEDGE, talking's SE_SELECT, Bill's
   `opendoor` SE_SLIDING_DOOR, the bedroom PC's SE_PC_ON without SE_SELECT, START's SE_WIN_OPEN and the menu's
   SE_SELECTs, the save dialog closing SE_SAVE's length + 60 frames after it, the heal machine's SE_BALLs 25 frames

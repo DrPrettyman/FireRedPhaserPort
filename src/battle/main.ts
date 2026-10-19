@@ -5,6 +5,7 @@
 import type { Pokemon } from '../pokemon/Pokemon';
 import { random, random32 } from '../util/random';
 import { setRoamerInactive, updateRoamerHPStatus } from '../world/roamer';
+import { FreeTrainerTowerBattleStruct, InitTrainerTowerBattleStruct } from '../world/trainerTower';
 import { battleAI_HandleItemUseBeforeAISetup, recordAbilityBattle } from './ai';
 import { BeginFastPaletteFade, gPaletteFade } from '../gba/palette';
 import { gMain } from '../gba/main';
@@ -96,6 +97,7 @@ function battlerBusy(battler: number): boolean {
 
 /** AllocateBattleResources (battle_util2.c): fresh zeroed structs. */
 export function allocateBattleResources(): void {
+  if (g.battleTypeFlags & K.BATTLE_TYPE_TRAINER_TOWER) InitTrainerTowerBattleStruct(state);
   g.battleStruct = new BattleStruct();
   g.battleResources = new BattleResources();
   gBattleAnimBgTileBuffer.fill(0);
@@ -1349,6 +1351,7 @@ function freeResetData_ReturnToOvOrDoEvolutions(): void {
     FreeAllWindowBuffers();
     // !(gBattleTypeFlags & BATTLE_TYPE_LINK): FreeMonSpritesGfx / FreeBattleSpritesData / FreeBattleResources
     FreeMonSpritesGfx();
+    if (g.battleTypeFlags & K.BATTLE_TYPE_TRAINER_TOWER) FreeTrainerTowerBattleStruct(); // FreeBattleResources
   }
 }
 

@@ -29,14 +29,9 @@ export const KNOWN_GAPS: KnownGap[] = [
   // (none left: the S.S. Anne departure and the league lighting were the last two, batch 2 of SIDE_PLAN.md)
   // ---------------------------------------------------------------- side: optional content before the Hall of Fame (NPCs, trades, the Game Corner, the daycare, the Sevii 1-3 trip).
   // ---------------------------------------------------------------- postgame: after the Hall of Fame (Sevii 4-7, Trainer Tower, the event islands) or the link features postgame areas share.
-  { kind: 'command', name: 'setstepcallback', tag: 'postgame', where: "FourIsland_IcefallCave_1F" },
-  { kind: 'command', name: 'warphole', tag: 'postgame', where: "(EventScript_FallDownHole), FourIsland_IcefallCave_1F" },
   { kind: 'special', name: 'SampleResortGorgeousMonAndReward', tag: 'postgame', where: "FiveIsland_ResortGorgeous_House" },
-  { kind: 'special', name: 'SetIcefallCaveCrackedIceMetatiles', tag: 'postgame', where: "FourIsland_IcefallCave_1F" },
   { kind: 'special', name: 'SetPostgameFlags', tag: 'postgame', where: "OneIsland_PokemonCenter_1F" },
   { kind: 'special', name: 'ShowBattleRecords', tag: 'postgame', where: "(CableClub_EventScript_ShowBattleRecords), TrainerTower_Lobby" },
-  { kind: 'special', name: 'StickerManGetBragFlags', tag: 'postgame', where: "FourIsland_House2" },
-  { kind: 'special', name: 'UpdateLoreleiDollCollection', tag: 'postgame', where: "FourIsland_LoreleisHouse" },
   // ---------------------------------------------------------------- link: link cable / wireless features (union room, cable club, minigames, Mystery Gift, e-Reader).
   { kind: 'command', name: 'erasebox', tag: 'link', where: "(TradeCenter_ConfirmLeaveRoom), CeladonCity_PokemonCenter_2F, CeruleanCity_PokemonCenter_2F, CinnabarIsland_PokemonCenter_2F, FiveIsland_PokemonCenter_2F, ... (21 in all)" },
   { kind: 'command', name: 'hideobjectat', tag: 'link', where: "CeladonCity_PokemonCenter_2F, CeruleanCity_PokemonCenter_2F, CinnabarIsland_PokemonCenter_2F, FiveIsland_PokemonCenter_2F, FourIsland_PokemonCenter_2F, ... (20 in all)" },

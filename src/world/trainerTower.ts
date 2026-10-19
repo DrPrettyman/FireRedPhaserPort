@@ -6,15 +6,15 @@
 // counts VBlanks through gMain.vblankCounter1 (SetVBlankCounter1Ptr, gba/main.ts). No Phaser here.
 //
 // The e-Reader sets (ReadTrainerTowerAndValidate, CEReaderTool_LoadTrainerTower) are link content: the port always
-// takes the local sets, as the C does when ReadTrainerTowerAndValidate returns FALSE. DoTrainerTowerBattle (unit 2 of
-// POSTGAME_PLAN.md's W-ttower) is a stand-in: see docs/DEVIATIONS.md.
+// takes the local sets, as the C does when ReadTrainerTowerAndValidate returns FALSE. The battle's side of the tower
+// (InitTrainerTowerBattleStruct, GetTrainerTowerOpponent*) is read by src/battle/ for BATTLE_TYPE_TRAINER_TOWER.
 
 import { DisableVBlankCounter1, SetVBlankCounter1Ptr } from '../gba/main';
-import { hasOverworldMusicHost, Overworld_PlaySpecialMapMusic } from '../gba/overworldMusic';
 import { PlayNewMapMusic } from '../gba/sound';
 import { ConvertIntToDecimalStringN, STR_CONV_MODE_LEADING_ZEROS, STR_CONV_MODE_LEFT_ALIGN, STR_CONV_MODE_RIGHT_ALIGN } from '../battle/stringUtil';
 import { setStringVar4 } from '../menus/common';
 import { ConvertEasyChatWordsToString } from '../menus/easyChat';
+import type { Pokemon } from '../pokemon/Pokemon';
 import type { GameState } from '../state/GameState';
 import {
   currentTrainerTowerRecord,
@@ -128,8 +128,12 @@ export { currentTrainerTowerRecord, GetTrainerTowerRecordTime, newTrainerTowerRe
 export interface TrainerTowerEnv {
   state: GameState;
   warnOnce(key: string, message: string): void;
-  /** DoTrainerTowerBattle's stand-in reports here (a test event). */
-  battleStandIn?(info: { challengeType: number; floor: number; trainer: number }): void;
+  /**
+   * DoTrainerTowerBattle's Task_DoTrainerTowerBattle and CB2_EndTrainerTowerBattle: the battle (gEnemyParty =
+   * `enemyParty`, no gTrainers entry) after `transition`, then back to the field, which the script's `waitstate`
+   * waits for (script/trainerTowerSpecials.ts: host.startScriptedBattle).
+   */
+  startTowerBattle(battleTypeFlags: number, enemyParty: Pokemon[], transition: number): void;
 }
 
 /** struct TrainerTowerState: sTrainerTowerState (allocated around each CallTrainerTowerFunc). */
@@ -369,16 +373,215 @@ export function TrainerTowerGetOpponentTextColor(state: GameState, challengeType
 }
 
 /**
- * DoTrainerTowerBattle: a STAND-IN until the tower's battles are ported (POSTGAME_PLAN.md W-ttower unit 2:
- * BuildEnemyParty, CreateBattleTowerMon, BATTLE_TYPE_TRAINER_TOWER). It reports the battle and leaves VAR_RESULT
- * B_OUTCOME_WON with the map's music back, as the battle's end (CB2_EndTrainerTowerBattle) would after a win.
+ * DoTrainerTowerBattle: gBattleTypeFlags TRAINER | TRAINER_TOWER (| DOUBLE on a doubles floor), no gTrainers entry
+ * (gTrainerBattleOpponent_A 0), gEnemyParty from BuildEnemyParty, then Task_DoTrainerTowerBattle starts the battle
+ * once BattleTransition_StartOnField(BattleSetup_GetBattleTowerBattleTransition()) is done; PlayMapChosenOrBattleBGM(0)
+ * (the battle's default music: gTrainers[0]'s class gives MUS_VS_TRAINER). Its own task, not Task_BattleStart: no
+ * wait for FldEffPoison, no ClearPoisonStepCounter. CB2_EndTrainerTowerBattle → CB2_ReturnToFieldContinueScriptPlayMapMusic
+ * whatever the outcome (no white-out): the script's `waitstate` ends once the field has faded back in, and
+ * `switch VAR_RESULT` reads gBattleOutcome (set by the battle's end).
  */
 function DoTrainerTowerBattle(env: TrainerTowerEnv): void {
   const { state } = env;
-  env.warnOnce('ttower_dobattle', '[trainer tower] DoTrainerTowerBattle is a stand-in: the battle counts as won');
-  env.battleStandIn?.({ challengeType: currFloor().challengeType, floor: tt().floorIdx, trainer: varGet(state, 'VAR_TEMP_1') });
-  setResult(state, state.defines.require('B_OUTCOME_WON'));
-  if (hasOverworldMusicHost()) Overworld_PlaySpecialMapMusic(); // CB2_ReturnToFieldContinueScriptPlayMapMusic
+  const d = state.defines;
+  let battleTypeFlags = d.require('BATTLE_TYPE_TRAINER') | d.require('BATTLE_TYPE_TRAINER_TOWER');
+  if (currFloor().challengeType === d.require('CHALLENGE_TYPE_DOUBLE')) battleTypeFlags |= d.require('BATTLE_TYPE_DOUBLE');
+  // gTrainerBattleOpponent_A = 0: startTowerBattle starts the battle with no trainer
+  BuildEnemyParty(state);
+  env.startTowerBattle(battleTypeFlags, state.enemyParty, BattleSetup_GetBattleTowerBattleTransition(state));
+}
+
+/** BattleSetup_GetBattleTowerBattleTransition (battle_setup.c): gEnemyParty[0]'s level against the lead mon's. */
+export function BattleSetup_GetBattleTowerBattleTransition(state: GameState): number {
+  const d = state.defines;
+  const enemyLevel = state.enemyParty[0]?.level ?? 0;
+  const playerLevel = GetSumOfPlayerPartyLevel(state, 1);
+  return d.require(enemyLevel < playerLevel ? 'B_TRANSITION_POKEBALLS_TRAIL' : 'B_TRANSITION_BIG_POKEBALL');
+}
+
+/** GetSumOfPlayerPartyLevel (battle_setup.c): the levels of the first `numMons` healthy, non-egg party mons (a u8). */
+function GetSumOfPlayerPartyLevel(state: GameState, numMons: number): number {
+  let sum = 0;
+  for (const mon of state.party) {
+    if (mon.isEgg || !mon.species || mon.hp === 0) continue;
+    sum = (sum + mon.level) & 0xff;
+    if (--numMons === 0) break;
+  }
+  return sum;
+}
+
+/**
+ * BuildEnemyParty: the floor's mons at the party's highest level, picked by the number of floors cleared from
+ * sSingleBattleChallengeMonIdxs (two of VAR_TEMP_1's trainer's), sDoubleBattleChallengeMonIdxs (one of each
+ * trainer's) or sKnockoutChallengeMonIdxs (one of VAR_TEMP_1's). The C sets `level` in its copy of the floor; the
+ * port's floors are the loaded data, so each mon is copied first.
+ */
+function BuildEnemyParty(state: GameState): void {
+  const d = state.defines;
+  const data = trainerTowerData();
+  const trainerIdx = varGet(state, 'VAR_TEMP_1');
+  const level = GetPartyMaxLevel(state);
+  const floorIdx = currentTrainerTowerRecord(state).floorsCleared;
+  const floor = currFloor();
+  const mon = (trainer: number, monIdx: number) => CreateBattleTowerMon(state, { ...floor.trainers[trainer].mons[monIdx], level });
+  state.enemyParty = []; // ZeroEnemyPartyMons
+  switch (floor.challengeType) {
+    case d.require('CHALLENGE_TYPE_SINGLE'):
+    default:
+      for (let i = 0; i < 2; i++) state.enemyParty[i] = mon(trainerIdx, data.singleBattleChallengeMonIdxs[floorIdx][i]);
+      break;
+    case d.require('CHALLENGE_TYPE_DOUBLE'):
+      state.enemyParty[0] = mon(0, data.doubleBattleChallengeMonIdxs[floorIdx][0]);
+      state.enemyParty[1] = mon(1, data.doubleBattleChallengeMonIdxs[floorIdx][1]);
+      break;
+    case d.require('CHALLENGE_TYPE_KNOCKOUT'):
+      state.enemyParty[0] = mon(trainerIdx, data.knockoutChallengeMonIdxs[floorIdx][trainerIdx]);
+      break;
+  }
+}
+
+/** GetPartyMaxLevel: the highest level among the party's mons (eggs left out). */
+export function GetPartyMaxLevel(state: GameState): number {
+  let topLevel = 0;
+  for (const mon of state.party) {
+    if (mon.species !== 0 && !mon.isEgg && mon.level > topLevel) topLevel = mon.level;
+  }
+  return topLevel;
+}
+
+/**
+ * CreateBattleTowerMon (pokemon.c): CreateMon with all IVs 0, the mon's personality and OT_ID_PRESET (no Random()
+ * call), its moves (SetMonMoveSlot: base PP), PP bonuses, held item, nickname (the C never sets the language), friendship,
+ * EVs, ability bit and IVs, then CalculateMonStats.
+ */
+export function CreateBattleTowerMon(state: GameState, src: BattleTowerPokemon): Pokemon {
+  const p = state.pokemon;
+  const mon = p.createMon(src.species, src.level, {
+    fixedIV: 0,
+    personality: src.personality >>> 0,
+    otId: src.otId >>> 0,
+    otName: state.playerName, // CreateBoxMon copies the player's name and gender
+    otGender: state.playerGender,
+    metLocation: state.currentMapSection,
+  });
+  for (let i = 0; i < p.c.MAX_MON_MOVES; i++) {
+    // SetMonMoveSlot
+    mon.moves[i] = src.moves[i];
+    mon.pp[i] = p.moves[src.moves[i]].pp;
+  }
+  mon.ppBonuses = src.ppBonuses;
+  mon.heldItem = src.heldItem;
+  mon.nickname = p.encodeName(src.nickname);
+  mon.friendship = src.friendship;
+  mon.evs = { hp: src.hpEV, attack: src.attackEV, defense: src.defenseEV, speed: src.speedEV, spAttack: src.spAttackEV, spDefense: src.spDefenseEV };
+  mon.abilityNum = src.abilityNum & 1;
+  mon.ivs = { hp: src.hpIV, attack: src.attackIV, defense: src.defenseIV, speed: src.speedIV, spAttack: src.spAttackIV, spDefense: src.spDefenseIV };
+  p.calculateStats(mon);
+  return mon;
+}
+
+// ------------------------------------------------------------------ the battle's opponent (battle_util2.c, battle_message.c, battle_controller_opponent.c)
+
+/** struct OpponentTrainerTowerData (sTrainerTowerOpponent): the battle's trainer(s), set up by AllocateBattleResources. */
+interface TrainerTowerOpponent {
+  name: string;
+  speechWin: number[];
+  speechLose: number[];
+  speechWin2: number[];
+  speechLose2: number[];
+  battleType: number;
+  facilityClass: number;
+  textColor: number;
+}
+
+let sTrainerTowerOpponent: TrainerTowerOpponent | null = null;
+
+function opponent(): TrainerTowerOpponent {
+  if (!sTrainerTowerOpponent) throw new Error('[trainer tower] no sTrainerTowerOpponent (InitTrainerTowerBattleStruct)');
+  return sTrainerTowerOpponent;
+}
+
+/**
+ * InitTrainerTowerBattleStruct (AllocateBattleResources, for a BATTLE_TYPE_TRAINER_TOWER battle): VAR_TEMP_1's
+ * trainer's name, win / lose speeches (and the next trainer's on a doubles floor), class and text colour; the
+ * timer counts again (SetVBlankCounter1Ptr).
+ */
+export function InitTrainerTowerBattleStruct(state: GameState): void {
+  SetUpTrainerTowerDataStruct(state);
+  try {
+    const d = state.defines;
+    const trainerId = varGet(state, 'VAR_TEMP_1');
+    const floor = currFloor();
+    const trainer = floor.trainers[trainerId];
+    const double = floor.challengeType === d.require('CHALLENGE_TYPE_DOUBLE');
+    sTrainerTowerOpponent = {
+      name: trainer.name,
+      speechWin: [...trainer.speechWin],
+      speechLose: [...trainer.speechLose],
+      // AllocZeroed: only a doubles floor fills the second trainer's speeches
+      speechWin2: double ? [...floor.trainers[trainerId + 1].speechWin] : new Array(6).fill(0),
+      speechLose2: double ? [...floor.trainers[trainerId + 1].speechLose] : new Array(6).fill(0),
+      battleType: floor.challengeType,
+      facilityClass: trainer.facilityClass,
+      textColor: trainer.textColor,
+    };
+    SetVBlankCounter1Ptr(currentTrainerTowerRecord(state));
+  } finally {
+    FreeTrainerTowerDataStruct();
+  }
+}
+
+/** FreeTrainerTowerBattleStruct (FreeBattleResources) */
+export function FreeTrainerTowerBattleStruct(): void {
+  sTrainerTowerOpponent = null;
+}
+
+/** GetTrainerTowerOpponentClass: gFacilityClassToTrainerClass[facilityClass] (TRAINER_CLASS_*). */
+export function GetTrainerTowerOpponentClass(): number {
+  return trainerTowerData().facilityClassToTrainerClass[opponent().facilityClass];
+}
+
+/** GetTrainerTowerOpponentName: the name, a raw decomp string ending in `$` (StringCopyN 11). */
+export function GetTrainerTowerOpponentName(): string {
+  return opponent().name;
+}
+
+/** GetTrainerTowerTrainerFrontSpriteId: gFacilityClassToPicIndex[facilityClass] (TRAINER_PIC_*). */
+export function GetTrainerTowerTrainerFrontSpriteId(): number {
+  return trainerTowerData().facilityClassToPicIndex[opponent().facilityClass];
+}
+
+/**
+ * The front pic the battle will draw, before it starts (BattleScene loads its graphics before CB2_InitBattle, where
+ * InitTrainerTowerBattleStruct runs): VAR_TEMP_1's trainer's class on the current floor.
+ */
+export function trainerTowerOpponentPicId(state: GameState): number {
+  SetUpTrainerTowerDataStruct(state);
+  try {
+    return trainerTowerData().facilityClassToPicIndex[currFloor().trainers[varGet(state, 'VAR_TEMP_1')].facilityClass];
+  } finally {
+    FreeTrainerTowerDataStruct();
+  }
+}
+
+/**
+ * GetTrainerTowerOpponentWinText / GetTrainerTowerOpponentLoseText: trainer `opponentIdx`'s speech for the battle's
+ * end into gStringVar4 (VAR_TEMP_3 = opponentIdx picks the doubles pair's text colour). Returned with EOS.
+ */
+export function GetTrainerTowerOpponentWinText(state: GameState, opponentIdx: number): number[] {
+  return opponentText(state, opponentIdx, opponentIdx === 0 ? opponent().speechWin : opponent().speechWin2);
+}
+
+export function GetTrainerTowerOpponentLoseText(state: GameState, opponentIdx: number): number[] {
+  return opponentText(state, opponentIdx, opponentIdx === 0 ? opponent().speechLose : opponent().speechLose2);
+}
+
+function opponentText(state: GameState, opponentIdx: number, words: number[]): number[] {
+  state.setVar('VAR_TEMP_3', opponentIdx);
+  TrainerTowerGetOpponentTextColor(state, opponent().battleType, opponent().facilityClass);
+  const text = TT_ConvertEasyChatMessageToString(state, words);
+  setStringVar4(text);
+  return text;
 }
 
 /** TrainerTowerGetChallengeType: VAR_RESULT = the floor's challenge type, unless VAR_0x8005 is set. */
