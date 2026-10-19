@@ -209,6 +209,19 @@ this is the next level down. When you add or change a subsystem, update its entr
   extract_gfx.py (`graphics/script_menu/`), preloaded with the field's gfx. Probe: `__test.museumFossilPic()`.
   Tests: tests/e2e/sideEvents.test.ts (Oak in his lab at (6, 4), the Viridian PC, the museum's fossils from
   (5, 4) / (5, 7) facing left, the Cinnabar lab's fossil revival), tests/unit/sideSpecials.test.ts.
+- **Postgame specials and braille:** `script/postgameSpecials.ts` (POSTGAME_SPECIALS, spread into SPECIALS; no
+  Phaser import) holds the postgame's specials (W-sevii; POSTGAME_PLAN.md). Braille: FONT_BRAILLE (6) is in
+  fonts.json from `braille_font` in tools/extract.py (`fixedWidth` 16 instead of `widths`), and data/text/braille.inc's
+  strings are in strings.json as byte tokens (`encode_braille`, preproc's ReadBraille), so `stringFor` / Charmap.encode
+  need nothing special. `braillemessage` shows them at once in the dialogue frame (MessageBox.show's `font`),
+  `getbraillestringwidth` sets VAR_0x8004 through `text/stringWidth.ts` with MessageBox's `fonts`, and
+  BrailleCursorToggle draws text.c's text cursor on the field (drawn through `host.listMenuHost().scene`, bobbed by a
+  field task; gfx `brailleCursorGfxSymbols` preloaded by OverworldScene). Probe: `brailleCursorProbe()` (import the
+  module in the page). Tests: tests/unit/braille.test.ts, tests/e2e/postgame.test.ts (Mt. Ember's Ruby Path B4F
+  from (4, 8) and B5F from (7, 3), facing north). Quick look: `?map=MtEmber_RubyPath_B5F&x=7&y=3`, face up, A.
+  Postgame e2e helpers: `tests/e2e/postgameHelpers.ts` (`afterHallOfFame` for the story state after the Hall of
+  Fame and the Sevii 1-3 trip, `fillPokedex(n)`, `scriptsSince`, `battlesSince`); set OPTIONS' battle style to SET
+  (`state.battleStyleSet`) when mashing trainer battles with two or more in the party.
 - **Daycare:** `world/daycare.ts` is daycare.c except the hatching scene: `GameState.route5DayCareMon` (struct
   DaycareMon: a BoxPokemon or null, u32 steps; no mail) and `GameState.daycare` (struct DayCare, the Four Island
   daycare: two DaycareMons, the u16 offspringPersonality, the u8 egg-cycle stepCounter), both saved (SAVE_VERSION

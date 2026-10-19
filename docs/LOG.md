@@ -3409,3 +3409,32 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   and the PR's own e2e files; the full suite runs exactly once per batch, at the end on master, and failures there
   are rerun file by file. Docs-only changes run nothing.
 - Verified: docs only.
+
+### W-sevii 1: back to One Island, Kindle Road, Mt. Ember, the Ruby (POSTGAME_PLAN.md batch 10)
+
+- Braille: `tools/extract.py` extracts FONT_BRAILLE beside the latin fonts (`braille_font`: graphics/fonts/braille.png
+  as a glyph mask, 16x16 cells as DecompressGlyph_Braille reads the .fwjpnfont, every glyph GetGlyphWidth_Braille's
+  16 px, `fixedWidth` in fonts.json, gFontInfos[FONT_BRAILLE]: line spacing 2, dark gray on white) and the
+  `.braille` strings of data/text/braille.inc (`braille_encoding` / `encode_braille`: preproc's
+  AsmFile::ReadBraille table with BRAILLE_CHAR_* from include/characters.h, written to strings.json as byte tokens,
+  `{0x01 0x05 0x03}$`, so Charmap.encode gives the ROM's bytes). `text/Font.ts` FONT_BRAILLE (6) and fixed widths;
+  `text/stringWidth.ts` skips the Japanese letter spacing for braille (`fontId != FONT_BRAILLE && isJapanese`);
+  TextPrinter draws braille glyphs whatever {FONT} says (FontFunc_Braille).
+- Script commands (`script/ScriptEngine.ts`): `braillemessage` (ScrCmd_braillemessage: the dialogue frame, printed
+  at once in FONT_BRAILLE through MessageBox.show's font), `getbraillestringwidth` (VAR_0x8004 = GetStringWidth).
+  `script/postgameSpecials.ts` (POSTGAME_SPECIALS, new): BrailleCursorToggle with text.c's text cursor on the field
+  (CreateTextCursorSprite's (x + 3, y + 4), SpriteCB_TextCursor's bob by a field task, DestroyTextCursorSprite), so
+  the `braillemessage_wait` macro (EventScript_BrailleCursorWaitButton) works. Three gaps off scriptCoverageGaps.ts.
+- Played headless (`tests/e2e/postgame.test.ts`, helpers in `tests/e2e/postgameHelpers.ts`: `afterHallOfFame`,
+  `fillPokedex`, `scriptsSince`, `battlesSince`): Pallet Town's OakRatingScene → the lab's National Dex scene;
+  Three Island's harbor → One Island (MULTICHOICE_SEAGALLOP_V12); Celio's Ruby request; One Island → Kindle Road
+  over the connection; Abigail by sight and Mik & Kia's double battle; the Ember Spa (HM06, the hot spring's heal);
+  Mt. Ember's password scene, both grunts and the open cave; the Ruby Path B4F / B5F braille (the bytes, each
+  braillemessage_wait's width and cursor); the Ruby; Moltres's battle on the summit, won; GiveCelioRuby → the
+  Rainbow Pass. Kindle Road and Mt. Ember ran without changes.
+- Fix found on the way: `waitbuttonpress` now waits from the frame after it was set up (SetupNativeScript): the A
+  that let one wait through could pass the next one in the same frame, so one press went through all eight of
+  B5F's messages (braille prints at once). DEVIATIONS' native-wait note updated.
+- Verified: typecheck; unit 589 (6 new in tests/unit/braille.test.ts: the font info and widths, the encoded strings,
+  GetStringWidth, the commands through the engine, the cursor's position and bob); e2e postgame.test.ts, plus
+  field, audioCries, seviiQuest and sideEvents (waitbuttonpress), all passed.

@@ -305,7 +305,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     frame later than a task ordered after Task_Fanfare would. The quest log's playback paths (no fanfare
     song, the BGM commands skipped, PlaySE skipped) aren't ported. The script engine models SetupNativeScript's frames
     (a native wait starts checking the next frame, and the script goes on the frame after it holds) only for the
-    audio commands; the port's other waits check in the same frame.
+    audio commands; `waitbuttonpress` starts checking the next frame too but goes on in the frame the press holds;
+    the port's other waits check in the same frame.
   - Cries (gba/sound.ts): Task_DuckBGMForPokemonCry is a sound task like Task_Fanfare (same caveats: ResetTasks
     doesn't remove it, and it runs after every screen task of the frame, as a priority-80 task after the usual
     priority-0 ones would). PlayCry_ReleaseDouble ducks in multi battles too (BATTLE_TYPE_MULTI is link only and
@@ -399,6 +400,11 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (AUDIO_PLAN.md decision 4; the decoded blocks equal the WAVs). The mixing is skipped (bookkeeping only) while
     the output doesn't want frames (headless, `?audio=0`), and samples.bin loads only when the output is on.
     ReloadSave's SetPokemonCryStereo (reset_save_heap.c, the link's save reload) has no caller: no link play.
+  - Braille (`text/TextPrinter.ts`, `script/postgameSpecials.ts`): FONT_BRAILLE prints through RenderText's
+    control-code handling, not FontFunc_Braille's smaller set (braille_text.c prints CLEAR / SKIP / CLEAR_TO /
+    MIN_LETTER_SPACING's argument as a glyph and ignores {FONT}); FRLG's braille strings use none of them.
+    BrailleCursorToggle's text cursor is a field image moved by a field task (SpriteCB_TextCursor once a frame), not an
+    OAM sprite; the quest log's playback, which skips it, isn't ported.
 - **Data:** Castform has no front pic (its `front.png` isn't in the decomp; it's built from per-form images).
 
 ## Deliberate QOL changes
