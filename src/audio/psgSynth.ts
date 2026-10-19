@@ -52,6 +52,9 @@ export const GBA_CYCLES_PER_FRAME = 280896;
  *  envelopes at 7 (64 Hz). */
 export const FRAME_SEQUENCER_CYCLES = 32768;
 
+/** The wave channel's first sample after a restart comes this many cycles later than a sample period. */
+export const WAVE_RESTART_DELAY = 24;
+
 /** The duty patterns (NRx1 bits 6-7: 12.5%, 25%, 50%, 75%), one bit per step of the square's 8. */
 export const SQUARE_DUTY: readonly (readonly number[])[] = [
   [0, 0, 0, 0, 0, 0, 0, 1],
@@ -452,8 +455,10 @@ export class PsgSynth {
         if (value & 0x80) {
           w.on = w.dac;
           this.reloadLength(w, 256, seqEven);
-          // The position isn't reset on the GBA (its wave RAM rotates); the sample timer starts over.
-          w.timer = 8 * (2048 - w.freq);
+          // The position isn't reset on the GBA (its wave RAM rotates); the sample timer starts over, 3 ticks of
+          // the wave's 2 MHz clock late (6 GB cycles, 24 GBA cycles: mGBA's GBAudioWriteNR34, SameBoy's
+          // sample_countdown + 3), so the sample that was playing goes on that much longer.
+          w.timer = 8 * (2048 - w.freq) + WAVE_RESTART_DELAY;
         }
         break;
       }
