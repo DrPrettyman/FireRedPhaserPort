@@ -16,10 +16,11 @@ import { MapMusicMain, ResetSoundState, RunSoundTasks } from '../gba/sound';
  * m4aSoundVSync (VCountIntr, main.c:439: the DMA's slot counter), then m4aSoundMain (VBlankIntr, main.c:406: the
  * music players' sequencers, CgbSound and the mixer), whose frame goes to the output: the DirectSound mix plays
  * during the next frame, as on the GBA; the PSG register writes take effect at once on the GBA (see PsgFrame in
- * soundRegs.ts).
+ * soundRegs.ts). `callbacksRan`: FALSE in a frame the help system kept the screen's callbacks (and so their RunTasks)
+ * from running (RunHelpSystemCallback, ui/helpSystem.ts): the sound tasks wait too.
  */
-export function AgbMainFrameEnd(): void {
-  RunSoundTasks();
+export function AgbMainFrameEnd(callbacksRan = true): void {
+  if (callbacksRan) RunSoundTasks();
   MapMusicMain();
   m4aSoundVSync();
   const wanted = audioOutputWantsFrames();

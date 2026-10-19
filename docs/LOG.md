@@ -3771,3 +3771,30 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   player, and the test's warp carried EventScript_DoTrainerBattleFromApproach into the chamber, where it never
   ended). Fixed by starting inside a chamber; the file rerun alone: 6 passed. tests/README.md item 10 names the
   pattern.
+
+### W-help 1: the help system's engine and menus (help_system_util.c, help_system.c)
+
+- `ui/helpSystem.ts` (help_system_util.c: RunHelpSystemCallback's states 0-8, SaveCallbacks with DMA0 stopped,
+  the tiles / GPU regs saved and restored, BG0's HS_* panels in a 0x4000 buffer committed to char block 3,
+  HelpSystemRenderText with {PLAYER}, {STR_VAR_1} (BILL / SOMEONE), CLEAR_TO and keypad icons, the list menu
+  controller, TryMoveCursor1 / MoveCursor, the scroll arrows), `ui/helpSystemMenu.ts` (RunHelpMenuSubroutine and
+  its subroutines), `ui/helpSystemContext.ts` (contexts, SetHelpContextForMap, the enable / R toggles, the list
+  builders and gates), `ui/helpSystemField.ts` (the field's hook and overlay). The tables through
+  `tools/extract_help.py` (helpSystem.json); the strings were already in strings.json.
+- Hooks: GbaHostScene runs RunHelpSystemCallback before CallCallbacks; OverworldScene.tick samples the buttons
+  first, asks the help, and skips tickField, the flash VBlank and the GBA layer's frame while it's up.
+  AgbMainFrameEnd(callbacksRan) keeps the sound tasks (gTasks in the C) waiting too. ReadKeys takes a key state
+  (`gba/main.ts` KeyState / NewKeyState): the field reads the help's keys into its own, leaving gMain alone (the
+  field's credits read gMain's A, which the field never updates: unchanged). gba/sound.ts: HelpSystem_StopSE1AndSE2,
+  HelpSystem_BGMVolumeControl, IsHelpSystemVolumeReduceDisabled.
+- SetHelpContextForMap where overworld.c calls it (warps and CONTINUE: LoadMapInStepsLocal; returns to the field:
+  ReturnToFieldLocal). The other screens' contexts, the specials and the title screen's HelpSystem_Enable are
+  unit 2's; gHelpSystemEnabled starts TRUE meanwhile (DEVIATIONS).
+- Found on the way: in the HELP button mode (the new-game default) R in the slot machine opens the help, as on the
+  GBA (RunHelpSystemCallback takes it before the machine's callback). gameCorner.test.ts's spins set the LR mode
+  before betting with R.
+- Verified: typecheck; unit 637 passed (new tests/unit/helpSystem.test.ts: 7); e2e helpSystem.test.ts (3: the field,
+  the LR mode and HelpSystem_Disable's SE_HELP_ERROR, the bag), options.test.ts (2), audio.test.ts (2),
+  gameCorner.test.ts (8). Screenshots of the welcome page, the topics, a scrolled submenu and a help item looked
+  like FRLG's.
+

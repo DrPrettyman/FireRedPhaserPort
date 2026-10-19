@@ -58,10 +58,11 @@ export abstract class GbaHostScene extends Phaser.Scene {
       this.buttons.sample();
       ReadKeys(this.buttons, this.lEqualsA);
       // CallCallbacks: the help system first; while it's up the screen's callbacks don't run (RunHelpSystemCallback)
-      if (!RunHelpSystemCallback()) CallCallbacks();
+      const callbacksRan = !RunHelpSystemCallback();
+      if (callbacksRan) CallCallbacks();
       if (this.playTime) PlayTimeCounter_Update(this.playTime);
       VBlankCounter1Update(); // VBlankIntr: the Trainer Tower's timer
-      AgbMainFrameEnd(); // the sound tasks, MapMusicMain, m4aSoundMain: every tick, also the one that hands over
+      AgbMainFrameEnd(callbacksRan); // the sound tasks, MapMusicMain, m4aSoundMain: every tick, also the one that hands over
       if (!this.running) break;
       gMain.vblankCallback?.();
       ticked = true;

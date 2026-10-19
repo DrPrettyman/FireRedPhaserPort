@@ -267,6 +267,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Start menu help window (ui/HelpMessageWindow.ts): a Phaser window like the start menu, not a BG0 window; the
     start menu (and its help window) goes away as soon as an item that leaves the field is chosen, before the fade
     (on the GBA both stay up under the fade).
+  - The help system (ui/helpSystem*.ts): only the field sets a context so far (SetHelpContextForMap on warps,
+    CONTINUE and returns to the field); the other screens' SetHelpContext calls, HelpSystem_Enable / _Disable and
+    the help specials are W-help unit 2's (GAPS_PLAN.md), so the field's context stays on them. gHelpSystemEnabled
+    starts TRUE (main.c clears it at boot and the title screen's HelpSystem_Enable sets it), a soft reset doesn't
+    clear the context or the welcome page's sSeenHelpSystemIntro, and Surf's dismount doesn't call
+    SetHelpContextForMap. It opens only once the field has loaded (it needs the field's fonts and graphics), so
+    not on the title screen or the main menu of a fresh boot. HelpSystem_Enable has no quest log check;
+    HelpSystem_IsSinglePlayer is always TRUE (no link play: GAPS_PLAN.md decision 4).
   - CONTINUE (OverworldScene.continueSavedGame): the map's objects spawn from its templates (object events aren't
     saved, see Save data); gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
@@ -314,6 +322,11 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (a native wait starts checking the next frame, and the script goes on the frame after it holds) only for the
     audio commands; `waitbuttonpress` starts checking the next frame too but goes on in the frame the press holds;
     the port's other waits check in the same frame.
+  - The help system draws on the GBA layer; in the field (which isn't) the PPU's frame goes into a canvas over the
+    field while the help's BG0 is up, and the field's Phaser-timed effects (if any) aren't paused under it. Its text
+    is drawn with the port's fonts into its own copy of gDecompressionBuffer; SaveMapTextColors /
+    RestoreMapTextColors do nothing (the port's text printers carry their colours); its DMA3 requests are copies
+    made at once (the C's run in the same frame's VBlank).
   - Cries (gba/sound.ts): Task_DuckBGMForPokemonCry is a sound task like Task_Fanfare (same caveats: ResetTasks
     doesn't remove it, and it runs after every screen task of the frame, as a priority-80 task after the usual
     priority-0 ones would). PlayCry_ReleaseDouble ducks in multi battles too (BATTLE_TYPE_MULTI is link only and

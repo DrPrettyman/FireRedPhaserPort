@@ -1011,6 +1011,33 @@ this is the next level down. When you add or change a subsystem, update its entr
   sStartMenuDescPointers text on open (DoDrawStartMenu case 5) and on cursor moves (StartCB_HandleInput) and
   destroys it with the menu, only when `optionsButtonMode == OPTIONS_BUTTON_MODE_HELP` (no link play or union room,
   so those checks always pass). Probe: `t.helpMessage()` (decoded, undefined when it's down).
+- **The L/R help system:** three modules. `ui/helpSystem.ts` is help_system_util.c (the engine: RunHelpSystemCallback,
+  the screen saved and restored, BG0's HS_* panels, HelpSystemRenderText, the list menu controller and scroll
+  arrows); `ui/helpSystemMenu.ts` is help_system.c's menus (RunHelpMenuSubroutine: the welcome page, the topics, a
+  topic's submenu, a help item); `ui/helpSystemContext.ts` is help_system.c's contexts and lists, Phaser-free so any
+  module (and the unit tests) can import it: **SetHelpContext(K.HELPCONTEXT_*)**, SetHelpContextDontCheckBattle,
+  BackupHelpContext / RestoreHelpContext, Script_SetHelpContext(var8004), SetHelpContextForMap, HelpSystem_Disable /
+  _Enable, HelpSystem_DisableToggleWithRButton / _EnableToggleWithRButton, the gates (IsHelpSystemSubmenuEnabled,
+  HelpSystem_ShouldShowBasicTerms, HasGottenAtLeastOneHM, HelpSystem_UpdateHasntSeenIntro with the saved
+  FLAG_SYS_SAW_HELP_SYSTEM_INTRO). The tables come from `tools/extract_help.py` (`helpSystem.json`, set by
+  Assets.init: the HELP_* ids, the label tables, the submenu lists by context and topic, the topic flags, the mart /
+  gym / dungeon / Pokémon Center map lists); the text is strings.json's (help_system.inc's Help_Text_*, strings.c's
+  gString_* / gText_HelpSystemControls_*). **Hooks:** main.c's CallCallbacks: GbaHostScene runs
+  RunHelpSystemCallback before gMain's callbacks every tick and skips them while it returns non-zero (every GBA
+  screen is paused); OverworldScene.tick does the same through `ui/helpSystemField.ts` (HelpSystemFieldHost: its
+  own key state, ReadKeys into a NewKeyState, since the field's logic reads its Input; while the help's BG0 is on
+  the screen, states 2-7, the PPU draws into a canvas over the field). While it's up the sound tasks wait
+  (AgbMainFrameEnd(callbacksRan)) and the BGM plays at half volume (m4aMPlayVolumeControl 0x80, unless
+  gDisableHelpSystemVolumeReduce: SetBGMVolume_SuppressHelpSystemReduction, the Pokédex); SE_HELP_OPEN /
+  _CLOSE / _ERROR. Only OPTIONS_BUTTON_MODE_HELP opens it, R not after HelpSystem_DisableToggleWithRButton.
+  The field calls SetHelpContextForMap where overworld.c does (OverworldScene.onMapLoaded for warps and CONTINUE,
+  resumeMap for returns to the field). It opens once the field has handed over its fonts and loaded
+  `helpSystemGfxSymbols` (OverworldScene.create). Probe: `t.helpSystem()` (videoState: 0 closed, 5 up; menuState:
+  9 welcome, 0 topics, 3 submenu, 6 item; level, topic, context, the list with decoded labels). Tests:
+  `tests/unit/helpSystem.test.ts` (contexts, SetHelpContextForMap, the topics and submenus by flags),
+  `tests/e2e/helpSystem.test.ts` (the field: welcome once, a topic, an item, back out, BGM and SEs; LR mode; the
+  bag paused under it). A screen that wants its own context calls SetHelpContext from helpSystemContext.ts where
+  its C does.
 - **Trainer card:** `menus/trainerCard.ts` is trainer_card.c, CARD_TYPE_FRLG for the player only (the Hoenn and link
   cards wait for link play). START → PLAYER (StartMenuPlayerCallback) fades out and runs ShowPlayerTrainerCard in
   FieldMenuScene 'trainerCard' (which preloads `trainerCardGfxSymbols(gender)`: graphics/trainer_card/ by symbol plus

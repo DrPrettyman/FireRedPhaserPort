@@ -774,7 +774,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     if (!help) this.tickField();
     PlayTimeCounter_Update(this.state.playTime); // AgbMain, once per frame
     VBlankCounter1Update(); // VBlankIntr: the Trainer Tower's timer (world/trainerTower.ts)
-    AgbMainFrameEnd(); // the sound tasks, MapMusicMain, m4aSoundMain
+    AgbMainFrameEnd(!help); // the sound tasks (not while the help is up), MapMusicMain, m4aSoundMain
     if (help) return;
     this.flash.vblank(); // VBlankCB_Field's ScanlineEffect_InitHBlankDmaTransfer
     this.gbaScreen.frame(); // the GBA layer's half of the frame, when it's in use
