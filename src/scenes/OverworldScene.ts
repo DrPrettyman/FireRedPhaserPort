@@ -84,6 +84,7 @@ import {
   WeatherTask,
 } from '../world/weather';
 import { WeatherTextures } from '../world/weatherTextures';
+import { FogHorizontal } from '../world/fogHorizontal';
 import { leagueLightingProbe, loadLeagueLightingData, registerLeagueLighting, ResetLeagueLightingTasks, setLeagueLightingHost, StopPokemonLeagueLightingEffectTask } from '../world/leagueLighting';
 import { tilesetVram } from '../world/TilesetVram';
 import { ShopMenu, type ShopHost } from '../ui/ShopMenu';
@@ -227,6 +228,15 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private screenFade!: ScreenFade;
   /** The weather's gamma shift on the field's sprite sheets (world/weatherTextures.ts). */
   private weatherTextures!: WeatherTextures;
+  /** WEATHER_FOG_HORIZONTAL's sprites (world/fogHorizontal.ts). */
+  private fog!: FogHorizontal;
+  /** The camera's left edge in world pixels as of the last camera update (cameraTop's counterpart). */
+  private cameraLeft = 0;
+  /**
+   * The camera's top-left when InitObjectEventsLocal zeroed gTotalCameraPixelOffsetX / Y (a warp's map load,
+   * ResumeMap): gSpriteCoordOffsetX / Y count the camera's movement from there.
+   */
+  private cameraOrigin = { left: 0, top: 0 };
   /** The field on the GBA layer, while a battle transition (or a cave's map change screen) runs. */
   private gbaScreen!: FieldGbaScreen;
   private fieldEffects!: FieldEffects;
@@ -332,6 +342,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     await loadSlotMachineData('gen'); // sSlotMachineIndices, for GetRandomSlotMachineId
     await loadLeagueLightingData('gen'); // the Elite Four / Champion rooms' lighting palettes and timers
     await loadWeatherData('gen'); // field_weather.c's tables
+    await FogHorizontal.load(); // the fog's tiles and the weather palette
     await this.assets.loadFieldEffectTextures(this);
     const field = this.field;
     const behaviorAt = (x: number, y: number) => this.world.tileAt(x, y).behavior;
@@ -576,6 +587,20 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /**
+   * Dev: the fog for `__test.fog()`: its sprites' screen positions, the blend, the fog's colour at screen pixel
+   * (px, py), gSpriteCoordOffsetX / Y as the fog takes them, and the GBA layer's semi-transparent OBJ pixels. `visible`
+   * shows or hides the fog (to read the field under it).
+   */
+  testFog(px?: number, py?: number, visible?: boolean) {
+    if (visible !== undefined) this.fog.setVisible(visible);
+    return {
+      ...this.fog.probe(px, py),
+      spriteCoordOffset: { x: -(this.cameraLeft - this.cameraOrigin.left), y: -(this.field.cameraTop - this.cameraOrigin.top) - 40 },
+      gbaSemiPixels: this.gbaScreen.semiObjPixels(),
+    };
+  }
+
+  /**
    * field_weather.c on the field: the palettes the weather shifts (the current map's BG palettes through tilesetVram,
    * the sprite sheets through WeatherTextures) and FadeScreen's weather half in the screen fade.
    */
@@ -586,10 +611,19 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         .map(([name]) => name),
     ));
     const pair = () => this.assets.tilesetPair(this.world.current.data.tilesetPair);
+    // UpdateCameraPanning: gSpriteCoordOffsetX = gTotalCameraPixelOffsetX - sHorizontalCameraPan (0 on the field),
+    // gSpriteCoordOffsetY = gTotalCameraPixelOffsetY - sVerticalCameraPan (32) - 8; cameraTop has the pan in it
+    const spriteCoordOffsetX = () => -(this.cameraLeft - this.cameraOrigin.left);
+    const spriteCoordOffsetY = () => -(this.field.cameraTop - this.cameraOrigin.top) - 32 - 8;
+    this.fog = new FogHorizontal({ scene: this, spriteCoordOffsetY });
     setWeatherHost({
       bgPaletteUnfaded: (slot) => (slot < 13 && this.world.current ? tilesetVram.bgPaletteUnfaded(pair(), slot) : undefined),
       setBgPaletteFaded: (slot, colors) => tilesetVram.loadBgPaletteFaded(this.textures, pair(), slot, colors),
       setObjPaletteGamma: (normal, alt) => this.weatherTextures.setTables(normal, alt),
+      setBlendAlpha: (eva, evb) => this.fog.setBlendAlpha(eva, evb),
+      createFogHorizontalSprites: () => this.fog.create(),
+      destroyFogHorizontalSprites: () => this.fog.destroy(),
+      spriteCoordOffsetX,
     });
     setWeatherPaletteFadeActive(() => this.screenFade.active);
     this.screenFade.weather = {
@@ -604,6 +638,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    */
   private startWeatherOnResumeMap(): void {
     this.weatherTextures.reset();
+    this.cameraOrigin = { left: this.cameraLeft, top: this.field.cameraTop }; // InitObjectEventsLocal
     StartWeather();
     ResumePausedWeather();
   }
@@ -728,6 +763,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }
     this.flash.tick(); // UpdateFlashLevelEffect / Task_WaitForFlashUpdate (priority 80)
     WeatherTask(); // Task_WeatherInit / Task_WeatherMain (priority 80)
+    this.fog.update(); // AnimateSprites' FogHorizontalSpriteCallback, against last frame's camera
     this.messageBox.tick();
     this.screenFade.tick();
     this.monPic?.tick();
@@ -783,7 +819,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * 32 px vertical pan and 8). The Phaser camera is framed the same way by CAMERA_FOLLOW_OFFSET_Y.
    */
   private updateFieldCamera(): void {
-    this.field.cameraTop = (this.cameraObject ?? this.player).feetY - CAMERA_FOLLOW_OFFSET_Y + this.cameraPanY - this.cameras.main.height / 2;
+    const focus = this.cameraObject ?? this.player;
+    this.field.cameraTop = focus.feetY - CAMERA_FOLLOW_OFFSET_Y + this.cameraPanY - this.cameras.main.height / 2;
+    this.cameraLeft = focus.anchor.x - this.cameras.main.width / 2;
   }
 
   /** FieldGetPlayerInput: which buttons count this frame, given where the player is in their step. */
@@ -2109,7 +2147,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /** The current map on the GBA layer for the credits: their camera, and no objects (ResetSpriteData). */
   private creditsGbaSource(): FieldGbaSource {
-    return { ...this.fieldGbaSource(), camera: () => ({ ...this.creditsCamera! }), sprites: () => [], flashLevel: 0 };
+    return { ...this.fieldGbaSource(), camera: () => ({ ...this.creditsCamera! }), sprites: () => [], fog: () => undefined, flashLevel: 0 };
   }
 
   /**
@@ -2623,6 +2661,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       layerType: (metatile) => pair.layerType(metatile),
       camera: () => ({ x: Math.round(cam.worldView.x), y: Math.round(cam.worldView.y) }),
       sprites: () => this.fieldSprites(),
+      fog: () => this.fog.gbaLayer(),
       flashLevel: Overworld_GetFlashLevel(this.state),
     };
   }

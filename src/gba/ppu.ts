@@ -58,6 +58,8 @@ const objWin = new Uint8Array(W);
 export interface ObjBitmapLayer {
   color: Int32Array;
   priority: Uint8Array;
+  /** 1 where the pixel is a semi-transparent OBJ's (ST_OAM_OBJ_BLEND: blended with BLDALPHA whatever BLDCNT's targets 1). */
+  semi?: Uint8Array;
 }
 
 let objBitmap: ObjBitmapLayer | null = null;
@@ -166,6 +168,7 @@ function renderObjLine(line: number, dispcnt: number): void {
   if (objBitmap) {
     objColor.set(objBitmap.color.subarray(line * W, line * W + W));
     objPrio.set(objBitmap.priority.subarray(line * W, line * W + W));
+    if (objBitmap.semi) objSemi.set(objBitmap.semi.subarray(line * W, line * W + W));
   }
   const oneD = (dispcnt & 0x40) !== 0;
   // Lower OAM index wins, so draw from the back of OAM to the front.

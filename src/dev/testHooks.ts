@@ -335,6 +335,14 @@ interface OverworldLike extends Phaser.Scene {
     sprite: { now: number[]; original: number[]; index: number } | undefined;
     fading: boolean;
   };
+  testFog(px?: number, py?: number, visible?: boolean): {
+    sprites: { x: number; y: number; visible: boolean; depth: number }[];
+    eva: number;
+    evb: number;
+    fogColor: number[] | undefined;
+    spriteCoordOffset: { x: number; y: number };
+    gbaSemiPixels: number;
+  };
   state: GameState;
   startWildBattle(mon: Pokemon): void;
   useFlash(): void;
@@ -652,6 +660,15 @@ function createApi(game: Phaser.Game) {
      * colour index `colorIndex`; from the canvas), and a pixel of the sprite sheet `texture` now and as loaded.
      */
     weather: (slot?: number, colorIndex?: number, texture?: string) => overworld()?.testWeather(slot, colorIndex, texture),
+    /**
+     * WEATHER_FOG_HORIZONTAL's sprites (world/fogHorizontal.ts): their screen positions, BLDALPHA's EVA / EVB, the
+     * fog's colour at screen pixel (px, py), gSpriteCoordOffsetX / Y, the GBA layer's semi-transparent OBJ pixels;
+     * `visible` shows or hides the fog.
+     */
+    fog: (px?: number, py?: number, visible?: boolean) => overworld()?.testFog(px, py, visible),
+    /** A pixel of the rendered screen ([r, g, b], 240 x 160), read back at the end of the next render. */
+    screenPixel: (x: number, y: number) =>
+      new Promise<number[]>((resolve) => game.renderer.snapshotPixel(x, y, (c) => resolve([(c as Phaser.Display.Color).red, (c as Phaser.Display.Color).green, (c as Phaser.Display.Color).blue]))),
     /**
      * Put the player in an avatar state the way the game does it (SetPlayerAvatarTransitionFlags with
      * PLAYER_AVATAR_FLAG_<state>): 'MACH_BIKE' gets on the bike, 'SURFING' onto a surfing mon, 'ON_FOOT' off.
