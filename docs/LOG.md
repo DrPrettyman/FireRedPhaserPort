@@ -3431,7 +3431,8 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - The timer: gMain.vblankCounter1 (gba/main.ts SetVBlankCounter1Ptr / DisableVBlankCounter1 /
   VBlankCounter1Update), counted next to the play time in OverworldScene.tick and GbaHostScene's loop; softReset
   clears it (InitMainCallbacks).
-- Save version 7: `trainerTower: { challengeId, records }`; a version-6 save loads with the new-game records.
+- Save version 8 (W-weather took 7 first; master merged into the branch): `trainerTower: { challengeId, records }`;
+  a version-7 save loads with the new-game records.
 - Fixes on the way: `msgbox gStringVar4` printed nothing (ScriptEngine's stringFor didn't know gStringVar4; also
   SevenIsland_House_Room2's); the white-out during a challenge now keeps VAR_MAP_SCENE_TRAINER_TOWER when the owner
   was reached (SetWhiteoutRespawnWarpAndHealerNpc), the old DEVIATIONS line is gone.
@@ -3439,8 +3440,71 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   scripts as ops; the battle stand-in is in DEVIATIONS); 22 postgame gaps left.
 - Verified: typecheck; unit 601 in 44 files (tests/unit/trainerTower.test.ts: the data, PRINT_TOWER_TIME, start / floors
   cleared / status / owner / prize / final time / resume timer, the floors' layouts and graphics for each type,
-  speeches and text colour, the 2x3 \l layout, the stand-in; saveData.test.ts: the record round-trips, version 6
+  speeches and text colour, the 2x3 \l layout, the stand-in; saveData.test.ts: the record round-trips, version 7
   loads); e2e tests/e2e/trainerTower.test.ts (4: a Single challenge from the receptionist to 1F's trainer, his intro
   and after speeches, the stand-in battle, the floor cleared, the timer exactly 60 per 60 ticks and the clock; a
   Double challenge's 1F_DOUBLES layout and twins; a loss ending the challenge in the lobby and leaving the tower;
   a white-out during a challenge) and saveContinue.test.ts, all passed.
+### The event tickets, Navel Rock, Birth Island (W-events unit 1, batch 10)
+
+- The tickets: `GiveEventTickets` (menus/hallOfFame.ts), EnterHallOfFame's `#if REVISION >= 0xA` block: the Aurora
+  and Mystic Tickets with FLAG_ENABLE_SHIP_BIRTH_ISLAND / _NAVEL_ROCK and FLAG_RECEIVED_*_TICKET while the bag has no
+  Aurora Ticket (no ribbons in the port, so the Champion Ribbon condition counts as met). A deliberate QOL change
+  (POSTGAME_PLAN.md decision 2), in DEVIATIONS' own section; the "REVISION 0 gives no tickets" notes are gone.
+- `script/eventIslandSpecials.ts` (EVENT_ISLAND_SPECIALS): ShakeScreen / Task_ShakeScreen / Task_EndScreenShake
+  (shared: W-sevii's Dotted Hole and Tanoby Key use it next batch), LoopWingFlapSound / Task_WingFlapSound,
+  DoDeoxysTriangleInteraction (Task_DoDeoxysTriangleInteraction, MoveDeoxysObject, Task_WaitDeoxysFieldEffect),
+  SetDeoxysTrianglePalette, and IncrementBirthIslandRockStepCount, which nothing called yet (the step caps need it:
+  now in OverworldScene's tookStep).
+- The camera pan has a horizontal half now: `setCameraPanning(dy, dx = 0)` (ScriptHost, OverworldScene: the follow
+  offset's x), `field().avatar.cameraPanX`. The elevator, fall warp and Deoxys rock use the same call.
+- `world/deoxysRock.ts`: the triangle's palette (sDeoxysObjectPals through extract_gfx.py's new
+  graphics/field_specials/ prefix; colours 0-3 over gObjectEventPal_Meteorite, the rock redrawn into a canvas texture),
+  FLDEFF_MOVE_DEOXYS_ROCK (not ported before: FldEff_MoveDeoxysRock, Task_MoveDeoxysRock_Step; ObjectEvent gained
+  shiftObjectEventCoords / shiftStillObjectEventCoords / setSpriteOffset) and FLDEFF_DESTROY_DEOXYS_ROCK
+  (Task_DestroyDeoxysRock's three states with Task_DeoxysRockCameraShake in the same field task, in priority order,
+  the white flash, the four fragments from sRockFragment_* at screen coordinates). Five gaps off
+  scriptCoverageGaps.ts (ShakeScreen, LoopWingFlapSound, DoDeoxysTriangleInteraction, SetDeoxysTrianglePalette,
+  FLDEFF_DESTROY_DEOXYS_ROCK).
+- Found on the way: Vermilion's ticket texts are `msgbox`es that wait for a button at their end, which
+  seagallopHelpers' `waitForMenu` (it presses only at page breaks) doesn't pass: the test mashes to the ferry question
+  first. seagallop.test.ts' comment no longer says the tickets aren't ported.
+- Left: Navel Rock's summit's `setweather 0` / `doweather` (W-weather) log once; the flash is the fade overlay over
+  the objects too (DEVIATIONS).
+- Verified: typecheck; `npm test` (583 in 43 files); e2e `tests/e2e/eventIslands.test.ts` (5: the Hall of Fame's
+  tickets and not twice; Vermilion's MULTICHOICE_SEVII_NAVEL_BIRTH, both texts, HI-SPEED 10 to Navel Rock, back, 12
+  to Birth Island; Lugia's two shakes tick by tick ([-3, -3, 3, 3, -3, -3] each, two SE_M_STRENGTH) and LUGIA 70;
+  Ho-Oh's six wing flaps 34 / 35 frames apart and HO_OH 70; the triangle: a failed corner back to the start
+  (SE_M_CONFUSE_RAY), ten corners within their caps with the palette and position each time, the shake (±4 dying
+  down), the fragments 32 / 24 px apart in their first frame, SE_THUNDER2 then SE_THUNDER, the rock's flag, DEOXYS
+  30), plus hallOfFame, listMenuFlash (the elevator's shake) and sideSpecials (the fall warp's shake) for the shared
+  code.
+
+### W-weather 1: field weather's framework and Shade (POSTGAME_PLAN.md batch 10)
+
+- `world/weather.ts`: field_weather.c's state (gWeatherPtr), StartWeather, SetNextWeather /
+  SetCurrentAndNextWeather, Task_WeatherInit / Task_WeatherMain with sWeatherPalStateFuncs (UpdateWeatherGammaShift,
+  FadeInScreenWithWeather / FadeInScreen_RainShowShade), BuildGammaShiftTables (the C's u16 loops), ApplyGammaShift,
+  FadeScreen's weather half, IsWeatherNotFadingIn & co.; field_weather_util.c's saved weather (SetSavedWeather,
+  SetSavedWeatherFromCurrMapHeader, DoCurrentWeather, ResumePausedWeather, TranslateWeatherNum, UpdateRainCounter);
+  None, Sunny (no visible effect: gamma 0) and Shade (gamma index 3, 20 frames a step). Fog and the unused weathers
+  run as NONE and log once (fog is unit 2).
+- `public/gen/weather.json` (tools/extract_field.py `extract_weather`): sBasePaletteGammaTypes, sWeatherFuncs' row
+  names, the loadfadedpal field effect palette tags. Rerun `npm run extract` (or just that function).
+- The field: tilesetVram keeps the unfaded BG palettes beside the shown ones (`loadBgPaletteFaded`,
+  `bgPaletteUnfaded`); `world/weatherTextures.ts` redraws the field's sprite sheets through the shift (the object
+  sheets GAMMA_ALT, which rows 0-2 leave alone, reflections and loadfadedpal field effects GAMMA_NORMAL);
+  `ScreenFade.weather` lets the weather fade the screen in (the shade's 16 frames). OverworldScene calls the weather
+  where overworld.c does (LoadMapFromWarp / LoadMapFromCameraTransition / ResumeMap), and ticks the task.
+- Save version 7: `weather` (gSaveBlock1Ptr->weather); version-6 saves load with WEATHER_NONE.
+- Script commands `setweather`, `doweather`, `resetweather`; `setweather` and `doweather` are off the gap list.
+- Stale "no field weather" notes in docs/DEVIATIONS.md reworded (the rain stopping sound stays out: decision 1);
+  "weather tints are ignored" on the battle transitions' copy of the field and on reflections removed.
+- Verified: typecheck; unit 590 passed, with tests/unit/weather.test.ts (gamma tables against the C's arithmetic by hand, the
+  shade's fade in, doweather's steps both ways, the saved weather, an unported weather); e2e
+  tests/e2e/weather.test.ts (Viridian Forest through the gate: a BG atlas pixel and the tall grass sheet at the
+  shade's colours, the player's sheet unchanged, the 16-frame weather fade, back out lit; the Monean Chamber dark
+  through EventScript_TryDarkenRuins and lit with FLAG_SYS_UNLOCKED_TANOBY_RUINS; Navel Rock's Ho-Oh scene lifting
+  the shade 3, 2, 1, 0 a frame apart; the weather surviving save + CONTINUE), plus leagueLighting, saveContinue,
+  fieldEffects and transitions (19 passed). A screenshot of Viridian Forest shows the shaded map with the tall grass
+  sprite matching it.

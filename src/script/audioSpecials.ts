@@ -1,5 +1,5 @@
 // The audio specials (data/specials.inc): battle_setup.c's PlayTrainerEncounterMusic and field_screen_effect.c's
-// Script_FadeOutMapMusic. LoopWingFlapSound (Navel Rock's summit) is postgame and not here.
+// Script_FadeOutMapMusic. LoopWingFlapSound (Navel Rock's summit) is in eventIslandSpecials.ts.
 
 import { bdata } from '../battle/env';
 import { BGMusicStopped, FadeOutMapMusic, PlayNewMapMusic } from '../gba/sound';

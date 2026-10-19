@@ -25,6 +25,7 @@ import { EGG_HATCH_SPECIALS } from '../menus/eggHatch';
 import { EASY_CHAT_SPECIALS } from './easyChatSpecials';
 import { FERRY_SPECIALS } from './ferrySpecials';
 import { AUDIO_SPECIALS } from './audioSpecials';
+import { EVENT_ISLAND_SPECIALS } from './eventIslandSpecials';
 import { TRAINER_TOWER_SPECIALS } from './trainerTowerSpecials';
 
 export interface SpecialEnv {
@@ -91,6 +92,7 @@ export const SPECIALS: Record<string, Special> = {
   ...EASY_CHAT_SPECIALS, // easyChatSpecials.ts: easy_chat.c's ShowEasyChatMessage, BufferRandomHobbyOrLifestyleString
   ...FERRY_SPECIALS, // ferrySpecials.ts: the Seagallop ferry scene (menus/seagallop.ts) and the Rainbow Pass menu
   ...AUDIO_SPECIALS, // audioSpecials.ts: PlayTrainerEncounterMusic, Script_FadeOutMapMusic
+  ...EVENT_ISLAND_SPECIALS, // eventIslandSpecials.ts: ShakeScreen, LoopWingFlapSound, Birth Island's triangle
   ...TRAINER_TOWER_SPECIALS, // trainerTowerSpecials.ts: trainer_tower.c's CallTrainerTowerFunc (world/trainerTower.ts)
 
   // field_player_avatar.c / bike.c / field_specials.c's player avatar specials

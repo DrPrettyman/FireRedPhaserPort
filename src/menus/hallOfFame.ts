@@ -247,7 +247,7 @@ function playerGender(): number {
 /**
  * EnterHallOfFame (special): heal the party, FLAG_SYS_GAME_CLEAR (gHasHallOfFameRecords says whether it was set
  * already), the first entry's play time, and CONTINUE from Pallet Town from now on. The Champion Ribbons aren't
- * given (the port's mons have no ribbons; REVISION 0 gives no event tickets either). The caller then runs
+ * given (the port's mons have no ribbons), but the event tickets are: see GiveEventTickets. The caller then runs
  * CB2_DoHallOfFameScreen. `palletTown` is gHealLocations[HEAL_LOCATION_PALLET_TOWN - 1].
  */
 export function EnterHallOfFame(gs: GameState, palletTown: { map: string; x: number; y: number }, healPlayerParty: () => void): void {
@@ -262,6 +262,25 @@ export function EnterHallOfFame(gs: GameState, palletTown: { map: string; x: num
   SetContinueGameWarpStatus(gs);
   // SetContinueGameWarpToHealLocation(HEAL_LOCATION_PALLET_TOWN)
   gs.continueGameWarp = { mapId: palletTown.map, warpId: -1, x: palletTown.x, y: palletTown.y };
+  GiveEventTickets(gs);
+}
+
+/**
+ * EnterHallOfFame's `#if REVISION >= 0xA` block (FireRed 1.1): the Aurora and Mystic Tickets, with the ferry's
+ * FLAG_ENABLE_SHIP_BIRTH_ISLAND / _NAVEL_ROCK and FLAG_RECEIVED_*_TICKET, when the bag has no Aurora Ticket. The C
+ * gives them only when a party mon got its first Champion Ribbon (gaveAtLeastOneRibbon); the port has no ribbons,
+ * so that condition counts as met on every entry (a deliberate QOL change: docs/DEVIATIONS.md, POSTGAME_PLAN.md
+ * decision 2). The port otherwise follows REVISION 0, where the tickets only came through Mystery Gift.
+ */
+export function GiveEventTickets(gs: GameState): void {
+  const d = gs.defines;
+  if (gs.bag.has(d.require('ITEM_AURORA_TICKET'), 1)) return; // CheckBagHasItem
+  gs.bag.add(d.require('ITEM_AURORA_TICKET'), 1);
+  gs.setFlag('FLAG_ENABLE_SHIP_BIRTH_ISLAND', true);
+  gs.setFlag('FLAG_RECEIVED_AURORA_TICKET', true);
+  gs.bag.add(d.require('ITEM_MYSTIC_TICKET'), 1);
+  gs.setFlag('FLAG_ENABLE_SHIP_NAVEL_ROCK', true);
+  gs.setFlag('FLAG_RECEIVED_MYSTIC_TICKET', true);
 }
 
 /** gHasHallOfFameRecords (credits.c): FLAG_SYS_GAME_CLEAR was already set when EnterHallOfFame ran. */

@@ -6,6 +6,8 @@
 - doors.json: field_door.c's sDoorGraphics table and its DoorAnimFrame lists. The door tiles themselves
   are GBA-native graphics (extract_gfx: sDoorAnimTiles_*), drawn at runtime with the map's palettes.
 - leagueLighting.json: field_specials.c's Elite Four / Champion room lighting palettes and timers.
+- weather.json: field_weather.c's tables (sBasePaletteGammaTypes, sWeatherFuncs) and the field effect
+  palettes field_effect_scripts.s loads with loadfadedpal (UpdateSpritePaletteWithWeather).
 """
 
 import json
@@ -211,3 +213,31 @@ def extract_league_lighting(decomp, out):
         "championRoomTimers": timers("sChampionRoomLightingTimers"),
     }
     (out / "leagueLighting.json").write_text(json.dumps(data, separators=(",", ":")))
+
+
+def extract_weather(decomp, out):
+    """weather.json: what world/weather.ts reads of field_weather.c.
+
+    - paletteGammaTypes: sBasePaletteGammaTypes (GAMMA_NONE / GAMMA_NORMAL / GAMMA_ALT per palette: 16 BG, 16 OBJ).
+    - funcs: sWeatherFuncs by weather id, each row named by its callbacks' prefix (Shade_InitVars -> "Shade").
+    - fadedFieldEffectPaletteTags: the palette tags of the SpritePalettes field_effect_scripts.s loads with
+      loadfadedpal / loadfadedpal_callnative (FieldEffectScript_LoadFadedPalette: UpdateSpritePaletteWithWeather),
+      as far as field_effect_objects.h tags them (the field effect templates' palettes; the Poké Ball glow, Hall of
+      Fame monitor and cut grass palettes elsewhere have numeric tags and no template in objects.json).
+    The gamma shift tables themselves are built by code (BuildGammaShiftTables), so the port builds them too.
+    """
+    src = (decomp / "src/field_weather.c").read_text()
+    gamma = re.search(r"static const u8 sBasePaletteGammaTypes\[32\] = \{(.*?)\};", src, re.S).group(1)
+    gamma_types = re.findall(r"GAMMA_\w+", gamma)
+    assert len(gamma_types) == 32, gamma_types
+    funcs_body = re.search(r"static const struct WeatherCallbacks sWeatherFuncs\[\] = \{(.*?)\n\};", src, re.S).group(1)
+    funcs = [re.sub(r"_Init(Vars)?$", "", row) for row in re.findall(r"\{\s*(\w+),", funcs_body)]
+
+    scripts = (decomp / "data/field_effect_scripts.s").read_text()
+    faded = set(re.findall(r"loadfadedpal(?:_callnative)?\s+(\w+)", scripts))
+    tags = {}
+    for name, tag in re.findall(r"const struct SpritePalette (\w+) = \{\s*\.data = \w+,\s*\.tag = (\w+)", (decomp / "src/data/field_effects/field_effect_objects.h").read_text()):
+        tags[name] = tag
+    faded_tags = sorted(tags[n] for n in faded if n in tags)
+    data = {"paletteGammaTypes": gamma_types, "funcs": funcs, "fadedFieldEffectPaletteTags": faded_tags}
+    (out / "weather.json").write_text(json.dumps(data, separators=(",", ":")))
