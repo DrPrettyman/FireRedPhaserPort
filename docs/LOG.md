@@ -3067,6 +3067,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   full suite ran (and the tests after it failed on the leftover page), then passed (50 s) on the rerun; master ran it
   in 59 s at a similar load, and timing each transition alone showed nothing slower. The full suite was not run
   (the coordinator's checkpoint came while the lock was held by another worker).
+
 ### W-sound 7a: the evolution scene's, egg hatching's and the in-game trade's sounds; map music after script screens
 
 - **Evolution scene** (`menus/evolutionScene.ts`, evolution_scene.c): m4aMPlayAllStop on entry and on a cancel,
@@ -3099,6 +3100,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the other workers): 410 e2e in 64 files, 408 passed, 27.4 min; the two failures are the races above, both green on
   rerun after the fixes. No tick budgets needed raising (the waits this unit adds are a frame or none: the cries and
   MUS_EVOLUTION_INTRO's wait were live already).
+
 ### W-m4a 4a: CgbSound, the engine side of the PSG (AUDIO_PLAN.md batch D, unit 1)
 
 - `src/audio/m4aCgb.ts` replaces the placeholder with m4a.c's CgbSound (the per-frame software envelope with its
@@ -3158,6 +3160,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   from Node after the anim ended: the battle can be over by then, tests/README.md rule 5) and battleAnims.3e3b's
   Snatch (polls a short-lived sprite from Node; timed out under load; on the rerun Memento timed out instead).
   Tick budgets raised: none.
+
 ### W-m4a 4b: the PSG synth, music complete (AUDIO_PLAN.md batch D, unit 2)
 
 - New `src/audio/psgSynth.ts` (`PsgSynth`): the GBA's four PSG channels driven by the engine's register writes
@@ -3219,6 +3222,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   volume after an awaited `t.until`, past the first cry's duck under load; now recorded tick by tick in one `t.mash`
   predicate); transitions' "every battle transition" (its 120 s timeout), battleAnims.3e3a's Smokescreen and
   battleAnims.2d's Memento were green on rerun: races outside this unit, not fixed. No tick budgets needed raising.
+
 ### W-sound 6b: the battle anim engine's sounds (AUDIO_PLAN.md batch D)
 
 - `src/battle/anim/` calls `gba/sound.ts` directly, with the C's arguments; battleAnim.ts's PlaySE12WithPanning
@@ -3276,6 +3280,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   and each ball's PlaySE1WithPanning(SE_BALL_TRAY_BALL) / PlaySE2WithPanning(SE_BALL_TRAY_EXIT) at
   SOUND_PAN_ATTACKER (the opponent's) / SOUND_PAN_TARGET, replacing `ui.playSE`. gfx.ts and battleInterface.ts no
   longer use BattleUi.
+
 ### W-ref 2: the port's audio against the ROM (AUDIO_PLAN.md batch D, unit 10)
 
 - Exact check on the rev 1 ROM in mGBA (GDB stub, W-ref 1's freeze and start; scripts in `wref-scratch/wref2/`,
@@ -3349,6 +3354,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Tests: `tests/unit/psgSynth.test.ts` + 2 (the wave restart's delay; a sequencer step inside an output sample
   through the DAC, checked to fail before the fix). Typecheck clean; unit 580 in 42 files; e2e audioOutput +
   audio 7 passed.
+
 ### W-sound 8: the sweep (AUDIO_PLAN.md batch D, unit 9)
 
 - Ambient cries (overworld.c: ChooseAmbientCrySpecies, UpdateAmbientCry, PlayAmbientCry; field_tasks.c's
@@ -3410,6 +3416,35 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   are rerun file by file. Docs-only changes run nothing.
 - Verified: docs only.
 
+### W-sevii 1: back to One Island, Kindle Road, Mt. Ember, the Ruby (POSTGAME_PLAN.md batch 10)
+
+- Braille: `tools/extract.py` extracts FONT_BRAILLE beside the latin fonts (`braille_font`: graphics/fonts/braille.png
+  as a glyph mask, 16x16 cells as DecompressGlyph_Braille reads the .fwjpnfont, every glyph GetGlyphWidth_Braille's
+  16 px, `fixedWidth` in fonts.json, gFontInfos[FONT_BRAILLE]: line spacing 2, dark gray on white) and the
+  `.braille` strings of data/text/braille.inc (`braille_encoding` / `encode_braille`: preproc's
+  AsmFile::ReadBraille table with BRAILLE_CHAR_* from include/characters.h, written to strings.json as byte tokens,
+  `{0x01 0x05 0x03}$`, so Charmap.encode gives the ROM's bytes). `text/Font.ts` FONT_BRAILLE (6) and fixed widths;
+  `text/stringWidth.ts` skips the Japanese letter spacing for braille (`fontId != FONT_BRAILLE && isJapanese`);
+  TextPrinter draws braille glyphs whatever {FONT} says (FontFunc_Braille).
+- Script commands (`script/ScriptEngine.ts`): `braillemessage` (ScrCmd_braillemessage: the dialogue frame, printed
+  at once in FONT_BRAILLE through MessageBox.show's font), `getbraillestringwidth` (VAR_0x8004 = GetStringWidth).
+  `script/postgameSpecials.ts` (POSTGAME_SPECIALS, new): BrailleCursorToggle with text.c's text cursor on the field
+  (CreateTextCursorSprite's (x + 3, y + 4), SpriteCB_TextCursor's bob by a field task, DestroyTextCursorSprite), so
+  the `braillemessage_wait` macro (EventScript_BrailleCursorWaitButton) works. Three gaps off scriptCoverageGaps.ts.
+- Played headless (`tests/e2e/postgame.test.ts`, helpers in `tests/e2e/postgameHelpers.ts`: `afterHallOfFame`,
+  `fillPokedex`, `scriptsSince`, `battlesSince`): Pallet Town's OakRatingScene → the lab's National Dex scene;
+  Three Island's harbor → One Island (MULTICHOICE_SEAGALLOP_V12); Celio's Ruby request; One Island → Kindle Road
+  over the connection; Abigail by sight and Mik & Kia's double battle; the Ember Spa (HM06, the hot spring's heal);
+  Mt. Ember's password scene, both grunts and the open cave; the Ruby Path B4F / B5F braille (the bytes, each
+  braillemessage_wait's width and cursor); the Ruby; Moltres's battle on the summit, won; GiveCelioRuby → the
+  Rainbow Pass. Kindle Road and Mt. Ember ran without changes.
+- Fix found on the way: `waitbuttonpress` now waits from the frame after it was set up (SetupNativeScript): the A
+  that let one wait through could pass the next one in the same frame, so one press went through all eight of
+  B5F's messages (braille prints at once). DEVIATIONS' native-wait note updated.
+- Verified: typecheck; unit 589 (6 new in tests/unit/braille.test.ts: the font info and widths, the encoded strings,
+  GetStringWidth, the commands through the engine, the cursor's position and bob); e2e postgame.test.ts, plus
+  field, audioCries, seviiQuest and sideEvents (waitbuttonpress), all passed.
+
 ### W-ttower 1: the Trainer Tower's data and the tower without battles (POSTGAME_PLAN.md batch 10)
 
 - Data: `tools/extract_trainer_tower.py` (in `npm run extract`) → `public/gen/trainerTower.json`: every
@@ -3445,6 +3480,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   and after speeches, the stand-in battle, the floor cleared, the timer exactly 60 per 60 ticks and the clock; a
   Double challenge's 1F_DOUBLES layout and twins; a loss ending the challenge in the lobby and leaving the tower;
   a white-out during a challenge) and saveContinue.test.ts, all passed.
+
 ### The event tickets, Navel Rock, Birth Island (W-events unit 1, batch 10)
 
 - The tickets: `GiveEventTickets` (menus/hallOfFame.ts), EnterHallOfFame's `#if REVISION >= 0xA` block: the Aurora
@@ -3539,3 +3575,58 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   battles; a loss: the win text, no white-out, healed, the receptionist ends the challenge), plus trainerBattle and
   scriptedBattles. Found on the way: the "Will you change POKéMON?" prompt between a single trainer's two mons eats
   the mash's A (the test sets the SET battle style).
+### W-sevii 2: Four Island and Icefall Cave (POSTGAME_PLAN.md batch 10)
+
+- `world/fieldTasks.ts` (new): field_tasks.c's per-step callback task. SetUpFieldTasks (a fresh STEP_CB_DUMMY task
+  where ResumeMap makes one: OverworldScene's `onMapLoaded` on a warp before ON_RESUME, `resumeMap()`),
+  ActivatePerStepCallback, Task_RunPerStepCallback (once a frame from `tickField`, beside the ambient cries),
+  sPerStepCallbacks with IcefallCaveIcePerStepCallback (thin ice cracks 5 frames after the step onto it, cracked ice
+  breaks and sets VAR_TEMP_1; SE_ICE_CRACK / SE_ICE_BREAK), MarkIcePuzzleCoordVisited / sIcefallCaveIceCoords
+  (FLAG_TEMP_1-9) and SetIcefallCaveCrackedIceMetatiles. The ash grass and cracked floor callbacks (R/S leftovers)
+  log once.
+- Script commands `setstepcallback` and `warphole` (SetWarpDestination to the player's spot on the named map, then
+  `special DoFallWarp` and ResetInitialPlayerAvatarState; MAP_UNDEFINED's fixed hole warp logs).
+- `script/postgameSpecials.ts`: SetIcefallCaveCrackedIceMetatiles, UpdateLoreleiDollCollection (a doll every 25
+  Hall of Fame entries), StickerManGetBragFlags. All five are off tests/unit/scriptCoverageGaps.ts.
+- tests/e2e/postgameHelpers.ts: `afterHallOfFame` also counts GAME_STAT_ENTERED_HOF 1 (the Hall of Fame's save);
+  `rainbowPassState` (where postgame.test.ts ends) and `talk` (moved from postgame.test.ts).
+- Nothing else needed fixing on the way: the rival scene, the sticker man's multichoice and fanfare, the back room's
+  scene (its trainerbattle_no_intro, Lapras's cry, the Rockets' exit) and the Seagallop to Four Island ran as they
+  were.
+- Verified: typecheck; unit (tests/unit/fieldTasks.test.ts: the ice's frame timing and flags, the cracked-ice
+  special, the doll thresholds, the brag flags); e2e tests/e2e/postgameFourIsland.test.ts (the ferry from Three
+  Island, the rival scene, the sticker man's HALL OF FAME brag, Icefall Cave 1F's ice cracking on the first step and
+  breaking on the second with their SEs, a save + CONTINUE keeping the cracked ice, the fall to B1F at the same spot,
+  the ice whole again on the next visit, the back room's scene to its end and Lorelei hidden on the next visit,
+  Lorelei's Meowth doll at 25 entries and her text), plus postgame.test.ts (the helper) and sideSpecials.test.ts
+  (the fall warps).
+
+### W-weather 2: the horizontal fog (POSTGAME_PLAN.md batch 10)
+
+- `world/weather.ts`: WEATHER_FOG_HORIZONTAL (FogHorizontal_InitVars / _InitAll / _Main / _Finish, its scroll:
+  fogHScrollPosX from gSpriteCoordOffsetX, a pixel left every 4 frames), the blend coefficients
+  (Weather_SetBlendCoeffs, Weather_SetTargetBlendCoeffs, Weather_UpdateBlend: REG_BLDALPHA through the host),
+  StartWeather's blend and sprite reset, FadeScreen's Weather_SetBlendCoeffs, FadeInScreen_FogHorizontal and
+  ApplyFogBlend (the BG palettes as loaded, the GAMMA_NORMAL sheets lightened: BlendPalette(12, RGB(28, 31, 28))).
+  FogHorizontal is in `PORTED`, so WEATHER_UNDERWATER runs it too, as FRLG's sWeatherFuncs has it.
+- `world/fogHorizontal.ts` (new): the fog's 20 sprites (gWeatherFogHorizontalTiles in gDefaultWeatherSpritePalette,
+  already extracted by tools/extract_gfx.py), FogHorizontalSpriteCallback's placement and wrap, and the blend over the
+  field: the GPU in two passes (a MULTIPLY rectangle of EVB / 16, the sprites in ADD mode at EVA / 16), between BG2 and
+  the priority-2 objects. `world/weatherTextures.ts` takes per-channel tables beside the gamma shift's one.
+- The GBA layer's copy of the field (battle transitions): the fog as semi-transparent OBJ pixels behind the priority-2
+  objects (`ObjBitmapLayer.semi`, which gba/ppu.ts now copies into its OBJ line) with the weather's BLDALPHA.
+- OverworldScene: the fog's host (sprites, BLDALPHA, gSpriteCoordOffsetX / Y as the camera's movement since the last
+  InitObjectEventsLocal, `cameraLeft` beside `cameraTop`), its update after the weather task, `FieldGbaSource.fog`.
+  Probes `__test.fog()` and `__test.screenPixel()` (Phaser's WebGL snapshotPixel reads screen row y - 1: the hook
+  asks for y + 1).
+- docs/DEVIATIONS.md: the "fog runs as NONE until unit 2" note gone; the fog's blend, lightened sheets and camera
+  offset written up.
+- Verified: typecheck; unit 593 passed (tests/unit/weather.test.ts: the fog's blend steps (0, 16) → (12, 8) in one
+  frame, the 17 fade-in frames, the drift, a tile's scroll, the 95-frame finish to (0, 16) and the sprites' end, a warp
+  out, WEATHER_UNDERWATER's (4, 16)); e2e weather.test.ts 7 passed (Pokémon Tower 3F: the sprites cover the screen
+  at (12, 8), four rendered pixels against min(255, fog * 12 / 16 + field * 8 / 16) read with the fog hidden and
+  shown, the player unfogged, 4 pixels of drift in 16 frames, a step up / left moving the fog 16 pixels, the stairs
+  to 2F lifting it, back up fading it in with the sprites up from the start; a battle transition with the fog on the
+  GBA layer at BLDALPHA (12, 8) and back after the battle; the Lost Cave fogged), pokemonTower.test.ts and
+  transitions.test.ts (15 passed with weather), battleAnims "a ghost dodges the ball" (3F). Screenshots of 3F on the
+  field and mid-transition show the fog.

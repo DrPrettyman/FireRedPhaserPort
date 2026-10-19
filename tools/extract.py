@@ -572,6 +572,64 @@ def parse_charmap(decomp):
 FONT_IDS = {"Small": 0, "NormalCopy1": 1, "Normal": 2, "NormalCopy2": 3, "Male": 4, "Female": 5}
 
 
+def braille_font(decomp, td, infos):
+    """FONT_BRAILLE (braille_text.c): graphics/fonts/braille.png (a .fwjpnfont: 16x16 cells, 16 per row, glyph g at
+    cell g as DecompressGlyph_Braille reads it), every glyph GetGlyphWidth_Braille's width, gFontInfos[FONT_BRAILLE]."""
+    src = Image.open(decomp / "graphics/fonts/braille.png")
+    px = src.load()
+    mask = Image.new("L", src.size, 0)
+    mp = mask.load()
+    for y in range(src.height):
+        for x in range(src.width):
+            v = px[x, y]
+            mp[x, y] = 255 if v == 1 else 128 if v == 2 else 0
+    mask.save(td / "braille.png", optimize=True)
+    braille_c = (decomp / "src/braille_text.c").read_text()
+    width = int(re.search(r"GetGlyphWidth_Braille\(.*?\)\s*\{\s*return\s+(\d+);", braille_c, re.S).group(1))
+    text_h = (decomp / "include/text.h").read_text()
+    enum = re.search(r"enum\s*\{\s*(FONT_SMALL.*?)\}", text_h, re.S).group(1)
+    font_id = [n.strip() for n in enum.split(",")].index("FONT_BRAILLE")
+    return font_id, {"name": "Braille", "image": "braille", "fixedWidth": width, "widths": [], **infos["FONT_BRAILLE"]}
+
+
+def braille_encoding(decomp):
+    """tools/preproc's AsmFile::ReadBraille table (character -> BRAILLE_CHAR_* from include/characters.h)."""
+    chars_h = (decomp / "include/characters.h").read_text()
+    consts = {n: int(v, 16) for n, v in re.findall(r"#define\s+(BRAILLE_CHAR_\w+)\s+0x([0-9A-Fa-f]+)", chars_h)}
+    for n, alias in re.findall(r"#define\s+(BRAILLE_CHAR_\w+)\s+(BRAILLE_CHAR_\w+)\s*$", chars_h, re.M):
+        consts[n] = consts[alias]
+    consts["EOS"] = 0xFF
+    asm_file = (decomp / "tools/preproc/asm_file.cpp").read_text()
+    body = asm_file[asm_file.index("AsmFile::ReadBraille") :]
+    body = body[: body.index("};")]
+    table = {}
+    for ch, const in re.findall(r"\{\s*'(\\'|[^'])',\s*(\w+)\s*\}", body):
+        table[ch[-1]] = consts[const]
+    return table
+
+
+def encode_braille(text, table):
+    """AsmFile::ReadBraille: a `.braille "..."` literal to bytes (BRAILLE_CHAR_NUMBER before a number), written as a
+    charmap string of byte tokens ("{0x01 0x05}$") so the runtime's Charmap.encode gives the same bytes."""
+    out, i, in_number = [], 0, False
+    while i < len(text):
+        if text[i] == "\\" and text[i + 1 : i + 2] == "n":
+            out.append(0xFE)  # CHAR_NEWLINE
+            i += 2
+            continue
+        c = text[i]
+        if not in_number and c.isdigit():
+            in_number = True
+            out.append(table["#"])
+        elif in_number and table[c] == table[" "]:
+            in_number = False
+        out.append(table[c])
+        i += 1
+    eos = out and out[-1] == 0xFF
+    body = out[:-1] if eos else out
+    return ("{" + " ".join(f"0x{b:02X}" for b in body) + "}" if body else "") + ("$" if eos else "")
+
+
 def extract_text_assets(decomp, out):
     td = out / "text"
     td.mkdir(parents=True, exist_ok=True)
@@ -612,6 +670,7 @@ def extract_text_assets(decomp, out):
             written.add(img_name)
         fid = FONT_IDS[name]
         fonts[fid] = {"name": name, "image": img_name, "halfWidth": ext == "hwlatfont", "widths": widths[name], **infos.get(id_to_const[fid], {})}
+    braille_id, fonts[braille_id] = braille_font(decomp, td, infos)
 
     # Dialogue frame (menu_message) + down arrow, rendered with the text window palette (stdpal_0).
     pal = read_jasc(decomp / "graphics/text_window/stdpal_0.pal")
@@ -837,6 +896,7 @@ def extract_scripts(decomp, out):
     strings: {label: raw decomp string}   (.string data, encoded at runtime with the charmap)
     """
     code, labels, strings = [], {}, {}
+    braille_table = braille_encoding(decomp)
     equs = {}
     seen = set()
 
@@ -885,6 +945,11 @@ def extract_scripts(decomp, out):
                 if not line:
                     return
             st["after_label"] = False
+            if line.startswith(".braille"):  # data/text/braille.inc (preproc's ReadBraille)
+                text = "".join(re.findall(r'"((?:\\.|[^"\\])*)"', line))
+                for lab in st["pending"]:
+                    strings[lab] = encode_braille(text, braille_table)
+                return
             if line.startswith(".string"):
                 text = "".join(re.findall(r'"((?:\\.|[^"\\])*)"', line))
                 for lab in st["pending"]:

@@ -6,10 +6,13 @@
 //
 // Object sprites stay Phaser's: each frame they're copied into the PPU's OBJ bitmap layer. Their
 // colours go through two probe OBJ palettes (a 0-31 grey ramp), so palette fades and blends reach them
-// as they would the objects' own palettes.
+// as they would the objects' own palettes. The horizontal fog's sprites (world/fogHorizontal.ts) go in as
+// semi-transparent OBJ pixels behind the priority-2 objects, blended by the PPU with the weather's BLDALPHA.
 
 import Phaser from 'phaser';
 import type { TilesetSymbols } from '../data/types';
+import type { FogGbaLayer } from './fogHorizontal';
+import { weatherBlendAlpha } from './weather';
 import { BG_ATTR_MOSAIC, CopyBgTilemapBufferToVram, InitBgsFromTemplates, ResetBgsAndClearDma3BusyFlags, SetBgAttribute, SetBgTilemapBuffer, ShowBg, type BgTemplate } from '../gba/bg';
 import { gfx16 } from '../gba/gfx';
 import {
@@ -76,6 +79,8 @@ export interface FieldGbaSource {
   camera(): { x: number; y: number };
   /** The field's object sprites (what OAM would hold) with their OAM priority, back to front. */
   sprites(): { sprite: Phaser.GameObjects.Sprite; priority: number }[];
+  /** WEATHER_FOG_HORIZONTAL's sprites while they're up (OAM priority 2, subpriority 0xFF, ST_OAM_OBJ_BLEND). */
+  fog?(): FogGbaLayer | undefined;
   /** gSaveBlock1Ptr->flashLevel: a dark cave's circle stays on WIN0 through the transition. */
   flashLevel?: number;
 }
@@ -120,7 +125,11 @@ export class FieldGbaScreen {
   private readonly pixels: Uint32Array;
   private readonly objCanvas: HTMLCanvasElement;
   private readonly objCtx: CanvasRenderingContext2D;
-  private readonly objLayer: ObjBitmapLayer = { color: new Int32Array(DISPLAY_WIDTH * DISPLAY_HEIGHT), priority: new Uint8Array(DISPLAY_WIDTH * DISPLAY_HEIGHT) };
+  private readonly objLayer: ObjBitmapLayer = {
+    color: new Int32Array(DISPLAY_WIDTH * DISPLAY_HEIGHT),
+    priority: new Uint8Array(DISPLAY_WIDTH * DISPLAY_HEIGHT),
+    semi: new Uint8Array(DISPLAY_WIDTH * DISPLAY_HEIGHT),
+  };
   /** gBGTilemapBuffers2 (BG1), gBGTilemapBuffers1 (BG2), gBGTilemapBuffers3 (BG3) */
   private readonly bgTilemapBuffers2 = new Uint16Array(0x400);
   private readonly bgTilemapBuffers1 = new Uint16Array(0x400);
@@ -224,6 +233,11 @@ export class FieldGbaScreen {
     SetGpuReg(REG_OFFSET_WIN1V, WIN_RANGE(255, 255));
     SetGpuReg(REG_OFFSET_BLDCNT, gOverworldBackgroundLayerFlags[1] | gOverworldBackgroundLayerFlags[2] | gOverworldBackgroundLayerFlags[3] | BLDCNT_TGT2_OBJ | BLDCNT_EFFECT_BLEND);
     SetGpuReg(REG_OFFSET_BLDALPHA, BLDALPHA_BLEND(13, 7));
+    if (source.fog?.()) {
+      // The fog's Weather_SetBlendCoeffs / Weather_UpdateBlend wrote BLDALPHA after the map load
+      const { eva, evb } = weatherBlendAlpha();
+      SetGpuReg(REG_OFFSET_BLDALPHA, BLDALPHA_BLEND(eva, evb));
+    }
     SetGpuReg(REG_OFFSET_DISPCNT, DISPCNT_MODE_0 | DISPCNT_OBJ_1D_MAP | 0x20 | DISPCNT_OBJ_ON | DISPCNT_WIN0_ON | DISPCNT_WIN1_ON);
     for (let bg = 0; bg < 4; bg++) ShowBg(bg);
     InitCurrentFlashLevelScanlineEffect(source.flashLevel ?? 0); // the field's flash circle, still running
@@ -399,8 +413,9 @@ export class FieldGbaScreen {
    * band in front overwrites the ones behind), coloured through the probe palettes.
    */
   private drawObjects(): void {
-    const { color, priority } = this.objLayer;
+    const { color, priority, semi } = this.objLayer;
     color.fill(-1);
+    semi!.fill(0);
     const cam = this.source!.camera();
     const ctx = this.objCtx;
     // The probes' faded colours: each channel value v of an object pixel shows as the probe for v does.
@@ -412,18 +427,33 @@ export class FieldGbaScreen {
       lut[2][v] = (c >> 10) & 0x1f;
     }
     const sprites = this.source!.sprites();
+    const fog = this.source!.fog?.();
     for (const band of [3, 2, 1]) {
       const inBand = sprites.filter((s) => s.priority === band);
-      if (!inBand.length) continue;
-      ctx.clearRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
-      for (const { sprite } of inBand) drawSprite(ctx, sprite, cam.x, cam.y);
-      const rgba = ctx.getImageData(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT).data;
-      for (let i = 0, p = 0; i < color.length; i++, p += 4) {
-        if (rgba[p + 3] < 128) continue;
-        color[i] = lut[0][rgba[p] >> 3] | (lut[1][rgba[p + 1] >> 3] << 5) | (lut[2][rgba[p + 2] >> 3] << 10);
-        priority[i] = band;
+      // The fog's sprites are the last in OAM at priority 2 (subpriority 0xFF): behind that band's objects
+      const fogHere = band === 2 && fog;
+      if (!inBand.length && !fogHere) continue;
+      const layers: (() => void)[] = [];
+      if (fogHere) layers.push(() => fog.positions.forEach((p) => ctx.drawImage(fog.image, p.x, p.y)));
+      if (inBand.length) layers.push(() => inBand.forEach(({ sprite }) => drawSprite(ctx, sprite, cam.x, cam.y)));
+      for (let l = 0; l < layers.length; l++) {
+        const blend = fogHere && l === 0 ? 1 : 0;
+        ctx.clearRect(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT);
+        layers[l]();
+        const rgba = ctx.getImageData(0, 0, DISPLAY_WIDTH, DISPLAY_HEIGHT).data;
+        for (let i = 0, p = 0; i < color.length; i++, p += 4) {
+          if (rgba[p + 3] < 128) continue;
+          color[i] = lut[0][rgba[p] >> 3] | (lut[1][rgba[p + 1] >> 3] << 5) | (lut[2][rgba[p + 2] >> 3] << 10);
+          priority[i] = band;
+          semi![i] = blend;
+        }
       }
     }
+  }
+
+  /** Dev: the OBJ layer's semi-transparent pixels (the fog's) in the last frame drawn. */
+  semiObjPixels(): number {
+    return this.source ? this.objLayer.semi!.reduce((n, v) => n + v, 0) : 0;
   }
 }
 

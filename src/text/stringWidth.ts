@@ -1,4 +1,4 @@
-import type { Fonts } from './Font';
+import { FONT_BRAILLE, type Fonts } from './Font';
 
 /**
  * GetStringWidth (text.c) with a given font set (the field's or the GBA layer's). Latin glyphs don't add
@@ -11,10 +11,11 @@ export function stringWidth(fonts: Fonts, fontId: number, str: number[], letterS
   let minGlyphWidth = 0;
   let width = 0;
   let lineWidth = 0;
-  const glyph = (c: number) => {
+  // (only a plain glyph checks the font: `fontId != FONT_BRAILLE && isJapanese`, the call's font, not a {FONT})
+  const glyph = (c: number, plain = false) => {
     let w = font.width(c);
     if (minGlyphWidth > 0) w = Math.max(w, minGlyphWidth);
-    else if (isJapanese) w += spacing;
+    else if (isJapanese && !(plain && fontId === FONT_BRAILLE)) w += spacing;
     lineWidth += w;
   };
   for (let i = 0; i < str.length && str[i] !== 0xff; i++) {
@@ -90,7 +91,7 @@ export function stringWidth(fonts: Fonts, fontId: number, str: number[], letterS
         }
         break;
       default:
-        glyph(c);
+        glyph(c, true);
     }
   }
   return lineWidth > width ? lineWidth : width;

@@ -1,4 +1,5 @@
-import { avatarField, ClearPlayerHeldMovement, IsFreezePlayerFinished } from '../world/playerAvatar';
+import { avatarField, ClearPlayerHeldMovement, IsFreezePlayerFinished, ResetInitialPlayerAvatarState } from '../world/playerAvatar';
+import { ActivatePerStepCallback } from '../world/fieldTasks'; // setstepcallback (W-sevii)
 import type { ObjectEvent } from '../entities/ObjectEvent';
 import type { Button, Input } from '../input/Input';
 import type { NamingScreenRequest } from '../scenes/FieldMenuScene';
@@ -6,6 +7,8 @@ import type { Pokemon } from '../pokemon/Pokemon';
 import type { GameState } from '../state/GameState';
 import type { Charmap } from '../text/charmap';
 import type { MessageBox, TextColor } from '../text/MessageBox';
+import { FONT_BRAILLE } from '../text/Font';
+import { stringWidth } from '../text/stringWidth';
 import { SCR_MENU_UNSET } from '../ui/MultichoiceMenu';
 import type { YesNoMenu } from '../ui/YesNoMenu';
 import { parseDirection, type Direction } from '../world/direction';
@@ -831,6 +834,20 @@ export class ScriptEngine {
     messageautoscroll(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
       this.showMessage(ctx, a[0]);
     },
+    /**
+     * ScrCmd_braillemessage: LoadStdWindowFrameGfx, DrawDialogueFrame(0, 1) (the dialogue frame, filled), then
+     * AddTextPrinterParameterized(0, FONT_BRAILLE, msg, 0, 1, 0, NULL): at once (speed 0), in gFontInfos'
+     * FONT_BRAILLE colours. The script doesn't wait: a `waitbuttonpress` follows.
+     */
+    braillemessage(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      const bytes = this.stringFor(ctx, a[0]);
+      if (bytes) this.messageBox.show(bytes, 'neutral', false, true, FONT_BRAILLE);
+    },
+    /** ScrCmd_getbraillestringwidth: gSpecialVar_0x8004 = GetStringWidth(FONT_BRAILLE, msg, -1). */
+    getbraillestringwidth(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      const bytes = this.stringFor(ctx, a[0]);
+      if (bytes) this.state.setVar('VAR_0x8004', stringWidth(this.messageBox.fonts, FONT_BRAILLE, bytes, -1));
+    },
     waitmessage(this: ScriptEngine, ctx: ScriptContext) {
       ctx.wait = () => !this.messageBox.isPrinting;
     },
@@ -839,7 +856,15 @@ export class ScriptEngine {
      * player faced), L, R, START or SELECT also closes the message, and is then replayed as field input.
      */
     waitbuttonpress(this: ScriptEngine, ctx: ScriptContext) {
+      // SetupNativeScript(ctx, WaitForAorBPress): the script stops for this frame, so the A or B that let an
+      // earlier wait through in this frame can't also pass this one (braillemessage_wait prints at once: one A
+      // went through all of Mt. Ember B5F's messages). (The frame the press holds, the port goes on at once.)
+      let setUp = true;
       ctx.wait = () => {
+        if (setUp) {
+          setUp = false;
+          return false;
+        }
         if (this.input.pressedAorB()) return true;
         if (!this.nextCommandEndsScript(ctx)) return false;
         const b = this.questLogInput();
@@ -991,6 +1016,27 @@ export class ScriptEngine {
     /** ScrCmd_warpsilent: DoDiveWarp (no SE_EXIT) */
     warpsilent(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
       this.doWarp(ctx, a, 'silent');
+    },
+    /**
+     * ScrCmd_warphole (W-sevii): SetWarpDestination(map, WARP_ID_NONE, the player's destination coords), then DoFallWarp
+     * (world/fallWarp.ts, as `special DoFallWarp`) and ResetInitialPlayerAvatarState; the `waitstate` after it never
+     * ends (the map load ends the script). MAP_UNDEFINED is SetWarpDestinationToFixedHoleWarp, which only R/S's
+     * `setholewarp` sets (no FRLG script; only the unused EventScript_FallDownHole reaches it): logged, no warp.
+     */
+    warphole(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      if (a[0] === 'MAP_UNDEFINED') {
+        console.warn('[script] warphole MAP_UNDEFINED: sFixedHoleWarp (setholewarp) is not ported');
+        ctx.done = true;
+        return;
+      }
+      const { x, y } = this.host.playerLocal(); // PlayerGetDestCoords
+      this.host.setWarpDestination(a[0], -1, x, y);
+      this.callSpecial('DoFallWarp');
+      ResetInitialPlayerAvatarState();
+    },
+    /** ScrCmd_setstepcallback: ActivatePerStepCallback (world/fieldTasks.ts; W-sevii) */
+    setstepcallback(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      ActivatePerStepCallback(this.state.value(a[0]));
     },
     /** ScrCmd_warpdoor: DoDoorWarp; the port goes straight to Task_DoorWarp's warp (no door anim; no FRLG script uses it) */
     warpdoor(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
