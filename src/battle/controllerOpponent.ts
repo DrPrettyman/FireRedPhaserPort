@@ -56,6 +56,7 @@ import {
 } from './gfx';
 import { battleStringShouldBeColored, bufferStringBattle } from './message';
 import type { ChooseMoveStruct, HpAndStatus } from './structs';
+import { GetTrainerTowerTrainerFrontSpriteId } from '../world/trainerTower';
 import { getBattlerAtPosition, getBattlerPosition, getBattlerSide } from './util';
 
 const ab = () => g.activeBattler;
@@ -358,8 +359,13 @@ function DoSwitchOutAnimation(): void {
   }
 }
 
-/** gTrainers[gTrainerBattleOpponent_A].trainerPic (secret base / towers / e-reader don't exist in this port) */
+/**
+ * OpponentHandleDrawTrainerPic's pick: the Trainer Tower's (GetTrainerTowerTrainerFrontSpriteId), else
+ * gTrainers[gTrainerBattleOpponent_A].trainerPic (secret bases, the Battle Tower and e-Reader trainers aren't in FRLG's
+ * reach).
+ */
 function opponentTrainerPicId(): number {
+  if (g.battleTypeFlags & K.BATTLE_TYPE_TRAINER_TOWER) return GetTrainerTowerTrainerFrontSpriteId();
   return bdata.tables.trainers[g.trainerBattleOpponent_A]?.trainerPic ?? 0;
 }
 
