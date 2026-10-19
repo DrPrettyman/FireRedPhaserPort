@@ -3438,3 +3438,33 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the shade 3, 2, 1, 0 a frame apart; the weather surviving save + CONTINUE), plus leagueLighting, saveContinue,
   fieldEffects and transitions (19 passed). A screenshot of Viridian Forest shows the shaded map with the tall grass
   sprite matching it.
+
+### W-weather 2: the horizontal fog (POSTGAME_PLAN.md batch 10)
+
+- `world/weather.ts`: WEATHER_FOG_HORIZONTAL (FogHorizontal_InitVars / _InitAll / _Main / _Finish, its scroll:
+  fogHScrollPosX from gSpriteCoordOffsetX, a pixel left every 4 frames), the blend coefficients
+  (Weather_SetBlendCoeffs, Weather_SetTargetBlendCoeffs, Weather_UpdateBlend: REG_BLDALPHA through the host),
+  StartWeather's blend and sprite reset, FadeScreen's Weather_SetBlendCoeffs, FadeInScreen_FogHorizontal and
+  ApplyFogBlend (the BG palettes as loaded, the GAMMA_NORMAL sheets lightened: BlendPalette(12, RGB(28, 31, 28))).
+  FogHorizontal is in `PORTED`, so WEATHER_UNDERWATER runs it too, as FRLG's sWeatherFuncs has it.
+- `world/fogHorizontal.ts` (new): the fog's 20 sprites (gWeatherFogHorizontalTiles in gDefaultWeatherSpritePalette,
+  already extracted by tools/extract_gfx.py), FogHorizontalSpriteCallback's placement and wrap, and the blend over the
+  field: the GPU in two passes (a MULTIPLY rectangle of EVB / 16, the sprites in ADD mode at EVA / 16), between BG2 and
+  the priority-2 objects. `world/weatherTextures.ts` takes per-channel tables beside the gamma shift's one.
+- The GBA layer's copy of the field (battle transitions): the fog as semi-transparent OBJ pixels behind the priority-2
+  objects (`ObjBitmapLayer.semi`, which gba/ppu.ts now copies into its OBJ line) with the weather's BLDALPHA.
+- OverworldScene: the fog's host (sprites, BLDALPHA, gSpriteCoordOffsetX / Y as the camera's movement since the last
+  InitObjectEventsLocal, `cameraLeft` beside `cameraTop`), its update after the weather task, `FieldGbaSource.fog`.
+  Probes `__test.fog()` and `__test.screenPixel()` (Phaser's WebGL snapshotPixel reads screen row y - 1: the hook
+  asks for y + 1).
+- docs/DEVIATIONS.md: the "fog runs as NONE until unit 2" note gone; the fog's blend, lightened sheets and camera
+  offset written up.
+- Verified: typecheck; unit 593 passed (tests/unit/weather.test.ts: the fog's blend steps (0, 16) → (12, 8) in one
+  frame, the 17 fade-in frames, the drift, a tile's scroll, the 95-frame finish to (0, 16) and the sprites' end, a warp
+  out, WEATHER_UNDERWATER's (4, 16)); e2e weather.test.ts 7 passed (Pokémon Tower 3F: the sprites cover the screen
+  at (12, 8), four rendered pixels against min(255, fog * 12 / 16 + field * 8 / 16) read with the fog hidden and
+  shown, the player unfogged, 4 pixels of drift in 16 frames, a step up / left moving the fog 16 pixels, the stairs
+  to 2F lifting it, back up fading it in with the sprites up from the start; a battle transition with the fog on the
+  GBA layer at BLDALPHA (12, 8) and back after the battle; the Lost Cave fogged), pokemonTower.test.ts and
+  transitions.test.ts (15 passed with weather), battleAnims "a ghost dodges the ball" (3F). Screenshots of 3F on the
+  field and mid-transition show the fog.

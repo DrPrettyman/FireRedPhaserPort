@@ -329,7 +329,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical. In a shaded map the
     fade in is the weather's (FadeInScreen_RainShowShade: 16 frames, `delay` unused): the palettes are at gamma index
     3 under the overlay from the first step and the overlay follows its blend coefficient, where the C blends the
-    shifted colours toward the fade colour (ApplyGammaShiftWithBlend).
+    shifted colours toward the fade colour (ApplyGammaShiftWithBlend). In the fog it's FadeInScreen_FogHorizontal's
+    16 frames the same way (ApplyFogBlend), with the fog's sprites under the overlay too.
   - `showmonpic`: the sprite appears when its PNG has loaded.
   - The Pewter Museum's fossil pics (ui/MuseumFossilPic.ts): a Phaser image over a MenuWindow, like `showmonpic`,
     not an OBJ in palette 13 over BG0 (the field isn't on the GBA layer); the graphics and positions are the C's.
@@ -402,11 +403,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (AUDIO_PLAN.md decision 4; the decoded blocks equal the WAVs). The mixing is skipped (bookkeeping only) while
     the output doesn't want frames (headless, `?audio=0`), and samples.bin loads only when the output is on.
     ReloadSave's SetPokemonCryStereo (reset_save_heap.c, the link's save reload) has no caller: no link play.
-  - Field weather (world/weather.ts, W-weather unit 1): only WEATHER_NONE, SUNNY and SHADE are ported.
-    WEATHER_FOG_HORIZONTAL (Pokémon Tower 3F-7F and the Lost Cave's 14 rooms) runs as WEATHER_NONE until
-    W-weather unit 2, and the weathers no FRLG map or script reaches (rain, snow, thunder, ash, sandstorm, diagonal
-    fog, underwater, drought, downpour, bubbles) run as WEATHER_NONE and log once (POSTGAME_PLAN.md decision 1);
-    their saved number is kept. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
+  - Field weather (world/weather.ts, W-weather units 1 and 2): WEATHER_NONE, SUNNY, SHADE and FOG_HORIZONTAL are
+    ported (and UNDERWATER, which shares the fog's callbacks); the weathers no FRLG map or script reaches (rain, snow,
+    thunder, ash, sandstorm, diagonal fog, drought, downpour, bubbles) run as WEATHER_NONE and log once
+    (POSTGAME_PLAN.md decision 1); their saved number is kept. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
     the field's sprite sheets redrawn in place (world/weatherTextures.ts: `spr_*` GAMMA_ALT, their reflection sheets
     and the loadfadedpal field effects GAMMA_NORMAL), not to palette RAM: a connected map with another secondary
     tileset isn't shifted until it's the current map. FadeScreen's fade-out copy of the shifted palettes into the
@@ -419,6 +419,23 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (no weatherCycleStage in the save). A dev start (`?map=`) skips CB2_NewGame's fade in from black, as before,
     but runs its weather half, so the map is shaded from the first frames. A save from before version 7 has no
     weather: CONTINUE gives WEATHER_NONE until the next map load sets the map's.
+  - The horizontal fog (world/fogHorizontal.ts, W-weather unit 2): the field is Phaser, not a GBA PPU, so BLDALPHA's
+    blend of the fog's sprites over the BGs under them (min(31, (fog * EVA + bg * EVB) >> 4) per 5-bit channel) is
+    done by the GPU in two passes at the fog's depth: a screen-sized EVB / 16 grey rectangle in MULTIPLY mode (the
+    fog has no transparent pixel and always covers the screen), then the sprites in ADD mode from a texture of their
+    colours times EVA / 16. The arithmetic is on 8-bit colours, so a pixel can be a step of the 5-bit channel off the
+    PPU's (the e2e test allows 3 of 255). A priority-3 sprite (a reflection, a ripple) under the fog is fogged like
+    the BG, where the GBA's OBJ layer would show the fog's pixel instead; neither fogged map has one. The lightened
+    OBJ palettes (ApplyFogBlend's LightenSpritePaletteInFog for the palettes UpdateSpritePaletteWithWeather loaded
+    while the fade in began, BlendPalette(12, RGB(28, 31, 28)) for the ones loaded in the fog after) are every
+    GAMMA_NORMAL sheet (reflections, the loadfadedpal field effects) from the fade in on: the sheets are shared
+    textures, not palettes loaded one by one, so one loaded before the fade in (which the C's fade would leave
+    unlightened) is lightened too, and a `doweather` out of the fog leaves them lightened until the next map load (as
+    the palettes already loaded stay on the GBA). gSpriteCoordOffsetX / Y, which the fog scrolls with, are the camera's
+    movement since the last warp or return to the field (InitObjectEventsLocal zeroes gTotalCameraPixelOffset), less
+    the vertical pan's 32 + 8; the horizontal pan (sHorizontalCameraPan) is 0 on the field. The GBA layer's copy of
+    the field (battle transitions) draws the fog as semi-transparent OBJ pixels behind the priority-2 objects, with
+    the weather's BLDALPHA, which the PPU blends as the GBA does.
 - **Data:** Castform has no front pic (its `front.png` isn't in the decomp; it's built from per-form images).
 
 ## Deliberate QOL changes

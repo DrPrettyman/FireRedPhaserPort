@@ -70,8 +70,8 @@ this is the next level down. When you add or change a subsystem, update its entr
   tests/e2e/leagueLighting.test.ts (dev start `?map=PokemonLeague_LoreleisRoom&x=6&y=12` or
   `PokemonLeague_ChampionsRoom&x=6&y=19`).
 - **Field weather:** `world/weather.ts` is field_weather.c / field_weather_util.c and FRLG's weathers of
-  field_weather_effects.c (None, Sunny, Shade; FogHorizontal is W-weather unit 2: add its callbacks to `PORTED`, make
-  `fadesInWithWeatherPalettes` and FadeInScreenWithWeather take it, and its sprites go in a module of their own). The
+  field_weather_effects.c (None, Sunny, Shade, FogHorizontal; `PORTED` is keyed by sWeatherFuncs' row names, so
+  WEATHER_UNDERWATER runs the fog's callbacks as in FRLG; the rest run None's and log once). The
   tables come from `public/gen/weather.json` (tools/extract_field.py `extract_weather`: sBasePaletteGammaTypes, the
   sWeatherFuncs row names, the loadfadedpal field effect palette tags); the gamma tables are built by
   BuildGammaShiftTables as in the C. The saved weather is `GameState.weather` (gSaveBlock1Ptr->weather, save
@@ -81,13 +81,35 @@ this is the next level down. When you add or change a subsystem, update its entr
   after its palette reload, `resumeMap` (battles, menus, CONTINUE) the same as a warp, `WeatherTask()` in
   `tickField` (priority 80). The host (`setUpWeather`) shifts the current map's BG palettes 0-12 through
   `tilesetVram.loadBgPaletteFaded` and the sprite sheets through `world/weatherTextures.ts` (the sheet's texture
-  source becomes a canvas, redrawn through the table; Phaser's ADD event shifts sheets loaded later). FadeScreen's
-  weather half is `ScreenFade.weather`: a fade in where the weather fades the screen itself (Shade) follows
-  `WeatherFadeInBlend` instead of a palette fade. Commands: `setweather`, `doweather`, `resetweather`. Probe:
-  `__test.weather(slot?, colorIndex?, texture?)` (state, gamma index, BG palette `slot` unfaded / shown, an atlas
-  pixel drawn with it, a sheet pixel now / as loaded). Tests: tests/unit/weather.test.ts (tables, the task),
-  tests/e2e/weather.test.ts (dev starts: `?map=ViridianForest`, `?map=NavelRock_Summit&x=9&y=13`,
-  `?map=SevenIsland_TanobyRuins&x=120&y=11` then up into the Monean Chamber).
+  source becomes a canvas, redrawn through channel tables: one for a gamma shift, one per channel for the fog's
+  lightening; Phaser's ADD event redraws sheets loaded later). FadeScreen's
+  weather half is `ScreenFade.weather`: a fade in where the weather fades the screen itself (Shade, the fog) follows
+  `WeatherFadeInBlend` instead of a palette fade.
+  - **The fog** (WEATHER_FOG_HORIZONTAL: Pokémon Tower 3F-7F, the Lost Cave): weather.ts has FogHorizontal_* (the
+    scroll: fogHScrollPosX, a pixel left every 4 frames on top of gSpriteCoordOffsetX), the blend coefficients
+    (Weather_SetBlendCoeffs / _SetTargetBlendCoeffs / _UpdateBlend: the host's `setBlendAlpha` is REG_BLDALPHA),
+    FadeInScreen_FogHorizontal and ApplyFogBlend (the BG palettes as loaded, the GAMMA_NORMAL sheets lightened toward
+    RGB(28, 31, 28)). The sprites are `world/fogHorizontal.ts` (FogHorizontal: CreateFogHorizontalSprites /
+    DestroyFogHorizontalSprites through the host, FogHorizontalSpriteCallback in `update()`, which `tickField` runs
+    right after the weather task, before the camera moves). Its header says how the blend is drawn (MULTIPLY then ADD
+    at depth `FogHorizontal.DEPTH`, between BG2 and the priority-2 objects). The tiles and palette are
+    gWeatherFogHorizontalTiles / gDefaultWeatherSpritePalette (tools/extract_gfx.py's `graphics/weather/`).
+    gSpriteCoordOffsetX / Y are the camera's movement since `startWeatherOnResumeMap` (InitObjectEventsLocal's
+    reset; OverworldScene `cameraOrigin`), less 40 vertically. StartWeather drops the sprites (the GBA's map load
+    freed them), so a warp or a battle builds them anew (FogHorizontal_InitAll: sprites and blend (12, 8) at once).
+    The GBA layer's copy of the field (world/fieldGbaScreen.ts, battle transitions) takes them through
+    `FieldGbaSource.fog` as semi-transparent OBJ pixels (`ObjBitmapLayer.semi` in gba/ppu.ts) and BLDALPHA from
+    `weatherBlendAlpha()`.
+  Commands: `setweather`, `doweather`, `resetweather`. Probes:
+  `__test.weather(slot?, colorIndex?, texture?)` (state, gamma index, BLDALPHA's EVA / EVB, fogHScrollPosX, BG palette
+  `slot` unfaded / shown, an atlas pixel drawn with it, a sheet pixel now / as loaded), `__test.fog(px?, py?,
+  visible?)` (the fog sprites' screen positions, EVA / EVB, the fog's colour at a screen pixel, gSpriteCoordOffset,
+  the GBA layer's semi-transparent pixels; `visible` hides it to read the field under it), `__test.screenPixel(x, y)`
+  (a rendered pixel, read at the end of the next render). Tests: tests/unit/weather.test.ts (tables, the task, the
+  fog's blend steps, scroll, fade in and finish), tests/e2e/weather.test.ts (dev starts: `?map=ViridianForest`,
+  `?map=NavelRock_Summit&x=9&y=13`, `?map=SevenIsland_TanobyRuins&x=120&y=11` then up into the Monean Chamber,
+  `?map=PokemonTower_3F&x=5&y=10` (the stairs to 2F at (4, 10) are a push warp: `t.enterWarp()`; column 6 is
+  gravestones), `?map=FiveIsland_LostCave_Room1&x=8&y=4`).
 - **Map layouts (`setmaplayoutindex`):** maps carry `layoutId` (gMapHeader.mapLayoutId) and `GameState.mapLayoutId`
   is gSaveBlock1Ptr->mapLayoutId: `onMapLoaded` sets it from the header before ON_TRANSITION (LoadCurrentMapData),
   the script command changes it (SetCurrentMapLayout), and `initMapLayout` then swaps the current chunk's grid,
@@ -1504,7 +1526,8 @@ or extend them:
 - **Not here:** the warp tasks' sounds (Escape Rope, Dig, Teleport, the fall arrival, Fly's music) and map music
   ("Map music"), the cries' timing (W-sound 2), the bike bell (item_use.c: menus/itemUse.ts). Not in the port: escalators,
   the Lavaridge warps, FldEff_NpcFlyOut, Birth Island's rock (SE_THUNDER), ShakeScreen, LoopWingFlapSound, the
-  Acro Bike and secret base mats (field_player_avatar.c's SE_BIKE_HOP / SE_WARP_IN), the mailbox, field weather.
+  Acro Bike and secret base mats (field_player_avatar.c's SE_BIKE_HOP / SE_WARP_IN), the mailbox, the rain weathers' sounds
+  (POSTGAME_PLAN.md decision 1).
 - **Tests:** `tests/e2e/fieldSounds.test.ts` (a bump's SE_WALL_HIT, a ledge's SE_LEDGE, talking's SE_SELECT, Bill's
   `opendoor` SE_SLIDING_DOOR, the bedroom PC's SE_PC_ON without SE_SELECT, START's SE_WIN_OPEN and the menu's
   SE_SELECTs, the save dialog closing SE_SAVE's length + 60 frames after it, the heal machine's SE_BALLs 25 frames
