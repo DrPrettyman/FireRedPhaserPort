@@ -255,3 +255,80 @@ test("Ruin Valley's door (Cut on the braille), the Dotted Hole's floors, the Sap
   // (ThiefExitNorth / PlayerWatchThiefExit: the player looks right after him)
   expect(await game.eval((t) => [t.field()!.x, t.field()!.y, t.field()!.facing])).toEqual([7, 8, 'right']);
 }, 600_000);
+
+/** Mash until the message matches `re` (t.message()), returning it. */
+async function untilMessage(game: Game, re: RegExp, what: string): Promise<string> {
+  await game.eval((_t, src, flags) => ((window as any).__sixRe = new RegExp(src, flags)), re.source, re.flags);
+  return (await game.mashUntil((t) => (window as any).__sixRe.test(t.message() ?? '') && t.message(), { what })) as string;
+}
+
+/** ChoosePartyMon's menu: once it takes input, party slot `slot`, A. */
+async function choosePartyMon(game: Game, slot: number, what: string) {
+  await game.mashUntil((t) => t.gbaScreen() === 'CB2_UpdatePartyMenu' && !t.paletteFadeActive(), { what });
+  for (let i = 0; i < slot; i++) {
+    await game.press('DOWN');
+    await game.eval((t) => t.waitFrames(4));
+  }
+  await game.press('A');
+}
+
+const scriptDone = (game: Game, what: string) => game.mashUntil((t) => t.idle() && !t.field()!.script, { what, button: 'B' });
+
+test("The Water Path house's Heracross record (CompareHeracrossSize, GetHeracrossSizeRecordInfo)", async () => {
+  const game = await session.start({ start: 'after-rival', map: 'SixIsland_WaterPath_House1', x: 3, y: 5, party: [CUTTER] });
+  await afterRainbowPass(game);
+  // The chart on the wall (9, 1) is blank until a record is set
+  await talk(game, 9, 2, 'up');
+  await untilMessage(game, /blank chart/, 'the blank chart');
+  await scriptDone(game, 'the chart');
+  // No Heracross in the party (DoesPlayerPartyContainSpecies)
+  await talk(game, 3, 5, 'up');
+  await untilMessage(game, /Love it, need it/, 'no Heracross');
+  await scriptDone(game, 'no Heracross');
+
+  // Two Heracross. Sizes from GetMonSizeHash (personality 0x12345678): all IVs 31 → 0x7856, 1480 mm, 58.2 in;
+  // IVs 3/5/6/2/1/7 → 0x715a, 1462 mm, 57.5 in (tests/unit/pokemonSizeRecord.test.ts works them by hand).
+  await game.eval((t) => {
+    t.setParty([
+      { species: 'HERACROSS', level: 30, moves: ['HORN_ATTACK'] },
+      { species: 'HERACROSS', level: 30, moves: ['HORN_ATTACK'] },
+    ]);
+    const [big, small] = t.state!.party;
+    big.personality = small.personality = 0x12345678;
+    big.ivs = { hp: 31, attack: 31, defense: 31, speed: 31, spAttack: 31, spDefense: 31 };
+    small.ivs = { hp: 3, attack: 5, defense: 6, speed: 2, spAttack: 1, spDefense: 7 };
+  });
+
+  // The smaller one first: a bigger one than the empty record (17.1 in): ShownBigHeracross, the Nest Ball
+  await talk(game, 3, 5, 'up');
+  await untilMessage(game, /may I measure/, 'the beauty asks');
+  await choosePartyMon(game, 1, "the beauty's party menu");
+  await untilMessage(game, /it.s 57\.5 inches!/, 'the first record');
+  await scriptDone(game, 'the Nest Ball');
+  expect(await game.eval((t) => [t.var('VAR_HERACROSS_SIZE_RECORD'), t.flag('FLAG_GOT_NEST_BALL_FROM_WATER_PATH_HOUSE_1'), t.itemCount('NEST_BALL')])).toEqual([0x715a, true, 1]);
+
+  // The bigger one: a new record (CompareMonSize 3); ShownBigHeracross gives a Nest Ball for every new record
+  await talk(game, 3, 5, 'up');
+  await choosePartyMon(game, 0, "the beauty's party menu");
+  await untilMessage(game, /it.s 58\.2 inches!/, 'the new record');
+  await scriptDone(game, 'the new record');
+  expect(await game.eval((t) => [t.var('VAR_HERACROSS_SIZE_RECORD'), t.itemCount('NEST_BALL')])).toEqual([0x7856, 2]);
+
+  // The smaller one again: smaller than the record (2), which stays
+  await talk(game, 3, 5, 'up');
+  await choosePartyMon(game, 1, "the beauty's party menu");
+  await untilMessage(game, /just 57\.5 inches/, 'smaller');
+  await untilMessage(game, /It was 58\.2 inches/, 'the record (STR_VAR_3)');
+  await scriptDone(game, 'smaller');
+  // The same one as the record: the same (4)
+  await talk(game, 3, 5, 'up');
+  await choosePartyMon(game, 0, "the beauty's party menu");
+  await untilMessage(game, /58\.2-inch measurement/, 'the same');
+  await scriptDone(game, 'the same');
+  expect(await game.eval((t) => t.var('VAR_HERACROSS_SIZE_RECORD'))).toBe(0x7856);
+
+  // The chart: GetHeracrossSizeRecordInfo's STR_VAR_3
+  await talk(game, 9, 2, 'up');
+  await untilMessage(game, /58\.2 inches!/, 'the chart');
+  await scriptDone(game, 'the chart');
+}, 300_000);
