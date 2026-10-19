@@ -48,9 +48,10 @@ test("a trainer battle: the trainer's ball tray SEs at SOUND_PAN_ATTACKER, his m
   await game.walk('right'); // into Bug Catcher Rick's view
   await game.waitForEvent('trainerApproach', { since, what: 'Rick to spot the player' });
   await game.mashUntil((t) => t.events().some((e) => e.type === 'battleEnd'), { what: 'the battle to end', timeout: 240_000 });
-  const K = await defines(game, ['SPECIES_WEEDLE', 'SPECIES_CATERPIE', 'SPECIES_MEWTWO', 'CRY_MODE_NORMAL']);
+  const K = await defines(game, ['SPECIES_WEEDLE', 'SPECIES_CATERPIE', 'SPECIES_MEWTWO', 'CRY_MODE_NORMAL', 'CRY_MODE_FAINT']);
   const audio = await game.eval((t, s) => t.audioEvents(s), since);
-  const sendOutCries = audio.filter((e) => e.type === 'cry' && (e.pan === 25 || e.pan === -25));
+  // The faint cries (CRY_MODE_FAINT at the same pans, battle_controller_*.c) aren't send-outs.
+  const sendOutCries = audio.filter((e) => e.type === 'cry' && (e.pan === 25 || e.pan === -25) && e.mode !== K.CRY_MODE_FAINT);
   expect(sendOutCries[0]).toMatchObject({ id: K.SPECIES_WEEDLE, mode: K.CRY_MODE_NORMAL, pan: 25 });
   expect(sendOutCries[1]).toMatchObject({ id: K.SPECIES_MEWTWO, mode: K.CRY_MODE_NORMAL, pan: -25 });
   // His second mon, sent out after the first fainted.
