@@ -294,6 +294,8 @@ export interface FieldProbe {
     spriteY2: number;
     /** SetCameraPanning's vertical offset (the fall warp's landing shake, the elevator). */
     cameraPanY: number;
+    /** SetCameraPanning's horizontal offset (ShakeScreen). */
+    cameraPanX: number;
   };
 }
 

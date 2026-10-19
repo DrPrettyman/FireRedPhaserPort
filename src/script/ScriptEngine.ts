@@ -100,8 +100,8 @@ export interface ScriptHost {
   elevatorFloorWindow(floor: number | undefined): void;
   /** CreateTask for a field task that outlives the script command that started it. */
   startFieldTask(task: FieldTask): void;
-  /** SetCameraPanning(0, dy) relative to the standard pan */
-  setCameraPanning(dy: number): void;
+  /** SetCameraPanning(dx, dy) relative to the standard pan (dx: ShakeScreen's horizontal shake) */
+  setCameraPanning(dy: number, dx?: number): void;
   /** CreatePokemartMenu (shop.c): the wait ends when the player leaves the shop menu. */
   openPokemart(items: number[]): Wait;
   /** ShowPokemonStorageSystemPC: the PC's storage menu and box screens; the wait ends when the player leaves it. */

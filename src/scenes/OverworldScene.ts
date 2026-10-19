@@ -79,6 +79,8 @@ import { MapNamePopup } from '../ui/MapNamePopup';
 import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
 import { gFieldCallback, gFieldCallback2, type FieldCallbackHost } from '../menus/fieldCallbacks';
 import { RunMassageCooldownStepCounter } from '../script/miscSpecials';
+import { IncrementBirthIslandRockStepCount } from '../script/eventIslandSpecials';
+import { DEOXYS_ROCK_GFX, registerDeoxysRock, setDeoxysRockHost } from '../world/deoxysRock';
 import { UseRegisteredKeyItemOnField } from '../menus/registeredItem';
 import { activeFieldEffects, setFieldEffectScriptHost, setFieldEffectScripts } from '../world/fieldEffectScripts';
 import { fieldMoveGfxSymbols, prepareFieldMoveMenu, prepareRegionMap, registerFieldMoves, setFieldMoveHost, UnlockPlayerFieldControls, UpdateEscapeWarp, type FieldMoveHost } from '../world/fieldMoves';
@@ -227,6 +229,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private arrivalFacing?: Direction;
   /** sVerticalCameraPan - 32: SetCameraPanning's offset from the standard framing. */
   private cameraPanY = 0;
+  /** sHorizontalCameraPan (ShakeScreen's horizontal shake). */
+  private cameraPanX = 0;
   /** sWarpDestination as set by `setwarp` (only Safari Zone's out-of-balls exit reads it so far). */
   private warpDestination?: { mapId: string; warpId: number; x: number; y: number };
   /** A fall warp's SetupWarp, which loads the destination's header before warpDestination is set. */
@@ -445,6 +449,21 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     });
     registerSSAnne();
     await loadGfx(SS_ANNE_GFX);
+    // Birth Island's triangle and FLDEFF_MOVE_DEOXYS_ROCK / FLDEFF_DESTROY_DEOXYS_ROCK (world/deoxysRock.ts)
+    setDeoxysRockHost({
+      scene: this,
+      cameraOrigin: () => ({ x: (this.cameraObject ?? this.player).anchor.x - this.cameras.main.width / 2, y: this.field.cameraTop - this.cameraPanY }),
+      cameraPan: () => ({ x: this.cameraPanX, y: this.cameraPanY }),
+      cameraTop: () => this.field.cameraTop,
+      objectByLocalId: (localId) => this.npcByLocalId(localId)?.brain.obj,
+      localToWorld: (x, y) => ({ x: this.world.current.originX + x, y: this.world.current.originY + y }),
+      removeObject: (localId) => this.removeObject(localId),
+      setCameraPanning: (dx, dy) => this.setCameraPanning(dy, dx),
+      bgWhiteFlash: () => this.screenFade.beginBlend(16, 0, 0xffffff, 0),
+      paletteFadeActive: () => this.screenFade.active,
+    });
+    registerDeoxysRock();
+    await loadGfx(DEOXYS_ROCK_GFX);
     this.cameras.main.startFollow(this.player.anchor, true, 1, 1, 0, CAMERA_FOLLOW_OFFSET_Y);
 
     if (start.continueGame) {
@@ -516,6 +535,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         movementDirection: this.player.movementDirection,
         spriteY2: this.player.sprite.y - (this.player.feetY + this.player.lift),
         cameraPanY: this.cameraPanY,
+        cameraPanX: this.cameraPanX,
       },
     };
   }
@@ -765,6 +785,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }
     if (this.tryOnFrameScript()) return true;
     if (input.tookStep) RunMassageCooldownStepCounter(this.state);
+    if (input.tookStep) IncrementBirthIslandRockStepCount(this.state, this.world.current.data.id);
     if (input.tookStep && this.tryStartStepBasedScript(x, y, tile.behavior)) return true;
     if (input.checkStandardWildEncounter) {
       if ((!input.dpadDirection || input.dpadDirection === facing) && this.tryWalkIntoSignpost()) return true;
@@ -2156,10 +2177,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.fieldTasks.push(task);
   }
 
-  setCameraPanning(dy: number): void {
-    // A bigger sVerticalCameraPan scrolls the view down
+  /** SetCameraPanning(dx, dy) (field_camera.c); 0, 0 for InstallCameraPanAheadCallback's standard pan. */
+  setCameraPanning(dy: number, dx = 0): void {
+    // A bigger sVerticalCameraPan scrolls the view down, a bigger sHorizontalCameraPan right
     this.cameraPanY = dy;
-    this.cameras.main.setFollowOffset(0, CAMERA_FOLLOW_OFFSET_Y - dy);
+    this.cameraPanX = dx;
+    this.cameras.main.setFollowOffset(-dx, CAMERA_FOLLOW_OFFSET_Y - dy);
     this.updateFieldCamera();
   }
 
