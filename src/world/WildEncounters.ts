@@ -105,6 +105,23 @@ export class WildEncounters {
     return false;
   }
 
+  /**
+   * GetLocalWildMon (wild_encounter.c), for the ambient cries (overworld.c's ChooseAmbientCrySpecies): a species from
+   * the map's land table, or its water table (isWaterMon), or 80 / 20 between them when it has both; SPECIES_NONE
+   * (0) without a header or either table.
+   */
+  getLocalWildMon(): { species: number; isWaterMon: boolean } {
+    const header = this.currentHeader();
+    const land = header?.land_mons;
+    const water = header?.water_mons;
+    if (!land && !water) return { species: 0, isWaterMon: false };
+    const landMon = () => ({ species: this.species(land!, this.chooseWildMonIndex(this.data.chances.land_mons)), isWaterMon: false });
+    const waterMon = () => ({ species: this.species(water!, this.chooseWildMonIndex(this.data.chances.water_mons)), isWaterMon: true });
+    if (land && !water) return landMon();
+    if (!land && water) return waterMon();
+    return random() % 100 < 80 ? landMon() : waterMon();
+  }
+
   /** SweetScentWildEncounter: a battle on the land or water tile the player stands on, no rate test. */
   sweetScentWildEncounter(tile: TileInfo): boolean {
     const header = this.currentHeader();

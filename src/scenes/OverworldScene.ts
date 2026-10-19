@@ -41,11 +41,14 @@ import { PlayTimeCounter_Reset, PlayTimeCounter_Start, PlayTimeCounter_Update } 
 import { AgbMainFrameEnd } from '../audio/frame';
 import { BGMusicStopped, StopMapMusic } from '../gba/sound';
 import {
+  type AmbientCryTaskData,
+  ChooseAmbientCrySpecies,
   Overworld_ClearSavedMusic,
   Overworld_PlaySpecialMapMusic,
   Overworld_TryMapConnectionMusicTransition,
   setOverworldMusicHost,
   TryFadeOutOldMapMusic,
+  UpdateAmbientCry,
 } from '../gba/overworldMusic';
 import type { PlayerLocation } from '../state/GameState';
 import { GetMapName } from '../world/regionMap';
@@ -263,6 +266,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private warping = false;
   /** LockPlayerFieldControls from field tasks (a boulder push, getting off a surfing mon): a count of holders. */
   private controlsLocked = 0;
+  /** Task_RunTimeBasedEvents' ambient cry data: zeroed when the task is made (ResumeMap's SetUpFieldTasks) and by
+   *  ResetFieldTasksArgs (a connection). */
+  private ambientCry: AmbientCryTaskData = { state: 0, delayCounter: 0 };
   /** FreezeObjectEvents from field tasks: the NPCs hold still. */
   private objectsFrozen = false;
   /** Task_QuestLogPlayback_OpenStartMenu: START cancelled a walked-into sign; open the menu once the controls are free. */
@@ -379,7 +385,13 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       this.assets.loadSprite(this, vsSeekerBikeGraphicsId(gender)),
     ]);
     setPlayerAvatarHost(this.createAvatarHost());
-    setOverworldMusicHost({ state: this.state, currentMap: () => this.world.current.data, playerLocal: () => this.playerLocal() });
+    setOverworldMusicHost({
+      state: this.state,
+      currentMap: () => this.world.current.data,
+      playerLocal: () => this.playerLocal(),
+      getLocalWildMon: () => this.wild.getLocalWildMon(),
+      playerDestIsSurfable: () => this.behaviors.isSurfable(this.world.tileAt(this.player.tileX, this.player.tileY).behavior),
+    });
     // Field moves: field_effect.c's script table, the moves' field side and their graphics
     setFieldEffectScripts(this.assets.fieldEffectScripts);
     setFieldEffectScriptHost({ isPhaserEffectActive: (fldeff) => this.fieldEffects.isActive(fldeff) });
@@ -635,6 +647,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const tasks = this.fieldTasks;
     this.fieldTasks = [];
     this.fieldTasks = [...tasks.filter((t) => !t.tick()), ...this.fieldTasks];
+    // Task_RunTimeBasedEvents (priority 80): the ambient cries, while ArePlayerFieldControlsLocked is FALSE
+    if (!this.busy && !this.warping && !this.scripts.running && this.overlay === undefined && this.controlsLocked === 0 && this.trainerApproach === undefined) {
+      UpdateAmbientCry(this.ambientCry);
+    }
     this.flash.tick(); // UpdateFlashLevelEffect / Task_WaitForFlashUpdate (priority 80)
     this.messageBox.tick();
     this.screenFade.tick();
@@ -1395,12 +1411,15 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.state.currentMapId = cur.data.id;
     this.state.currentMapSection = this.mapSection();
     testEvent('map', { map: name });
+    // A warp's (and CONTINUE's) ResumeMap makes a new Task_RunTimeBasedEvents; a connection's ResetFieldTasksArgs zeroes it
+    this.ambientCry = { state: 0, delayCounter: 0 };
     if (!continued) {
       this.state.clearTemps();
       this.wild.resetEncounterRateModifiers(); // RestartWildEncounterImmunitySteps
       mapResetTrainerRematches(this.state);
       ResetMovementOfRematchableTrainers();
       // LoadMapFromWarp / LoadMapFromCameraTransition
+      ChooseAmbientCrySpecies();
       updateLocationHistoryForRoamer(this.state);
       if (warped) roamerMoveToOtherLocationSet(this.state);
       else roamerMove(this.state);
@@ -1477,10 +1496,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     StopMapMusic(); // CB2_ContinueSavedGame
     // A save always has a location (the save dialog stores it); `start` is only a fallback.
     const loc = s.location ?? { mapId: '', x: start.x, y: start.y, facing: start.facing ?? 'down', avatarFlags: PLAYER_AVATAR_FLAG.ON_FOOT };
-    // LoadSaveblockMapHeader, then Overworld_ResetStateOnContinue (ChooseAmbientCrySpecies: no audio)
+    // LoadSaveblockMapHeader, then Overworld_ResetStateOnContinue
     s.currentMapId = loc.mapId;
     s.setFlag('FLAG_SYS_SAFARI_MODE', false);
     s.setVar('VAR_MAP_SCENE_FUCHSIA_CITY_SAFARI_ZONE_ENTRANCE', 0);
+    ChooseAmbientCrySpecies();
     updateLocationHistoryForRoamer(s);
     roamerMoveToOtherLocationSet(s);
     PlayTimeCounter_Start(s.playTime);
@@ -2535,6 +2555,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    */
   private resumeMap(): void {
     ResetLeagueLightingTasks(); // ResumeMap's ResetTasks
+    this.ambientCry = { state: 0, delayCounter: 0 }; // and SetUpFieldTasks' new Task_RunTimeBasedEvents
     ReturnPlayerAvatarToField(); // SpawnObjectEventsOnReturnToField
     this.objectsFrozen = false; // FieldCB_ReturnToFieldNoScript's UnfreezeObjectEvents (a rod's bite froze them)
     this.player.clearHeldMovementIfFinished(); // (a finished step isn't processed again after a battle)

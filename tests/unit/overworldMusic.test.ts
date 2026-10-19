@@ -68,7 +68,7 @@ describe.skipIf(!existsSync(SONGS_JSON))('overworld.c map music on the extracted
     t = newGame();
     current = PALLET;
     local = { x: 5, y: 5 };
-    setOverworldMusicHost({ state: t.state, currentMap: () => current, playerLocal: () => local });
+    setOverworldMusicHost({ state: t.state, currentMap: () => current, playerLocal: () => local, getLocalWildMon: () => ({ species: 0, isWaterMon: false }), playerDestIsSurfable: () => false });
     AgbMainSoundInit();
     setSoundEventListener(undefined);
     gPlayerAvatar.flags = PLAYER_AVATAR_FLAG.ON_FOOT;

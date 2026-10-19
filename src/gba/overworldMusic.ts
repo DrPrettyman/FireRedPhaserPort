@@ -11,6 +11,7 @@ import { K } from '../battle/constants';
 import { gMPlayInfo_BGM, gSongTable } from '../audio/m4a';
 import type { MapData } from '../data/types';
 import type { GameState } from '../state/GameState';
+import { random } from '../util/random';
 import { gPlayerAvatar, PLAYER_AVATAR_FLAG } from '../world/playerAvatar';
 import {
   FadeInBGM,
@@ -21,6 +22,7 @@ import {
   GetCurrentMapMusic,
   MUSIC_DISABLE_KEEP,
   MUSIC_DISABLE_STOP,
+  PlayCry_NormalNoDucking,
   PlayNewMapMusic,
   ResetMapMusic,
   StopMapMusic,
@@ -37,6 +39,10 @@ export interface OverworldMusicHost {
   currentMap(): MapMusicHeader;
   /** PlayerGetDestCoords, map-local (gSaveBlock1Ptr->pos) */
   playerLocal(): { x: number; y: number };
+  /** GetLocalWildMon (wild_encounter.c): a species from the current map's land / water table (Random() rolls) */
+  getLocalWildMon(): { species: number; isWaterMon: boolean };
+  /** MetatileBehavior_IsSurfable(MapGridGetMetatileBehaviorAt(PlayerGetDestCoords)) */
+  playerDestIsSurfable(): boolean;
 }
 
 let host: OverworldMusicHost | undefined;
@@ -180,4 +186,75 @@ export function Overworld_MusicCanOverrideMapMusic(music: number): boolean {
     if (mapsec === 'MAPSEC_KANTO_VICTORY_ROAD' || mapsec === 'MAPSEC_ROUTE_23' || mapsec === 'MAPSEC_INDIGO_PLATEAU') return false;
   }
   return true;
+}
+
+// ------------------------------------------------------------------ the ambient cries (overworld.c:1131-1191)
+
+/** sAmbientCrySpecies / sIsAmbientCryWaterMon (EWRAM): set on every map load. */
+let sAmbientCrySpecies = 0; // SPECIES_NONE
+let sIsAmbientCryWaterMon = false;
+
+/**
+ * ChooseAmbientCrySpecies: LoadMapFromWarp, LoadMapFromCameraTransition and Overworld_ResetStateOnContinue (before
+ * the roamer's moves): GetLocalWildMon, so the map's wild table rolls Random() (twice on a map with land and water
+ * mons, once with one of them, never without a wild header).
+ */
+export function ChooseAmbientCrySpecies(): void {
+  const { species, isWaterMon } = musicHost().getLocalWildMon();
+  sAmbientCrySpecies = species;
+  sIsAmbientCryWaterMon = isWaterMon;
+}
+
+/**
+ * PlayAmbientCry: a water mon only cries while the player stands on water. pan = s8((Random() % 88) + 212), so
+ * -44..43; volume 50..79; CRY_PRIORITY_AMBIENT. The rolls come before the music checks, as in the C.
+ */
+function PlayAmbientCry(): void {
+  if (sIsAmbientCryWaterMon && !musicHost().playerDestIsSurfable()) return;
+  const pan = (((random() % 88) + 212) << 24) >> 24;
+  const volume = (random() % 30) + 50;
+
+  if (gDisableMapMusicChangeOnMapLoad === MUSIC_DISABLE_STOP) {
+    StopMapMusic();
+    return;
+  }
+  if (gDisableMapMusicChangeOnMapLoad === MUSIC_DISABLE_KEEP) return;
+
+  PlayCry_NormalNoDucking(sAmbientCrySpecies, pan, volume, K.CRY_PRIORITY_AMBIENT);
+}
+
+/** Task_RunTimeBasedEvents' data[1] / data[2] (tAmbientCryState, tAmbientCryDelay): zero when the task is created. */
+export interface AmbientCryTaskData {
+  state: number;
+  delayCounter: number;
+}
+
+/**
+ * UpdateAmbientCry (field_tasks.c's Task_RunTimeBasedEvents, while the player's field controls are free): no wild
+ * header, no cries; else the first cry 1200-3599 frames after the task starts (the roll is its second frame), then
+ * one every 1200-2399 frames.
+ */
+export function UpdateAmbientCry(t: AmbientCryTaskData): void {
+  switch (t.state) {
+    case 0:
+      t.state = sAmbientCrySpecies === 0 ? 4 : 1;
+      break;
+    case 1:
+      t.delayCounter = (random() % 2400) + 1200;
+      t.state = 3;
+      break;
+    case 2:
+      t.delayCounter = (random() % 1200) + 1200;
+      t.state = 3;
+      break;
+    case 3:
+      t.delayCounter = (t.delayCounter - 1) & 0xffff;
+      if (t.delayCounter === 0) {
+        PlayAmbientCry();
+        t.state = 2;
+      }
+      break;
+    case 4:
+      break;
+  }
 }
