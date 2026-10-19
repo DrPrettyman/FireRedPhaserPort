@@ -1480,7 +1480,6 @@ or extend them:
   SE_SELECTs, the save dialog closing SE_SAVE's length + 60 frames after it, the heal machine's SE_BALLs 25 frames
   apart, MUS_HEAL 32 frames after the last, the effect running until the fanfare task resumes the BGM).
 
-### Scene sounds (W-sound 7a, 7b)
 ### Battle sounds: the controllers (W-sound 5b)
 
 - **Where:** each controller calls `gba/sound.ts` (and `audio/m4a.ts` for m4aMPlayContinue / m4aMPlayVolumeControl /
@@ -1527,7 +1526,7 @@ or extend them:
   FadeOutMapMusic's fade before the end, MUS_ROUTE1 after; a level-100 win without victory music; Rick:
   MUS_ENCOUNTER_BOY, MUS_VS_TRAINER, MUS_VICTORY_TRAINER, MUS_VIRIDIAN_FOREST after; Lorelei's mugshot SE_MUGSHOT;
   Zapdos's MUS_VS_LEGEND; the Poké Flute's `waitfanfare` holding "...awoke!" until MUS_POKE_FLUTE's 450 frames end).
-### Scene sounds (W-sound 7a)
+### Scene sounds (W-sound 7a, 7b)
 
 - **Where:** each C call at its port function, through `gba/sound.ts` with the C's arguments.
   `menus/evolutionScene.ts` (evolution_scene.c): m4aMPlayAllStop on entry (EvolutionScene) and on a cancel, the
