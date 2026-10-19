@@ -4086,6 +4086,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   (+4: the mailbox empty / READ / MOVE TO BAG with the bag full and not / GIVE; ten mails scrolled to the last and
   read; a mon with mail through the Route 5 daycare and read after; DONTAE's Fab Mail read after the trade), passed
   three times in a row; daycare, inGameTrades and pcStorage e2e pass.
+
 ### W-qlog 1: the quest log's recording and the scenes in the save (QUEST_LOG_PLAN.md QL1, batch 12)
 
 - New `world/questLog.ts` (quest_log.c's recording half), `questLogEvents.ts` (quest_log_events.c: the u16 command
@@ -4144,3 +4145,24 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   Rattata, the player and Pallet Town's NPCs ending each scene where they were recorded, the field afterwards
   equal to the save; A skips a scene, B to the end with the map name and no "saved the game"). Ran saveContinue,
   titleScreen, field, newGame, hallOfFame, mapMusic, weather, mail, daycare and fameChecker e2e files: all pass.
+
+### W-qlog-events: the quest log's event codecs for QL_EVENT_* 3-29 (QUEST_LOG_PLAN.md QL3a, batch 12)
+
+- New `world/questLogEventCodecs.ts`: quest_log_events.c's RecordEvent_* / LoadEvent_* for SWITCHED_PARTY_ORDER,
+  USED_ITEM (items, key items, TMs / HMs learned or replacing a move, the Escape Rope with its map section, which
+  stops recording steps until the next departure and so ends the scene), GAVE_HELD_ITEM(_BAG / _PC), TOOK_HELD_ITEM,
+  SWAPPED_HELD_ITEM(_PC), USED_PKMN_CENTER (header only; a second heal at the same action writes nothing), the link
+  events 12-19 (their own header, no repeats; TranslateLinkPartnersName; no callers until link play), the box events
+  20-27 (the box bytes packed into a u16 as the C's u8 casts do; a party-first SWITCHED_PARTY_MON_FOR_PC_MON swapped
+  round; "a different spot" for the same box twice) and DEPOSITED / WITHDREW_ITEM_PC, with the shared helpers
+  (QuestLog_GetSpeciesName incl. the egg, GetBoxNamePtr, sBattleOutcomeTexts). Loaders expand the line into
+  gStringVar4 as the C does. questLogEvents.ts registers them in ensureEventTables and exports LoadEvent and
+  QL_DisableRecordingStepsUntilDepart.
+- `tools/extract.py` reads src/data/text/quest_log.h with strings.c: all 125 gText_QuestLog_* in strings.json, for
+  QL2b's and QL3b's texts too.
+- Not done: events 30-42 and quest_log_battle.c (QL3b); the menus' call sites (QL4).
+- Tests: tests/unit/questLogEvents.test.ts (17: every event recorded into a scene and loaded back to its line, against
+  quest_log.h's string with the buffers filled as the C fills them; the stream's words; repeats loaded copy by copy
+  with QL_TryRepeatEvent; the Pokémon Center's non-repeat; the Escape Rope's scene end; the link events through the
+  deferred path; TranslateLinkPartnersName), tests/e2e/questLog.test.ts (+1: three events through
+  `__test.questLogEvent` in a running game, a repeat, the save's stream).

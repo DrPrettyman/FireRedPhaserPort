@@ -8,11 +8,12 @@
 // Bytes go into the u16s little-endian, as on the GBA.
 //
 // SetQuestLogEvent runs the C's filters and starts a scene (QL_StartRecordingAction) when none is recording. The
-// per-event recorders are in sRecordEventFuncs: QL1 has QL_EVENT_DEPARTED and QL_EVENT_ARRIVED; the others
-// (QL_EVENT_* 3-34, 36-38, 40) are QUEST_LOG_PLAN.md's QL3, which adds them to the table (`registerQuestLogEvent`).
+// per-event recorders are in sRecordEventFuncs: QL_EVENT_DEPARTED and QL_EVENT_ARRIVED here, QL_EVENT_* 3-29 in
+// questLogEventCodecs.ts (QL3a); 30-34, 37, 38, 40 are QUEST_LOG_PLAN.md's QL3b (`registerQuestLogEvent`).
 // The loaders (playback) for the two here decode the data; their texts are QL2's.
 
 import { constant, K } from '../battle/constants';
+import { registerQuestLogEventCodecs } from './questLogEventCodecs';
 import {
   QuestLog_CutRecording,
   QL_FinishRecordingScene,
@@ -113,6 +114,7 @@ function ensureEventTables(): void {
   sTablesReady = true;
   if (!sRecordEventFuncs.has(K.QL_EVENT_DEPARTED)) registerQuestLogEvent(K.QL_EVENT_DEPARTED, RecordEvent_DepartedLocation, LoadEvent_DepartedLocation);
   if (!sRecordEventFuncs.has(K.QL_EVENT_ARRIVED)) registerQuestLogEvent(K.QL_EVENT_ARRIVED, RecordEvent_ArrivedInLocation, LoadEvent_ArrivedInLocation);
+  registerQuestLogEventCodecs(); // QL_EVENT_* 3-29
 }
 
 /** IS_LINK_QL_EVENT */
@@ -254,6 +256,11 @@ function ShouldRegisterEvent_HandleBeatStoryTrainer(eventId: number, data: Quest
 /** QL_EnableRecordingSteps */
 export function QL_EnableRecordingSteps(): void {
   sStepRecordingMode = STEP_RECORDING_MODE_ENABLED;
+}
+
+/** sStepRecordingMode = STEP_RECORDING_MODE_DISABLED_UNTIL_DEPART (RecordEvent_UsedItem: an Escape Rope ends the scene) */
+export function QL_DisableRecordingStepsUntilDepart(): void {
+  sStepRecordingMode = STEP_RECORDING_MODE_DISABLED_UNTIL_DEPART;
 }
 
 /** ShouldRegisterEvent: start the event in a new scene (after the last one ran out of room). */
@@ -537,7 +544,7 @@ export function RecordEventHeader(eventId: number, dest: ScriptPtr | null): Scri
 }
 
 /** LoadEvent: the data of the repeat the tracker is on. */
-function LoadEvent(eventId: number, eventData: ScriptPtr): ScriptPtr {
+export function LoadEvent(eventId: number, eventData: ScriptPtr): ScriptPtr {
   const size = QL_EventCmdSize(eventId);
   return advance(eventData, (gQuestLogRepeatEventTracker.counter * (size - CMD_HEADER_SIZE) + CMD_HEADER_SIZE) / 2);
 }

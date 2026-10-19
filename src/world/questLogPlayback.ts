@@ -299,6 +299,8 @@ export { QL_InitSceneActions };
  * or FieldCB_WarpExitFadeFromBlack): playback state with QLogCB_Playback, sPlaybackControl reset to "just loaded".
  */
 export function QL_StartPlaybackScene(): void {
+  // (registered here, not at module load: questLog.ts and this module import each other through trainerSee.ts)
+  registerQLogCBPlayback(QLogCB_Playback);
   SetQuestLogState(K.QL_STATE_PLAYBACK);
   sPlaybackControl = emptyPlaybackControl();
   sPlaybackControl.state = 2;
@@ -325,7 +327,6 @@ function QLogCB_Playback(): void {
     DoSceneEndTransition(0);
   }
 }
-registerQLogCBPlayback(QLogCB_Playback);
 
 /** QuestLog_PlayCurrentEvent */
 function QuestLog_PlayCurrentEvent(): void {

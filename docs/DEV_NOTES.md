@@ -683,6 +683,18 @@ this is the next level down. When you add or change a subsystem, update its entr
     with every filter, the deferred trainer / link events, QL_EVENT_DEPARTED and QL_EVENT_ARRIVED
     (QuestLog_RecordEnteredMap from `setworldmapflag`, SetQuestLogEvent_Arrived every frame). Other events hook in
     with `registerQuestLogEvent(id, record, load)` (QL3); until then SetQuestLogEvent ignores them.
+  - `world/questLogEventCodecs.ts` (QL3a) has QL_EVENT_* 3-29's RecordEvent_* / LoadEvent_* (party order, used item,
+    the held items, the Pokémon Center, the link events, the box events, the item PC), registered by
+    ensureEventTables (`registerQuestLogEventCodecs`). The event's data is the C struct as a plain object
+    (`QuestLogEventItem`, `QuestLogEventMovedBoxMon`, ...: field names as in include/quest_log.h; box
+    TOTAL_BOXES_COUNT is the party; names are encoded byte arrays). Recorders write the C's u16 / byte layout
+    (`putByte` / `getByte`: little-endian halves of a u16); loaders read the copy the repeat tracker is on (LoadEvent)
+    and leave the line in `gStringVar4` (menus/common, with STR_VAR_1-3 / the DYNAMIC placeholders filled as the C
+    does), where the playback's description window prints it. Texts: src/data/text/quest_log.h's gText_QuestLog_*
+    (all 125, in strings.json through tools/extract.py; `text('gText_QuestLog_...')`). The loaders use the battle
+    env's state / strings and menusData (the overworld sets both up). Test: tests/unit/questLogEvents.test.ts
+    (record, then QL_LoadEvent / QL_TryRepeatEvent back to the line); `__test.questLogEvent(name, data)` records one
+    in a running game. QL3b adds 30-42 the same way.
   - `world/questLogLocations.ts` is field_specials.c's QuestLog_CheckDepartingIndoorsMap /
     QuestLog_TryRecordDepartedLocation; `world/questLogObjects.ts` is QL_RecordObjects (and
     `questLogObjectEventFrom`, the port's ObjectEvent as a gObjectEvents entry, map coordinates with MAP_OFFSET);
