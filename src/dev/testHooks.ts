@@ -656,7 +656,10 @@ function createApi(game: Phaser.Game) {
     /** The Easy Chat screen (menus/easyChatScreen.ts): the live model, the last command, the triangle cursor. */
     easyChat: () => easyChatProbe(),
     /** The mail screen (menus/mail.ts, W-mail): its type, the message lines and the name as encoded bytes, the icon. */
-    mail: () => mailProbe(),
+    mail: () => {
+      const p = mailProbe();
+      return p && { ...p, lines: p.lines.map(decode), authorName: decode(p.authorName) };
+    },
     /** The Seagallop ferry scene (menus/seagallop.ts) while it's up: setup state, frames, BG3's x, the ferry, wakes. */
     seagallop: () => seagallopProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */

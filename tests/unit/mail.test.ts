@@ -59,7 +59,7 @@ describe('mail data (mail_data.c)', () => {
   });
 
   it('GiveMailToMon: 0xFF when every party slot is taken', () => {
-    const { state, d, mon, defines } = setup();
+    const { state, d, mon } = setup();
     for (let i = 0; i < 6; i++) state.mail[i].itemId = d('ITEM_ORANGE_MAIL');
     expect(GiveMailToMon(state, mon, d('ITEM_RETRO_MAIL'))).toBe(0xff);
     expect(mon.mail).toBeUndefined();
@@ -92,7 +92,7 @@ describe('mail data (mail_data.c)', () => {
   });
 
   it('TakeMailFromMon2: 0xFF with the mailbox full', () => {
-    const { state, d, mon, defines } = setup();
+    const { state, d, mon } = setup();
     GiveMailToMon(state, mon, d('ITEM_RETRO_MAIL'));
     for (let i = 6; i < 16; i++) state.mail[i].itemId = d('ITEM_ORANGE_MAIL');
     expect(TakeMailFromMon2(state, mon)).toBe(0xff);
