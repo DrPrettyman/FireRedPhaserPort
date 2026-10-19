@@ -3409,3 +3409,38 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   and the PR's own e2e files; the full suite runs exactly once per batch, at the end on master, and failures there
   are rerun file by file. Docs-only changes run nothing.
 - Verified: docs only.
+
+### W-ttower 1: the Trainer Tower's data and the tower without battles (POSTGAME_PLAN.md batch 10)
+
+- Data: `tools/extract_trainer_tower.py` (in `npm run extract`) → `public/gen/trainerTower.json`: every
+  sTrainerTowerFloor_* of trainer_tower_sets.c (a small C initializer parser; DUMMY_TOWER_TEAM / DUMMY_TOWER_MON and
+  easy_chat.h's EC_MOVE / EC_MOVE2 expanded from their #defines), gTrainerTowerLocalHeader, gTrainerTowerFloors as
+  floor symbols, and trainer_tower.c's tables (sSingle/DoubleBattleTrainerInfo, sTrainerEncounterMusicLUT,
+  sFloorLayouts, sPrizeList, sTrainerTowerEncounterMusic, the mon index tables) plus trainer_class_lookups.h's
+  gFacilityClassToTrainerClass / gFacilityClassToPicIndex (the #else side of its `#ifdef BUGFIX`).
+- Scripts: the `ttower_*` macros (asm/macros/trainer_tower.inc) are expanded by the script extractor like the
+  assembler does (`setvar VAR_0x8004, TRAINER_TOWER_FUNC_*` + `special CallTrainerTowerFunc`); asm_condition gained
+  `&&` / `||` and `>= <= > <` for ttower_getspeech's `.if \trainer >= VARS_START && \trainer != 0xFF`. The rest of
+  scripts.json is unchanged (checked against the old file).
+- `world/trainerTower.ts` is trainer_tower.c without the battle: CallTrainerTowerFunc and every sTrainerTowerFunctions
+  entry; DoTrainerTowerBattle is a stand-in (reports `trainerTowerBattle`, VAR_RESULT B_OUTCOME_WON, map music back),
+  ShowResultsBoard / CloseResultsBoard (no script uses them) don't draw. `script/trainerTowerSpecials.ts` registers the
+  special (TRAINER_TOWER_SPECIALS). The record is `state/trainerTowerRecord.ts` (struct TrainerTower,
+  ResetTrainerTowerResults in the GameState constructor); GameState gained `towerChallengeId`, `trainerTower` and
+  `mapHeaderLayoutId` (gMapHeader.mapLayoutId, which the tower reads; set on every map load).
+- The timer: gMain.vblankCounter1 (gba/main.ts SetVBlankCounter1Ptr / DisableVBlankCounter1 /
+  VBlankCounter1Update), counted next to the play time in OverworldScene.tick and GbaHostScene's loop; softReset
+  clears it (InitMainCallbacks).
+- Save version 7: `trainerTower: { challengeId, records }`; a version-6 save loads with the new-game records.
+- Fixes on the way: `msgbox gStringVar4` printed nothing (ScriptEngine's stringFor didn't know gStringVar4; also
+  SevenIsland_House_Room2's); the white-out during a challenge now keeps VAR_MAP_SCENE_TRAINER_TOWER when the owner
+  was reached (SetWhiteoutRespawnWarpAndHealerNpc), the old DEVIATIONS line is gone.
+- Coverage gaps: the 16 `ttower_*` commands and CallTrainerTowerFunc are off the list (the macros no longer reach the
+  scripts as ops; the battle stand-in is in DEVIATIONS); 22 postgame gaps left.
+- Verified: typecheck; unit 601 in 44 files (tests/unit/trainerTower.test.ts: the data, PRINT_TOWER_TIME, start / floors
+  cleared / status / owner / prize / final time / resume timer, the floors' layouts and graphics for each type,
+  speeches and text colour, the 2x3 \l layout, the stand-in; saveData.test.ts: the record round-trips, version 6
+  loads); e2e tests/e2e/trainerTower.test.ts (4: a Single challenge from the receptionist to 1F's trainer, his intro
+  and after speeches, the stand-in battle, the floor cleared, the timer exactly 60 per 60 ticks and the clock; a
+  Double challenge's 1F_DOUBLES layout and twins; a loss ending the challenge in the lobby and leaving the tower;
+  a white-out during a challenge) and saveContinue.test.ts, all passed.

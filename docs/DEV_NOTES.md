@@ -76,6 +76,25 @@ this is the next level down. When you add or change a subsystem, update its entr
   script defines. Users: Seafoam Islands B3F/B4F (currents stop once both boulders are down), Three Island's
   Dunsparce Tunnel, Seven Island's house. Tests: tests/e2e/mainPathLeftovers.test.ts (B4F from (7, 6), B3F from
   (12, 8); a dev start never passed Route 20, so both boulders count as down there).
+- **Trainer Tower (trainer_tower.c; POSTGAME_PLAN.md W-ttower):** `world/trainerTower.ts` (no Phaser). Every
+  `ttower_*` macro is expanded by the script extractor into `setvar VAR_0x8004, TRAINER_TOWER_FUNC_*` (+ VAR_0x8005 /
+  0x8006) and `special CallTrainerTowerFunc` (script/trainerTowerSpecials.ts → `CallTrainerTowerFunc(env)`), which
+  sets up sTrainerTowerState (the floor from `state.mapHeaderLayoutId` - LAYOUT_TRAINER_TOWER_1F, the local set
+  gTrainerTowerFloors[towerChallengeId]; the e-Reader path is never taken) and runs the function. Data:
+  `public/gen/trainerTower.json` (tools/extract_trainer_tower.py; `initTrainerTowerData` from Assets.init and the
+  unit tests): the floors by symbol (trainers, Easy Chat speeches, struct BattleTowerPokemon mons), `sets`, and the
+  C tables (layouts as LAYOUT_* names). Save record: `state/trainerTowerRecord.ts` (struct TrainerTower;
+  `state.trainerTower[]`, `state.towerChallengeId`, save version 7; bestTime is kept plain, no encryption key). The
+  timer is gMain.vblankCounter1 (gba/main.ts), counted by VBlankCounter1Update once per tick in OverworldScene.tick
+  and GbaHostScene's loop (like the play time). The speeches go to gStringVar4 (menus/common.ts), which
+  `msgbox gStringVar4` prints; TT_ConvertEasyChatMessageToString measures with the field's FONT_NORMAL
+  (`setTrainerTowerStringWidth`, set by OverworldScene). For unit 2 (the battles): DoTrainerTowerBattle is a stand-in
+  (`trainerTowerBattle` test event, VAR_RESULT B_OUTCOME_WON); InitTrainerTowerBattleStruct / BuildEnemyParty /
+  GetTrainerTowerOpponent* aren't ported yet; the floors in sTrainerTowerState are shared with the data, so
+  BuildEnemyParty must copy a mon before setting its level. Tests: tests/unit/trainerTower.test.ts,
+  tests/e2e/trainerTower.test.ts (`?start=after-rival&map=TrainerTower_Lobby&x=9&y=9`, up onto the entry trigger,
+  YES, the challenge type; the stairs at (9, 2); 1F's singles trigger (10, 13), doubles (9, 12)). Probe:
+  `t.state.trainerTower[t.state.towerChallengeId]`.
 - **Silph Co. card key doors** (data/scripts/silphco_doors.inc) need nothing of their own: ON_LOAD closes them with
   `setmetatile`, the bg events open them (FLAG_HIDE_SILPH_CO_5F_CARD_KEY, `special SetHiddenItemFlag`). Test spot:
   `?map=SilphCo_5F&x=9&y=9`, face left (mark the floor's trainers beaten first).
@@ -1623,7 +1642,7 @@ or extend them:
   saved anyway since the Safari start menu has no SAVE, and the roamer's location). Other optional warps the save
   keeps: `continueGameWarp` + `specialSaveWarpFlags` (CONTINUE_GAME_WARP), `escapeWarp`. Game stats
   (`state.gameStats`, Get/Set/IncrementGameStat; only GAME_STAT_ENTERED_HOF and _FIRST_HOF_PLAY_TIME are counted so
-  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6. The Hall of Fame records live apart from the save, like their own flash
+  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 7. The Hall of Fame records live apart from the save, like their own flash
   sectors: `state/hallOfFame.ts` (key `HOF_STORAGE_KEY`, versioned), read into `gHofBuffer` (gDecompressionBuffer)
   by LoadHallOfFameSave, written by TrySavingData(SAVE_HALL_OF_FAME) (which also counts GAME_STAT_ENTERED_HOF) and
   erased by SAVE_OVERWRITE_DIFFERENT_FILE.

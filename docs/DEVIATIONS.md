@@ -44,7 +44,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Script timing: `special EnterHallOfFame` ends its script at the special (script/specials.ts) instead of
     keeping it in its `waitstate` until the screen warps out (as DoSeagallopFerryScene now does), so in theory the
     field could take input in the frame's ticks left after it. Not seen: the field sleeps under the HoF screen.
-  - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
+  - Trainer Tower (world/trainerTower.ts): DoTrainerTowerBattle is a stand-in until W-ttower unit 2: no battle, it
+    counts as won (VAR_RESULT B_OUTCOME_WON) and the map music comes back, so a challenge can be climbed without
+    fighting. ShowResultsBoard / CloseResultsBoard (`ttower_showresults` / `ttower_closeresults`, which no script
+    uses) validate the record but draw no window. The record times aren't XORed with an encryption key (no key in
+    the port). GetFloorAlreadyCleared on the roof with every floor cleared reads a zeroed floor where the C reads
+    past the set (heap memory); the roof's result changes nothing. The e-Reader sets are never read (link content).
   - VS Seeker (world/vsSeeker.ts): no quest log event. Task_VsSeeker_0
     takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for
     the Escape Rope). The movement scripts (Wait48, the trainers' emotes and step in place) run as MovementRunners
@@ -225,7 +230,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     what the port keeps; left out because the port doesn't keep them: the current map's object events and object
     templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail,
     Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, the fame
-    checker, Trainer Tower and minigame records, the enigma berry, mystery gift, link records and
+    checker, minigame records, the enigma berry, mystery gift, link records and
     the region map zoom option. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
   - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the title screen; the
@@ -265,7 +270,6 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Elevators: UpdateEscapeWarp isn't kept on warps.
   - Field ListMenu (ui/FieldListMenu.ts): the quest log's QL_AvoidDisplay is ignored.
   - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu.
-  - Interaction metatiles whose scripts need unported screens/specials (Trainer Tower clock, cable club
   - Hall of Fame (menus/hallOfFame.ts): no Champion
     Ribbons (mons have no ribbons; REVISION 0 gives no event tickets either); the help system isn't toggled and the
     quest log isn't saved; a failed save carries on (no DoSaveFailedScreen / gGameContinueCallback).
@@ -290,8 +294,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     SoftReset (BootScene's `softReset`) restarts the boot flow (the title screen) with a fresh Overworld scene and
     GameState; other module-level state isn't reset, and intro.c's movie isn't ported.
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
-  - Interaction metatiles whose scripts need unported screens/specials (Town Map, Trainer Tower clock, cable club
-    monitors) start their scripts and hit the unimplemented-special warnings.
+  - Interaction metatiles whose scripts need unported screens/specials (Town Map, cable club monitors) start their scripts and hit the unimplemented-special warnings.
   - No-op specials (`NO_OP` in `script/specials.ts`): quest log, help system, fame checker, GameCube link flags,
     CloseLink.
   - Player names are "PLAYER"/"RIVAL" until Oak's intro exists.
