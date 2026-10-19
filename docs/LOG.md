@@ -4396,6 +4396,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the gamma 19 flash and SE_THUNDER(2); downpour; a stair warp's SE_RAIN_STOP before SE_EXIT; a wild battle's rain
   message; the blend of a test sprite read back from the screen, and its semi pixels on the GBA layer in a battle
   transition), plus weather, mapPreview, fieldSounds, seagallop, dive and transitions.
+
 ### W-dyngfx: dynamic-graphics objects (GAPS_PLAN.md batch 13)
 
 - The trap: a script that sets a VAR_OBJ_GFX_ID_* to a sheet the map didn't preload and then `addobject`s logged
