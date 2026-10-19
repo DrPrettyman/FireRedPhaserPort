@@ -20,6 +20,7 @@ import type { Behaviors } from './behaviors';
 import { BikeClearState, Bike_HandleBumpySlopeJump, Bike_UpdateBikeCounterSpeed, IsRunningDisallowed, MovePlayerOnBike } from './bike';
 import { DELTA, type Direction } from './direction';
 import { Overworld_ChangeMusicToDefault, Overworld_ClearSavedMusic } from '../gba/overworldMusic'; // CreateStopSurfingTask (W-sound 3)
+import { SetHelpContext, SetHelpContextForMap } from '../ui/helpSystemContext';
 
 /** A d-pad direction, or DIR_NONE. */
 export type Dir = Direction | undefined;
@@ -881,7 +882,8 @@ export function CreateStopSurfingTask(direction: Direction): void {
     gPlayerAvatar.preventStep = false;
     f.unlockPlayerFieldControls();
     f.unfreezeObjectEvents();
-    f.destroySurfBlob?.(); // DestroySprite(&gSprites[playerObjEvent->fieldEffectSpriteId]); SetHelpContextForMap: no help system
+    f.destroySurfBlob?.(); // DestroySprite(&gSprites[playerObjEvent->fieldEffectSpriteId])
+    SetHelpContextForMap();
     return true;
   };
   step();
@@ -893,8 +895,9 @@ export function SeafoamIslandsB4F_CurrentDumpsPlayerOnLand(): void {
   CreateStopSurfingTask('up');
 }
 
-/** ForcePlayerToStartSurfing (field_specials.c; SetHelpContext isn't ported) */
+/** ForcePlayerToStartSurfing (field_specials.c) */
 export function ForcePlayerToStartSurfing(): void {
+  SetHelpContext(K.HELPCONTEXT_SURFING);
   SetPlayerAvatarTransitionFlags(F.SURFING);
 }
 

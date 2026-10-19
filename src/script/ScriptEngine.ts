@@ -112,7 +112,7 @@ export interface ScriptHost {
   /** ShowPokemonStorageSystemPC: the PC's storage menu and box screens; the wait ends when the player leaves it. */
   openPokemonStoragePc(): Wait;
   /** PlayerPC / BedroomPC: the item storage menus; the wait ends when the player turns the PC off. */
-  openPlayerPc(): Wait;
+  openPlayerPc(notInRoom?: boolean): Wait;
   /** EnterHallOfFame: the Hall of Fame screen; the field comes back through its warp into Indigo Plateau. */
   enterHallOfFame(): void;
   /** HallOfFamePCBeginFade: the Hall of Fame PC, then the PC menu again (its choice in `result`). */

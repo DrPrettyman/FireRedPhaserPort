@@ -35,6 +35,7 @@ import { random } from '../util/random';
 import { DrawBattleEntryBackground, InitBattleBgsVideo, LoadBattleTextboxAndBackground } from './battleBg';
 import { K } from './constants';
 import { g } from './env';
+import { SetHelpContextForBattle } from '../ui/helpSystemContext';
 import { AllocateMonSpritesGfx, BattleInitAllSprites, BattleInterfaceSetWindowPals } from './gfx';
 import { allocateBattleResources, battleMainCB1, initBattleControllers, initBattleInternal } from './main';
 
@@ -87,6 +88,7 @@ export function CB2_InitBattle(terrain: number, afterSetUp: () => void = () => {
   afterSetUp();
   SetMainCallback2(CB2_HandleStartBattle);
   gMain.inBattle = true;
+  SetHelpContextForBattle(g.battleTypeFlags);
 }
 
 /** CB2_HandleStartBattle (single-player path) */

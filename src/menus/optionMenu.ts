@@ -2,7 +2,6 @@
 // battle scene, battle style, sound, button mode, frame) and CANCEL; LEFT/RIGHT change the one under the cursor
 // (the frame's tiles and palette are reloaded at once), A or B fades out and CloseAndSaveOptionMenu writes them to
 // the save block (GameState) and goes to gMain.savedCallback (CB2_ReturnToFieldWithOpenMenu from the start menu).
-// Not ported: the help system context (SetHelpContext).
 
 import { SetPokemonCryStereo } from '../audio/m4a';
 import { K } from '../battle/constants';
@@ -66,6 +65,7 @@ import {
 import type { TextSpeed } from '../text/TextPrinter';
 import { EOS, text } from './common';
 import { CB2_ReturnToFieldWithOpenMenu } from './fieldCallbacks';
+import { SetHelpContext } from '../ui/helpSystemContext';
 
 // Menu items
 const MENUITEM_TEXTSPEED = 0;
@@ -165,7 +165,7 @@ export function CB2_OptionsMenuFromStartMenu(): void {
   for (let i = 0; i < MENUITEM_COUNT - 1; i++) {
     if (ptr.option[i] > sOptionMenuItemCounts[i] - 1 || ptr.option[i] < 0) ptr.option[i] = 0;
   }
-  // SetHelpContext(HELPCONTEXT_OPTIONS): no help system
+  SetHelpContext(K.HELPCONTEXT_OPTIONS);
   SetMainCallback2(CB2_OptionMenu);
 }
 

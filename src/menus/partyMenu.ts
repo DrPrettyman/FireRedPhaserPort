@@ -172,6 +172,7 @@ import { BeginEvolutionScene, setCB2_AfterEvolution } from './evolutionScene';
 import { CreateMonIcon, LoadMonIconPalettes, SetPartyHPBarSprite, SpriteCB_MonIcon, UpdateMonIconFrame } from './pokemonIcon';
 import { testEvent } from '../dev/testHooks';
 import { GetNumberOfRelearnableMoves } from './learnMove';
+import { SetHelpContext } from '../ui/helpSystemContext';
 
 const PARTY_PAL_SELECTED = 1 << 0;
 const PARTY_PAL_FAINTED = 1 << 1;
@@ -799,7 +800,7 @@ function ShowPartyMenu(): boolean {
       ++gMain.state;
       break;
     case 19:
-      // SetHelpContext(HELPCONTEXT_PARTY_MENU): no help system
+      SetHelpContext(K.HELPCONTEXT_PARTY_MENU);
       ++gMain.state;
       break;
     case 20:

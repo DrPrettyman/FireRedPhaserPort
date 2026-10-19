@@ -2,7 +2,7 @@
 // (from the battle) and nicknames (ChangePokemonNickname). DoNamingScreen is the entry point; the
 // screen writes the name into the caller's buffer and hands over to the return callback.
 //
-// Not ported: the help system context, StartTimer1/SeedRngAndSetTrainerId for NAMING_SCREEN_PLAYER
+// Not ported: StartTimer1/SeedRngAndSetTrainerId for NAMING_SCREEN_PLAYER
 // (the trainer id is rolled when the game state is created) and the REVISION >= 0xA bad-word check.
 
 import { K } from '../battle/constants';
@@ -147,6 +147,7 @@ import { CalculatePlayerPartyCount, encodeRaw, EOS, gStringVar1, gStringVar2, gS
 import { menusData } from './data';
 import { CopyObjectGraphicsInfoToSpriteTemplate, CreateObjectGraphicsSprite, objectEventGfxSymbols } from './objectEventGraphics';
 import { CreateMonIcon, GetIconSpecies, LoadMonIconPalettes, monIconSymbol } from './pokemonIcon';
+import { BackupHelpContext, RestoreHelpContext, SetHelpContext } from '../ui/helpSystemContext';
 
 // include/naming_screen.h
 export const NAMING_SCREEN_PLAYER = 0;
@@ -473,7 +474,8 @@ function NamingScreen_InitBGs(): void {
 function CreateNamingScreenTask(): void {
   CreateTask(Task_NamingScreen, 2);
   SetMainCallback2(CB2_NamingScreen);
-  // BackupHelpContext / SetHelpContext(HELPCONTEXT_NAMING_SCREEN): no help system
+  BackupHelpContext();
+  SetHelpContext(K.HELPCONTEXT_NAMING_SCREEN);
 }
 
 function Task_NamingScreen(_taskId: number): void {
@@ -612,7 +614,7 @@ function MainState_Exit(): boolean {
     FreeAllWindowBuffers();
     sFreedNamingScreen = sNamingScreen;
     sNamingScreen = null;
-    // RestoreHelpContext: no help system
+    RestoreHelpContext();
   }
   return false;
 }

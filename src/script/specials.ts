@@ -28,6 +28,7 @@ import { AUDIO_SPECIALS } from './audioSpecials';
 import { POSTGAME_SPECIALS } from './postgameSpecials';
 import { EVENT_ISLAND_SPECIALS } from './eventIslandSpecials';
 import { TRAINER_TOWER_SPECIALS } from './trainerTowerSpecials';
+import * as Help from '../ui/helpSystemContext';
 
 export interface SpecialEnv {
   state: GameState;
@@ -66,24 +67,34 @@ export interface SpecialEnv {
 /** A gSpecials entry (data/specials.inc). The return value is stored by `specialvar`. */
 export type Special = (env: SpecialEnv) => number | void;
 
-/** Specials with no effect yet because the system they feed (quest log, help, fame checker) doesn't exist. */
+/** Specials with no effect yet because the system they feed (quest log, fame checker) doesn't exist. */
 const NO_OP = [
   'QuestLog_CutRecording', // quest log
-  'SetHelpContextForMap', // help system
-  'Script_SetHelpContext',
   'SetFlavorTextFlagFromSpecialVars', // fame checker
   'UpdatePickStateFromSpecialVar8005',
   'InitUnionRoom', // wireless only (and stubbed out from REVISION 0xA): CableClub_OnResume in every Pokémon Center
   'CloseLink', // link play: nothing was opened (TryBattleLinkup below never connects)
-  'HelpSystem_Enable', // help system
-  'HelpSystem_Disable',
 ];
+
+/** help_system.c / help_system_util.c's specials (data/specials.inc): ui/helpSystemContext.ts. */
+const HELP_SPECIALS: Record<string, Special> = {
+  /** Script_SetHelpContext: the context is VAR_0x8004 (the Pokédex rating, the Hall of Fame PC, ...). */
+  Script_SetHelpContext({ state }) {
+    Help.Script_SetHelpContext(state.getVar('VAR_0x8004'));
+  },
+  BackupHelpContext: () => Help.BackupHelpContext(),
+  RestoreHelpContext: () => Help.RestoreHelpContext(),
+  SetHelpContextForMap: () => Help.SetHelpContextForMap(),
+  HelpSystem_Disable: () => Help.HelpSystem_Disable(),
+  HelpSystem_Enable: () => Help.HelpSystem_Enable(),
+};
 
 export const SPECIALS: Record<string, Special> = {
   ...Object.fromEntries(NO_OP.map((name) => [name, () => {}])),
   ...PARTY_MENU_SPECIALS, // menus/partyMenuSpecials.ts: party_menu_specials.c, ChooseMonForMoveTutor
   ...STORY_SPECIALS, // storySpecials.ts: field_specials.c's story specials (Lt. Surge's trash cans, ...)
-  ...SIDE_SPECIALS, // sideSpecials.ts: Oak's Pokédex rating, the help context pair
+  ...HELP_SPECIALS,
+  ...SIDE_SPECIALS, // sideSpecials.ts: Oak's Pokédex rating, money.c's cost specials
   ...DAYCARE_SPECIALS, // daycareSpecials.ts: daycare.c's Route 5 daycare specials
   ...GAME_CORNER_SPECIALS, // gameCornerSpecials.ts: GetRandomSlotMachineId
   ...TRADE_SPECIALS, // tradeSpecials.ts: in-game trades and the Name Rater
@@ -241,7 +252,7 @@ export const SPECIALS: Record<string, Special> = {
 
   /** BedroomPC (player_pc.c): the same menus; turning off sets up EventScript_PalletTown_PlayersHouse_2F_ShutDownPC. */
   BedroomPC({ host, setWaitState, setupScript }) {
-    const menu = host.openPlayerPc();
+    const menu = host.openPlayerPc(false);
     setWaitState(() => {
       if (!menu()) return false;
       setupScript('EventScript_PalletTown_PlayersHouse_2F_ShutDownPC'); // Task_PlayerPcTurnOff

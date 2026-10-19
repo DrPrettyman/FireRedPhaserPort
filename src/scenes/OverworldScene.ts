@@ -36,7 +36,7 @@ import { StartMenu } from '../ui/StartMenu';
 import { helpMessageWindowGfxSymbols } from '../ui/HelpMessageWindow';
 import { helpSystemGfxSymbols } from '../ui/helpSystem';
 import { HelpSystemFieldHost } from '../ui/helpSystemField';
-import { SetHelpContextForMap } from '../ui/helpSystemContext';
+import { HelpSystem_Disable, HelpSystem_Enable, SetHelpContextForMap } from '../ui/helpSystemContext';
 import { SAVECB_RETURN_CANCEL, SAVECB_RETURN_CONTINUE, SaveDialog } from '../ui/SaveDialog';
 import { ClearContinueGameWarpStatus, gSave, UseContinueGameWarp } from '../state/save';
 import { fromSaveData, type SaveData } from '../state/saveData';
@@ -2056,7 +2056,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /** PlayerPC / BedroomPC (player_pc.c): the item storage menus run as a field overlay while the script waits. */
-  openPlayerPc(): Wait {
+  openPlayerPc(notInRoom = true): Wait {
     const d = this.defines;
     const menu = new PlayerPcMenu(this, this.fonts, this.buttons, {
       text: (symbol) => this.charmap.encode(this.assets.strings[symbol] ?? '?$'),
@@ -2074,7 +2074,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         this.runFieldMenu({ menu: screen }, () => onReturn());
       },
       fadeInFromBlack: () => this.fadeScreen(d.require('FADE_FROM_BLACK')),
-    });
+    }, notInRoom);
     this.overlay = menu;
     return () => menu.done;
   }
@@ -2679,6 +2679,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
           phase = 'transition';
           testEvent('battleTransition', { transition });
           this.gbaScreen.start(source);
+          if (battleStartTask) HelpSystem_Disable(); // Task_BattleStart
           BattleTransition_StartOnField(transition);
         }
         if (phase === 'transition' && IsBattleTransitionDone()) {
@@ -2688,6 +2689,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
           this.gbaScreen.stop();
           this.screenFade.fill(false);
           if (battleStartTask) {
+            HelpSystem_Enable();
             this.wild.resetEncounterRateModifiers(); // RestartWildEncounterImmunitySteps
             this.state.setVar('VAR_POISON_STEP_COUNTER', 0); // ClearPoisonStepCounter
           }

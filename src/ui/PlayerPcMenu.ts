@@ -4,6 +4,7 @@ import { PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import { FONT_NORMAL, type Fonts } from '../text/Font';
 import { KeyRepeat } from './FieldListMenu';
+import { BackupHelpContext, RestoreHelpContext, SetHelpContext } from './helpSystemContext';
 import { MenuWindow } from './MenuWindow';
 
 /** What the player's PC needs from the overworld. */
@@ -70,8 +71,11 @@ export class PlayerPcMenu {
     private fonts: Fonts,
     private input: Input,
     private host: PlayerPcMenuHost,
+    /** gPlayerPcMenuManager.notInRoom: PlayerPC (TRUE) or BedroomPC (FALSE) */
+    private notInRoom = true,
   ) {
     this.keys = new KeyRepeat(input);
+    BackupHelpContext();
     // PlayerPC / BedroomPC: DisplayItemMessageOnField(gText_WhatWouldYouLikeToDo, Task_DrawPlayerPcTopMenu)
     this.message(this.host.text('gText_WhatWouldYouLikeToDo'), () => this.Task_DrawPlayerPcTopMenu());
   }
@@ -164,6 +168,7 @@ export class PlayerPcMenu {
   }
 
   private Task_ReturnToTopMenu(): void {
+    RestoreHelpContext();
     this.message(this.host.text('gText_WhatWouldYouLikeToDo'), () => this.Task_DrawPlayerPcTopMenu());
   }
 
@@ -182,6 +187,7 @@ export class PlayerPcMenu {
   }
 
   private Task_CreateItemStorageSubmenu(cursorPos: number): void {
+    SetHelpContext(this.notInRoom ? K.HELPCONTEXT_PLAYERS_PC_ITEMS : K.HELPCONTEXT_BEDROOM_PC_ITEMS);
     this.openWindow(SUBMENU_RECT, ITEM_PC_MENU, cursorPos);
     this.host.showDescription(this.host.text(ITEM_PC_DESCRIPTIONS[cursorPos]));
     this.phase = 'submenu';

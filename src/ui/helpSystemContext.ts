@@ -154,6 +154,18 @@ export function Script_SetHelpContext(var8004: number): void {
   sHelpSystemContextId = var8004;
 }
 
+/**
+ * The battle's context, as CB2_InitBattle (battle_main.c) and ReshowBattleScreenAfterMenu (reshow_battle_screen.c)
+ * both set it inline from gBattleTypeFlags (not in a link battle).
+ */
+export function SetHelpContextForBattle(battleTypeFlags: number): void {
+  if (battleTypeFlags & K.BATTLE_TYPE_LINK) return;
+  if (battleTypeFlags & K.BATTLE_TYPE_TRAINER)
+    SetHelpContext(battleTypeFlags & K.BATTLE_TYPE_DOUBLE ? K.HELPCONTEXT_TRAINER_BATTLE_DOUBLE : K.HELPCONTEXT_TRAINER_BATTLE_SINGLE);
+  else if (battleTypeFlags & K.BATTLE_TYPE_SAFARI) SetHelpContext(K.HELPCONTEXT_SAFARI_BATTLE);
+  else SetHelpContext(K.HELPCONTEXT_WILD_BATTLE);
+}
+
 export function BackupHelpContext(): void {
   gHelpContextIdBackup = sHelpSystemContextId;
 }
