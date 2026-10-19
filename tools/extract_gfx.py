@@ -56,6 +56,7 @@ GFX_PREFIXES = (
     "graphics/weather/",
     "graphics/main_menu/",
     "graphics/title_screen/",
+    "graphics/intro/",  # intro.c: the copyright screen, the Game Freak scene, scenes 1-3 (W-intro)
     "graphics/oak_speech/",
     "graphics/hall_of_fame/",
     "graphics/credits/",

@@ -34,6 +34,9 @@ import { WildEncounters } from '../world/WildEncounters';
 import { World } from '../world/World';
 import { StartMenu } from '../ui/StartMenu';
 import { helpMessageWindowGfxSymbols } from '../ui/HelpMessageWindow';
+import { helpSystemGfxSymbols } from '../ui/helpSystem';
+import { HelpSystemFieldHost } from '../ui/helpSystemField';
+import { SetHelpContextForMap } from '../ui/helpSystemContext';
 import { SAVECB_RETURN_CANCEL, SAVECB_RETURN_CONTINUE, SaveDialog } from '../ui/SaveDialog';
 import { ClearContinueGameWarpStatus, gSave, UseContinueGameWarp } from '../state/save';
 import { fromSaveData, type SaveData } from '../state/saveData';
@@ -249,6 +252,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private cameraOrigin = { left: 0, top: 0 };
   /** The field on the GBA layer, while a battle transition (or a cave's map change screen) runs. */
   private gbaScreen!: FieldGbaScreen;
+  /** The L/R help system (ui/helpSystemField.ts): RunHelpSystemCallback before the field's logic each frame. */
+  private help!: HelpSystemFieldHost;
   private fieldEffects!: FieldEffects;
   private doors!: FieldDoors;
   private monPic?: MonPicBox;
@@ -396,10 +401,14 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.setUpWeather();
     this.gbaScreen = new FieldGbaScreen(this, DEPTH_FADE + 10);
     setTransitionFieldCamera(() => this.gbaScreen.cameraPixelOffset());
-    await loadGfx([...mapTransitionGfxSymbols, ...mapPreviewGfxSymbols(), ...fieldListMenuGfxSymbols, ...helpMessageWindowGfxSymbols, ...museumFossilPicGfxSymbols, ...brailleCursorGfxSymbols]);
+    await loadGfx([...mapTransitionGfxSymbols, ...mapPreviewGfxSymbols(), ...fieldListMenuGfxSymbols, ...helpMessageWindowGfxSymbols, ...museumFossilPicGfxSymbols, ...brailleCursorGfxSymbols, ...helpSystemGfxSymbols]);
     setUserFrameTypeSource(() => this.state.optionsWindowFrameType + 1); // the options' FRAME for field windows
     this.flash = new FieldFlash(this);
     this.fonts = new Fonts(this, this.assets.fonts);
+    this.help = new HelpSystemFieldHost(this, DEPTH_FADE + 100, this.fonts, (str) => this.charmap.encodePlain(str), {
+      mapType: () => this.world.current.data.mapType ?? '',
+      surfing: () => TestPlayerAvatarFlags(PLAYER_AVATAR_FLAG.SURFING) !== 0,
+    });
     setTrainerTowerStringWidth((str) => stringWidth(this.fonts, FONT_NORMAL, str, -1)); // TT_ConvertEasyChatMessageToString
     this.messageBox = new MessageBox(this, this.fonts, this.buttons, charmap, this.state);
     registerMuseumFossilPic({ scene: this, fonts: this.fonts, input: this.buttons });
@@ -762,10 +771,14 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   // ------------------------------------------------------------------ frame logic
 
   private tick(): void {
-    this.tickField();
+    this.buttons.sample();
+    // CallCallbacks: RunHelpSystemCallback first; while the help is up the field's callbacks and VBlank don't run
+    const help = this.help?.tick(this.buttons) ?? false;
+    if (!help) this.tickField();
     PlayTimeCounter_Update(this.state.playTime); // AgbMain, once per frame
     VBlankCounter1Update(); // VBlankIntr: the Trainer Tower's timer (world/trainerTower.ts)
-    AgbMainFrameEnd(); // the sound tasks, MapMusicMain, m4aSoundMain
+    AgbMainFrameEnd(!help); // the sound tasks (not while the help is up), MapMusicMain, m4aSoundMain
+    if (help) return;
     this.flash.vblank(); // VBlankCB_Field's ScanlineEffect_InitHBlankDmaTransfer
     this.gbaScreen.frame(); // the GBA layer's half of the frame, when it's in use
   }
@@ -776,7 +789,6 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     // layer, VBlankCB_Field does the transfer until a battle transition replaces it).
     if (!this.creditsCamera) UpdateTilesetAnimations(); // the credits run them every other frame themselves
     if (!this.screenFade.active && !this.gbaScreen.active) TransferTilesetAnimsBuffer();
-    this.buttons.sample();
     // FieldGetPlayerInput: QuestLogOverrideJoyVars replays the key that closed the last script's message.
     if (!this.scripts.running) {
       const replay = this.scripts.takeRegisteredInput();
@@ -1645,6 +1657,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       const state = flags & F.MACH_BIKE ? F.MACH_BIKE : flags & F.ACRO_BIKE ? F.ACRO_BIKE : flags & F.SURFING ? F.SURFING : F.ON_FOOT;
       InitPlayerAvatar(continued.facing, this.playerGender(), state);
     }
+    if (warped || continued) SetHelpContextForMap(); // LoadMapInStepsLocal's (ReturnToFieldLocal's), after the objects
     this.syncNpcsWithLoadedMaps();
     if (warped) {
       const table = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_WARP_INTO_MAP_TABLE');
@@ -2711,6 +2724,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       // IsPlayerDefeated: B_OUTCOME_LOST or B_OUTCOME_DREW
       playerWon: () => outcome !== d.require('B_OUTCOME_LOST') && outcome !== d.require('B_OUTCOME_DREW'),
       returnToField: () => {
+        // CB2_ReturnToField → InitOverworldBgs → InitFieldMessageBox: the field's windows are made anew, so the
+        // message the script left up before the battle ("Mew!", "Gyaoo!", "SNORLAX woke up!") is gone
+        this.messageBox.hide();
         this.resumeMap();
         // FieldCB_DefaultWarpExit (CB2_EndWildBattle) / FieldCB_ContinueScriptHandleMusic (a trainer's
         // CB2_ReturnToFieldContinueScriptPlayMapMusic): the map's music again after the battle's
@@ -2766,6 +2782,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       if (script) this.scripts.runImmediately(script);
     }
     tilesetVram.resetBgPalettes(); // InitViewGraphics' LoadMapTilesetPalettes
+    SetHelpContextForMap(); // ReturnToFieldLocal, after InitViewGraphics
     // ResumeMap's ResetTasks + ScanlineEffect_Clear, then InitCurrentFlashLevelScanlineEffect
     this.flash.initCurrentFlashLevelScanlineEffect(Overworld_GetFlashLevel(this.state));
   }

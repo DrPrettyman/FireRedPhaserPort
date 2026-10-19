@@ -1586,6 +1586,10 @@ def main():
     from extract_easy_chat import extract_easy_chat
 
     extract_easy_chat(decomp, out)
+    print("help system")
+    from extract_help import extract_help_system
+
+    extract_help_system(decomp, out)
     print("trainer tower")
     from extract_trainer_tower import extract_trainer_tower
 

@@ -3798,3 +3798,97 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   second visit, Icefall Cave's banner, none from Mt. Moon 1F to B1F), transitions, weather, fly, and the story tests
   that warp into forest sections (storyCeladonSaffron's Game Corner stairs to the Rocket Hideout, storyLeague's
   Safari Zone gate). Screenshots of both banners checked by eye (the name window and the art as on the GBA).
+
+### W-kanto 1: Cerulean Cave and the legendaries' battles to the end (GAPS_PLAN.md batch 11)
+
+- Played headless: Cerulean Cave from Cerulean City's entrance (the guard hidden by FLAG_HIDE_CERULEAN_CAVE_GUARD)
+  through 1F (Surf across the lake), 2F and 1F's north-west corner down to B1F, Surf round to Mewtwo, and Mewtwo's
+  StartLegendaryBattle to its end: caught with a full party (Text_MonSentToBoxInBillsPC, BOX1), ON_RESUME's
+  CeruleanCave_B1F_EventScript_TryRemoveMewtwo, FLAG_FOUGHT_MEWTWO, MUS_ROCKET_HIDEOUT back, gone on the next visit;
+  beaten (CeruleanCave_B1F_EventScript_DefeatedMewtwo → EventScript_RemoveStaticMon's fade, never back); run from
+  (EventScript_MonFlewAway, back on the next visit). Moltres, Articuno and Zapdos caught; Moltres teleported away
+  from (B_OUTCOME_PLAYER_TELEPORTED, back on the next visit); Lugia caught and beaten (FLAG_LUGIA_FLEW_AWAY, stays
+  away); Ho-Oh caught (VAR_TEMP_1 keeps the coord event off) and run from (where Movement_HoOhApproach left it, the
+  script's `setweather 0` kept through the battle, WEATHER_SHADE again on the next visit); Deoxys caught (the
+  triangle's last touch; no Deoxys, no rock on the next visit).
+- Fixed: the field message box stayed up through a scripted battle. Mewtwo's "Mew!", the birds' "Gyaoo!" and the
+  like (`message` + `waitbuttonpress`, then StartLegendaryBattle) were still on screen when the field faded back
+  in after the battle, and through EventScript_RemoveStaticMon's fades, until `release`. On the GBA,
+  CB2_ReturnToField → InitOverworldBgs → InitFieldMessageBox (overworld.c) makes the field's windows anew with the
+  message box hidden; `returnToField` (OverworldScene.runBattle) now hides it. Trainer and wild battles return the
+  same way.
+- Test state: `afterHallOfFame` now sets FLAG_SYS_NOT_SOMEONES_PC (Route25_SeaCottage: Bill met), so the postgame's
+  PC texts say BILL'S PC as they would.
+- Everything else ran as the scripts have it: StartLegendaryBattle's music and BLUR, CB2_EndScriptedWildBattle,
+  every map's ON_RESUME / ON_TRANSITION, the GetBattleOutcome branches.
+- Verified: typecheck; unit 630 passed; e2e postgameKanto.test.ts (3 passed, ~85 s), postgameKantoLegendaries.test.ts
+  (9 passed, ~2.5 min), scriptedBattles.test.ts (6) and trainerBattle.test.ts (3) for the message box change.
+
+### W-help 1: the help system's engine and menus (help_system_util.c, help_system.c)
+
+- `ui/helpSystem.ts` (help_system_util.c: RunHelpSystemCallback's states 0-8, SaveCallbacks with DMA0 stopped,
+  the tiles / GPU regs saved and restored, BG0's HS_* panels in a 0x4000 buffer committed to char block 3,
+  HelpSystemRenderText with {PLAYER}, {STR_VAR_1} (BILL / SOMEONE), CLEAR_TO and keypad icons, the list menu
+  controller, TryMoveCursor1 / MoveCursor, the scroll arrows), `ui/helpSystemMenu.ts` (RunHelpMenuSubroutine and
+  its subroutines), `ui/helpSystemContext.ts` (contexts, SetHelpContextForMap, the enable / R toggles, the list
+  builders and gates), `ui/helpSystemField.ts` (the field's hook and overlay). The tables through
+  `tools/extract_help.py` (helpSystem.json); the strings were already in strings.json.
+- Hooks: GbaHostScene runs RunHelpSystemCallback before CallCallbacks; OverworldScene.tick samples the buttons
+  first, asks the help, and skips tickField, the flash VBlank and the GBA layer's frame while it's up.
+  AgbMainFrameEnd(callbacksRan) keeps the sound tasks (gTasks in the C) waiting too. ReadKeys takes a key state
+  (`gba/main.ts` KeyState / NewKeyState): the field reads the help's keys into its own, leaving gMain alone (the
+  field's credits read gMain's A, which the field never updates: unchanged). gba/sound.ts: HelpSystem_StopSE1AndSE2,
+  HelpSystem_BGMVolumeControl, IsHelpSystemVolumeReduceDisabled.
+- SetHelpContextForMap where overworld.c calls it (warps and CONTINUE: LoadMapInStepsLocal; returns to the field:
+  ReturnToFieldLocal). The other screens' contexts, the specials and the title screen's HelpSystem_Enable are
+  unit 2's; gHelpSystemEnabled starts TRUE meanwhile (DEVIATIONS).
+- Found on the way: in the HELP button mode (the new-game default) R in the slot machine opens the help, as on the
+  GBA (RunHelpSystemCallback takes it before the machine's callback). gameCorner.test.ts's spins set the LR mode
+  before betting with R.
+- Verified: typecheck; unit 637 passed (new tests/unit/helpSystem.test.ts: 7); e2e helpSystem.test.ts (3: the field,
+  the LR mode and HelpSystem_Disable's SE_HELP_ERROR, the bag), options.test.ts (2), audio.test.ts (2),
+  gameCorner.test.ts (8). Screenshots of the welcome page, the topics, a scrolled submenu and a help item looked
+  like FRLG's.
+
+### W-intro 1: the copyright screen, the intro's framework and the Game Freak scene (batch 11)
+
+- `menus/intro.ts` ports intro.c up to the end of the Game Freak scene: CB2_InitCopyrightScreenAfterBootup /
+  AfterTitleScreen, SetUpCopyrightScreen, LoadCopyrightGraphics, CB2_WaitFadeBeforeSetUpIntro, CB2_SetUpIntro,
+  CB2_Intro, VBlankCB_Intro, Intro_ResetGpuRegs, StartIntroSequence, SetIntroCB, Task_CallIntroCallback (the skip
+  with A / START / SELECT), IntroCB_Init, IntroCB_ExitToTitleScreen, LoadFightSceneSpriteGraphics, and
+  IntroCB_GF_OpenWindow / _Star / _RevealName / _RevealLogo with GFScene_* and the star, sparkle and logo sprites
+  (REVISION 0: no "presents", the copyright screen fades in from white). PlaySE(MUS_GAME_FREAK) as the C plays it.
+  IntroCB_Scene1 is a stub that goes to IntroCB_ExitToTitleScreen until unit 2 ports scenes 1-3.
+- menu2.c's StartBlendTask / IsBlendTaskActive: new `gba/menu2.ts`. `graphics/intro/` is in extract_gfx.py's
+  GFX_PREFIXES (all 49 INCBINs extract).
+- Boot (BootScene → MainMenuScene `entry: 'copyright'`) and soft reset now run copyright → intro → title; the
+  title screen's 2700-frame timeout goes to CB2_InitCopyrightScreenAfterTitleScreen instead of straight back to
+  the title screen. `?skipIntro`, `?start=`, `?map=` skip it all as before. MainMenuScene loads the battle data for
+  gSineTable (the star's wave).
+- Tests: new tests/e2e/intro.test.ts (harness option `intro: true`: boot like the game, return once the copyright
+  screen is up): the copyright screen, the GF scene's callbacks in order with their frame counts against the C
+  (copyright → IntroCB_Init 167 frames, Init 2, OpenWindow 8, Star 121, RevealName 189, RevealLogo 187), the
+  jingle in the Star's first frame, the sparkles, A skipping to the title screen, and the title screen's timeout
+  back to the copyright screen. titleScreen.test.ts: the restart and the soft resets go through the copyright
+  screen; audioOutput.test.ts's headless check boots with `intro: true` (only needs the page up). The frame counts
+  showed BeginNormalPaletteFade doing the fade's first step itself and the intro task first running the frame
+  after CB2_SetUpIntro creates it, as in the C.
+
+### W-intro 2: the intro's scenes 1-3 (batch 11)
+
+- `menus/intro.ts` ports the rest of intro.c: IntroCB_Scene1 (Scene1_Task_AnimateGrass, Scene1_StartGrassScrolling,
+  Scene1_Task_BgZoom), IntroCB_Scene2 (Scene2_Task_PanForest / _PanMons, Scene2_CreateMonSprites /
+  _DestroyMonSprites), IntroCB_Scene3_Entrance and IntroCB_Scene3_Fight with every Scene3_* task and function
+  (the BG scroll, Gengar's bounce, entrance and attack, the swipes, the grass, Nidorino's entrance, cry, recoil and
+  its dust, hops and attack, the zooms) and the sprite callbacks; sBgTemplates_Scene1/2/3, the sprite templates and
+  anims. m4aSongNumStart(MUS_INTRO_FIGHT) and PlayCry_ByMode(SPECIES_NIDORINO, 0x3F, CRY_MODE_DOUBLES) through
+  gba/sound.ts. The movie now ends on IntroCB_ExitToTitleScreen after the fight. No shared files changed: gba/bg.ts
+  already had ChangeBgX / ChangeBgY / GetBgX, and the scenes use no affine BG.
+- Tests: tests/e2e/intro.test.ts's callback order is the whole movie (boot, the title screen's timeout); a new
+  full-movie test checks each scene's frame count against the C, worked out by hand from intro.c (scene 1 47,
+  scene 2 138, scene 3's entrance 60, the fight 501: the fades, Gengar's scroll vs Nidorino's slide, the cry, the
+  attack landing on its 31st frame, the recoil and hops, Gengar's 30-frame bounce), MUS_INTRO_FIGHT on scene 1's
+  17th frame and Nidorino's cry on the fight's 41st, with screenshots of each scene; another skips with A during
+  Gengar's attack (MUS_TITLE takes over from MUS_INTRO_FIGHT). The port matched every hand count on the first run.
+  The full movie adds about 750 frames to each `title: true` boot (well inside the 60 s waits): titleScreen.test.ts,
+  audioOutput.test.ts and audioScenes2.test.ts's title test pass unchanged.

@@ -3,7 +3,8 @@
 // frames play (the title screen's music), the PSG synth plays (SE_SELECT), M toggles the output and the setting survives a
 // reload (but not when typed into a text field), and `?audio=tone` plays a tone through pushFrame's path (the
 // worklet reports the peak it wrote; headless Chrome runs the audio graph on a fake output device).
-// The boots go to the title screen (`title: true`), the quickest place where the page is up.
+// The boots go to the title screen (`title: true`), through the copyright screen and the intro; the headless check
+// only needs the page up (`intro: true`, the copyright screen).
 
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
@@ -13,7 +14,7 @@ const session = useGame();
 const output = (game: Game) => game.eval((t) => t.audioOutput.state());
 
 test('headless, the output is off (the engine runs without it)', async () => {
-  const game = await session.start({ title: true, speed: 1 });
+  const game = await session.start({ intro: true, speed: 1 });
   expect(await output(game)).toMatchObject({ enabled: false, reason: 'headless', context: 'none', ready: false });
   expect(await game.eval((t) => t.audioOutput.tone(true))).toBe(false);
 });

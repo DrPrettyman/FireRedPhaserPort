@@ -244,15 +244,18 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     checker, minigame records, the enigma berry, mystery gift, link records and
     the region map zoom option. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
-  - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the title screen; the
-    copyright screen and intro.c's Game Freak / Nidorino movie before it aren't ported. Dev starts (`?start=`,
-    `?map=`) skip the title screen and the main menu; dev `?skipIntro` (the e2e harness's default) skips the title
-    screen and Oak's speech: the main menu with a save, the new game without. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
+  - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the copyright screen, the
+    intro and the title screen. Dev starts (`?start=`, `?map=`) skip all of them and the main menu; dev
+    `?skipIntro` (the e2e harness's default) skips the copyright screen, the intro, the title screen and Oak's
+    speech: the main menu with a save, the new game without. No MYSTERY GIFT (IsMysteryGiftEnabled isn't kept), no quest log playback ("Previously on your quest")
     before CONTINUE. SAVE_STATUS_ERROR ("the previous save file will be loaded") can't happen: one
     slot, no backup; an unreadable slot is SAVE_STATUS_INVALID ("The save file has been deleted...").
-  - Title screen (menus/titleScreen.ts): no help system (HELPCONTEXT_TITLE_SCREEN: L/R do nothing). When its 2700-frame timer runs out it goes
-    straight back to the title screen (CB2_InitCopyrightScreenAfterTitleScreen would replay the copyright screen
-    and the intro). StartTimer1 / SeedRngAndSetTrainerId don't seed the RNG from the time spent on the title
+  - Copyright screen and intro (menus/intro.ts, intro.c): the GameCube multiboot the copyright screen listens for
+    (Pokémon Colosseum's link over the GBA cable: SerialCB_CopyrightScreen, GameCubeMultiBoot_*, sGcmb) isn't
+    ported; no GameCube ever answers, so the screen always fades out after its 140 frames.
+    LoadSpritePalettes(sFightSceneSpritePalettes) reads past the array's end without BUGFIX (no {0} entry); the
+    port loads its five palettes only.
+  - Title screen (menus/titleScreen.ts): no help system (HELPCONTEXT_TITLE_SCREEN: L/R do nothing). StartTimer1 / SeedRngAndSetTrainerId don't seed the RNG from the time spent on the title
     screen: the port seeds it at load. B+SELECT (REVISION 0's berry fix program, a multiboot program for Ruby and
     Sapphire's berry clock) does nothing. The clear save data screen (B+SELECT+UP) empties the one localStorage
     slot (ClearSaveData erases every flash sector, incl. the Hall of Fame) and its soft reset (DoSoftReset) is
@@ -274,6 +277,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Start menu help window (ui/HelpMessageWindow.ts): a Phaser window like the start menu, not a BG0 window; the
     start menu (and its help window) goes away as soon as an item that leaves the field is chosen, before the fade
     (on the GBA both stay up under the fade).
+  - The help system (ui/helpSystem*.ts): only the field sets a context so far (SetHelpContextForMap on warps,
+    CONTINUE and returns to the field); the other screens' SetHelpContext calls, HelpSystem_Enable / _Disable and
+    the help specials are W-help unit 2's (GAPS_PLAN.md), so the field's context stays on them. gHelpSystemEnabled
+    starts TRUE (main.c clears it at boot and the title screen's HelpSystem_Enable sets it), a soft reset doesn't
+    clear the context or the welcome page's sSeenHelpSystemIntro, and Surf's dismount doesn't call
+    SetHelpContextForMap. It opens only once the field has loaded (it needs the field's fonts and graphics), so
+    not on the title screen or the main menu of a fresh boot. HelpSystem_Enable has no quest log check;
+    HelpSystem_IsSinglePlayer is always TRUE (no link play: GAPS_PLAN.md decision 4).
   - CONTINUE (OverworldScene.continueSavedGame): the map's objects spawn from its templates (object events aren't
     saved, see Save data); gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
@@ -302,8 +313,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Credits (menus/credits.ts): a map scene loads asynchronously, so it can start
     a frame or two later than on the GBA (behind a black screen; the Pokémon scene → map switch, synchronous on the
     GBA, also takes a few frames). Before the first one the credits wait a few frames for their maps and graphics.
-    SoftReset (BootScene's `softReset`) restarts the boot flow (the title screen) with a fresh Overworld scene and
-    GameState; other module-level state isn't reset, and intro.c's movie isn't ported.
+    SoftReset (BootScene's `softReset`) restarts the boot flow (the copyright screen, the intro, the title screen)
+    with a fresh Overworld scene and GameState; other module-level state isn't reset.
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, cable club monitors) start their scripts and hit the unimplemented-special warnings.
   - No-op specials (`NO_OP` in `script/specials.ts`): quest log, help system, fame checker, GameCube link flags,
@@ -321,6 +332,11 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     (a native wait starts checking the next frame, and the script goes on the frame after it holds) only for the
     audio commands; `waitbuttonpress` starts checking the next frame too but goes on in the frame the press holds;
     the port's other waits check in the same frame.
+  - The help system draws on the GBA layer; in the field (which isn't) the PPU's frame goes into a canvas over the
+    field while the help's BG0 is up, and the field's Phaser-timed effects (if any) aren't paused under it. Its text
+    is drawn with the port's fonts into its own copy of gDecompressionBuffer; SaveMapTextColors /
+    RestoreMapTextColors do nothing (the port's text printers carry their colours); its DMA3 requests are copies
+    made at once (the C's run in the same frame's VBlank).
   - Cries (gba/sound.ts): Task_DuckBGMForPokemonCry is a sound task like Task_Fanfare (same caveats: ResetTasks
     doesn't remove it, and it runs after every screen task of the frame, as a priority-80 task after the usual
     priority-0 ones would). PlayCry_ReleaseDouble ducks in multi battles too (BATTLE_TYPE_MULTI is link only and

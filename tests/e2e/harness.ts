@@ -172,6 +172,11 @@ export interface StartOptions {
    * passes `?skipIntro`, which boots to the main menu (with a save) or the new game.
    */
   title?: boolean;
+  /**
+   * Boot like the game and return as soon as the copyright screen is up (it and the intro come before the title
+   * screen; intro.test.ts).
+   */
+  intro?: boolean;
   /** More URL parameters (e.g. `{ audio: '1' }`, audioOutput.test.ts). */
   query?: Record<string, string>;
 }
@@ -218,13 +223,17 @@ export class Game {
     q.set('seed', String(opts.seed ?? 1));
     q.set('speed', String(opts.speed ?? 8));
     q.set('textSpeed', opts.textSpeed ?? 'fast');
-    if (!opts.title) q.set('skipIntro', '1');
+    if (!opts.title && !opts.intro) q.set('skipIntro', '1');
     for (const [k, v] of Object.entries(opts.query ?? {})) q.set(k, v);
     this.errors = [];
     this.log = [];
     if (!opts.keepSave) await this.clearSave();
     await this.cdp.send('Page.navigate', { url: `${this.baseUrl}/?${q}` });
     await this.waitFor(() => typeof (window as any).__test !== 'undefined', { what: 'test hooks', timeout: 60_000, raw: true });
+    if (opts.intro) {
+      await this.waitFor((t) => t.events().some((e) => e.type === 'copyrightScreen'), { what: 'the copyright screen', timeout: 60_000 });
+      return this;
+    }
     if (opts.title) {
       await this.waitFor((t) => t.events().some((e) => e.type === 'titleScreen'), { what: 'the title screen', timeout: 60_000 });
       return this;
