@@ -3,8 +3,7 @@
 // screen writes the name into the caller's buffer and hands over to the return callback.
 //
 // Not ported: the help system context, StartTimer1/SeedRngAndSetTrainerId for NAMING_SCREEN_PLAYER
-// (the trainer id is rolled when the game state is created), the REVISION >= 0xA bad-word check, and
-// SE playback (PlaySE is silent).
+// (the trainer id is rolled when the game state is created) and the REVISION >= 0xA bad-word check.
 
 import { K } from '../battle/constants';
 import { state } from '../battle/env';

@@ -307,7 +307,7 @@ function Task_Seagallop_3(): void {
   }
   const [mapId, x, y] = sSeag[dest];
   sWarpDestination = { mapId, warpId: -1, x, y }; // SetWarpDestination(group, num, -1, x, y)
-  // PlayRainStoppingSoundEffect: no audio
+  // PlayRainStoppingSoundEffect: not ported (no field weather; its SE3 loops are deferred, AUDIO_PLAN.md "Not in this plan")
   PlaySE(K.SE_EXIT);
   // gFieldCallback = FieldCB_DefaultWarpExit: the field's arrival from a screen's warp (fade in, or the door's walk out)
   gFieldCallback.fn = undefined;

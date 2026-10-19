@@ -17,7 +17,6 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     CheckPartnersMonForRibbons (no ribbons; no in-game trade mon has any) and TradeEvolutionScene (no FRLG
     in-game trade evolves). Only the in-game (wireless) path is ported: DoTradeAnim_Cable is a link trade's, and so
     are CB2_SaveAndEndTrade's FadeOutBGM / IsBGMStopped wait.
-  - Lt. Surge's trash cans, Bill's cell separator: silent (SE_PIN, SE_UNLOCK, SE_BALL, SE_WARP_IN).
   - The Elite Four and Champion rooms' lighting (world/leagueLighting.ts): Task_CancelPokemonLeagueLightingEffect's
     BlendPalettes(palette 7 → black) while a fade runs does nothing (the field's fade is an overlay over everything,
     so the newly loaded palette is faded with the rest anyway). ApplyGlobalTintToPaletteSlot is a no-op (no quest
@@ -30,9 +29,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     heights the first time the guru measures (the script waits for it). The diploma returns through the field's
     plain fade from black rather than FieldCB_WarpExitFadeFromBlack's Task_ExitNonDoor (same look).
   - Fall warps (world/fallWarp.ts): no help context while surfing on Seafoam B4F.
-  - Easy Chat (menus/easyChat.ts, menus/easyChatScreen.ts, SIDE_PLAN.md W-easychat): the screen is silent
-    (SE_SELECT).
-    ShowEasyChatScreen: on the GBA the script's `fadescreen FADE_FROM_BLACK` after the special
+  - Easy Chat (menus/easyChat.ts, menus/easyChatScreen.ts, SIDE_PLAN.md W-easychat): ShowEasyChatScreen: on the GBA the script's `fadescreen FADE_FROM_BLACK` after the special
     runs unseen before the screen takes over and FieldCB_ContinueScript fades the field in; here the script waits
     at the special and that `fadescreen` does the fade in (as the move deleter; same on screen). The mail type isn't
     modelled (the special does nothing for it). ShowEasyChatMessage shows
@@ -149,9 +146,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     box isn't on a scrolled BG); InUnionRoom is always FALSE. No quest log events (ItemUse_SetQuestLogEvent).
     The Town Map, TM case and berry pouch from SELECT start their screen once the map headers the region map /
     party menu read have loaded (prepareFieldMoveMenu), a frame or more after the fade instead of in the same frame.
-  - TM case (menus/tmCase.ts): silent (SE_SELECT, SE_SHOP); no quest log (RecordItemTransaction). Not ported:
+  - TM case (menus/tmCase.ts): no quest log (RecordItemTransaction). Not ported:
     the Pokédude's Teachy TV demo (TMCASE_POKEDUDE) and the Union Room's GIVE / EXIT menu (no link play).
-  - Berry pouch (menus/berryPouch.ts): silent (SE_BAG_CURSOR, SE_SELECT, SE_SHOP); no quest log
+  - Berry pouch (menus/berryPouch.ts): no quest log
     (RecordItemTransaction). Not ported: Berry Crush (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room context
     menus (GIVE / EXIT, EXIT) and IsHoldingItemAllowed's Enigma Berry check there (always TRUE: neither can be
     entered) and AbortBerryPouchLoading (for a failed Alloc).
@@ -197,7 +194,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     user, so it lives in surf.ts rather than on the ObjectEvent, and the player's sprite y2 it sets is applied
     to the Phaser sprite directly (ObjectEvent's depth ignores that 1 px). After a battle or field menu the blob
     is made again (the GBA rebuilds every sprite), so its animation restarts.
-  - Dive (world/dive.ts; an R/S leftover no FRLG map reaches): no SE_M_DIVE, no PlayRainStoppingSoundEffect (no field
+  - Dive (world/dive.ts; an R/S leftover no FRLG map reaches): no PlayRainStoppingSoundEffect (no field
     weather). DiveFieldEffect_ShowMon waits for the banner's graphics to load, as Waterfall's
     does. `setdivewarp` (ScrCmd_setdivewarp) isn't ported (no FRLG script uses it), so sFixedDiveWarp is always the
     dummy warp and a map without a dive/emerge connection never dives. As in the C, that case leaves the player
@@ -205,7 +202,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Object animations follow the step's progress (first half step frame, second half standing) instead of
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
-    GAME_STAT_SHOPPED; no SE_SHOP. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
+    GAME_STAT_SHOPPED. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
   - Egg hatching (menus/eggHatch.ts): the MUS_EVOLVED fanfare holds "X hatched from the EGG!" for sFanfares' 220
     frames and the cry holds the scene, as on the GBA. The C
     loads five palettes from gTradeGba2_Pal, two of them past the file's end (ROM that follows); the port loads
@@ -219,9 +216,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     kept (the nickname is タマゴ). The level menu's 1 px letter spacing is dropped, as for all latin text.
     DetermineEggSpeciesAndParentSlots leaves parentSlots uninitialised in the C when neither mon is female nor
     Ditto; the port starts them at [0, 1] (no compatible pair gets there).
-  - Safari Zone: the entrance's SE/fanfare are silent.
   - The money box and Safari stats window are Phaser MenuWindows (the field isn't on the GBA layer).
-  - Pokémon Storage System (menus/pokemonStorage*.ts): silent (SE_PC_LOGIN / SE_PC_OFF and the menu SEs); no
+  - Pokémon Storage System (menus/pokemonStorage*.ts): no
     quest log events (SetPokeStorageQuestLogEvent) or help context. The PPU has no OBJ mosaic, so the mon shown on
     the left changes at once instead of un-pixelating (the effect's timing, which the menus wait for, is kept).
     The screen works on its own six-slot copy of the party (the C keeps empty slots while it runs) and writes it
@@ -229,7 +225,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     early if the summary / naming screen / bag opened while the party box still showed the gap.
     MON_DATA_SANITY_IS_BAD_EGG reads FALSE and mail isn't modelled, so the bad-egg and mail checks never trigger.
   - Player's PC (ui/PlayerPcMenu.ts, menus/itemPc.ts): the mailbox is always empty (mail isn't modelled); no quest
-    log events (withdrew / deposited / gave from the PC), help contexts or SEs.
+    log events (withdrew / deposited / gave from the PC) or help contexts.
   - Save data (state/saveData.ts): one JSON save in browser localStorage instead of the flash's two 14-sector
     save slots, so there are no sector checksums, no alternating slots / save counter, no backup of the previous
     save and no encryption of money, coins and bag quantities (gSaveBlock2Ptr->encryptionKey). The save holds
@@ -252,8 +248,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     Sapphire's berry clock) does nothing. The clear save data screen (B+SELECT+UP) empties the one localStorage
     slot (ClearSaveData erases every flash sector, incl. the Hall of Fame) and its soft reset (DoSoftReset) is
     `softReset` in scenes/BootScene.ts: the scenes restart, the extracted data stays loaded.
-  - Oak's speech (menus/oakSpeech.ts): no BGM (MUS_NEW_GAME_INSTRUCT / _INTRO / _EXIT, MUS_ROUTE24) or SEs (the
-    Nidoran cry and its wait are real), no help context (HELPCONTEXT_NEW_GAME). After the naming screen the C loads 48
+  - Oak's speech (menus/oakSpeech.ts): no help context (HELPCONTEXT_NEW_GAME). After the naming screen the C loads 48
     colours past the background palette (out of the tiles after it) into palettes the player / rival pic overwrite
     anyway; the port loads just the palette. The trainer id is still rolled when the game state is created (see the
     RNG approximation), not by the naming screen's SeedRngAndSetTrainerId. CB2_NewGame hands only the names and the
