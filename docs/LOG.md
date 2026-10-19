@@ -3349,3 +3349,31 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Tests: `tests/unit/psgSynth.test.ts` + 2 (the wave restart's delay; a sequencer step inside an output sample
   through the DAC, checked to fail before the fix). Typecheck clean; unit 580 in 42 files; e2e audioOutput +
   audio 7 passed.
+### W-sound 8: the sweep (AUDIO_PLAN.md batch D, unit 9)
+
+- Ambient cries (overworld.c: ChooseAmbientCrySpecies, UpdateAmbientCry, PlayAmbientCry; field_tasks.c's
+  Task_RunTimeBasedEvents) in `gba/overworldMusic.ts`, with `WildEncounters.getLocalWildMon` (GetLocalWildMon) and
+  two new OverworldMusicHost members. ChooseAmbientCrySpecies runs on every map load (before the roamer moves) and in
+  CONTINUE's Overworld_ResetStateOnContinue, so a map with a wild header now rolls Random() once or twice on load, as
+  on the GBA; the task's state lives in OverworldScene (zeroed on map loads and in resumeMap) and ticks after the
+  field tasks while the field is free. No seeded e2e outcome changed (the full suite below).
+- Battle controllers: the player's and the opponent's MOVEANIMATION / STATUSICONUPDATE / STATUSANIMATION /
+  BATTLEANIMATION handlers hold while IsBattleSEPlaying (up to 30 calls, then SE1 / SE2 stop), PlayerHandleCmd23
+  calls BattleStopLowHpSound.
+- BattleUi's `playSE / playCry / playBGM / playFanfare` deleted (decision 21), with BattleScene's pass-throughs and
+  the MainMenuScene / tradeScene stand-ins' hooks.
+- Stale, removed from docs/DEVIATIONS.md (their screens already made the C's calls, checked by grep against the C):
+  Lt. Surge's trash cans and Bill's cell separator (script `playse`), Easy Chat, the TM case, the berry pouch, the
+  Safari Zone entrance (script `playfanfare`), the Storage System, the Player's PC, Oak's speech, the Poké Mart's
+  SE_SHOP, Dive's SE_M_DIVE. Stale src comments: namingScreen.ts (PlaySE "silent"), seagallop.ts (now names field
+  weather as deferred), OverworldScene's ChooseAmbientCrySpecies note.
+- Races: battleAnims.3e3a's Smokescreen polled the smoke cloud's four sprites from Node, which could come after the
+  cloud was gone under load; now watched in the page. Found by the full suite: battleAnims.2c's Zap Cannon row timed out
+  at 120 s (Zap Cannon's 50% accuracy, each miss a retried turn, misses vary run to run as expectMovesRun documents);
+  its rows get 300 s.
+- AUDIO_PLAN.md: "Batch D result" lists what stays deferred.
+- Tests: typecheck clean; unit 583 in 43 files (overworldMusic + the ambient cries' rolls against an independent
+  LCG); new `tests/e2e/audioSweep.test.ts` (4: Route 1's ambient cries and their spacing, none indoors, the trash
+  can's SE_PIN, PSYCHIC's anim held behind a long SE until IsBattleSEPlaying stops it); the battle files (60) green.
+  Full suite on the branch: 440 e2e in 70 files, 439 passed, 25 min; the one failure (2c's Zap Cannon timeout) is
+  fixed above and the file passes (7).

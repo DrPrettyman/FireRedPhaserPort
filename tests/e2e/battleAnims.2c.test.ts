@@ -20,7 +20,9 @@ test.each([
   // AnimGrowingShockWaveOrb + AnimTask_ShockWaveProgressingBolt + AnimTask_ShockWaveLightning,
   // AnimAirWaveCrescent, AnimTask_DrillPeckHitSplats, AnimFallingFeather
   ['SHOCK_WAVE', 'AEROBLAST', 'DRILL_PECK', 'FEATHER_DANCE'],
-])('%s, %s, %s and %s run to the end', (...moves) => expectMovesRun(session, moves));
+  // Zap Cannon hits half the time and a miss costs a whole turn (expectMovesRun retries it up to 8 times, as the
+  // reseed can't fix the roll): several misses in a row ran past the default 120 s under the full suite's load.
+])('%s, %s, %s and %s run to the end', (...moves) => expectMovesRun(session, moves), 300_000);
 
 test.each([
   // AnimFlyBallUp, then AnimFlyBallAttack
