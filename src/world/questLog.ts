@@ -908,11 +908,14 @@ export function loadQuestLogScenes(saved: QuestLogSceneSave[] | undefined): Ques
 
 // ------------------------------------------------------------------ tests
 
-/** The commands of a script up to and including its first SCENE_END (or all 128 u16s), decoded for tests. */
-export function decodeQuestLogScript(script: number[]): { id: number; words: number[] }[] {
+/**
+ * The commands of a script up to and including its first SCENE_END, or up to `end` (the recording cursor of a
+ * scene still being recorded) or the last whole command, decoded for tests.
+ */
+export function decodeQuestLogScript(script: number[], end = script.length): { id: number; words: number[] }[] {
   const out: { id: number; words: number[] }[] = [];
   let pos = 0;
-  while (pos < script.length) {
+  while (pos < end) {
     const id = script[pos] & 0x0fff;
     let n: number;
     if (id === K.QL_EVENT_INPUT || id === K.QL_EVENT_MOVEMENT || id === K.QL_EVENT_GFX_CHANGE) n = 4;
@@ -923,6 +926,7 @@ export function decodeQuestLogScript(script: number[]): { id: number; words: num
       if (!size) break;
       n = (size + (size - 4) * (script[pos] >> 12)) / 2;
     }
+    if (pos + n > end) break;
     out.push({ id, words: script.slice(pos, pos + n) });
     pos += n;
     if (id === K.QL_EVENT_SCENE_END) break;
@@ -934,7 +938,7 @@ export function decodeQuestLogScript(script: number[]): { id: number; words: num
 export function questLogTestProbe(state: GameState) {
   return {
     ...questLogDebugState(),
-    scenes: state.questLog.map((s) => ({
+    scenes: state.questLog.map((s, i) => ({
       startType: s.startType,
       map: mapIdOf(s.mapGroup, s.mapNum),
       mapGroup: s.mapGroup,
@@ -943,7 +947,7 @@ export function questLogTestProbe(state: GameState) {
       x: s.x,
       y: s.y,
       objects: s.objectEvents.filter((o) => o.active).map((o) => ({ localId: o.localId, x: o.x, y: o.y, isPlayer: o.isPlayer, facingDirection: o.facingDirection })),
-      commands: decodeQuestLogScript(s.script),
+      commands: decodeQuestLogScript(s.script, gQL.state === K.QL_STATE_RECORDING && gQL.recordingPointer?.scene === i ? gQL.recordingPointer.pos : undefined),
       script: [...s.script],
     })),
   };
