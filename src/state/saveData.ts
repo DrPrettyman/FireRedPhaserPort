@@ -15,14 +15,15 @@ import type { PlayTime } from './playTime';
 import type { BoxPokemon } from './PokemonStorage';
 import type { DaycareMon } from '../world/daycare';
 import type { TrainerTowerRecord } from './trainerTowerRecord';
+import { loadQuestLogScenes, questLogScenesSave, type QuestLogSceneSave } from '../world/questLog';
 
 /**
  * Bump when SaveData changes shape; fromSaveData refuses other versions. Older versions that only lack fields
  * are brought up to date by `upgradeSave` (version 1 had no gameStats, version 2 no options.sound, version 3 had
  * daycareStepCounter instead of daycare and no route5DayCareMon, version 4 no easyChat, version 5 no savedMusic,
- * version 6 no weather, version 7 no trainerTower, version 8 no gcnLinkFlags).
+ * version 6 no weather, version 7 no trainerTower, version 8 no gcnLinkFlags, version 9 no questLog).
  */
-export const SAVE_VERSION = 9;
+export const SAVE_VERSION = 10;
 
 /** The localStorage key of the one save slot. */
 export const SAVE_STORAGE_KEY = 'firered-phaser:save';
@@ -149,6 +150,8 @@ export interface SaveData {
    * since version 8. Absent in an older save: the new-game records (ResetTrainerTowerResults) stay.
    */
   trainerTower?: { challengeId: number; records: TrainerTowerRecord[] };
+  /** gSaveBlock1Ptr->questLog[QUEST_LOG_SCENE_COUNT] (world/questLog.ts); since version 10. */
+  questLog: QuestLogSceneSave[];
 
   // ---- gPokemonStoragePtr
   storage: {
@@ -264,6 +267,7 @@ export function toSaveData(state: GameState): SaveData {
       additionalPhrases: [...state.additionalPhrases],
     },
     trainerTower: { challengeId: state.towerChallengeId, records: state.trainerTower.map((r) => ({ ...r })) },
+    questLog: questLogScenesSave(state.questLog),
     storage: {
       currentBox: st.currentBox,
       boxes: st.boxes.map((box) => box.map((mon) => mon && boxMonSave(mon))),
@@ -343,6 +347,8 @@ export function fromSaveData(data: SaveData, state: GameState): GameState {
     state.trainerTower.forEach((r, i) => Object.assign(r, data.trainerTower!.records[i]));
   }
 
+  state.questLog = loadQuestLogScenes(data.questLog);
+
   const st = state.storage;
   st.currentBox = data.storage.currentBox;
   st.boxes.forEach((box, b) => box.forEach((_, p) => (box[p] = clone(data.storage.boxes[b]?.[p] ?? null))));
@@ -372,6 +378,8 @@ export function upgradeSave(data: SaveData): SaveData {
   if (data?.version === 7) data = { ...data, version: 8 };
   // No gcnLinkFlags: 0 (their specials weren't ported yet; only the GameCube link reads them).
   if (data?.version === 8) data = { ...data, version: 9, gcnLinkFlags: 0 };
+  // No quest log scenes (it wasn't ported): CONTINUE has nothing to play back.
+  if (data?.version === 9) data = { ...data, version: 10, questLog: [] };
   return data;
 }
 

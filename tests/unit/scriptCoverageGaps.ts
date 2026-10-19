@@ -52,7 +52,6 @@ export const KNOWN_GAPS: KnownGap[] = [
   { kind: 'special', name: 'LoadPlayerBag', tag: 'link', where: "CeladonCity_PokemonCenter_2F, CeruleanCity_PokemonCenter_2F, CinnabarIsland_PokemonCenter_2F, FiveIsland_PokemonCenter_2F, FourIsland_PokemonCenter_2F, ... (19 in all)" },
   { kind: 'special', name: 'LoadPlayerParty', tag: 'link', where: "SevenIsland_House_Room1, SevenIsland_House_Room2" },
   { kind: 'special', name: 'PrintPlayerBerryPowderAmount', tag: 'link', where: "CeruleanCity_House5" },
-  { kind: 'special', name: 'QuestLog_StartRecordingInputsAfterDeferredEvent', tag: 'link', where: "CeladonCity_PokemonCenter_2F, CeruleanCity_PokemonCenter_2F, CinnabarIsland_PokemonCenter_2F, FiveIsland_PokemonCenter_2F, FourIsland_PokemonCenter_2F, ... (20 in all)" },
   { kind: 'special', name: 'ReducePlayerPartyToThree', tag: 'link', where: "SevenIsland_House_Room1" },
   { kind: 'special', name: 'RemoveBerryPowderVendorMenu', tag: 'link', where: "CeruleanCity_House5" },
   { kind: 'special', name: 'ReturnFromLinkRoom', tag: 'link', where: "(CableClub_EventScript_DoLinkRoomExit)" },

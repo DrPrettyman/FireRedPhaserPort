@@ -905,3 +905,46 @@ export function loadQuestLogScenes(saved: QuestLogSceneSave[] | undefined): Ques
   });
   return scenes;
 }
+
+// ------------------------------------------------------------------ tests
+
+/** The commands of a script up to and including its first SCENE_END (or all 128 u16s), decoded for tests. */
+export function decodeQuestLogScript(script: number[]): { id: number; words: number[] }[] {
+  const out: { id: number; words: number[] }[] = [];
+  let pos = 0;
+  while (pos < script.length) {
+    const id = script[pos] & 0x0fff;
+    let n: number;
+    if (id === K.QL_EVENT_INPUT || id === K.QL_EVENT_MOVEMENT || id === K.QL_EVENT_GFX_CHANGE) n = 4;
+    else if (id === K.QL_EVENT_WAIT) n = 2;
+    else if (id === K.QL_EVENT_SCENE_END) n = 1;
+    else {
+      const size = questLogData().eventCmdSizes[Object.keys(questLogData().eventCmdSizes).find((k) => K[k] === id) ?? ''];
+      if (!size) break;
+      n = (size + (size - 4) * (script[pos] >> 12)) / 2;
+    }
+    out.push({ id, words: script.slice(pos, pos + n) });
+    pos += n;
+    if (id === K.QL_EVENT_SCENE_END) break;
+  }
+  return out;
+}
+
+/** __test.questLog(): the state and the scenes, their commands decoded. */
+export function questLogTestProbe(state: GameState) {
+  return {
+    ...questLogDebugState(),
+    scenes: state.questLog.map((s) => ({
+      startType: s.startType,
+      map: mapIdOf(s.mapGroup, s.mapNum),
+      mapGroup: s.mapGroup,
+      mapNum: s.mapNum,
+      warpId: s.warpId,
+      x: s.x,
+      y: s.y,
+      objects: s.objectEvents.filter((o) => o.active).map((o) => ({ localId: o.localId, x: o.x, y: o.y, isPlayer: o.isPlayer, facingDirection: o.facingDirection })),
+      commands: decodeQuestLogScript(s.script),
+      script: [...s.script],
+    })),
+  };
+}

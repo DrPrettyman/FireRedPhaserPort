@@ -7,8 +7,8 @@
 // (TestPlayerAvatarFlags, GetOnOffBike, ...) reach it directly.
 //
 // Not here: fishing (StartFishing, Task_Fishing: world/fishing.ts), the teleport warp-out/in spin
-// (field moves). Not ported: the warp arrow sprite (HandleWarpArrowSpriteHideShow), the quest log's recordings,
-// and the Acro Bike / secret base mat functions, which FRLG's metatile behaviours never trigger.
+// (field moves). The quest log's recordings (QuestLogRecordPlayerStep, the gfx transitions) call world/questLog*.ts.
+// Not ported: the warp arrow sprite (HandleWarpArrowSpriteHideShow) and the Acro Bike / secret base mat functions, which FRLG's metatile behaviours never trigger.
 
 import { K } from '../battle/constants';
 import { PlaySE } from '../gba/sound';
@@ -21,6 +21,16 @@ import { BikeClearState, Bike_HandleBumpySlopeJump, Bike_UpdateBikeCounterSpeed,
 import { DELTA, type Direction } from './direction';
 import { Overworld_ChangeMusicToDefault, Overworld_ClearSavedMusic } from '../gba/overworldMusic'; // CreateStopSurfingTask (W-sound 3)
 import { SetHelpContext, SetHelpContextForMap } from '../ui/helpSystemContext';
+import { QL_GetPlaybackState, QuestLogRecordPlayerStep } from './questLog';
+import {
+  QL_PLAYER_GFX_BIKE,
+  QL_PLAYER_GFX_NORMAL,
+  QL_PLAYER_GFX_SURF,
+  QL_TryRecordNPCStepWithDuration32,
+  QL_TryRecordPlayerStepWithDuration0,
+  QuestLogRecordSurfDismount,
+  QuestLogTryRecordPlayerAvatarGfxTransition,
+} from './questLogPlayer';
 
 /** A d-pad direction, or DIR_NONE. */
 export type Dir = Direction | undefined;
@@ -389,6 +399,7 @@ export function CheckForObjectEventCollision(obj: ObjectEvent, x: number, y: num
 /** CanStopSurfing: surfing into land at elevation 3 with nobody there gets the player off (CreateStopSurfingTask). */
 function CanStopSurfing(x: number, y: number, direction: Direction): boolean {
   if (gPlayerAvatar.flags & F.SURFING && avatarField().elevationAt(x, y) === 3 && !avatarField().objectAtPosition(x, y, 3)) {
+    QuestLogRecordSurfDismount(direction); // QuestLogRecordPlayerAvatarGfxTransitionWithDuration(sQuestLogSurfDismountActionIds[direction], 16)
     CreateStopSurfingTask(direction);
     return true;
   }
@@ -450,6 +461,7 @@ function DoPlayerAvatarTransition(): void {
 
 /** PlayerAvatarTransition_Normal → QL_GfxTransition_Normal */
 function PlayerAvatarTransition_Normal(): void {
+  QuestLogTryRecordPlayerAvatarGfxTransition(QL_PLAYER_GFX_NORMAL);
   const player = playerObj();
   SetPlayerGraphics(GetPlayerAvatarGraphicsIdByStateId(K.PLAYER_AVATAR_GFX_NORMAL));
   player.face(player.movementDirection); // ObjectEventTurn
@@ -458,6 +470,7 @@ function PlayerAvatarTransition_Normal(): void {
 
 /** PlayerAvatarTransition_Bike → QL_GfxTransition_Bike, then BikeClearState */
 function PlayerAvatarTransition_Bike(): void {
+  QuestLogTryRecordPlayerAvatarGfxTransition(QL_PLAYER_GFX_BIKE);
   const player = playerObj();
   SetPlayerGraphics(GetPlayerAvatarGraphicsIdByStateId(K.PLAYER_AVATAR_GFX_BIKE));
   player.face(player.movementDirection);
@@ -468,6 +481,7 @@ function PlayerAvatarTransition_Bike(): void {
 
 /** PlayerAvatarTransition_Surfing → QL_GfxTransition_StartSurf */
 function PlayerAvatarTransition_Surfing(): void {
+  QuestLogTryRecordPlayerAvatarGfxTransition(QL_PLAYER_GFX_SURF);
   if (gPlayerAvatar.flags & F.SURFING) return;
   const player = playerObj();
   SetPlayerGraphics(GetPlayerAvatarGraphicsIdByStateId(K.PLAYER_AVATAR_GFX_RIDE));
@@ -645,7 +659,7 @@ function PlayerCheckIfAnimFinishedOrInactive(): boolean {
 function PlayerSetAnimId(movementActionId: number, copyableMovement: number): void {
   if (!PlayerIsAnimActive()) {
     playerObj().playerCopyableMovement = copyableMovement; // PlayerSetCopyableMovement
-    playerObj().setHeldMovement(movementActionId);
+    if (!playerObj().setHeldMovement(movementActionId)) QuestLogRecordPlayerStep(movementActionId);
   }
 }
 
@@ -829,8 +843,8 @@ function StartStrengthAnim(boulder: ObjectEvent, direction: Direction): void {
         if (!player.movementOverridden && !boulder.movementOverridden) {
           player.clearHeldMovementIfFinished();
           boulder.clearHeldMovementIfFinished();
-          player.setHeldMovement(directionalAction('WALK_IN_PLACE_NORMAL', direction));
-          boulder.setHeldMovement(directionalAction('WALK_SLOWER', direction));
+          QL_TryRecordPlayerStepWithDuration0(player, directionalAction('WALK_IN_PLACE_NORMAL', direction));
+          QL_TryRecordNPCStepWithDuration32(boulder, directionalAction('WALK_SLOWER', direction));
           f.startDust(boulder.current.x, boulder.current.y, boulder.previousElevation, boulder.priority); // FLDEFF_DUST
           PlaySE(K.SE_M_STRENGTH);
           state++;
@@ -871,14 +885,14 @@ export function CreateStopSurfingTask(direction: Direction): void {
       // Task_StopSurfingInit
       if (player.movementOverridden && !player.clearHeldMovementIfFinished()) return false;
       f.stopSurfBlob?.(); // SetSurfBlob_BobState(BOB_MON_ONLY)
-      player.setHeldMovement(directionalAction('JUMP_SPECIAL_WITH_EFFECT', direction));
+      QL_TryRecordPlayerStepWithDuration0(player, directionalAction('JUMP_SPECIAL_WITH_EFFECT', direction));
       waiting = true;
       return false;
     }
     // Task_WaitStopSurfing
     if (!player.clearHeldMovementIfFinished()) return false;
     SetPlayerGraphics(GetPlayerAvatarGraphicsIdByStateId(K.PLAYER_AVATAR_GFX_NORMAL));
-    player.setHeldMovement(directionalAction('FACE', player.facing));
+    QL_TryRecordPlayerStepWithDuration0(player, directionalAction('FACE', player.facing));
     gPlayerAvatar.preventStep = false;
     f.unlockPlayerFieldControls();
     f.unfreezeObjectEvents();
@@ -892,6 +906,8 @@ export function CreateStopSurfingTask(direction: Direction): void {
 
 /** SeafoamIslandsB4F_CurrentDumpsPlayerOnLand (special) */
 export function SeafoamIslandsB4F_CurrentDumpsPlayerOnLand(): void {
+  if (QL_GetPlaybackState() === K.QL_PLAYBACK_STATE_RUNNING) return; // gQuestLogPlaybackState RUNNING or ACTION_END
+  QuestLogRecordSurfDismount('up');
   CreateStopSurfingTask('up');
 }
 

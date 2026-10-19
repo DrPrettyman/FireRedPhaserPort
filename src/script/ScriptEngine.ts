@@ -31,6 +31,8 @@ import { FadeInBGM, FadeOutBGMTemporarily, IsBGMPausedOrStopped, IsFanfareTaskIn
 import { IsCryFinished, PlayCry_Script } from '../gba/sound'; // the cries (W-sound 2)
 import { Overworld_ChangeMusicToDefault, Overworld_SetSavedMusic } from '../gba/overworldMusic';
 import { gStringVar4 } from '../menus/common';
+import { QL_FinishRecordingScene } from '../world/questLog';
+import { QuestLog_RecordEnteredMap, QuestLogEvents_HandleEndTrainerBattle } from '../world/questLogEvents';
 
 export interface ScriptsData {
   code: Instruction[];
@@ -802,7 +804,8 @@ export class ScriptEngine {
       ctx.cmp = this.state.getFlag(a[0]) ? Cmp.Equal : Cmp.Less; // goto_if TRUE tests EQ against 1
     },
     setworldmapflag(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
-      MapPreview_SetFlag(a[0], this.state); // QuestLog_RecordEnteredMap: no quest log
+      QuestLog_RecordEnteredMap(this.defines.require(a[0])); // before the flag is set
+      MapPreview_SetFlag(a[0], this.state);
     },
     setvar(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       this.state.setVar(a[0], this.defines.get(a[1]) ?? this.host.resolveLocalId(a[1]) ?? 0);
@@ -1555,7 +1558,10 @@ export class ScriptEngine {
       this.state.setVar('VAR_LAST_TALKED', battle.localIdOrFlags);
       this.host.selectObject(battle.localIdOrFlags);
     }
-    if (is('TRAINER_BATTLE_REMATCH', 'TRAINER_BATTLE_REMATCH_DOUBLE')) battle.trainer = GetRematchTrainerId(this.rematchEnv(), battle.trainer);
+    if (is('TRAINER_BATTLE_REMATCH', 'TRAINER_BATTLE_REMATCH_DOUBLE')) {
+      QL_FinishRecordingScene(); // BattleSetup_ConfigureTrainerBattle: a rematch ends the scene
+      battle.trainer = GetRematchTrainerId(this.rematchEnv(), battle.trainer);
+    }
     return script;
   }
 
@@ -1626,6 +1632,7 @@ export class ScriptEngine {
     }
     if (rematch) this.state.trainerRematches[this.state.getVar('VAR_LAST_TALKED')] = 0; // ClearRematchStateOfLastTalked
     this.setTrainerFlag(battle.trainer); // SetBattledTrainerFlag
+    if (!rematch) QuestLogEvents_HandleEndTrainerBattle(); // CB2_EndTrainerBattle (not CB2_EndRematchBattle)
     return true;
   }
 

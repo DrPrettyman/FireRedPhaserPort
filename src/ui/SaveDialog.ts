@@ -16,6 +16,7 @@ import { BackupHelpContext, RestoreHelpContext, SetHelpContext } from './helpSys
 import { MenuWindow } from './MenuWindow';
 import { SaveStatToString } from './saveMenuUtil';
 import { YesNoMenu } from './YesNoMenu';
+import { SaveQuestLogData } from '../world/questLog';
 
 // enum SaveCBReturn
 export const SAVECB_RETURN_CONTINUE = 0;
@@ -197,7 +198,7 @@ export class SaveDialog {
   };
 
   private printSavingDontTurnOffPower = (): number => {
-    // SaveQuestLogData: no quest log
+    SaveQuestLogData();
     this.printSaveText('gText_SavingDontTurnOffThePower', this.doSave);
     return SAVECB_RETURN_CONTINUE;
   };

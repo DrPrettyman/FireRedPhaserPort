@@ -59,6 +59,8 @@ import { diplomaProbe } from '../menus/diploma';
 import { easyChatProbe } from '../menus/easyChatScreen';
 import { seagallopProbe } from '../menus/seagallop';
 import type { SSAnneProbe } from '../world/ssAnne';
+import { questLogTestProbe } from '../world/questLog';
+import { SetQuestLogEvent } from '../world/questLogEvents';
 import type { WeatherProbe } from '../world/weather';
 import { gMPlayTable, gPokemonCryMusicPlayers, gSongTable } from '../audio/m4a';
 import { MPT_FLG_EXIST, MUSICPLAYER_STATUS_PAUSE, MUSICPLAYER_STATUS_TRACK, type MusicPlayerInfo } from '../audio/m4aInternal';
@@ -794,6 +796,14 @@ function createApi(game: Phaser.Game) {
     eggHatch: () => eggHatchProbe(),
     /** The S.S. Anne's departure while it runs (world/ssAnne.ts): the task's state, the boat's x2, wake and smoke. */
     ssAnne: () => overworld()?.testSSAnne(),
+    /**
+     * The quest log (world/questLog*.ts): gQuestLogState, the playback state, the scene being recorded, the action
+     * index and the next action's delay, the step recording mode, and the four scenes (startType, map, warp id,
+     * position, the active objects and the command stream up to its SCENE_END).
+     */
+    questLog: () => questLogTestProbe(requireState()),
+    /** SetQuestLogEvent(QL_EVENT_* name, data): an event as the C's call sites (QL3-QL4) would send it. */
+    questLogEvent: (event: string, data: Record<string, unknown> | null) => SetQuestLogEvent(define(event), data),
     /** The move relearner while it's up (menus/learnMove.ts): its MENU_STATE_*, the list's moves and selection. */
     moveRelearner: () => (gMain.callback2?.name === 'CB2_MoveRelearner' ? moveRelearnerProbe() : undefined),
     /** The berry pouch while it's open (menus/berryPouch.ts): BERRYPOUCH_* type, task, scroll/row and the pocket's berries in list order. */
