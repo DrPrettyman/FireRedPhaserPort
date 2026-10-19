@@ -68,8 +68,8 @@ import { questLogTestProbe } from '../world/questLog';
 import { questLogPlaybackDebugState } from '../world/questLogPlayback';
 import { questLogEventLineProbe } from '../world/questLogEventCodecs2';
 import { SetQuestLogEvent } from '../world/questLogEvents';
-import { DoCurrentWeather, SetSavedWeather, Weather_SetBlendCoeffs, type WeatherProbe } from '../world/weather';
-import { CreateSprite, GFXTAG_ASH, LoadSpriteSheet, MAX_SPRITES, PALTAG_WEATHER } from '../world/weatherSprites';
+import { DoCurrentWeather, gWeatherPtr, SetSavedWeather, Weather_SetBlendCoeffs, type WeatherProbe } from '../world/weather';
+import { CreateSprite, GFXTAG_ASH, gWeatherSprites, LoadSpriteSheet, MAX_SPRITES, PALTAG_WEATHER } from '../world/weatherSprites';
 import type { WeatherSpriteRenderer } from '../world/weatherSpriteRenderer';
 import { gDummySpriteAffineAnimTable, gDummySpriteAnimTable, oam, SPRITE_SHAPE, ST_OAM_OBJ_BLEND, ST_OAM_OBJ_NORMAL } from '../gba/sprite';
 import { gMPlayTable, gPokemonCryMusicPlayers, gSongTable } from '../audio/m4a';
@@ -370,7 +370,7 @@ interface OverworldLike extends Phaser.Scene {
     spriteCoordOffset: { x: number; y: number };
     gbaSemiPixels: number;
   };
-  testWeatherSprites(px?: number, py?: number, visible?: boolean): ReturnType<WeatherSpriteRenderer['probe']> & {
+  testWeatherSprites(px?: number, py?: number, visible?: boolean, drawn?: boolean): ReturnType<WeatherSpriteRenderer['probe']> & {
     spriteCoordOffset: { x: number; y: number };
     gbaSemiPixels: number;
   };
@@ -731,9 +731,19 @@ function createApi(game: Phaser.Game) {
     /**
      * The weathers' sprites (world/weatherSprites.ts, drawn by world/weatherSpriteRenderer.ts): OAM as drawn (front
      * first: position, frame, priority, blend), BLDALPHA, the front sprite's colour at screen pixel (px, py),
-     * gSpriteCoordOffsetX / Y, the GBA layer's semi-transparent OBJ pixels; `visible` shows or hides them.
+     * gSpriteCoordOffsetX / Y, the GBA layer's semi-transparent OBJ pixels; `visible` shows or hides them. `drawn`:
+     * the OAM and pixel as the last render drew them (right after a `screenPixel`: the frame it read).
      */
-    weatherSprites: (px?: number, py?: number, visible?: boolean) => overworld()?.testWeatherSprites(px, py, visible),
+    weatherSprites: (px?: number, py?: number, visible?: boolean, drawn?: boolean) => overworld()?.testWeatherSprites(px, py, visible, drawn),
+    /** gWeatherPtr's scalar fields (the weathers' counters and flags: snowflakeSpriteCount, sandstormWaveIndex, ...). */
+    weatherPtr: () => Object.fromEntries(Object.entries(gWeatherPtr).filter(([, v]) => typeof v !== 'object')) as Record<string, number | boolean>,
+    /** Test-only: Weather_SetBlendCoeffs(eva, evb) (current and target: a weather idling at its blend keeps it). */
+    weatherBlendCoeffs: (eva: number, evb: number) => Weather_SetBlendCoeffs(eva, evb),
+    /** A weather sprite by id (world/weatherSprites.ts gWeatherSprites): position, offsets, data[], invisible, frame. */
+    weatherSprite: (id: number) => {
+      const s = gWeatherSprites[id];
+      return s?.inUse ? { x: s.x, y: s.y, x2: s.x2, y2: s.y2, data: [...s.data], invisible: s.invisible, tileNum: s.oam.tileNum, centerToCornerVecX: s.centerToCornerVecX, centerToCornerVecY: s.centerToCornerVecY } : undefined;
+    },
     /**
      * Test-only: a still 64x64 sprite of the ash sheet (gWeatherAshTiles' first frame) on the weather's sprite layer
      * at screen (x, y) (its top-left corner), ST_OAM_OBJ_BLEND or NORMAL, OAM priority 1, and BLDALPHA (eva, evb)

@@ -160,11 +160,12 @@ export class WeatherSpriteRenderer {
 
   /**
    * Dev: the sprites' OAM as of now (front first), BLDALPHA, and the colour (JASC [r, g, b]) of the front sprite's
-   * opaque pixel at screen pixel (px, py), if any, with whether that sprite blends.
+   * opaque pixel at screen pixel (px, py), if any, with whether that sprite blends. `drawn`: the OAM the last render
+   * drew instead (read right after a `screenPixel`, it's the frame that pixel came from).
    */
-  probe(px?: number, py?: number) {
+  probe(px?: number, py?: number, drawn = false) {
     // BuildOamBuffer now (the drawn OAM is the last render's, a few ticks behind under the e2e harness's speed)
-    const oam = BuildWeatherOam(this.host.spriteCoordOffsetX(), this.host.spriteCoordOffsetY());
+    const oam = drawn ? this.oam : BuildWeatherOam(this.host.spriteCoordOffsetX(), this.host.spriteCoordOffsetY());
     this.refreshFrames();
     let pixel: { rgb: number[]; blend: boolean; id: number } | undefined;
     if (px !== undefined && py !== undefined) {

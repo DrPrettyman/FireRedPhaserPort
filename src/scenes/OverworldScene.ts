@@ -754,10 +754,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    * Dev: the weathers' sprites for `__test.weatherSprites()` (world/weatherSpriteRenderer.ts `probe`: OAM as drawn,
    * BLDALPHA, the front sprite's colour at screen pixel (px, py)); `visible` shows or hides them.
    */
-  testWeatherSprites(px?: number, py?: number, visible?: boolean) {
+  testWeatherSprites(px?: number, py?: number, visible?: boolean, drawn?: boolean) {
     if (visible !== undefined) this.weatherSpriteRenderer.setVisible(visible);
     return {
-      ...this.weatherSpriteRenderer.probe(px, py),
+      ...this.weatherSpriteRenderer.probe(px, py, drawn),
       spriteCoordOffset: { x: -(this.cameraLeft - this.cameraOrigin.left), y: -(this.field.cameraTop - this.cameraOrigin.top) - 40 },
       gbaSemiPixels: this.gbaScreen.semiObjPixels(),
     };
