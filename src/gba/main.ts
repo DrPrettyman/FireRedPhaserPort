@@ -105,11 +105,20 @@ export function CallCallbacks(): void {
   gMain.callback2?.();
 }
 
+/** gMain's key fields: what ReadKeys writes and JOY_NEW / JOY_HELD / JOY_REPT read. */
+export type KeyState = Pick<typeof gMain, 'heldKeysRaw' | 'newKeysRaw' | 'heldKeys' | 'newKeys' | 'newAndRepeatedKeys' | 'keyRepeatCounter'>;
+
+/** A key state of its own, for the field (whose logic reads its Input, not gMain): the help system's keys there. */
+export function NewKeyState(): KeyState {
+  return { heldKeysRaw: 0, newKeysRaw: 0, heldKeys: 0, newKeys: 0, newAndRepeatedKeys: 0, keyRepeatCounter: 0 };
+}
+
 /**
- * ReadKeys: sample the buttons into gMain's raw/held/new/repeated masks. `lEqualsA` is
- * gSaveBlock2Ptr->optionsButtonMode == OPTIONS_BUTTON_MODE_L_EQUALS_A.
+ * ReadKeys: sample the buttons into gMain's raw/held/new/repeated masks (or `gMain`'s stand-in `keys`). `lEqualsA`
+ * is gSaveBlock2Ptr->optionsButtonMode == OPTIONS_BUTTON_MODE_L_EQUALS_A.
  */
-export function ReadKeys(input: Input, lEqualsA = false): void {
+export function ReadKeys(input: Input, lEqualsA = false, keys: KeyState = gMain): void {
+  const gMain = keys;
   let keyInput = 0;
   for (const [b, bit] of BUTTON_BITS) if (input.held(b)) keyInput |= bit;
   gMain.newKeysRaw = keyInput & ~gMain.heldKeysRaw;
@@ -132,8 +141,8 @@ export function ReadKeys(input: Input, lEqualsA = false): void {
   gMain.heldKeys = gMain.heldKeysRaw;
 
   if (lEqualsA) {
-    if (JOY_NEW(L_BUTTON)) gMain.newKeys |= A_BUTTON;
-    if (JOY_HELD(L_BUTTON)) gMain.heldKeys |= A_BUTTON;
+    if (gMain.newKeys & L_BUTTON) gMain.newKeys |= A_BUTTON; // JOY_NEW / JOY_HELD on `keys`
+    if (gMain.heldKeys & L_BUTTON) gMain.heldKeys |= A_BUTTON;
   }
 }
 

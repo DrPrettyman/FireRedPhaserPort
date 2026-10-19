@@ -833,22 +833,43 @@ this is the next level down. When you add or change a subsystem, update its entr
   Tests: tests/e2e/moveTutors.test.ts (Route 4's Mega Punch tutor, the Fuchsia move deleter, Two Island's Move
   Maniac, the Cape Brink tutor), tests/unit/partyMenuSpecials.test.ts.
 - **Boot, title screen and soft reset:** `BootScene` loads the extracted data and starts `MainMenuScene` on the
-  title screen (`entry: 'title'`). MainMenuScene is one GbaHostScene for the boot screens, which hand over through
-  gMain like the C: `menus/titleScreen.ts` (title_screen.c: CB2_InitTitleScreen, the intro scenes, the run scene
-  with PRESS START / flames / the slash, the 2700-frame restart; A/START → the cry scene → `titleScreenEnv.
+  copyright screen (`entry: 'copyright'`: CB2_InitCopyrightScreenAfterBootup, see "Copyright screen and intro").
+  MainMenuScene is one GbaHostScene for the boot screens, which hand over through gMain like the C:
+  `menus/intro.ts` (the copyright screen and the intro, which end on CB2_InitTitleScreen), `menus/titleScreen.ts` (title_screen.c: CB2_InitTitleScreen, the intro scenes, the run scene
+  with PRESS START / flames / the slash, the 2700-frame timeout back to CB2_InitCopyrightScreenAfterTitleScreen; A/START → the cry scene → `titleScreenEnv.
   loadGameSave` (LoadGameSave) → CB2_InitMainMenu), `menus/clearSaveDataScreen.ts` (B+SELECT+UP on the title
   screen) and `menus/mainMenu.ts` (B goes back to CB2_InitTitleScreen). Dev starts (`?start=`, `?map=`) go
   straight to the field; dev `?skipIntro` boots like the port did before the title screen: MainMenuScene with
   `entry: 'mainMenu'` (and `skipOakSpeech`: NEW GAME goes straight to the field) when the slot holds something,
   else the new game. **Restarting the game** (DoSoftReset, e.g.
   after the credits): `softReset(scene)` from scenes/BootScene.ts stops every scene and starts BootScene again with
-  `{ softReset: true }`, which ignores the URL's dev starts and shows the title screen (with `?skipIntro`: the main
-  menu / new game). From a GbaHostScene, `stopHost()` and clear gMain's callbacks first (see MainMenuScene's
+  `{ softReset: true }`, which ignores the URL's dev starts and shows the copyright screen, the intro and the title
+  screen, as at power-on (with `?skipIntro`: the main menu / new game). From a GbaHostScene, `stopHost()` and clear gMain's callbacks first (see MainMenuScene's
   clear save data env). The extracted data stays loaded. Phaser reuses a stopped scene's instance with its fields,
   so `softReset` also replaces the Overworld scene with a new instance (a clean GameState and field state).
   Probes: `t.titleScreen()` (scene INIT/FLASHSPRITE/FADEIN/RUN/RESTART/CRY, state, timer, pressStartShown,
   flames), `t.clearSaveData()`; events `titleScreen` (CB2_InitTitleScreen) and `mainMenu` (CB2_InitMainMenu).
   Tests: tests/e2e/titleScreen.test.ts (harness option `title: true`).
+- **Copyright screen and intro:** `menus/intro.ts` is intro.c. CB2_InitCopyrightScreenAfterBootup (boot, soft
+  reset; it loads the save once it fades out, like the C) and CB2_InitCopyrightScreenAfterTitleScreen (the title
+  screen's timer) run SetUpCopyrightScreen (140 frames, then a fade to black; no GameCube multiboot), then
+  CB2_WaitFadeBeforeSetUpIntro → CB2_SetUpIntro → CB2_Intro. The movie is one task, Task_CallIntroCallback, calling
+  `sIntro.callback` (the C's IntroSequenceData, Alloc'd by StartIntroSequence; here a module variable instead of a
+  pointer in the task's data); each IntroCallback is a state machine on `ptr.state` / `ptr.timer` and hands over
+  with `SetIntroCB(ptr, next)` (state back to 0). A / START / SELECT switch to IntroCB_ExitToTitleScreen (it
+  fills the palette black and starts CB2_InitTitleScreen). Ported: IntroCB_Init, the Game Freak scene
+  (IntroCB_GF_OpenWindow / _Star / _RevealName / _RevealLogo, GFScene_* and the star / sparkle / logo sprites;
+  "presents" is REVISION 1's, so it isn't shown), LoadFightSceneSpriteGraphics. **Scenes 1-3 (W-intro unit 2)**
+  go in where `IntroCB_Scene1` is a stub: port IntroCB_Scene1 → IntroCB_Scene2 → IntroCB_Scene3_Entrance →
+  _Fight with SetIntroCB, as in the C; the IntroSequenceData fields, the fight scene's tags and
+  LoadFightSceneSpriteGraphics are there, and `introGfxSymbols()` lists (and MainMenuScene preloads) every
+  graphics/intro INCBIN. menu2.c's StartBlendTask / IsBlendTaskActive are `gba/menu2.ts`. `introEnv` (filled by
+  MainMenuScene): `define`, `loadGameSave` / `savedOptionsSound` (the main menu's), `sineTable` (gSineTable, from
+  the battle data's tables, which MainMenuScene loads for it). Sounds through gba/sound.ts as the C plays them
+  (PlaySE(MUS_GAME_FREAK)). Probe `t.intro()` (screen 'copyright' | 'setUp' | 'intro', the callback's name,
+  state, timer, sprites in use); events `copyrightScreen` (`cb2`: after bootup or after the title screen) and
+  `introCB` (`cb`: each SetIntroCB). Tests: tests/e2e/intro.test.ts (harness option `intro: true`: boot like the
+  game and return once the copyright screen is up; it checks each callback's frame count against the C).
 - **Oak's speech (NEW GAME):** `menus/oakSpeech.ts` is oak_speech.c: StartNewGameScene, the controls guide, the
   Pikachu intro, Oak with Nidoran♀ (`CreatePokeballSpriteToReleaseMon` / `CreateTradePokeballSprite`, now in
   battle/gfx.ts's pokeball.c section), BOY / GIRL, the names (the naming screen, or the rival presets), "Let's go!"
@@ -1021,6 +1042,33 @@ this is the next level down. When you add or change a subsystem, update its entr
   sStartMenuDescPointers text on open (DoDrawStartMenu case 5) and on cursor moves (StartCB_HandleInput) and
   destroys it with the menu, only when `optionsButtonMode == OPTIONS_BUTTON_MODE_HELP` (no link play or union room,
   so those checks always pass). Probe: `t.helpMessage()` (decoded, undefined when it's down).
+- **The L/R help system:** three modules. `ui/helpSystem.ts` is help_system_util.c (the engine: RunHelpSystemCallback,
+  the screen saved and restored, BG0's HS_* panels, HelpSystemRenderText, the list menu controller and scroll
+  arrows); `ui/helpSystemMenu.ts` is help_system.c's menus (RunHelpMenuSubroutine: the welcome page, the topics, a
+  topic's submenu, a help item); `ui/helpSystemContext.ts` is help_system.c's contexts and lists, Phaser-free so any
+  module (and the unit tests) can import it: **SetHelpContext(K.HELPCONTEXT_*)**, SetHelpContextDontCheckBattle,
+  BackupHelpContext / RestoreHelpContext, Script_SetHelpContext(var8004), SetHelpContextForMap, HelpSystem_Disable /
+  _Enable, HelpSystem_DisableToggleWithRButton / _EnableToggleWithRButton, the gates (IsHelpSystemSubmenuEnabled,
+  HelpSystem_ShouldShowBasicTerms, HasGottenAtLeastOneHM, HelpSystem_UpdateHasntSeenIntro with the saved
+  FLAG_SYS_SAW_HELP_SYSTEM_INTRO). The tables come from `tools/extract_help.py` (`helpSystem.json`, set by
+  Assets.init: the HELP_* ids, the label tables, the submenu lists by context and topic, the topic flags, the mart /
+  gym / dungeon / Pokémon Center map lists); the text is strings.json's (help_system.inc's Help_Text_*, strings.c's
+  gString_* / gText_HelpSystemControls_*). **Hooks:** main.c's CallCallbacks: GbaHostScene runs
+  RunHelpSystemCallback before gMain's callbacks every tick and skips them while it returns non-zero (every GBA
+  screen is paused); OverworldScene.tick does the same through `ui/helpSystemField.ts` (HelpSystemFieldHost: its
+  own key state, ReadKeys into a NewKeyState, since the field's logic reads its Input; while the help's BG0 is on
+  the screen, states 2-7, the PPU draws into a canvas over the field). While it's up the sound tasks wait
+  (AgbMainFrameEnd(callbacksRan)) and the BGM plays at half volume (m4aMPlayVolumeControl 0x80, unless
+  gDisableHelpSystemVolumeReduce: SetBGMVolume_SuppressHelpSystemReduction, the Pokédex); SE_HELP_OPEN /
+  _CLOSE / _ERROR. Only OPTIONS_BUTTON_MODE_HELP opens it, R not after HelpSystem_DisableToggleWithRButton.
+  The field calls SetHelpContextForMap where overworld.c does (OverworldScene.onMapLoaded for warps and CONTINUE,
+  resumeMap for returns to the field). It opens once the field has handed over its fonts and loaded
+  `helpSystemGfxSymbols` (OverworldScene.create). Probe: `t.helpSystem()` (videoState: 0 closed, 5 up; menuState:
+  9 welcome, 0 topics, 3 submenu, 6 item; level, topic, context, the list with decoded labels). Tests:
+  `tests/unit/helpSystem.test.ts` (contexts, SetHelpContextForMap, the topics and submenus by flags),
+  `tests/e2e/helpSystem.test.ts` (the field: welcome once, a topic, an item, back out, BGM and SEs; LR mode; the
+  bag paused under it). A screen that wants its own context calls SetHelpContext from helpSystemContext.ts where
+  its C does.
 - **Trainer card:** `menus/trainerCard.ts` is trainer_card.c, CARD_TYPE_FRLG for the player only (the Hoenn and link
   cards wait for link play). START → PLAYER (StartMenuPlayerCallback) fades out and runs ShowPlayerTrainerCard in
   FieldMenuScene 'trainerCard' (which preloads `trainerCardGfxSymbols(gender)`: graphics/trainer_card/ by symbol plus

@@ -1,7 +1,8 @@
 // The title screen (title_screen.c) in front of the main menu, and NEW GAME's Oak's speech (oak_speech.c). Booting
 // shows the title, its intro plays through to the run scene (PRESS START blinking, flames), START goes to the main
-// menu with a save and to Oak's speech without, B on the main menu comes back to it, it restarts itself after 2700
-// frames, and B+SELECT+UP opens the clear save data screen (clear_save_data_screen.c), which soft-resets back to the
+// menu with a save and to Oak's speech without, B on the main menu comes back to it, after 2700 frames it goes back
+// to the copyright screen and the intro (menus/intro.ts; tests/e2e/intro.test.ts), which end on it again, and
+// B+SELECT+UP opens the clear save data screen (clear_save_data_screen.c), which soft-resets back to the
 // title screen. Oak's speech: the gender and the names chosen through the naming screen (or a preset) end up in the
 // new game's GameState, and the game starts in the player's room.
 
@@ -105,16 +106,19 @@ test('the title screen restarts itself after 2700 frames without input', async (
     let restartAt = 0;
     await t.until(() => t.titleScreen()?.scene === 'RESTART' && (restartAt ||= t.frame()));
     const waited = restartAt - at;
-    // Fade to black, then (intro.c isn't ported) CB2_InitTitleScreen again
-    await t.until(() => t.events().filter((e) => e.type === 'titleScreen').length === 2);
+    // Fade to black, the copyright screen and the intro (CB2_InitCopyrightScreenAfterTitleScreen), then
+    // CB2_InitTitleScreen again
+    await t.until(() => t.events().filter((e) => e.type === 'titleScreen').length === 2, 20000);
     return { timer, waited };
   });
   expect(restart.timer).toBeLessThan(2700);
   expect(Math.abs(restart.waited - (2700 - restart.timer))).toBeLessThanOrEqual(2);
+  const order = (await game.events()).filter((e) => e.type === 'titleScreen' || e.type === 'copyrightScreen').map((e) => e.type);
+  expect(order).toEqual(['copyrightScreen', 'titleScreen', 'copyrightScreen', 'titleScreen']);
   await titleRunning(game);
 });
 
-test('B+SELECT+UP: the clear save data screen; NO keeps the save, YES clears it; both soft-reset to the title', async () => {
+test('B+SELECT+UP: the clear save data screen; NO keeps the save, YES clears it; both soft-reset to the copyright screen and the title', async () => {
   let game = await session.start({ start: 'after-rival' });
   await saveNow(game);
   const hasSave = () => game.eval(() => localStorage.getItem('firered-phaser:save') !== null);
@@ -129,7 +133,8 @@ test('B+SELECT+UP: the clear save data screen; NO keeps the save, YES clears it;
     if (answer === 'YES') await game.press('UP'); // NO is the default
     const since = await game.mark();
     await game.press('A');
-    // DoSoftReset: back to the title screen
+    // DoSoftReset: back to the copyright screen (as at power-on), the intro and the title screen
+    await game.waitForEvent('copyrightScreen', { since, timeout: 60_000 });
     await game.waitForEvent('titleScreen', { since, timeout: 60_000 });
     expect(await hasSave()).toBe(answer === 'NO');
     await titleRunning(game);
