@@ -3570,6 +3570,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the ice whole again on the next visit, the back room's scene to its end and Lorelei hidden on the next visit,
   Lorelei's Meowth doll at 25 entries and her text), plus postgame.test.ts (the helper) and sideSpecials.test.ts
   (the fall warps).
+
 ### W-weather 2: the horizontal fog (POSTGAME_PLAN.md batch 10)
 
 - `world/weather.ts`: WEATHER_FOG_HORIZONTAL (FogHorizontal_InitVars / _InitAll / _Main / _Finish, its scroll:

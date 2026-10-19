@@ -420,11 +420,6 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     doesn't run while OverworldScene loads a map (`busy`), when the GBA isn't running the overworld either.
     `warphole MAP_UNDEFINED` (SetWarpDestinationToFixedHoleWarp: R/S's `setholewarp`, else gLastUsedWarp, which the
     port doesn't keep) logs and ends the script; only the unused EventScript_FallDownHole reaches it.
-  - Field weather (world/weather.ts, W-weather unit 1): only WEATHER_NONE, SUNNY and SHADE are ported.
-    WEATHER_FOG_HORIZONTAL (Pokémon Tower 3F-7F and the Lost Cave's 14 rooms) runs as WEATHER_NONE until
-    W-weather unit 2, and the weathers no FRLG map or script reaches (rain, snow, thunder, ash, sandstorm, diagonal
-    fog, underwater, drought, downpour, bubbles) run as WEATHER_NONE and log once (POSTGAME_PLAN.md decision 1);
-    their saved number is kept. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
   - Field weather (world/weather.ts, W-weather units 1 and 2): WEATHER_NONE, SUNNY, SHADE and FOG_HORIZONTAL are
     ported (and UNDERWATER, which shares the fog's callbacks); the weathers no FRLG map or script reaches (rain, snow,
     thunder, ash, sandstorm, diagonal fog, drought, downpour, bubbles) run as WEATHER_NONE and log once
