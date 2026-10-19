@@ -41,6 +41,17 @@ export function initBattleEnv(data: BattleData, defines: Record<string, number>,
   gItems = pk.items;
 }
 
+/**
+ * A fresh BattleGlobals (the battle's zeroed EWRAM, as initBattleEnv gives each BattleScene), for a battle that starts
+ * on a screen whose host set up the battle env already (Teachy TV's Pokédude battles). The field's map battle scene
+ * is kept.
+ */
+export function ResetBattleGlobals(): void {
+  const mapBattleScene = g.mapBattleScene;
+  g = new BattleGlobals(mem);
+  g.mapBattleScene = mapBattleScene;
+}
+
 /** ItemId_GetHoldEffect */
 export function itemHoldEffect(item: number): number {
   return gItems[item]?.holdEffect ?? 0;

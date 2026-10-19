@@ -21,22 +21,26 @@ import {
   REG_OFFSET_WIN1V,
   REG_OFFSET_WININ,
   REG_OFFSET_WINOUT,
+  PALETTES_ALL,
   resetHardware,
+  RGB_BLACK,
   SetGpuReg,
   WIN_RANGE,
 } from '../gba/hw';
-import { gMain, SetHBlankCallback, SetMainCallback1, SetMainCallback2, SetVBlankCallback } from '../gba/main';
-import { ResetPaletteFade, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
-import { gScanlineEffectRegBuffers, ScanlineEffect_Clear, ScanlineEffect_InitHBlankDmaTransfer, ScanlineEffect_SetParams, SCANLINE_EFFECT_DMACNT_16BIT } from '../gba/scanline';
+import { B_BUTTON, gMain, JOY_HELD, SetHBlankCallback, SetMainCallback1, SetMainCallback2, SetVBlankCallback } from '../gba/main';
+import { BeginNormalPaletteFade, gPaletteFade, ResetPaletteFade, ResetPaletteFadeControl, TransferPlttBuffer, UpdatePaletteFade } from '../gba/palette';
+import { gScanlineEffect, gScanlineEffectRegBuffers, ScanlineEffect_Clear, ScanlineEffect_InitHBlankDmaTransfer, ScanlineEffect_SetParams, SCANLINE_EFFECT_DMACNT_16BIT } from '../gba/scanline';
 import { AnimateSprites, BuildOamBuffer, FreeAllSpritePalettes, ProcessSpriteCopyRequests, ResetSpriteData, SetReservedSpritePaletteCount } from '../gba/sprite';
 import { ResetTasks, RunTasks } from '../gba/task';
-import { RunTextPrinters } from '../gba/window';
+import { FreeAllWindowBuffers, RunTextPrinters } from '../gba/window';
+import { m4aSongNumStop } from '../audio/m4a';
 import { random } from '../util/random';
 import { DrawBattleEntryBackground, InitBattleBgsVideo, LoadBattleTextboxAndBackground } from './battleBg';
 import { K } from './constants';
-import { g } from './env';
+import { g, state } from './env';
+import { FreePokedudeBattlerStates } from './controllerPokedude';
 import { SetHelpContextForBattle } from '../ui/helpSystemContext';
-import { AllocateMonSpritesGfx, BattleInitAllSprites, BattleInterfaceSetWindowPals } from './gfx';
+import { AllocateMonSpritesGfx, BattleInitAllSprites, BattleInterfaceSetWindowPals, FreeMonSpritesGfx } from './gfx';
 import { allocateBattleResources, battleMainCB1, initBattleControllers, initBattleInternal } from './main';
 
 const spritesInit = { state: 0, battlerId: 0 };
@@ -128,13 +132,46 @@ function CB2_HandleStartBattle(): void {
   }
 }
 
-/** BattleMainCB2 */
+/** BattleMainCB2: in the Pokédude's battle (Teachy TV), holding B quits it. */
 export function BattleMainCB2(): void {
   AnimateSprites();
   BuildOamBuffer();
   RunTextPrinters();
   UpdatePaletteFade();
   RunTasks();
+
+  if (JOY_HELD(B_BUTTON) && g.battleTypeFlags & K.BATTLE_TYPE_POKEDUDE) {
+    g.battleOutcome = K.B_OUTCOME_DREW;
+    state.setVar('VAR_RESULT', g.battleOutcome); // gSpecialVar_Result
+    ResetPaletteFadeControl();
+    BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 16, RGB_BLACK);
+    SetMainCallback2(CB2_QuitPokedudeBattle);
+  }
+}
+
+/**
+ * FreeRestoreBattleData: what ending a battle frees, for the Pokédude's battle quitting early (B in the battle, the
+ * bag or the party menu).
+ */
+export function FreeRestoreBattleData(): void {
+  SetMainCallback1(null); // gMain.callback1 = gPreBattleCallback1 (the screens that host the Pokédude's battle have none)
+  gScanlineEffect.state = 3;
+  gMain.inBattle = false;
+  g.enemyParty = []; // ZeroEnemyPartyMons
+  m4aSongNumStop(K.SE_LOW_HEALTH);
+  FreeMonSpritesGfx();
+  // FreeBattleSpritesData: the next battle's globals come with a fresh BattleSpriteData
+  if (g.battleTypeFlags & K.BATTLE_TYPE_POKEDUDE) FreePokedudeBattlerStates(); // FreeBattleResources
+}
+
+/** CB2_QuitPokedudeBattle */
+function CB2_QuitPokedudeBattle(): void {
+  UpdatePaletteFade();
+  if (!gPaletteFade.active) {
+    FreeRestoreBattleData();
+    FreeAllWindowBuffers();
+    SetMainCallback2(gMain.savedCallback);
+  }
 }
 
 /** VBlankCB_Battle */

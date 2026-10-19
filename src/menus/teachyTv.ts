@@ -6,13 +6,21 @@
 // From the bag (InitTeachyTvFromBag) it returns to the bag; from the field (SELECT: Task_InitTeachyTvFromField) to
 // the field. Both are in menus/itemUse.ts (FieldUseFunc_TeachyTv).
 //
-// Not ported (FIELD_ITEMS_PLAN.md W-teachy units 2-3): the demos themselves. TeachyTvPrepBattle's battle
-// (InitPokedudePartyAndOpponent, the battle transition, CB2_InitBattle, battle_controller_pokedude.c) and the
-// scripted bag and TM case (InitPokedudeBag). They go through the one seam at the bottom of this file
-// (PokedudeDemoNotPorted), which logs and comes back as from the demo's end.
+// The four battle options run the Pokédude's battle (TeachyTvPrepBattle: battle/controllerPokedude.ts, on this
+// screen's host, then back here through TeachyTvRestorePlayerPartyCallback). Not ported (FIELD_ITEMS_PLAN.md W-teachy
+// unit 3): the field demos, the scripted bag and TM case of TTVSCR_REGISTER / _TMS. They go through the seam at the
+// bottom of this file (PokedudeDemoNotPorted), which logs and comes back as from the demo's end.
 
 import { K } from '../battle/constants';
-import { state } from '../battle/env';
+import { g, ResetBattleGlobals, state } from '../battle/env';
+import { CB2_InitBattle } from '../battle/battleCallbacks';
+import { PlayMapChosenOrBattleBGM } from '../battle/battleBgm';
+import { setBattleUi, type BattleUi, type GbaButton } from '../battle/battleUi';
+import { InitPokedudePartyAndOpponent, LoadPlayerParty, pokedudeBattleMons, SavePlayerParty } from '../battle/controllerPokedude';
+import { battleTransitionGfxSymbols, BattleTransition_StartOnField, IsBattleTransitionDone } from '../battle/transition';
+import { testEvent } from '../dev/testHooks';
+import { itemIconSymbols } from './itemMenuIcons';
+import { monIconSymbol } from './pokemonIcon';
 import type { Assets } from '../data/assets';
 import type { TilesetSymbols } from '../data/types';
 import {
@@ -57,7 +65,25 @@ import {
   type ListMenuItem,
   type ListMenuTemplate,
 } from '../gba/listMenu';
-import { A_BUTTON, B_BUTTON, gMain, JOY_NEW, SELECT_BUTTON, SetMainCallback2, SetVBlankCallback, type MainCallback } from '../gba/main';
+import {
+  A_BUTTON,
+  B_BUTTON,
+  DPAD_DOWN,
+  DPAD_LEFT,
+  DPAD_RIGHT,
+  DPAD_UP,
+  gMain,
+  JOY_HELD,
+  JOY_NEW,
+  L_BUTTON,
+  R_BUTTON,
+  SELECT_BUTTON,
+  SetMainCallback1,
+  SetMainCallback2,
+  SetVBlankCallback,
+  START_BUTTON,
+  type MainCallback,
+} from '../gba/main';
 import {
   ClearScheduledBgCopiesToVram,
   DecompressAndCopyTileDataToVram,
@@ -162,7 +188,22 @@ export async function prepareTeachyTv(assets: Assets): Promise<void> {
     ...TEACHY_TV_GFX,
     ...[l.primaryTileset, l.secondaryTileset].flatMap((t) => [t.tiles, t.palettes, t.metatiles]),
     ...objectEventGfxSymbols([TEACHY_TV_HOST]),
+    ...pokedudeDemoGfxSymbols(),
   ]);
+}
+
+/**
+ * What the Pokédude's battle demos draw beyond the battle itself (FieldMenuScene loads pokedudeBattleGfxSymbols): the
+ * transitions, his bag's item icons (InitPokedudeBag) and his mons' party menu icons.
+ */
+function pokedudeDemoGfxSymbols(): string[] {
+  const items = [K.ITEM_POTION, K.ITEM_ANTIDOTE, K.ITEM_TEACHY_TV, K.ITEM_TM_CASE, K.ITEM_POKE_BALL, K.ITEM_GREAT_BALL, K.ITEM_NEST_BALL];
+  return [
+    ...battleTransitionGfxSymbols(K.B_TRANSITION_WHITE_BARS_FADE),
+    ...battleTransitionGfxSymbols(K.B_TRANSITION_SLICE),
+    ...itemIconSymbols(items),
+    ...pokedudeBattleMons().map((mon) => monIconSymbol(mon.species)),
+  ];
 }
 
 /** struct TeachyTvCtrlBlk: kept while the demos run, so the screen can come back to the same option. */
@@ -954,15 +995,19 @@ function TeachyTvGrassAnimationCheckIfNeedsToGenerateGrassObj(x: number, y: numb
 }
 
 /**
- * TeachyTvPrepBattle: the screen's buffers go, VAR_0x8004 is the option (the Pokédude's battle reads it), and the
- * battle comes back through TeachyTvRestorePlayerPartyCallback.
+ * TeachyTvPrepBattle: the screen's buffers go, VAR_0x8004 is the option (the Pokédude's battle reads it), the player's
+ * party waits in the save block while the Pokédude's mons take its place, and the battle comes back through
+ * TeachyTvRestorePlayerPartyCallback.
  */
 function TeachyTvPrepBattle(taskId: number): void {
   const data = gTasks[taskId].data;
   TeachyTvFree();
   state.setVar('VAR_0x8004', sStaticResources.whichScript);
   gMain.savedCallback = TeachyTvRestorePlayerPartyCallback;
-  // Unit 2: SavePlayerParty(); InitPokedudePartyAndOpponent(); PlayMapChosenOrBattleBGM(MUS_DUMMY);
+  ResetBattleGlobals(); // the battle's EWRAM, as BattleScene gets it (gBattleTypeFlags etc. are set from here on)
+  SavePlayerParty();
+  InitPokedudePartyAndOpponent();
+  PlayMapChosenOrBattleBGM(K.MUS_DUMMY, g.battleTypeFlags, 0);
   data[6] = sStaticResources.whichScript === TTVSCR_BATTLE ? K.B_TRANSITION_WHITE_BARS_FADE : K.B_TRANSITION_SLICE;
   data[7] = 0;
   gTasks[taskId].func = TeachyTvPreBattleAnimAndSetBattleCallback;
@@ -970,14 +1015,74 @@ function TeachyTvPrepBattle(taskId: number): void {
 
 /** TeachyTvPreBattleAnimAndSetBattleCallback: the transition on this screen, then the battle. */
 function TeachyTvPreBattleAnimAndSetBattleCallback(taskId: number): void {
-  // Unit 2: case 0 BattleTransition_StartOnField(data[6]); case 1 once IsBattleTransitionDone, CB2_InitBattle.
-  Task_PokedudeBattleNotPorted(taskId);
+  const data = gTasks[taskId].data;
+  switch (data[7]) {
+    case 0:
+      testEvent('battleTransition', { transition: data[6] });
+      BattleTransition_StartOnField(data[6]);
+      ++data[7];
+      break;
+    case 1:
+      if (IsBattleTransitionDone()) {
+        SetMainCallback2(CB2_InitPokedudeBattle);
+        DestroyTask(taskId);
+      }
+      break;
+  }
 }
+
+/**
+ * CB2_InitBattle for the Pokédude's battle. It runs on this screen's host (FieldMenuScene), which set up the battle
+ * env and preloaded the demos' graphics (pokedudeBattleGfxSymbols); what BattleScene.create would add from a
+ * BattleStart is set here: no trainer, the BattleUi, and the way back (ReturnFromBattleToOverworld's
+ * SetMainCallback2(gMain.savedCallback)). The terrain is BATTLE_TERRAIN_GRASS (GetBattleTerrainOverride).
+ */
+function CB2_InitPokedudeBattle(): void {
+  g.trainerBattleOpponent_A = 0;
+  g.trainerBattleMode = 0;
+  g.rivalBattleFlags = 0;
+  g.npcTextColor = K.NPC_TEXT_COLOR_NEUTRAL;
+  g.onBattleEnd = ReturnFromPokedudeBattle;
+  setBattleUi(sPokedudeBattleUi);
+  testEvent('battleStart', { flags: g.battleTypeFlags, trainer: 0 });
+  SetMainCallback1(null); // gPreBattleCallback1
+  CB2_InitBattle(K.BATTLE_TERRAIN_GRASS);
+}
+
+/** ReturnFromBattleToOverworld's end, on this host: gMain.inBattle off, gMain.savedCallback. */
+function ReturnFromPokedudeBattle(outcome: number): void {
+  testEvent('battleEnd', { outcome });
+  gMain.inBattle = false;
+  SetMainCallback1(null); // gMain.callback1 = gPreBattleCallback1
+  SetMainCallback2(gMain.savedCallback);
+}
+
+/** The BattleUi the Pokédude's battle reads (BattleScene's, on gMain's keys). */
+const sPokedudeBattleUi: BattleUi = {
+  joyNew: (button) => JOY_NEW(GBA_BUTTON_BITS[button]) !== 0,
+  joyHeld: (button) => JOY_HELD(GBA_BUTTON_BITS[button]) !== 0,
+  anyNewKeys: () => gMain.newKeys !== 0,
+  addBagItem: (itemId, count) => state.bag.add(itemId, count),
+  playerGender: () => (state.playerGender === 'female' ? K.FEMALE : K.MALE),
+};
+
+const GBA_BUTTON_BITS: Record<GbaButton, number> = {
+  A: A_BUTTON,
+  B: B_BUTTON,
+  SELECT: SELECT_BUTTON,
+  START: START_BUTTON,
+  RIGHT: DPAD_RIGHT,
+  LEFT: DPAD_LEFT,
+  UP: DPAD_UP,
+  DOWN: DPAD_DOWN,
+  R: R_BUTTON,
+  L: L_BUTTON,
+};
 
 /** TeachyTvRestorePlayerPartyCallback: back from the battle (a draw is B, which quits to the list). */
 function TeachyTvRestorePlayerPartyCallback(): void {
-  // Unit 2: LoadPlayerParty();
-  if (state.battleOutcome === K.B_OUTCOME_DREW) SetTeachyTvControllerModeToResume();
+  LoadPlayerParty();
+  if (g.battleOutcome === K.B_OUTCOME_DREW) SetTeachyTvControllerModeToResume();
   else PlayNewMapMusic(K.MUS_FOLLOW_ME);
   CB2_ReturnToTeachyTV();
 }
@@ -1105,14 +1210,13 @@ function TeachyTvLoadMapPalette(mStruct: TeachyTvLayout, palIndexArray: Uint8Arr
   }
 }
 
-// ------------------------------------------------------------------ the seam for units 2-3
+// ------------------------------------------------------------------ the seam for unit 3
 
 /**
- * The Pokédude's demos aren't ported yet (FIELD_ITEMS_PLAN.md W-teachy unit 2: the battles, battle_setup.c's
- * InitPokedudePartyAndOpponent and battle_controller_pokedude.c; unit 3: the scripted bag and TM case,
- * item_menu.c's InitPokedudeBag and tm_case.c's Pokedude_InitTMCase). Until they are, a demo logs and is skipped:
- * the screen comes back through `exit` as from the demo's end, and the option's script goes on with its closing
- * text (CB2_ReturnToTeachyTV in mode 2, sWhereToReturnToFromBattle).
+ * The field demos aren't ported yet (FIELD_ITEMS_PLAN.md W-teachy unit 3: TTVSCR_REGISTER / _TMS, the field half of
+ * item_menu.c's InitPokedudeBag and tm_case.c's Pokedude_InitTMCase). Until they are, such a demo logs and is skipped:
+ * the screen comes back through `exit` as from the demo's end, and the option's script goes on with its closing text
+ * (CB2_ReturnToTeachyTV in mode 2, sWhereToReturnToFromBattle).
  */
 function PokedudeDemoNotPorted(demo: string, exit: MainCallback): void {
   console.warn(`[teachy_tv] ${demo} is not implemented`);
@@ -1120,27 +1224,9 @@ function PokedudeDemoNotPorted(demo: string, exit: MainCallback): void {
 }
 
 /**
- * Unit 2 replaces this with TeachyTvPreBattleAnimAndSetBattleCallback's transition and CB2_InitBattle: until then
- * a fade to black stands in for the transition, and the "battle" ends at once (gMain.savedCallback).
+ * item_menu.c's InitPokedudeBag for TTVSCR_REGISTER / _TMS: menus/itemMenu.ts has it (the battle demos use it), but
+ * not those locations' scripted tasks (unit 3), so until then they're skipped.
  */
-function Task_PokedudeBattleNotPorted(taskId: number): void {
-  const data = gTasks[taskId].data;
-  switch (data[7]) {
-    case 0:
-      BeginNormalPaletteFade(PALETTES_ALL, 0, 0, 0x10, RGB_BLACK);
-      ++data[7];
-      break;
-    case 1:
-      if (!gPaletteFade.active) {
-        state.battleOutcome = K.B_OUTCOME_WON;
-        PokedudeDemoNotPorted('the Pokédude battle (StartPokedudeBattle)', gMain.savedCallback!);
-        DestroyTask(taskId);
-      }
-      break;
-  }
-}
-
-/** item_menu.c's InitPokedudeBag (unit 3 ports it there, with GoToBagMenu's TTVSCR locations): until then, skipped. */
 function InitPokedudeBag(location: number): void {
   PokedudeDemoNotPorted(`the Pokédude's bag (InitPokedudeBag(${location}))`, CB2_ReturnToTeachyTV);
 }

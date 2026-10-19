@@ -24,6 +24,9 @@ import { battleStringExpandPlaceholders, encodeBattleText, moveName } from '../b
 import { getPartyIdFromBattlePartyId, getPartyIdFromBattleSlot, switchPartyMonSlots } from '../battle/partyOrder';
 import { adjustFriendship, giveMoveToMon, monTryLearningNewMove, removeMonPPBonus, setMonMoveSlot } from '../battle/pokemonBattle';
 import { SetCB2ToReshowScreenAfterMenu } from '../battle/reshowBattleScreen';
+import { FreeRestoreBattleData } from '../battle/battleCallbacks';
+import { LoadPlayerParty } from '../battle/controllerPokedude';
+import { CB2_ReturnToTeachyTV, SetTeachyTvControllerModeToResume } from './teachyTv';
 import { getBattlerSide } from '../battle/util';
 import {
   CopyRectToBgTilemapBufferRect,
@@ -4277,6 +4280,82 @@ export function EnterPartyFromItemMenuInBattle(): void {
   }
   // ReshowBattleScreenDummy
   UpdatePartyToBattleOrder();
+}
+
+/** Pokedude_OpenPartyMenuInBattle: the Pokédude's shift (Teachy TV's type matchups demo), scripted by Task_PartyMenu_Pokedude. */
+export function Pokedude_OpenPartyMenuInBattle(): void {
+  InitPartyMenu(K.PARTY_MENU_TYPE_IN_BATTLE, GetPartyLayoutFromBattleType(), K.PARTY_ACTION_CHOOSE_MON, false, K.PARTY_MSG_CHOOSE_MON, Task_PartyMenu_Pokedude, SetCB2ToReshowScreenAfterMenu);
+  // ReshowBattleScreenDummy
+  UpdatePartyToBattleOrder();
+}
+
+/** Pokedude_ChooseMonForInBattleItem: the Pokédude's Antidote (the status demo), from his bag. */
+export function Pokedude_ChooseMonForInBattleItem(): void {
+  InitPartyMenu(K.PARTY_MENU_TYPE_IN_BATTLE, GetPartyLayoutFromBattleType(), K.PARTY_ACTION_REUSABLE_ITEM, false, K.PARTY_MSG_USE_ON_WHICH_MON, Task_PartyMenuFromBag_Pokedude, CB2_BagMenuFromBattle);
+  // ReshowBattleScreenDummy
+  UpdatePartyToBattleOrder();
+}
+
+/** Task_PartyMenu_Pokedude: the Pokédude switches Pokémon. */
+function Task_PartyMenu_Pokedude(taskId: number): void {
+  gTasks[taskId].data[0] = 0;
+  gTasks[taskId].func = Task_PartyMenu_PokedudeStep;
+}
+
+/** Task_PartyMenu_PokedudeStep: right to the second mon, its menu, then its first action (SHIFT). */
+function Task_PartyMenu_PokedudeStep(taskId: number): void {
+  const data = gTasks[taskId].data;
+  if (!gPaletteFade.active && PartyMenuPokedudeIsCancelled(taskId) !== true) {
+    switch (data[0]) {
+      case 80:
+        UpdateCurrentPartySelection(slotIdPtr, MENU_DIR_RIGHT);
+        break;
+      case 160:
+        PlaySE(K.SE_SELECT);
+        CreateSelectionWindow();
+        break;
+      case 240:
+        PartyMenuRemoveWindow(2);
+        sCursorOptions(internal().actions[0]).func(taskId);
+        break;
+    }
+    ++data[0];
+  }
+}
+
+function PartyMenuPokedudeIsCancelled(taskId: number): boolean {
+  if (JOY_NEW(B_BUTTON)) {
+    internal().exitCallback = PartyMenuHandlePokedudeCancel;
+    Task_ClosePartyMenu(taskId);
+    return true;
+  }
+  return false;
+}
+
+/** PartyMenuHandlePokedudeCancel: B quits the battle, back to Teachy TV's list. */
+function PartyMenuHandlePokedudeCancel(): void {
+  FreeRestoreBattleData();
+  LoadPlayerParty();
+  SetTeachyTvControllerModeToResume();
+  SetMainCallback2(CB2_ReturnToTeachyTV);
+}
+
+/** Task_PartyMenuFromBag_Pokedude: the Pokédude uses the item on his own Pokémon. */
+function Task_PartyMenuFromBag_Pokedude(taskId: number): void {
+  gTasks[taskId].data[0] = 0;
+  gTasks[taskId].func = Task_PartyMenuFromBag_PokedudeStep;
+}
+
+function Task_PartyMenuFromBag_PokedudeStep(taskId: number): void {
+  const data = gTasks[taskId].data;
+  if (!gPaletteFade.active && PartyMenuPokedudeIsCancelled(taskId) !== true) {
+    if (data[0] !== 80) {
+      ++data[0];
+    } else {
+      internal().exitCallback = CB2_SetUpExitToBattleScreen;
+      gItemUseCB!(taskId, Task_ClosePartyMenuAfterText);
+    }
+  }
 }
 
 function GetPartyMenuActionsTypeInBattle(mon: Pokemon): number {
