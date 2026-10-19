@@ -492,10 +492,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     visiting trainer's door never opens; the battle room's specials (SetEReaderTrainerGfxId, StartSpecialBattle,
     ReducePlayerPartyToThree, the party save / load) stay link gaps.
   - Field weather (world/weather.ts, W-weather units 1 and 2): WEATHER_NONE, SUNNY, SHADE and FOG_HORIZONTAL are
-    ported (and UNDERWATER, which shares the fog's callbacks), and RAIN, RAIN_THUNDERSTORM and DOWNPOUR (batch 13,
-    world/weatherRain.ts); the other weathers no FRLG map or script reaches (clouds, snow, ash, sandstorm, diagonal
-    fog, drought, bubbles) run as WEATHER_NONE and log once (POSTGAME_PLAN.md decision 1); their saved number is
-    kept. SetCurrentAndNextWeatherNoDelay (static, never called in FRLG) isn't ported. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
+    ported (and UNDERWATER, which shares the fog's callbacks), and the weathers no FRLG map or script reaches as the C
+    has them (batch 13, each in its own module: RAIN, RAIN_THUNDERSTORM and DOWNPOUR in world/weatherRain.ts;
+    SUNNY_CLOUDS, FOG_DIAGONAL, DROUGHT and UNDERWATER_BUBBLES in world/weatherClouds.ts, weatherFogDiagonal.ts,
+    weatherDrought.ts and weatherBubbles.ts). SetCurrentAndNextWeatherNoDelay (static, never called in FRLG) isn't ported. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
     the field's sprite sheets redrawn in place (world/weatherTextures.ts: `spr_*` GAMMA_ALT, their reflection sheets
     and the loadfadedpal field effects GAMMA_NORMAL), not to palette RAM: a connected map with another secondary
     tileset isn't shifted until it's the current map. FadeScreen's fade-out copy of the shifted palettes into the
@@ -525,6 +525,15 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     the vertical pan's 32 + 8; the horizontal pan (sHorizontalCameraPan) is 0 on the field. The GBA layer's copy of
     the field (battle transitions) draws the fog as semi-transparent OBJ pixels behind the priority-2 objects, with
     the weather's BLDALPHA, which the PPU blends as the GBA does.
+  - WEATHER_DROUGHT (world/weatherDrought.ts, W-weather 3): FRLG dummied LoadDroughtWeatherPalette out, so
+    LoadDroughtWeatherPalettes is TRUE for ever and Drought_InitAll's `while (!weatherGfxLoaded) Drought_Main()` never
+    returns: on the GBA a map load or a return to the field in a drought hangs the game. The port leaves the loop
+    where Main would spin (its steps 0 and 2), warns once, and carries on as `doweather` does (Main stuck at step 2,
+    nothing on screen). FadeInScreen_Drought's last step leaves the palettes at the step before's coefficient-1
+    blend toward the fade colour; here the steps before are the overlay's blend over the colours as loaded, and the
+    last step draws that coefficient-1 blend into the palettes (the same colours). StartDroughtWeatherBlend's
+    BLDCNT_EFFECT_LIGHTEN (BG1-3 and OBJ, BLDY) is a white rectangle at BLDY / 16 alpha under the windows (8-bit
+    arithmetic; it also lightens the backdrop, and WININ's change isn't modelled); no FRLG script calls it.
   - The weather sprite layer (world/weatherSprites.ts, world/weatherSpriteRenderer.ts, batch 13): the weathers'
     sprites have a pool of their own (MAX_SPRITES slots: CreateSpriteAtEnd from the top, CreateSprite from the
     bottom); on the GBA they share gSprites with the field's objects, so a weather that wants many sprites could run

@@ -83,9 +83,11 @@ this is the next level down. When you add or change a subsystem, update its entr
   tests/e2e/leagueLighting.test.ts (dev start `?map=PokemonLeague_LoreleisRoom&x=6&y=12` or
   `PokemonLeague_ChampionsRoom&x=6&y=19`).
 - **Field weather:** `world/weather.ts` is field_weather.c / field_weather_util.c and FRLG's weathers of
-  field_weather_effects.c (None, Sunny, Shade, FogHorizontal; Rain, Thunderstorm and Downpour in `world/weatherRain.ts`;
-  `PORTED` is keyed by sWeatherFuncs' row names, so WEATHER_UNDERWATER runs the fog's callbacks as in FRLG; the rest
-  run None's and log once). The
+  field_weather_effects.c (None, Sunny, Shade, FogHorizontal in weather.ts; the weathers no FRLG map reaches each in
+  a module of their own: Rain, Thunderstorm and Downpour in `world/weatherRain.ts`, Clouds in `world/weatherClouds.ts`,
+  FogDiagonal in `world/weatherFogDiagonal.ts`, Drought in `world/weatherDrought.ts`, Bubbles in
+  `world/weatherBubbles.ts`; `ported()` is keyed by sWeatherFuncs' row names, so WEATHER_UNDERWATER runs the fog's
+  callbacks as in FRLG; a number past the table, which TranslateWeatherNum never saves, runs None's). The
   tables come from `public/gen/weather.json` (tools/extract_field.py `extract_weather`: sBasePaletteGammaTypes, the
   sWeatherFuncs row names, the loadfadedpal field effect palette tags); the gamma tables are built by
   BuildGammaShiftTables as in the C. The saved weather is `GameState.weather` (gSaveBlock1Ptr->weather, save
@@ -134,6 +136,21 @@ this is the next level down. When you add or change a subsystem, update its entr
     as the C does), its templates and callbacks on the layer; `Weather_SetBlendCoeffs` / `_SetTargetBlendCoeffs` /
     `_UpdateBlend`, `WeatherShiftGammaIfPalStateIdle`, `WeatherBeginGammaFade`, `spriteCoordOffsetX / Y` are
     exported), then its row in weather.ts' `ported()`. GFXTAG_* / PALTAG_WEATHER are in weatherSprites.ts.
+  - **Clouds, the diagonal fog, the drought, the bubbles** (W-weather 3; no FRLG map or script reaches them):
+    `world/weatherClouds.ts` (WEATHER_SUNNY_CLOUDS: three 64x64 BLEND clouds at priority 3 placed with
+    SetSpritePosToMapCoords, the host's `mapCoordsToSpritePos`, at R/S's Route 120 coordinates, so on most FRLG maps
+    they wrap round OAM's 9 / 8 bits; gCloudsWeatherPalette, which stays loaded after the clouds go until
+    StartWeather, as in the C), `world/weatherFogDiagonal.ts` (WEATHER_FOG_DIAGONAL: 20 BLEND sprites at priority 2,
+    fogDBaseSpritesX / fogDPosY), `world/weatherBubbles.ts` (WEATHER_UNDERWATER_BUBBLES: weather.ts' exported
+    FogHorizontal_InitVars / _Main / _Finish, so the horizontal fog's sprites and UNDERWATER's (4, 16) blend, plus the
+    8x8 bubbles), `world/weatherDrought.ts` (WEATHER_DROUGHT and field_weather.c's drought half: FRLG dummied the
+    drought palettes, so Drought_Main sticks at its step 2 for ever, FadeInScreen_Drought leaves the palettes blended
+    1/16 toward the fade colour with gamma index -6, and DroughtStateRun is unreachable but ported and unit-tested;
+    StartDroughtWeatherBlend is a special (UpdateDroughtBlend's BLDY lighten: the host's `setBrightnessLighten`, a white
+    rectangle under the windows) no FRLG script calls). Tests: tests/unit/weatherCloudsFogDroughtBubbles.test.ts (each
+    weather frame by frame), tests/e2e/weatherCloudsFogDroughtBubbles.test.ts (`PalletTown` (8, 14) for the clouds,
+    whose priority 3 is under the house's floor; the house for the rest; the blended pixels are read with the
+    sprites' callbacks and the tile animations stopped).
   - **The rain weathers** (`world/weatherRain.ts`): Rain_* (24 raindrops, 10 shown), Thunderstorm_* (16; the
     lightning's gamma 19 flashes, SE_THUNDER / SE_THUNDER2) and Downpour_* (24, Thunderstorm_Main / _Finish).
     field_weather.c's sound half is in weather.ts: SetRainStrengthFromSoundEffect (the SE3 loops, from the InitVars)

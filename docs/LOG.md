@@ -4429,3 +4429,36 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   `t.textColor()`, `t.objects()` gains `texture`.
 - Verified: typecheck, unit tests, tests/e2e/dynamicGfx.test.ts (new, 4 tests), trainerTower.test.ts,
   eventIslands.test.ts, story.test.ts.
+
+### W-weather 3 (GAPS_PLAN.md batch 13): Clouds, the diagonal fog, the drought, the bubbles
+
+- **The weathers** (field_weather_effects.c, each in its own module, on W-weather 1's sprite layer; `ported()` gains
+  their rows): `world/weatherClouds.ts` (Clouds_*: CreateCloudSprites with SetSpritePosToMapCoords at
+  sCloudSpriteMapCoords, gCloudsWeatherPalette, UpdateCloudSprite, BLDALPHA (12, 8) / back to (0, 16) a step every
+  2 frames), `world/weatherFogDiagonal.ts` (FogDiagonal_*: UpdateFogDiagonalMovement, the 20 sprites and
+  UpdateFogDiagonalSprite's column wrap, (12, 8) a step every 9 frames), `world/weatherBubbles.ts` (Bubbles_*: the
+  horizontal fog's callbacks, now exported from weather.ts, plus CreateBubbleSprite / UpdateBubbleSprite /
+  DestroyBubbleSprites from sBubbleStartDelays / sBubbleStartCoords; bubblesSpritesCreated is never set, as in the
+  C), `world/weatherDrought.ts` (Drought_* and field_weather.c's drought half: ResetDroughtWeatherPaletteLoading,
+  LoadDroughtWeatherPalette(s), SetDroughtGamma, DroughtStateInit / Run, ApplyDroughtGammaShiftWithBlend,
+  FadeInScreen_Drought, which FadeInScreenWithWeather and FadeScreen's useWeatherPal now take; StartDroughtWeatherBlend /
+  UpdateDroughtBlend as a special). gWeatherPtr gains their fields (and fadeDestColor), StartWeather clears
+  cloudSpritesCreated / fogDSpritesCreated / bubblesSpritesCreated.
+- **The drought is broken in FRLG, and so it is here**: there are no drought palette tables (FRLG dummied
+  LoadDroughtWeatherPalette and ApplyGammaShift's negative branch out; constants/weather.h: "unused and broken in
+  overworld"), so `doweather` leaves Drought_Main at step 2 for ever with nothing on screen, a fade in ends with the
+  palettes 1/16 toward the fade colour and gamma index -6, and Drought_InitAll never returns on the GBA (a hang the
+  port breaks out of: docs/DEVIATIONS.md).
+- **No weather runs as WEATHER_NONE any more** (with W-weather 2's snow, ash and sandstorm): the "isn't ported" log
+  and its unit test are gone; a number past sWeatherFuncs (TranslateWeatherNum never saves one) runs None's.
+- Shared files: weather.ts (the rows, gWeatherPtr fields, the drought fade-in case, exports: FogHorizontal_* ,
+  ApplyGammaShift, `weatherHost()`; WeatherHost gains optional `mapCoordsToSpritePos` and `setBrightnessLighten`),
+  OverworldScene (those two host hooks), script/specials.ts (StartDroughtWeatherBlend).
+- Found on the way: the house's floor is drawn over priority-3 sprites (its metatiles' layers), so the clouds'
+  e2e check runs in Pallet Town; Pallet's flower animation changed pixels between the reads, so the sampling stops
+  the tile animations (test-only).
+- Verified: typecheck; unit tests (tests/unit/weatherCloudsFogDroughtBubbles.test.ts, 15: each weather frame by
+  frame against the C's numbers, the drought's states and sine stages, its fade in, the BLDY flash); e2e
+  tests/e2e/weatherCloudsFogDroughtBubbles.test.ts (5: the clouds' positions, drift, blend steps and blended pixels;
+  the diagonal fog's 20 sprites tick by tick, its blend and pixels; the drought's stuck step and fade in; the flash on
+  screen; the bubbles and the fog; each finish), plus weatherRain.test.ts and weather.test.ts.
