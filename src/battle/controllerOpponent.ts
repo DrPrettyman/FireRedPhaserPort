@@ -52,6 +52,7 @@ import {
   StartAnimLinearTranslation,
   StartHealthboxSlideIn,
   TryHandleLaunchBattleTableAnimation,
+  IsBattleSEPlaying,
 } from './gfx';
 import { battleStringShouldBeColored, bufferStringBattle } from './message';
 import type { ChooseMoveStruct, HpAndStatus } from './structs';
@@ -428,7 +429,9 @@ function OpponentHandleFaintAnimation(): void {
   }
 }
 
+/** OpponentHandleMoveAnimation: held (run again next frame) while IsBattleSEPlaying */
 function OpponentHandleMoveAnimation(): void {
+  if (IsBattleSEPlaying(ab())) return;
   const move = bufA()[1] | (bufA()[2] << 8);
   SetMoveAnimGlobalsFromBuffer(ab());
   if (IsMoveWithoutAnimation(move, bufA()[3])) {
@@ -549,12 +552,14 @@ function OpponentHandleHealthBarUpdate(): void {
 }
 
 function OpponentHandleStatusIconUpdate(): void {
+  if (IsBattleSEPlaying(ab())) return;
   UpdateHealthboxAttribute(g.healthboxSpriteIds[ab()], monOf(ab()), K.HEALTHBOX_STATUS_ICON);
   sbd().healthBoxesData[ab()].statusAnimActive = 0;
   g.battlerControllerFuncs[ab()] = CompleteOnFinishedStatusAnimation;
 }
 
 function OpponentHandleStatusAnimation(): void {
+  if (IsBattleSEPlaying(ab())) return;
   const b = bufA();
   InitAndLaunchChosenStatusAnimation(!!b[1], (b[2] | (b[3] << 8) | (b[4] << 16) | (b[5] << 24)) >>> 0);
   g.battlerControllerFuncs[ab()] = CompleteOnFinishedStatusAnimation;
@@ -676,6 +681,7 @@ function OpponentHandleSpriteInvisibility(): void {
 }
 
 function OpponentHandleBattleAnimation(): void {
+  if (IsBattleSEPlaying(ab())) return;
   const animationId = bufA()[1];
   const argument = bufA()[2] | (bufA()[3] << 8);
   if (TryHandleLaunchBattleTableAnimation(ab(), ab(), ab(), animationId, argument)) OpponentBufferExecCompleted();

@@ -77,6 +77,8 @@ import {
   StartHealthboxSlideIn,
   TryHandleLaunchBattleTableAnimation,
   TrySetBehindSubstituteSpriteBit,
+  BattleStopLowHpSound,
+  IsBattleSEPlaying,
 } from './gfx';
 import { battleStringExpandPlaceholders, battleStringShouldBeColored, bufferStringBattle, encodeBattleText, getCurrentPpToMaxPpState, moveName, typeName } from './message';
 import { countAliveMonsInBattle, getDefaultMoveTarget } from './pokemonBattle';
@@ -864,8 +866,9 @@ function PlayerHandleBallThrowAnim(): void {
   g.battlerControllerFuncs[ab()] = CompleteOnSpecialAnimDone;
 }
 
-/** PlayerHandleMoveAnimation (IsBattleSEPlaying is always FALSE without audio) */
+/** PlayerHandleMoveAnimation: held (run again next frame) while IsBattleSEPlaying */
 function PlayerHandleMoveAnimation(): void {
+  if (IsBattleSEPlaying(ab())) return;
   const move = bufA()[1] | (bufA()[2] << 8);
   SetMoveAnimGlobalsFromBuffer(ab());
   if (IsMoveWithoutAnimation(move, anim.moveTurn)) {
@@ -1001,6 +1004,7 @@ function PlayerHandleChoosePokemon(): void {
 }
 
 function PlayerHandleCmd23(): void {
+  BattleStopLowHpSound();
   BeginNormalPaletteFade(PALETTES_ALL, 2, 0, 16, RGB_BLACK);
   PlayerBufferExecCompleted();
 }
@@ -1031,12 +1035,14 @@ function PlayerHandleExpUpdate(): void {
 }
 
 function PlayerHandleStatusIconUpdate(): void {
+  if (IsBattleSEPlaying(ab())) return;
   UpdateHealthboxAttribute(g.healthboxSpriteIds[ab()], monOf(ab()), K.HEALTHBOX_STATUS_ICON);
   sbd().healthBoxesData[ab()].statusAnimActive = 0;
   g.battlerControllerFuncs[ab()] = CompleteOnFinishedStatusAnimation;
 }
 
 function PlayerHandleStatusAnimation(): void {
+  if (IsBattleSEPlaying(ab())) return;
   const b = bufA();
   InitAndLaunchChosenStatusAnimation(!!b[1], (b[2] | (b[3] << 8) | (b[4] << 16) | (b[5] << 24)) >>> 0);
   g.battlerControllerFuncs[ab()] = CompleteOnFinishedStatusAnimation;
@@ -1210,6 +1216,7 @@ function PlayerHandleSpriteInvisibility(): void {
 }
 
 function PlayerHandleBattleAnimation(): void {
+  if (IsBattleSEPlaying(ab())) return;
   const animationId = bufA()[1];
   const argument = bufA()[2] | (bufA()[3] << 8);
   if (TryHandleLaunchBattleTableAnimation(ab(), ab(), ab(), animationId, argument)) PlayerBufferExecCompleted();
