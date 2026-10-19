@@ -290,6 +290,14 @@ this is the next level down. When you add or change a subsystem, update its entr
   the player's spot on the named map and calls `special DoFallWarp` (world/fallWarp.ts). Tests:
   tests/unit/fieldTasks.test.ts, tests/e2e/postgameFourIsland.test.ts. Quick look: `?map=FourIsland_IcefallCave_1F&x=8&y=15`,
   walk up twice.
+  Five Island (unit 4): SampleResortGorgeousMonAndReward (Selphy's request: a seen species and a reward in
+  VAR_RESORT_GORGEOUS_REQUESTED_MON / _REWARD) and IncrementResortGorgeousStepCounter (exported, called from
+  `OverworldScene.processPlayerFieldInput` on every step beside IncrementBirthIslandRockStepCount: 250 steps with a
+  request open set it to 0xFFFF); SetPostgameFlags / SetUnlockedPokedexFlags set `state.gcnLinkFlags` (saved) and
+  CHAMPION_SAVEWARP in `state.specialSaveWarpFlags` (only union_room.c's cross-version trade check reads it: link
+  play). Tests: tests/unit/fiveIsland.test.ts, tests/e2e/postgameFiveIsland.test.ts (the Sapphire theft's state is
+  set inline there). Quick look: `?map=FiveIsland_ResortGorgeous_House&x=4&y=5` once FLAG_HIDE_RESORT_GORGEOUS_INSIDE_SELPHY
+  is cleared.
 - **Step callbacks (field_tasks.c):** `world/fieldTasks.ts` (no Phaser). Task_RunPerStepCallback runs once a frame
   from `OverworldScene.tickField` (beside Task_RunTimeBasedEvents' ambient cries, not while a map loads) with a
   `PerStepCallbackHost` (map-local coords: PlayerGetDestCoords, the behavior at a cell, MapGridSetMetatileIdAt +
@@ -1734,7 +1742,7 @@ or extend them:
   saved anyway since the Safari start menu has no SAVE, and the roamer's location). Other optional warps the save
   keeps: `continueGameWarp` + `specialSaveWarpFlags` (CONTINUE_GAME_WARP), `escapeWarp`. Game stats
   (`state.gameStats`, Get/Set/IncrementGameStat; only GAME_STAT_ENTERED_HOF and _FIRST_HOF_PLAY_TIME are counted so
-  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8. The Hall of Fame records live apart from the save, like their own flash
+  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8, `gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) since version 9. The Hall of Fame records live apart from the save, like their own flash
   sectors: `state/hallOfFame.ts` (key `HOF_STORAGE_KEY`, versioned), read into `gHofBuffer` (gDecompressionBuffer)
   by LoadHallOfFameSave, written by TrySavingData(SAVE_HALL_OF_FAME) (which also counts GAME_STAT_ENTERED_HOF) and
   erased by SAVE_OVERWRITE_DIFFERENT_FILE.
@@ -1831,6 +1839,10 @@ or extend them:
   prize room charged LeafGreen's prices). `.if` inside macros is still expand_conditionals'.
 - **Script argument expressions:** `Defines.get` folds constant expressions over known names (`FALSE | (TRUE <<
   1)`, `(MAX_COINS + 1) - 20`), as GAS does; before, the Pokémon Center nurse's `multichoice` threw.
+- **Script comparisons:** `compare`, `goto_if_*` / `call_if_*` and `case` take their second operand as event.inc's
+  `compare` macro does (ScriptEngine `compareArg`): a var only in VARS_START..VARS_END or SPECIAL_VARS_START..
+  SPECIAL_VARS_END, otherwise a value (Selphy's `goto_if_eq VAR_RESORT_GORGEOUS_REQUESTED_MON, 0xFFFF`; VarGet's
+  "anything from VARS_START up is a var" read 0xFFFF as an unset var, 0).
 - **Story checks (Erika to Sabrina):** `tests/e2e/storyCeladonSaffron.test.ts` plays each required story event
   from a `?map=` start with the state the story would have (badges and hide flags with `setFlag`, the area's
   trainers marked beaten with the TRAINER_FLAGS_START offset, a level-100 Mewtwo with PSYCHIC + CUT) and checks what
