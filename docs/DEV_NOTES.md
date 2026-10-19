@@ -776,6 +776,29 @@ this is the next level down. When you add or change a subsystem, update its entr
   Item icons: `CreateBerryPouchItemIcon` (menus/itemMenuIcons.ts). Probe `__test.berryPouch()` (BERRYPOUCH_* type,
   the screen task's name, `fading`, scroll/row, the pocket's berries in list order). Tests:
   tests/e2e/berryPouch.test.ts.
+- **Fame Checker:** `menus/fameChecker.ts` is fame_checker.c's screen: `UseFameChecker(savedCallback)` on whichever
+  GBA host has the bag (FieldMenuScene). Ways in: the bag's KEY ITEMS → FAME CHECKER → USE (`FieldUseFunc_FameChecker`
+  in menus/itemUse.ts → UseFameCheckerFromBag, back to CB2_BagMenuFromStartMenu) and, registered, SELECT on the field
+  (Task_UseFameCheckerFromField, back to CB2_ReturnToField through FieldCB2_UseItemFromField; SELECT closes it only
+  then). Structure as in the C: MainCB2_LoadFameChecker's gMain.state steps, `sFameCheckerData` (struct
+  FameCheckerData), Task_TopMenuHandleInput / Task_FlavorTextDisplayHandleInput / Task_EnterPickMode /
+  Task_ExitPickMode, the list menu (FC_MoveCursorFunc redraws the six icons), the info box on BG1
+  (UpdateInfoBoxTilemap, Task_FCOpenOrCloseInfoBox), the pick panel sliding in on BG1 with the person's pic and the
+  spinning Poké Ball (SpriteCB_FCSpinningPokeball), dimmed icons with OBJ blending (BLDALPHA 7/0).
+  CreateFameCheckerObject draws a flavor text's object event (menus/objectEventGraphics.ts's template, its
+  `paletteSlot`; InitObjectEventPalettes(0) loads sObjectPaletteTags0's palettes into OBJ slots 0-9). The save
+  data and the specials are `state/fameChecker.ts` (Phaser-free): `GameState.fameChecker`
+  (gSaveBlock1Ptr->fameChecker[16]: pickState FCPICKSTATE_*, flavorTextFlags), ResetFameChecker in the GameState
+  constructor (NewGameInitData), SetFlavorTextFlagFromSpecialVars / UpdatePickStateFromSpecialVar8005 (specials.ts'
+  FAME_CHECKER_SPECIALS; the `famechecker person, value[, special]` macro is expanded by the extractor), saved since
+  save version 10. Data: `tools/extract_fame_checker.py` → `fameChecker.json` (sTrainerIdxs,
+  sFameCheckerTrainerPicIdxs, sFameCheckerArrayNpcGraphicsIds, the object palettes; set by Assets.init); text:
+  strings.json (data/text/fame_checker.inc); graphics: `graphics/fame_checker/` in extract_gfx.py,
+  `fameCheckerGfxSymbols()` (FieldMenuScene preloads them when the bag holds the item or it's the registered one).
+  No help context of its own (the C sets none). Probe `__test.fameChecker()` (the task, the list, the cursor, the six
+  icons' graphics / "?" / dimmed / hidden, the pic in pick mode, the selector's slot, the message box's last string).
+  Tests: tests/e2e/fameChecker.test.ts (the rival's gift in Cerulean, the bag, Bill's text and "?" icons, pick mode;
+  Brock after his gym from SELECT, his pic and text, the save), tests/unit/fameChecker.test.ts.
 - **Naming screen:** `DoNamingScreen` (`menus/namingScreen.ts`) runs on any GBA host. From a script, use
   `ScriptHost.doNamingScreen` (FieldMenuScene `naming`). Oak's speech calls it with NAMING_SCREEN_PLAYER
   (monSpecies = the player's gender) and NAMING_SCREEN_RIVAL on MainMenuScene, preloading `namingScreenGfxSymbols`
@@ -1900,7 +1923,7 @@ or extend them:
   saved anyway since the Safari start menu has no SAVE, and the roamer's location). Other optional warps the save
   keeps: `continueGameWarp` + `specialSaveWarpFlags` (CONTINUE_GAME_WARP), `escapeWarp`. Game stats
   (`state.gameStats`, Get/Set/IncrementGameStat; only GAME_STAT_ENTERED_HOF and _FIRST_HOF_PLAY_TIME are counted so
-  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8, `gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) since version 9. The Hall of Fame records live apart from the save, like their own flash
+  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8, `gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) since version 9. `fameChecker` (gSaveBlock1Ptr->fameChecker) since version 10. The Hall of Fame records live apart from the save, like their own flash
   sectors: `state/hallOfFame.ts` (key `HOF_STORAGE_KEY`, versioned), read into `gHofBuffer` (gDecompressionBuffer)
   by LoadHallOfFameSave, written by TrySavingData(SAVE_HALL_OF_FAME) (which also counts GAME_STAT_ENTERED_HOF) and
   erased by SAVE_OVERWRITE_DIFFERENT_FILE.
