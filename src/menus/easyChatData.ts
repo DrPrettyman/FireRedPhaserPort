@@ -132,11 +132,13 @@ export interface EasyChatSaveFields {
   questionnaireWords: number[];
   /** gSaveBlock1Ptr->additionalPhrases: one bit per trendy saying (IsTrendySayingUnlocked / EnableRareWord) */
   additionalPhrases: number[];
+  /** gSaveBlock1Ptr->mail[].words (world/mail.ts) */
+  mail?: { words: number[] }[];
 }
 
 /**
  * InitEasyChatPhrases (NewGameInitData): the default profile and battle-start words, empty win / loss words, no
- * trendy sayings. The mail words it also clears aren't modelled (no mail). Without UBFIX the C clears 64 bytes
+ * trendy sayings, every mail's words EC_WORD_UNDEFINED. Without UBFIX the C clears 64 bytes
  * from additionalPhrases on (into the Mauville old man's data, re-initialized right after); the port clears the
  * array.
  */
@@ -149,6 +151,7 @@ export function InitEasyChatPhrases(state: EasyChatSaveFields): void {
   state.easyChatBattleStart = words(d.defaultBattleStartWords);
   state.easyChatBattleWon = words([]);
   state.easyChatBattleLost = words([]);
+  for (const mail of state.mail ?? []) mail.words.fill(EC_WORD_UNDEFINED);
   state.additionalPhrases = new Array<number>(NUM_ADDITIONAL_PHRASE_BYTES).fill(0);
 }
 
@@ -158,7 +161,7 @@ export function InitQuestionnaireWords(state: EasyChatSaveFields): void {
   state.questionnaireWords = new Array<number>(NUM_QUESTIONNAIRE_WORDS).fill(EC_WORD_UNDEFINED);
 }
 
-/** ShowEasyChatScreen / ShowEasyChatMessage's word arrays by EASY_CHAT_TYPE_* (undefined for other types; mail isn't modelled). */
+/** ShowEasyChatScreen / ShowEasyChatMessage's word arrays by EASY_CHAT_TYPE_* (the mail's: VAR_0x8005's slot; undefined for other types). */
 export function easyChatWordsForType(state: GameState, type: number): number[] | undefined {
   const c = EC();
   switch (type) {
@@ -172,6 +175,8 @@ export function easyChatWordsForType(state: GameState, type: number): number[] |
       return state.easyChatBattleLost;
     case c.EASY_CHAT_TYPE_QUESTIONNAIRE:
       return state.questionnaireWords;
+    case c.EASY_CHAT_TYPE_MAIL:
+      return state.mail[state.getVar('VAR_0x8005')]?.words;
     default:
       return undefined;
   }

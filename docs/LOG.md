@@ -3969,6 +3969,90 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
     wasn't pinned down.
 - Typecheck clean, 646 unit tests.
 
+### W-teachy 1: Teachy TV's screen (FIELD_ITEMS_PLAN.md batch 12)
+
+- `menus/teachyTv.ts` is teachy_tv.c whole but the demos: InitTeachyTvController, CB2_ReturnToTeachyTV,
+  SetTeachyTvControllerModeToResume, the main callback (modes 0-2), the BGs (the TV set, the noise, the title, Route 1
+  drawn on BG3 from its layout and tilesets: TeachyTvLoadBg3Map and its tile / palette helpers), the Pokédude's object,
+  the six-option list (four without the TM case) with its scroll arrows and WIN0 darkening, every TTVcmd, the tall
+  grass sprites (the field effect's template on the GBA layer, with the C's subsprite tables), quitting to the bag or
+  the field (Overworld_PlaySpecialMapMusic). menus/itemUse.ts: FieldUseFunc_TeachyTv, InitTeachyTvFromBag,
+  Task_InitTeachyTvFromField. The Pokédude's battles and scripted bag / TM case (units 2-3) go through one seam,
+  PokedudeDemoNotPorted: logged, and the screen comes back as from the demo's end (mode 2: the closing text).
+- Extractor: `graphics/teachy_tv/` in extract_gfx.py's prefixes (gTeachyTv_Gfx, the screen and title tilemaps, the
+  4-palette gTeachyTv_Pal); extract.py reads `src/data/text/teachy_tv.h` with strings.c (strings.c #includes it, the
+  regex only saw strings.c's own text). FieldMenuScene awaits `prepareTeachyTv` for the bag and SELECT screens when
+  the bag holds Teachy TV (the layout is a JSON fetch, the rest graphics).
+- On the way: the grass sprites' callback reads sResources after TeachyTvPrepBattle has freed it (on the GBA, the
+  freed heap during the transition); the port keeps the freed buffer for it (sFreedResources).
+- Tests: tests/e2e/teachyTv.test.ts, 4 tests: the old man's tutorial to the gift and Teachy TV from the bag (five
+  rows, no arrows, MUS_TEACHY_TV_MENU, SELECT ignored from the bag, B back to the bag and the map music); all six
+  options with the TM case, each recorded tick by tick in the page (the texts printed, every TTVcmd in order, mode 2
+  after the skipped demo, grass sprites in the battle options only, MUS_FOLLOW_ME then MUS_TEACHY_TV_MENU, back on
+  the same row), then CANCEL scrolled into view; B mid-sequence (TTVcmd_End's state, the list on the same option);
+  SELECT from the field (HELPCONTEXT_BAG, SELECT and CANCEL back to the field with the controls locked until the
+  fade in). Screenshots of the noise, title, walk-in, hello, the grass, mode 2, the walk off and THE END checked by
+  eye. Typecheck, 646 unit tests; teachyTv, registeredItems and fieldItems e2e pass.
+
+### W-mail 1: mail's data, the mail screen, the party menu's mail actions (FIELD_ITEMS_PLAN.md, batch 12)
+
+- mail_data.c whole in `world/mail.ts` (no Phaser): struct Mail, ClearMailData / ClearMailStruct, MonHasMail,
+  GiveMailToMon / GiveMailToMon2, TakeMailFromMon / TakeMailFromMon2, ClearMailItemId, SpeciesToMailSpecies /
+  MailSpeciesToSpecies, plus pokemon_icon.c's MailSpeciesToIconSpecies; the Game Corner's photo special and the
+  trainer card now use these instead of their own copies. `GameState.mail` (gSaveBlock1Ptr->mail[16], ClearMailData
+  in the constructor; InitEasyChatPhrases clears the words), MON_DATA_MAIL as the party-only `Pokemon.mail` (absent =
+  MAIL_NONE). Save version 11 (10 at first; renumbered at the merge after W-fame's 10): `mail` and each party mon's `mail` (an older save keeps the new-game slots).
+- mail.c whole in `menus/mail.ts`: ReadMail, DoInitMailView's 19 steps, every mail type's graphics (graphics/mail/
+  through extract_gfx.py) and textpals, sMessageLayouts_5x2 (and the unused 3x3), the gender colours, Bead / Dream
+  Mail's icon (new CreateMonIcon_HandleDeoxys / LoadMonIconPalette / FreeMonIconPalette in menus/pokemonIcon.ts: the
+  Unown letters' icon species are past NUM_SPECIES, which CreateMonIcon maps to SPECIES_NONE), BufferMailMessage
+  (ConvertInternationalString for names under 6 chars), the help context by gPlayerPcMenuManager.notInRoom (now set
+  by ui/PlayerPcMenu.ts). The menus preload the mail and Easy Chat graphics when the bag or the party holds mail.
+- The party menu: give a mail from the bag or from ITEM → GIVE (also swapped for a held item), written on the Easy
+  Chat screen (EASY_CHAT_TYPE_MAIL) and taken back on cancel; MAIL → READ; MAIL → TAKE → YES into the PC slots
+  (TakeMailFromMon2; the mailbox screen is unit 2) or NO → YES into the bag. The bag's CHECK on a mail
+  (FieldUseFunc_Mail: a blank mail). `special ShowEasyChatScreen` with EASY_CHAT_TYPE_MAIL edits VAR_0x8005's slot.
+- On the way: CreateShedinja now clears the copy's mail and markings (both modelled now; the comment said neither
+  was). The Easy Chat e2e helpers moved to tests/e2e/easyChatHelpers.ts for mail.test.ts.
+- Left for W-mail unit 2: the PC mailbox (player_pc.c's mailbox, mailbox_pc.c, PARTY_ACTION_GIVE_MAILBOX_MAIL),
+  daycare.c's DayCareMail, the in-game trade's mail (DONTAE's Jynx's Fab Mail reads as blank until then).
+- Tests: tests/unit/mail.test.ts (8); tests/e2e/mail.test.ts (4: a Retro Mail bought at Celadon Dept. Store 4F,
+  given from the bag with HI AWESOME typed, read, taken into the bag; ITEM → GIVE cancelled and written, Bead Mail's
+  icon, TAKE → YES to the PC slots; CHECK; a held mail through SAVE and CONTINUE), passed three times in a row;
+  easyChat.test.ts, fieldItems.test.ts, trainerCard.test.ts and gameCorner.test.ts's photo printer pass.
+
+### The Fame Checker (W-fame, FIELD_ITEMS_PLAN.md batch 12)
+
+- fame_checker.c whole in `menus/fameChecker.ts` (new): UseFameChecker and MainCB2_LoadFameChecker's setup (BG3 the
+  background, BG2 the frame, BG1's 512 px info box / pick panel, BG0's four windows), the persons list with CANCEL
+  (FC_PopulateListMenu, AdjustGiovanniIndexIfBeatenInGym, FC_DoMoveCursor's green / grey names), the six flavor-text
+  icons (CreateFameCheckerObject's object events, PlaceQuestionMarkTile's "?"), the selector cursor and the dimmed
+  icons (OBJ blending), the icon description box and its open / close animation, the pick mode (START: the person's
+  trainer pic or Daisy / Fuji / Oak / Bill's own, in colour or as a silhouette, sliding in with the spinning Poké
+  Ball and BG1; the name, or the quote with all six texts), the scroll arrows past five persons, the UI help line,
+  B / CANCEL / SELECT (from the field) closing with a fade. `menus/itemUse.ts`: FieldUseFunc_FameChecker (from the
+  bag, and with SELECT through FadeToScreenFromField / OpenScreenFromFieldOnceFaded); registeredItem.ts's "not
+  implemented" fallback is Teachy TV's only now.
+- Save data and specials in `state/fameChecker.ts` (new, Phaser-free): GameState.fameChecker, ResetFameChecker in
+  the constructor (NewGameInitData), FullyUnlockFameChecker, SetFlavorTextFlagFromSpecialVars and
+  UpdatePickStateFromSpecialVar8005 (out of specials.ts' NO_OP; the `famechecker` macro was already expanded by the
+  extractor). SAVE_VERSION 9 → 10 (`fameChecker`; upgradeSave keeps the new-game state for a version 9 save).
+- Extractor: `tools/extract_fame_checker.py` (new: fameChecker.json, loaded by Assets.init), `graphics/fame_checker/`
+  in extract_gfx.py, and `paletteSlot` in the sprite manifest's `gba` info (extract.py's gba_info; the Fame
+  Checker's objects draw with it). Rerun `npm run extract`.
+- Shared files: state/saveData.ts (version 10), script/specials.ts (FAME_CHECKER_SPECIALS, NO_OP), menus/itemUse.ts,
+  menus/registeredItem.ts (a comment), scenes/FieldMenuScene.ts (setObjectEventGraphicsInfo always; the Fame
+  Checker's graphics for the bag / the registered item), data/Assets.ts, data/types.ts, dev/testHooks.ts
+  (`fameChecker()`), tools/extract.py, tools/extract_gfx.py. No help context: the C sets none for it.
+- Verified: typecheck; `npm test` (53 files, 653 tests; tests/unit/fameChecker.test.ts new, 7: the new-game state, both
+  specials' rules, the save and a version 9 save, the extracted tables against fame_checker.c); e2e fameChecker.test.ts
+  (new, 2 tests: the rival's battle and gift in Cerulean, the bag's USE, OAK / BILL / CANCEL, Bill's first text from
+  the rival's icon, "?" elsewhere, the selector and dimming, pick mode with Bill's silhouette and Oak in colour with
+  his name, B back to the bag and the field; Brock beaten in his gym, SELECT from the field, his icon and text, his
+  pic in colour, B back to the field without the bag, the flags through a save and CONTINUE, SELECT closing it),
+  registeredItems, fieldItems. Screenshots of the list, a flavor text, a silhouette and Brock's pic match the GBA's
+  layout.
+
 ### W-qlog 1: the quest log's recording and the scenes in the save (QUEST_LOG_PLAN.md QL1, batch 12)
 
 - New `world/questLog.ts` (quest_log.c's recording half), `questLogEvents.ts` (quest_log_events.c: the u16 command
@@ -3984,7 +4068,8 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   32-action buffer is full, on a cut (`special QuestLog_CutRecording`, ShowTownMap, ShowDiploma, a white-out, a
   Victory Road switch, walking into a disabled location), on a rematch, or on a save (SaveQuestLogData from the save
   dialog and the Hall of Fame, which also sorts the scenes oldest first). GetQuestLogState writes the real state.
-  The save keeps the four scenes: SAVE_VERSION 10 (upgradeSave gives a version 9 save none).
+  The save keeps the four scenes: SAVE_VERSION 12 after W-fame's 10 and W-mail's 11 (upgradeSave gives a version 11
+  save none).
 - Found on the way: the after-rival start preset now sets VAR_QLBAK_MAP_LAYOUT as leaving the house does (BackUpMapLayout
   at the departure's scene start); newGame.test.ts compares the preset against a real playthrough and caught it.
 - Not done (QL2-QL5): playback on CONTINUE (QL_ResetForContinue stands in: the next scene goes after the saved ones),

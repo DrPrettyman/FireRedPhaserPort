@@ -16,14 +16,17 @@ import type { BoxPokemon } from './PokemonStorage';
 import type { DaycareMon } from '../world/daycare';
 import type { TrainerTowerRecord } from './trainerTowerRecord';
 import { loadQuestLogScenes, questLogScenesSave, type QuestLogSceneSave } from '../world/questLog';
+import type { FameCheckerSaveData } from './fameChecker';
+import type { Mail } from '../world/mail';
 
 /**
  * Bump when SaveData changes shape; fromSaveData refuses other versions. Older versions that only lack fields
  * are brought up to date by `upgradeSave` (version 1 had no gameStats, version 2 no options.sound, version 3 had
  * daycareStepCounter instead of daycare and no route5DayCareMon, version 4 no easyChat, version 5 no savedMusic,
- * version 6 no weather, version 7 no trainerTower, version 8 no gcnLinkFlags, version 9 no questLog).
+ * version 6 no weather, version 7 no trainerTower, version 8 no gcnLinkFlags, version 9 no fameChecker,
+ * version 10 no mail, version 11 no questLog).
  */
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 12;
 
 /** The localStorage key of the one save slot. */
 export const SAVE_STORAGE_KEY = 'firered-phaser:save';
@@ -54,7 +57,7 @@ const BOX_MON_FIELDS = [
 ] as const satisfies readonly (keyof BoxPokemon)[];
 
 /** struct Pokemon's party-only fields. */
-const PARTY_MON_FIELDS = ['level', 'status', 'hp', 'maxHP', 'stats'] as const satisfies readonly (keyof Pokemon)[];
+const PARTY_MON_FIELDS = ['level', 'status', 'hp', 'maxHP', 'stats', 'mail'] as const satisfies readonly (keyof Pokemon)[];
 
 // A Pokemon field missing from the lists above fails to compile here: add it (and bump SAVE_VERSION).
 type Unlisted = Exclude<keyof Pokemon, (typeof BOX_MON_FIELDS)[number] | (typeof PARTY_MON_FIELDS)[number]>;
@@ -150,7 +153,17 @@ export interface SaveData {
    * since version 8. Absent in an older save: the new-game records (ResetTrainerTowerResults) stay.
    */
   trainerTower?: { challengeId: number; records: TrainerTowerRecord[] };
-  /** gSaveBlock1Ptr->questLog[QUEST_LOG_SCENE_COUNT] (world/questLog.ts); since version 10. */
+  /**
+   * gSaveBlock1Ptr->fameChecker[NUM_FAMECHECKER_PERSONS] (state/fameChecker.ts); since version 10. Absent in an
+   * older save: the new-game state (ResetFameChecker) stays.
+   */
+  fameChecker?: FameCheckerSaveData[];
+  /**
+   * gSaveBlock1Ptr->mail[MAIL_COUNT] (world/mail.ts; a party mon's `mail` is its slot); since version 11. Absent
+   * in an older save: the new-game slots (ClearMailData) stay (no mon held mail then).
+   */
+  mail?: Mail[];
+  /** gSaveBlock1Ptr->questLog[QUEST_LOG_SCENE_COUNT] (world/questLog.ts); since version 12. */
   questLog: QuestLogSceneSave[];
 
   // ---- gPokemonStoragePtr
@@ -267,6 +280,8 @@ export function toSaveData(state: GameState): SaveData {
       additionalPhrases: [...state.additionalPhrases],
     },
     trainerTower: { challengeId: state.towerChallengeId, records: state.trainerTower.map((r) => ({ ...r })) },
+    fameChecker: state.fameChecker.map((p) => ({ ...p })),
+    mail: structuredClone(state.mail),
     questLog: questLogScenesSave(state.questLog),
     storage: {
       currentBox: st.currentBox,
@@ -346,6 +361,8 @@ export function fromSaveData(data: SaveData, state: GameState): GameState {
     state.towerChallengeId = data.trainerTower.challengeId;
     state.trainerTower.forEach((r, i) => Object.assign(r, data.trainerTower!.records[i]));
   }
+  if (data.fameChecker) state.fameChecker.forEach((p, i) => Object.assign(p, data.fameChecker![i]));
+  if (data.mail) state.mail.forEach((_, i) => (state.mail[i] = clone(data.mail![i] ?? state.mail[i])));
 
   state.questLog = loadQuestLogScenes(data.questLog);
 
@@ -378,8 +395,12 @@ export function upgradeSave(data: SaveData): SaveData {
   if (data?.version === 7) data = { ...data, version: 8 };
   // No gcnLinkFlags: 0 (their specials weren't ported yet; only the GameCube link reads them).
   if (data?.version === 8) data = { ...data, version: 9, gcnLinkFlags: 0 };
+  // No Fame Checker (its specials were no-ops): fromSaveData keeps the new-game state (ResetFameChecker).
+  if (data?.version === 9) data = { ...data, version: 10 };
+  // No mail: fromSaveData keeps the new-game slots (ClearMailData); no mon held mail.
+  if (data?.version === 10) data = { ...data, version: 11 };
   // No quest log scenes (it wasn't ported): CONTINUE has nothing to play back.
-  if (data?.version === 9) data = { ...data, version: 10, questLog: [] };
+  if (data?.version === 11) data = { ...data, version: 12, questLog: [] };
   return data;
 }
 

@@ -6,6 +6,7 @@ import { FONT_NORMAL, type Fonts } from '../text/Font';
 import { KeyRepeat } from './FieldListMenu';
 import { BackupHelpContext, RestoreHelpContext, SetHelpContext } from './helpSystemContext';
 import { MenuWindow } from './MenuWindow';
+import { gPlayerPcMenuManager } from '../world/mail';
 
 /** What the player's PC needs from the overworld. */
 export interface PlayerPcMenuHost {
@@ -75,6 +76,7 @@ export class PlayerPcMenu {
     private notInRoom = true,
   ) {
     this.keys = new KeyRepeat(input);
+    gPlayerPcMenuManager.notInRoom = notInRoom; // the mail screen's help context reads it
     BackupHelpContext();
     // PlayerPC / BedroomPC: DisplayItemMessageOnField(gText_WhatWouldYouLikeToDo, Task_DrawPlayerPcTopMenu)
     this.message(this.host.text('gText_WhatWouldYouLikeToDo'), () => this.Task_DrawPlayerPcTopMenu());

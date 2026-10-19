@@ -5,7 +5,7 @@
 import { beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { initConstants } from '../../src/battle/constants';
 import type { ObjectEventData } from '../../src/data/types';
-import { fromSaveData, toSaveData, upgradeSave, type SaveData } from '../../src/state/saveData';
+import { fromSaveData, SAVE_VERSION, toSaveData, upgradeSave, type SaveData } from '../../src/state/saveData';
 import type { Direction } from '../../src/world/direction';
 import {
   decodeQuestLogScript,
@@ -389,18 +389,18 @@ describe('the departed locations (field_specials.c)', () => {
 });
 
 describe('the save', () => {
-  test('the scenes round-trip through the save file; a version 9 save has none', () => {
+  test('the scenes round-trip through the save file; a version 11 save has none', () => {
     SetQuestLogEvent(d('QL_EVENT_DEPARTED'), departed('QL_LOCATION_HOME'));
     QuestLogRecordPlayerStep(d('MOVEMENT_ACTION_WALK_NORMAL_UP'));
     SaveQuestLogData();
     const data = JSON.parse(JSON.stringify(toSaveData(t.state))) as SaveData;
-    expect(data.version).toBe(10);
+    expect(data.version).toBe(SAVE_VERSION);
     const loaded = fromSaveData(data, newGame().state);
     expect(loaded.questLog).toEqual(t.state.questLog);
-    const v9 = { ...data, version: 9 } as Partial<SaveData>;
-    delete v9.questLog;
-    const upgraded = upgradeSave(v9 as SaveData);
-    expect(upgraded.version).toBe(10);
+    const v11 = { ...data, version: 11 } as Partial<SaveData>;
+    delete v11.questLog;
+    const upgraded = upgradeSave(v11 as SaveData);
+    expect(upgraded.version).toBe(SAVE_VERSION);
     expect(fromSaveData(upgraded, newGame().state).questLog.every((s) => s.startType === 0)).toBe(true);
   });
 });

@@ -33,6 +33,8 @@ import { tmCaseProbe } from '../menus/tmCase';
 import { eggHatchProbe } from '../menus/eggHatch';
 import { moveRelearnerProbe } from '../menus/learnMove';
 import { berryPouchProbe } from '../menus/berryPouch';
+import { fameCheckerProbe } from '../menus/fameChecker';
+import { teachyTvProbe } from '../menus/teachyTv';
 import { hallOfFameProbe } from '../menus/hallOfFame';
 import { creditsProbe, creditsSkipToClosing } from '../menus/credits';
 import { pokedexAreaProbe } from '../menus/pokedexArea';
@@ -57,6 +59,7 @@ import { daycareLevelMenuProbe } from '../ui/DaycareLevelMenu';
 import { battleRecordsProbe } from '../menus/battleRecords';
 import { diplomaProbe } from '../menus/diploma';
 import { easyChatProbe } from '../menus/easyChatScreen';
+import { mailProbe } from '../menus/mail';
 import { seagallopProbe } from '../menus/seagallop';
 import type { SSAnneProbe } from '../world/ssAnne';
 import { questLogTestProbe } from '../world/questLog';
@@ -656,6 +659,11 @@ function createApi(game: Phaser.Game) {
     battleRecords: () => battleRecordsProbe()?.map((p) => ({ x: p.x, y: p.y, text: decode(p.str) })),
     /** The Easy Chat screen (menus/easyChatScreen.ts): the live model, the last command, the triangle cursor. */
     easyChat: () => easyChatProbe(),
+    /** The mail screen (menus/mail.ts, W-mail): its type, the message lines and the name as encoded bytes, the icon. */
+    mail: () => {
+      const p = mailProbe();
+      return p && { ...p, lines: p.lines.map(decode), authorName: decode(p.authorName) };
+    },
     /** The Seagallop ferry scene (menus/seagallop.ts) while it's up: setup state, frames, BG3's x, the ferry, wakes. */
     seagallop: () => seagallopProbe(),
     /** The start menu's save dialog while it runs: whether its YES/NO menu and save info window are up, and that window's values. */
@@ -808,6 +816,16 @@ function createApi(game: Phaser.Game) {
     moveRelearner: () => (gMain.callback2?.name === 'CB2_MoveRelearner' ? moveRelearnerProbe() : undefined),
     /** The berry pouch while it's open (menus/berryPouch.ts): BERRYPOUCH_* type, task, scroll/row and the pocket's berries in list order. */
     berryPouch: () => (gMain.callback2?.name === 'CB2_BerryPouchIdle' ? berryPouchProbe() : undefined),
+    /** The Fame Checker while it's up (menus/fameChecker.ts): its task, the list, the icons, the pic, the message. */
+    fameChecker: () => {
+      const p = fameCheckerProbe();
+      return p && { ...p, list: p.list.map(decode), message: decode(p.message) };
+    },
+    /**
+     * Teachy TV while it's up (menus/teachyTv.ts): its mode, option, scroll/row, the task and TTVcmd step, the text
+     * printed last (symbol), the Pokédude's sprite, the grass sprites, BG3's scroll.
+     */
+    teachyTv: () => (gMain.callback2?.name === 'TeachyTvCallback' ? teachyTvProbe() : undefined),
     /** The map name popup while Task_MapNamePopup runs: its text, decoded, and how many px of it are on screen. */
     mapNamePopup: () => {
       const f = field();

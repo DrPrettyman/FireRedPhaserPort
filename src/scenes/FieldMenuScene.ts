@@ -27,8 +27,10 @@ import { gMain, SetMainCallback1, SetMainCallback2, SetVBlankCallback } from '..
 import { initGbaText } from '../gba/window';
 import { CB2_ReturnToField, CB2_ReturnToFieldContinueScriptPlayMapMusic, CB2_ReturnToFieldWithOpenMenu, fieldReturn } from '../menus/fieldCallbacks';
 import { prepareMenus } from '../menus/host';
+import { prepareTeachyTv } from '../menus/teachyTv';
 import { CB2_BagMenuFromStartMenu, GoToBagMenu } from '../menus/itemMenu';
 import { setObjectEventGraphicsInfo } from '../menus/objectEventGraphics';
+import { fameCheckerGfxSymbols } from '../menus/fameChecker';
 import { DoNamingScreen, NAMING_SCREEN_BOX, namingScreenGfxSymbols } from '../menus/namingScreen';
 import { EnterPokeStorage, pokemonStorageGfxSymbols } from '../menus/pokemonStorage';
 import { ItemPc_Init, itemPcGfxSymbols } from '../menus/itemPc';
@@ -131,6 +133,11 @@ export class FieldMenuScene extends GbaHostScene {
     if (start.menu === 'party' || start.menu === 'bag' || start.menu === 'townMap') {
       await loadGfx(regionMapGfxSymbols(start.menu === 'bag' && start.state.bag.has(K.ITEM_TOWN_MAP, 1)));
     }
+    // The Fame Checker from the bag or registered for SELECT (FieldUseFunc_FameChecker): its graphics, the trainer
+    // pics and the flavor texts' object events.
+    setObjectEventGraphicsInfo(assets.sprites);
+    const fameCheckerFrom = start.menu === 'bag' || (start.menu === 'itemFromField' && start.state.registeredItem === K.ITEM_FAME_CHECKER);
+    if (fameCheckerFrom && start.state.bag.has(K.ITEM_FAME_CHECKER, 1)) await loadGfx(fameCheckerGfxSymbols());
     // The Pokédex (StartMenuPokedexCallback): its data and graphics.
     if (start.menu === 'pokedex') {
       await loadPokedexData('gen');
@@ -138,6 +145,8 @@ export class FieldMenuScene extends GbaHostScene {
     }
     if (start.menu === 'options') await loadGfx(optionMenuGfxSymbols());
     if (start.menu === 'itemFromField') await loadGfx(start.itemScreen!.gfxSymbols);
+    // Teachy TV from the bag or with SELECT: Route 1's layout and tilesets, its graphics, the Pokédude.
+    if ((start.menu === 'bag' || start.menu === 'itemFromField') && start.state.bag.has(K.ITEM_TEACHY_TV, 1)) await prepareTeachyTv(assets);
     // The trainer card (StartMenuPlayerCallback): its graphics and the player's pic.
     if (start.menu === 'trainerCard') await loadGfx(trainerCardGfxSymbols(start.state.playerGender === 'female' ? K.FEMALE : K.MALE));
     // The item PC's list (WITHDRAW ITEM) draws the PC's items' icons.

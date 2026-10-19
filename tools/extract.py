@@ -417,6 +417,7 @@ def extract_object_events(decomp, out):
             frames.append([sym, 0, -1] if frame is None else [sym, frame * frame_size, frame_size])
         return {
             "paletteTag": pal_tag_values.get(tag, 0x11FF),
+            "paletteSlot": pal_slots.get(info.get("paletteSlot", "").strip(), 0),  # the Fame Checker's objects (W-fame)
             "palette": pal_by_tag.get(tag),
             "oam": re.sub(r"^&gObjectEventBaseOam_", "", info.get("oam", "").strip()),
             "images": frames,
@@ -1100,7 +1101,7 @@ def extract_scripts(decomp, out):
     )
     # C strings (menu labels etc.): const u8 gText_X[] = _("..." "...");
     # (+ daycare.c's sJapaneseEggNickname, trade.c's gText_MaleSymbol4 / gText_FemaleSymbol4 / gText_GenderlessSymbol)
-    for cfile in ("src/strings.c", "src/keyboard_text.c", "src/daycare.c", "src/trade.c"):
+    for cfile in ("src/strings.c", "src/keyboard_text.c", "src/daycare.c", "src/trade.c", "src/data/text/teachy_tv.h"):
         src = (decomp / cfile).read_text(encoding="utf-8")
         for name, body in re.findall(r"const u8 (\w+)\[\]\s*=\s*_\((.*?)\);", src, re.S):
             parts = re.findall(r'"((?:\\.|[^"\\])*)"', body)
@@ -1598,6 +1599,10 @@ def main():
     from extract_quest_log import extract_quest_log
 
     extract_quest_log(decomp, out)
+    print("fame checker")
+    from extract_fame_checker import extract_fame_checker
+
+    extract_fame_checker(decomp, out)
     print("gfx")
     from extract_gfx import extract_gfx
     extract_gfx(decomp, out)

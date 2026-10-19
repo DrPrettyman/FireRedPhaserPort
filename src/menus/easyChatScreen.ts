@@ -373,7 +373,7 @@ const sSpriteTemplate_ScrollIndicator: SpriteTemplate = {
 
 /**
  * ShowEasyChatScreen (easy_chat_2.c): the screen for VAR_0x8004's EASY_CHAT_TYPE_*, editing the saved words, back
- * through CB2_ReturnToFieldContinueScript. Nothing for another type (the mail's words aren't modelled).
+ * through CB2_ReturnToFieldContinueScript (the mail type: VAR_0x8005's slot). Nothing for another type.
  */
 export function ShowEasyChatScreen(): void {
   const type = state.getVar('VAR_0x8004');

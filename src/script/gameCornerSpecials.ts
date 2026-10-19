@@ -6,7 +6,7 @@ import { CB2_ReturnToFieldContinueScriptPlayMapMusic } from '../menus/fieldCallb
 import { PlaySlotMachine, slotMachineGfxSymbols } from '../menus/slotMachine';
 import { GetRandomSlotMachineId } from '../menus/slotMachineLogic';
 import { REG_OFFSET_WIN0V, SetGpuReg, WIN_RANGE } from '../gba/hw';
-import { GetUnownLetterByPersonality } from '../menus/pokemonIcon';
+import { SpeciesToMailSpecies } from '../world/mail';
 import { avatarField } from '../world/playerAvatar';
 import { FieldEffectActiveListRemove, gFieldEffectArguments, registerFieldEffectNatives } from '../world/fieldEffectScripts';
 import type { Defines } from './Defines';
@@ -14,13 +14,6 @@ import type { ScriptHost, Wait } from './ScriptEngine';
 import type { Special } from './specials';
 
 const PARTY_SIZE = 6;
-const UNOWN_OFFSET = 30000; // mail_data.c
-
-/** SpeciesToMailSpecies (mail_data.c): Unown as UNOWN_OFFSET + its letter. */
-function SpeciesToMailSpecies(species: number, personality: number, unown: number): number {
-  if (species === unown) return GetUnownLetterByPersonality(personality) + UNOWN_OFFSET;
-  return species;
-}
 
 export const GAME_CORNER_SPECIALS: Record<string, Special> = {
   /** GetRandomSlotMachineId (field_specials.c): the machine's sReelBiasChances row, for `playslotmachine`. */
@@ -37,7 +30,7 @@ export const GAME_CORNER_SPECIALS: Record<string, Special> = {
     for (let i = 0; i < PARTY_SIZE; i++) {
       const mon = state.party[i];
       const species = !mon ? d.require('SPECIES_NONE') : mon.isEgg ? d.require('SPECIES_EGG') : mon.species; // MON_DATA_SPECIES_OR_EGG
-      state.setVar(`VAR_TRAINER_CARD_MON_ICON_${i + 1}`, SpeciesToMailSpecies(species, mon?.personality ?? 0, d.require('SPECIES_UNOWN')));
+      state.setVar(`VAR_TRAINER_CARD_MON_ICON_${i + 1}`, SpeciesToMailSpecies(d, species, mon?.personality ?? 0));
     }
     state.setVar('VAR_TRAINER_CARD_MON_ICON_TINT_IDX', state.getVar('VAR_0x8004'));
   },
