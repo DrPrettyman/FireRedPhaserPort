@@ -275,6 +275,52 @@ test('B during a sequence stops it: the noise, then the list again on the same o
   expect(r.list).toMatchObject({ mode: 0, whichScript: 1, scrollOffset: 0, selectedRow: 1, grassDisabled: 0, listItems: 5 });
 });
 
+test("B quits the Pokédude's demo from his battle, his bag and his party menu, back to the list on the same option", async () => {
+  const game = await session.start(PALLET);
+  await setUp(game, ['ITEM_TEACHY_TV']);
+  const before = await partyAndBag(game);
+  await openFromBag(game);
+  const quits: { option: number; what: string; at: (t: any) => boolean }[] = [
+    // BattleMainCB2: JOY_HELD(B_BUTTON) → B_OUTCOME_DREW, CB2_QuitPokedudeBattle (here during his first voiceover)
+    { option: 0, what: 'his first voiceover', at: (t) => t.battle()?.pokedude?.text === 'Pokedude_Text_SpeedierBattlerGoesFirst' },
+    // Task_BButtonInterruptTeachyTv: FreeRestoreBattleData, LoadPlayerParty, CB2_ReturnToTeachyTV
+    { option: 1, what: 'his bag', at: (t) => t.gbaTasks().includes('Task_Bag_TeachyTvStatus') && !t.paletteFadeActive() },
+    // PartyMenuPokedudeIsCancelled → PartyMenuHandlePokedudeCancel
+    { option: 2, what: 'his party menu', at: (t) => t.gbaTasks().includes('Task_PartyMenu_PokedudeStep') && !t.paletteFadeActive() },
+  ];
+  for (const { option, what, at } of quits) {
+    if (option > 0) {
+      await game.press('DOWN');
+      expect(await game.eval((t, o) => t.until(() => t.teachyTv()!.scrollOffset + t.teachyTv()!.selectedRow === o, 600), option)).toBe(true);
+    }
+    const mark = await game.mark();
+    await game.mashUntil(at, { what, timeout: 300_000, maxFrames: 40000 }); // (sent to the page as source)
+    const r = await game.eval(async (t) => {
+      const screens: string[] = [];
+      const done = t.until(() => {
+        const s = t.gbaScreen();
+        if (s && screens.at(-1) !== s) screens.push(s);
+        return !!t.teachyTv()?.listReady;
+      }, 20000);
+      void t.press('B');
+      return { ok: await done, screens, list: t.teachyTv(), battle: t.battle() };
+    });
+    expect(r.ok, what).toBe(true);
+    // SetTeachyTvControllerModeToResume: the list again (mode 1 → 0), no closing words, on the same option
+    expect(r.list, what).toMatchObject({ mode: 0, whichScript: option, task: 'TeachyTvOptionListController' });
+    expect(r.list!.scrollOffset + r.list!.selectedRow, what).toBe(option);
+    expect(r.battle, what).toBeUndefined(); // gMain.inBattle off (FreeRestoreBattleData)
+    // No battle end: the quit doesn't go through ReturnFromBattleToOverworld
+    expect((await game.events(mark)).filter((e) => e.type === 'battleEnd'), what).toEqual([]);
+    expect(await game.eval((t) => t.audioEvents().filter((e) => e.type === 'bgm').at(-1)?.name), what).toBe('MUS_TEACHY_TV_MENU');
+    expect(await partyAndBag(game), what).toEqual(before);
+  }
+  // A demo runs to its end after the quits (the battle's state starts afresh).
+  const seen = await runOption(game, "the matchups demo after the quits");
+  expect(seen.voiceovers).toEqual(DEMOS[2].voiceovers.map((v) => `Pokedude_Text_${v}`));
+  expect(await partyAndBag(game)).toEqual(before);
+}, 600_000);
+
 /**
  * Close Teachy TV opened with SELECT with `button`: back on the field (never through the bag), the objects frozen
  * and the controls locked while it fades in (FieldCB2_UseItemFromField), then both given back. The press is made
