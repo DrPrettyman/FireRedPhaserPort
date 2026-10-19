@@ -3568,9 +3568,10 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   one and the same one, the chart's record). The sweep: all 29 trainers of Pattern Bush, Green Path, Outcast
   Island, the Water Path and Ruin Valley (the double battles Ava & Geb and Miu & Mia), the 6 item balls and 6
   hidden items, Pattern Bush's two escape warps, the Water Path house's man. Nothing in them was wrong.
-- Verified: typecheck; unit 615 (tests/unit/pokemonSizeRecord.test.ts: the hash and sizes moved from
+- Verified: typecheck; unit 625 with master merged (tests/unit/pokemonSizeRecord.test.ts: the hash and sizes moved from
   miscSpecials.test.ts, and the Heracross specials through POSTGAME_SPECIALS); e2e postgameSixIsland.test.ts (4)
-  and sideSpecials.test.ts (the Magikarp record on the moved code).
+  and sideSpecials.test.ts (the Magikarp record on the moved code), postgameSixIsland.test.ts again after merging
+  master (4 passed, ~6 min: the sweep's 29 battles are most of it).
 ### W-ttower 2: the Trainer Tower's battles (POSTGAME_PLAN.md batch 10)
 
 - `world/trainerTower.ts`: unit 1's DoTrainerTowerBattle stand-in replaced by the C's: gBattleTypeFlags TRAINER |
