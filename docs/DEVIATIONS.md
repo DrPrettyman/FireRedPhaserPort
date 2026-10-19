@@ -337,17 +337,13 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     object's other fields; previousCoords are the current ones); a QL_START_WARP scene's player state comes from the
     warp, not the snapshot's graphics. A warp in playback into a disabled location ends the scene once the field has
     faded in, not at once. Task_EndQuestLog's gHelpSystemEnabled = TRUE is HelpSystem_Enable (which also lets R toggle
-    the help again). Only QL_EVENT_DEPARTED and QL_EVENT_ARRIVED have recorders: SetQuestLogEvent drops the other events (QL3), and the
-    menus, shops, PC and battles don't send theirs yet (QL4). The scene's objects snapshot is the player and the
-  - Quest log (world/questLog*.ts; QUEST_LOG_PLAN.md QL1 records, QL2-QL5 to come): CONTINUE doesn't play the
-    scenes back yet (QL2; QL_ResetForContinue puts sCurrentSceneNum where the playback would leave it). QL_EVENT_*
-    3-29 (QL3a), DEPARTED and ARRIVED have recorders and loaders; SetQuestLogEvent drops 30-34, 37, 38 and 40 (the
-    battles, field moves, shops, story items: QL3b), and the menus, shops, PC and battles don't send theirs yet (QL4:
-    events 3-29 are recorded only by unit tests and `__test.questLogEvent`). The link events (12-19) have codecs but
-    no callers (no link play). The scene's objects snapshot is the player and the
-    current map's objects in the port's order (the C's gObjectEvents slots, offScreen, the sprite anim backups and
-    directionSequenceIndex aren't kept: 0); a scene's flags and vars are kept sparse, as the save keeps them,
-    rather than as the C's byte arrays. NPC steps are recorded from NpcBrain's movement types (a face, then a
+    the help again). Every QL_EVENT_* has its recorder and loader (QL1: DEPARTED / ARRIVED, QL3a: 3-29, QL3b: 30-40),
+    but the menus, shops, PC, field moves and battles don't send theirs yet (QL4: TrySetQuestLogBattleEvent and the
+    other entry points are called only by unit tests and `__test.questLogEvent`). The link events (12-19) and
+    TrySetQuestLogLinkBattleEvent (which takes gLinkPlayers as an argument) have no callers (no link play). The
+    scene's objects snapshot is the player and the current map's objects in the port's order (the C's gObjectEvents
+    slots, offScreen, the sprite anim backups and directionSequenceIndex aren't kept: 0); a scene's flags and vars
+    are kept sparse, as the save keeps them, rather than as the C's byte arrays. NPC steps are recorded from NpcBrain's movement types (a face, then a
     WALK_NORMAL step), not each MovementType_*'s own single movements; a blocked pacer that the C has walk in place
     every 16 frames records nothing. ArePlayerFieldControlsLocked (an action's frame count, the field input's
     delay) is the field's busy / warping / script / overlay / lock / trainer approach state. MenuHelpers_IsLinkActive

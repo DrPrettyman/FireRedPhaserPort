@@ -694,7 +694,20 @@ this is the next level down. When you add or change a subsystem, update its entr
     (all 125, in strings.json through tools/extract.py; `text('gText_QuestLog_...')`). The loaders use the battle
     env's state / strings and menusData (the overworld sets both up). Test: tests/unit/questLogEvents.test.ts
     (record, then QL_LoadEvent / QL_TryRepeatEvent back to the line); `__test.questLogEvent(name, data)` records one
-    in a running game. QL3b adds 30-42 the same way.
+    in a running game.
+  - `world/questLogEventCodecs2.ts` (QL3b) has QL_EVENT_* 30-40 the same way (the trainer battles, DEFEATED_WILD_MON,
+    the field moves, BOUGHT / SOLD_ITEM, OBTAINED_STORY_ITEM; registerQuestLogEventCodecs2). Two don't use
+    RecordEventHeader: DEFEATED_WILD_MON writes into the scene's one wild record (`gQL.defeatedWildMonRecord`, the
+    header only while both counts are 0; the counts and map section at byte 8, agbcc's padded struct size), and
+    DEFEATED_CHAMPION writes a fixed count of 2 that the playback turns into three lines (by the repeat tracker's
+    counter; QL_SkipCommand and decodeQuestLogScript ignore it). The wild and champion loaders check
+    QL_IsRoomToSaveEvent like the C, so playback needs `gQL.currentSceneNum` on the scene being played.
+    `__test.questLogEventLine(scene, event)` loads a recorded event back to its line in a running game.
+  - `world/questLogBattle.ts` is quest_log_battle.c: TrySetQuestLogBattleEvent (the battle's end: the trainer
+    class picks GYM_LEADER / E4_MEMBER / CHAMPION / TRAINER via `questLogTrainerBattleEventId`, the HP fraction from
+    the player's side; a won or caught wild battle) and TrySetQuestLogLinkBattleEvent (gLinkPlayers as an argument).
+    QL4 calls them from battle/main.ts (HandleEndTurn_FinishBattle's comment marks the spot); the trainer events wait
+    in SetQuestLogEvent's deferred slot until CB2_EndTrainerBattle's QuestLogEvents_HandleEndTrainerBattle (wired).
   - `world/questLogLocations.ts` is field_specials.c's QuestLog_CheckDepartingIndoorsMap /
     QuestLog_TryRecordDepartedLocation; `world/questLogObjects.ts` is QL_RecordObjects (and
     `questLogObjectEventFrom`, the port's ObjectEvent as a gObjectEvents entry, map coordinates with MAP_OFFSET);

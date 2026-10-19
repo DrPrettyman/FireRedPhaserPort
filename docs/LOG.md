@@ -4166,3 +4166,27 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   with QL_TryRepeatEvent; the Pokémon Center's non-repeat; the Escape Rope's scene end; the link events through the
   deferred path; TranslateLinkPartnersName), tests/e2e/questLog.test.ts (+1: three events through
   `__test.questLogEvent` in a running game, a repeat, the save's stream).
+
+### W-qlog-events: the quest log's event codecs for QL_EVENT_* 30-40 and quest_log_battle.c (QUEST_LOG_PLAN.md QL3b, batch 12)
+
+- New `world/questLogEventCodecs2.ts`: quest_log_events.c's RecordEvent_* / LoadEvent_* for DEFEATED_GYM_LEADER,
+  DEFEATED_E4_MEMBER, DEFEATED_TRAINER (the rival by the player's name for them), DEFEATED_CHAMPION (a fixed count
+  of 2: three lines in playback), DEFEATED_WILD_MON (one record per scene that later wild battles count into, up
+  to 255 each; the last defeated / caught species named; eight texts by the counts), USED_FIELD_MOVE (Teleport's
+  HOME / POKéMON CENTER; Teleport and Dig stop recording steps until the next departure, the others end the
+  scene), BOUGHT_ITEM / SOLD_ITEM (the u32 money in two u16s; "just one", the number, or the money) and
+  OBTAINED_STORY_ITEM, registered by ensureEventTables. Every QL_EVENT_* now has a recorder and a loader.
+- New `world/questLogBattle.ts`: quest_log_battle.c's TrySetQuestLogBattleEvent (the trainer class split, the
+  double battle's victor, the HP fraction) and TrySetQuestLogLinkBattleEvent / GetLinkMultiBattlePlayerIndexes
+  (gLinkPlayers passed in). Not called from battle/ yet (QL4).
+- Found on the way: ShouldRegisterEvent_HandleBeatStoryTrainer read the trainer class from a host hook nobody set,
+  so every trainer counted as a non-story one; it now reads gTrainers (`gTrainerClass`). QL3a's link battle loader
+  read the outcome as B_OUTCOME_* where the C stores gBattleOutcome - 1 (a loss printed "win"); fixed with its
+  test. decodeQuestLogScript (the test probe) counted the champion's 2 as repeats.
+- Tests: tests/unit/questLogEvents2.test.ts (22: every event recorded and loaded back to its line against
+  quest_log.h's string; the gym leader / E4 / champion / trainer split and the deferral to the battle's end; the
+  story-trainer filter before the Hall of Fame; TrySetQuestLogBattleEvent's HP fractions, double battles and the
+  battles it skips; the wild record's counting, its 255 cap, a new record after another event, the special
+  encounters; the champion's three lines; a shop repeat), tests/e2e/questLog.test.ts (+1: a field move ending the
+  preset's scene, a story item starting one, a shop inside it, each loaded back through the new
+  `__test.questLogEventLine`). questLog.test.ts's "no recorder" check went (every event has one now).
