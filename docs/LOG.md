@@ -3508,3 +3508,34 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   the shade 3, 2, 1, 0 a frame apart; the weather surviving save + CONTINUE), plus leagueLighting, saveContinue,
   fieldEffects and transitions (19 passed). A screenshot of Viridian Forest shows the shaded map with the tall grass
   sprite matching it.
+
+### W-ttower 2: the Trainer Tower's battles (POSTGAME_PLAN.md batch 10)
+
+- `world/trainerTower.ts`: unit 1's DoTrainerTowerBattle stand-in replaced by the C's: gBattleTypeFlags TRAINER |
+  TRAINER_TOWER (| DOUBLE on a doubles floor), gTrainerBattleOpponent_A 0, BuildEnemyParty (the mon tables indexed by
+  floors cleared; each floor mon copied before its level is set, the floors being the loaded JSON), GetPartyMaxLevel,
+  CreateBattleTowerMon (pokemon.c: CreateMon with IVs 0, the preset personality and OT id, no Random() call, then
+  moves, PP bonuses, item, nickname, friendship, EVs, ability bit, IVs, CalculateMonStats),
+  BattleSetup_GetBattleTowerBattleTransition (the foes are at the party's top level, so it is always the big Poké
+  Ball), Task_DoTrainerTowerBattle / CB2_EndTrainerTowerBattle (`env.startTowerBattle`: back to the field whatever
+  the outcome, no white-out; PlayMapChosenOrBattleBGM(0)), and the battle's side: InitTrainerTowerBattleStruct /
+  FreeTrainerTowerBattleStruct (sTrainerTowerOpponent; the timer counts on during the battle),
+  GetTrainerTowerOpponentClass / Name / WinText / LoseText (both trainers on a doubles floor), GetTrainerTowerTrainerFrontSpriteId.
+- `src/battle/`: AllocateBattleResources / FreeBattleResources call the tower's struct functions (main.ts);
+  battle/message.ts's trainer class, name, win / lose texts and B_TXT_TRAINER2_LOSE_TEXT / _WIN_TEXT for the tower;
+  controllerOpponent.ts's trainer pic. The other BATTLE_TYPE_TRAINER_TOWER checks the decomp has (getexp, Thief,
+  Trick, the AI's flags and items, the terrain, HandleEndTurn_BattleWon / FinishBattle, CreateNPCTrainerParty) were
+  already ported. `scenes/BattleScene.ts` loads the tower trainer's pic with the battle's graphics.
+- Shared: `host.startScriptedBattle` takes `battleStartTask` (false for the tower's own task: no FldEffPoison wait,
+  no ClearPoisonStepCounter / RestartWildEncounterImmunitySteps), ScriptEngine.ts's ScriptHost and OverworldScene.
+- The test event `trainerTowerBattle` is gone (the battle's own `battleStart` / `battleEnd` report it). Stand-in
+  removed from docs/DEVIATIONS.md.
+- Verified: typecheck; unit 610 passed (tests/unit/trainerTower.test.ts: BuildEnemyParty for each challenge type
+  against the decomp's tables, the data left alone, a Lv50 FERALIGATR's stats against the stat formula by hand, the
+  transition, InitTrainerTowerBattleStruct's class / name / pic / both trainers' texts); e2e
+  tests/e2e/trainerTower.test.ts (a Single floor won: SAILOR ALBERTO, his pic, FERALIGATR and KANGASKHAN at the
+  party's Lv70 with a Lv5 RATTATA along, the lose text after "Player defeated"; the doubles on 1F (TWINS JEN & KIRA)
+  and 2F (CRUSH KIN JO & HALEY: both lose texts in order, sDoubleBattleChallengeMonIdxs[1]); a Knockout floor's three
+  battles; a loss: the win text, no white-out, healed, the receptionist ends the challenge), plus trainerBattle and
+  scriptedBattles. Found on the way: the "Will you change POKéMON?" prompt between a single trainer's two mons eats
+  the mash's A (the test sets the SET battle style).
