@@ -4190,6 +4190,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   encounters; the champion's three lines; a shop repeat), tests/e2e/questLog.test.ts (+1: a field move ending the
   preset's scene, a story item starting one, a shop inside it, each loaded back through the new
   `__test.questLogEventLine`). questLog.test.ts's "no recorder" check went (every event has one now).
+
 ### W-teachy 2: the Pokédude's battles (FIELD_ITEMS_PLAN.md batch 12)
 
 - battle_controller_pokedude.c whole in `battle/controllerPokedude.ts` (new): SetControllerToPokedude for every
