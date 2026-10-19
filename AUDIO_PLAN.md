@@ -5,8 +5,9 @@ commands do nothing, the GBA-layer menus call the stubs, and the field, the batt
 their calls for a comment. This plan says how the GBA
 makes its sound, where the game uses it (and where game logic *waits* on it), how to bring it into the port, and
 how to split the work into batches. It was written as research (batch 3 of [SIDE_PLAN.md](SIDE_PLAN.md),
-W-audioplan); the user has reviewed it and answered its open questions ("Decisions", marked "(user)"), batches A,
-B and C are in.
+W-audioplan); the user has reviewed it and answered its open questions ("Decisions", marked "(user)"). **The plan
+is complete:** batches A (PRs #84-#86), B (#89-#92), C (#95-#98) and D (#100-#111) are in; what stays deferred is
+listed under "Batch D result" (section 6) and "Not in this plan".
 
 **The recommendation in one paragraph:** port the m4a engine itself (the sequencer, the channel allocator, the
 mixer and the CGB channels: `src/m4a.c`, `src/m4a_1.s`) to TypeScript and drive it from the 60 Hz tick, once per
@@ -774,7 +775,8 @@ Waves: 4a, 5a, 6b, 7a first (4a starts the critical path 4a → 4b → W-ref 2);
 once 4a merged; then W-sound 8 and W-ref 2. At most four at once; the units that lengthen waits take turns on the
 full suite through `/Users/joshua/Coding/PokemonProjects/.e2e-full.lock` (decision 19), and so does the merger.
 
-**Batch D result** (W-sound 8, the sweep): every call site this plan lists plays its sound; BattleUi's `play*` hooks
+**Batch D result** (PRs #101 W-m4a 4a, #103 4b, #104 W-sound 5a, #108 5b, #107 6a, #105 6b, #102 7a, #110 7b,
+#111 W-sound 8, #106 W-ref 2, #109 W-ref 2b; the plan PR #100). From W-sound 8, the sweep: every call site this plan lists plays its sound; BattleUi's `play*` hooks
 are gone; the ambient cries, the controllers' IsBattleSEPlaying and PlayerHandleCmd23's BattleStopLowHpSound were
 the last ports; the other "silent" entries in docs/DEVIATIONS.md were stale (their screens already made the C's
 calls). What stays deferred, one line each (docs/DEVIATIONS.md keeps the approximations, "Not in this plan" the rest):

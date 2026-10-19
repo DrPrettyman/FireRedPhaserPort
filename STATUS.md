@@ -24,17 +24,19 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
 
 ## Next up
 
-Audio, [AUDIO_PLAN.md](AUDIO_PLAN.md): batches A (PRs #84-#86), B (PRs #89-#92) and C (PRs #95-#98) are in.
-**The game makes sound** (`npm run dev`, press any key; M mutes): the m4a engine (`src/audio/`) runs every frame
-from both hosts and its mixer (W-m4a 3) feeds the AudioWorklet; the DirectSound parts of the music, SEs and cries
-are heard, the PSG parts (squares, wave, noise: SE_SELECT, SE_DOOR, ...) are silent until W-m4a 4. `gba/sound.ts`
-is all of sound.c (cries with the BGM ducking, `playmoncry` / `waitmoncry`, the text printer's SE_SELECT and audio
-codes); map music (`gba/overworldMusic.ts`: every map's music, warps waiting for the fade, connections, bike and
-surf music, `savedMusic` in the save, version 6); the field's SEs (W-sound 4: bumps, ledges, doors, PCs, the save
-dialog, the Pokémon Center heal, field moves, menus). Every audio wait (fanfares, `waitse`, cries, warps) times
-as on the GBA. Next: batch D, W-m4a 4 (the PSG channels: music complete), W-sound 5 (battle I: controllers,
-scripts, battle music), W-sound 6 (battle II: balls, interface, anim SE panning / waits), W-sound 7 (scenes:
-evolution, trades, Hall of Fame, credits, Pokédex, bag); then W-ref 2 (listening comparison with mGBA).
+**Audio is done** ([AUDIO_PLAN.md](AUDIO_PLAN.md) complete: batches A-D, PRs #84-#111). `npm run dev`, press any
+key (M mutes): the m4a engine (`src/audio/`: sequencer, DirectSound mixer, CgbSound and the PSG synth) plays every
+song, SE and cry, checked against the ROM in mGBA (W-ref 2: the DirectSound mix, the CgbChannels and the sound
+registers are identical frame by frame on 31 songs, SEs and cries; the listening page is in
+`/Users/joshua/Coding/PokemonProjects/wref-scratch/wref2/index.html`). Every call site the plan lists makes its
+sound: the field, map music (saved), the battle (music in the transition, the controllers, scripts, balls, the low
+HP beep, the anims' panned SEs and waits), the scenes (evolution, eggs, trades, Hall of Fame, credits, Pokédex,
+title), the ambient cries. Every audio wait times as on the GBA. Deferred: field weather's sounds (no field
+weather), the help system, quest log and link play (AUDIO_PLAN.md "Batch D result").
+
+Next: the postgame (Sevii 4-7, Mt. Ember, Trainer Tower, the event islands; `tests/unit/scriptCoverageGaps.ts`
+lists its 42 gaps), then the open work below (field weather, the intro movie, map previews, the help system).
+
 [SIDE_PLAN.md](SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
 `bufferdecorationname` (and the other decoration commands) and FLDEFF_USE_DIVE with DoDiveWarp, ported as FRLG's C
 has them; the `unused` gap tag is gone.
@@ -57,12 +59,11 @@ No known main-path blockers are left: the story checks found and fixed four (Lt.
 Hideout's `call_if_defeated` barrier, `GetQuestLogState` leaving VAR_RESULT stale so `trainerbattle_no_intro`
 could skip its battle, every nurse's YES/NO throwing on a constant expression). `tests/unit/scriptCoverageGaps.ts`
 lists what the scripts use that isn't ported: 0 main, 0 side, 42 postgame, 44 link (what FRLG compiles but never
-reaches, the decoration commands and Dive, is ported as the C has it). Next: audio
-([AUDIO_PLAN.md](AUDIO_PLAN.md) batch D), then the postgame (Sevii 4-7, Mt. Ember, Trainer
-Tower, the event islands).
+reaches, the decoration commands and Dive, is ported as the C has it).
 
 Other open work:
 
+- Field weather (field_weather.c, field_weather_effects.c: rain, snow, fog, ... and their SE3 sounds).
 - The intro movie (intro.c) before the title screen.
 - The L/R help system (help_system.c) behind OPTIONS_BUTTON_MODE_HELP.
 - Map preview screens (map_preview_screen.c): TryDoMapTransition already knows where they'd run.
@@ -116,7 +117,7 @@ Loose ends:
   battle_anim_scripts.s with template/task pointers as named externs, sprite templates, anim OamData, pic/palette/bg tables)
 - [x] Evolution scene graphics (`graphics/evolution_scene/`: moving background, sparkles)
 - [x] Pure event macros (giveitem_msg, famechecker, trainerbattle_*, ...) expanded like the assembler would, incl. `.if/.elseif/.else` on arguments
-- [~] Audio: songs (`audio/songs.json`, the decomp's mid2agb built into `tools/.bin/` and run), voicegroups,
+- [x] Audio: songs (`audio/songs.json`, the decomp's mid2agb built into `tools/.bin/` and run), voicegroups,
   keysplits, samples, waves, cry tables (`tools/extract_audio.py`, `extract_audio_voices.py`); a C++ compiler needed
 
 ### Engine
@@ -148,7 +149,7 @@ Loose ends:
 - [x] Poké Mart (shop.c + buy_menu_helpers.c): `pokemart`, BUY/SELL/SEE YA! field menu, buy menu with the map view
   (field tiles + object sprites on the GBA layer), regular and TM layouts, quantity box, YES/NO; SELL via the bag
 - [~] Specials (`special X` / `specialvar`): table in `script/specials.ts` with one module per area spread in
-  (story, side, misc, party menu, trades, Game Corner, daycare, egg hatch); no-ops for audio/quest log/help/fame
+  (story, side, misc, party menu, trades, Game Corner, daycare, egg hatch); no-ops for quest log/help/fame
   checker. Unknown specials log once; what's left is in `tests/unit/scriptCoverageGaps.ts`
 - [x] Party selection from scripts (party_menu_specials.c: ChoosePartyMon), move tutors (incl. Cape Brink), the
   move deleter, the move relearner (learn_move.c)
@@ -208,7 +209,7 @@ Loose ends:
   pokedex_area_markers.c, the Sevii islands, the size comparison) and the "registered" page after a catch
 - [x] TM case (tm_case.c) and berry pouch (berry_pouch.c): from the bag, GIVE (party, PC box), SELL, back from
   teaching / using; the berry pouch from the battle bag too
-- [x] Options (option_menu.c; SOUND is stored only) and trainer card (trainer_card.c: front, back, flip; the
+- [x] Options (option_menu.c; SOUND sets mono or stereo through SetPokemonCryStereo) and trainer card (trainer_card.c: front, back, flip; the
   player's FRLG card only, no link cards)
 - [~] Field items: rods and fishing (Task_Fishing, FishingWildEncounter), Escape Rope, VS Seeker (vs_seeker.c:
   rematches, the raise-hand trainers, the charge), Itemfinder (itemfinder.c); Bike, Town Map, flutes, Repel, Coin
@@ -235,7 +236,7 @@ Loose ends:
 - [x] Battle: bag and party menu (choose item, use medicine/PP items/X items/balls, switch/send out) with reshow_battle_screen.c
 - [x] Old Man's catching tutorial (StartOldManTutorialBattle)
 - [x] Battle: move/status animations (src/battle/anim/: the battle_anim.c engine and every battle_anim_*.c file;
-  all 397 move, status, general and special anim scripts run. The anim SEs go through BattleScene's no-op `ui.playSE` until W-sound 6, so SE waits end at once)
+  all 397 move, status, general and special anim scripts run, with their panned SEs and SE waits)
 - [x] Battle transitions (battle_transition.c): every FRLG B_TRANSITION_* (the grey-blink intro, Blur, Swirl,
   Shuffle, Big Poké Ball, Poké Balls trail, Clockwise wipe, Ripple, Wave, Slice, White bars fade, Grid squares,
   Angled wipes, the Elite Four / Champion mugshots) drawn over the field on the GBA layer, picked like battle_setup.c
@@ -247,10 +248,10 @@ Loose ends:
   or an evolution stone; holding B stops it; Crobat-style evolutions stop without the National Dex; learning the
   new species' move (incl. forgetting one through the summary screen); Nincada's Shedinja. TradeEvolutionScene
   isn't ported (no FRLG in-game trade evolves; no link trading)
-- [~] Audio playback: the m4a engine (`src/audio/`: sequencer, notes, channels, envelopes, the cry song, the
-  DirectSound mixer and reverb) runs every frame; sound.c (`gba/sound.ts`: fanfares, SEs, BGM, cries and their
-  waits); map music (`gba/overworldMusic.ts`, savedMusic); the field's SEs; the AudioWorklet output with autoplay
-  and the mute key M. Not yet: the PSG channels, the battle's and the scenes' calls (AUDIO_PLAN.md batch D)
+- [x] Audio playback (AUDIO_PLAN.md): the m4a engine (`src/audio/`: sequencer, notes, channels, envelopes, the cry
+  song, the DirectSound mixer and reverb, CgbSound and the PSG synth) runs every frame; sound.c (`gba/sound.ts`);
+  map music (`gba/overworldMusic.ts`, savedMusic, the ambient cries); the field's, battle's and scenes' calls; the
+  AudioWorklet output with autoplay and the mute key M. Field weather's sounds wait for field weather
 - [x] Naming screen (naming_screen.c): every template (player, rival, PC box, nickname, caught mon); opened by
   ChangePokemonNickname from scripts and by the battle's nickname prompt after a catch
 - [x] Title screen (title_screen.c, clear save data screen) and Oak's speech (oak_speech.c); intro.c isn't ported

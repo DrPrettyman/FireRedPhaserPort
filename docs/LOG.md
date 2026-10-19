@@ -3377,3 +3377,25 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   can's SE_PIN, PSYCHIC's anim held behind a long SE until IsBattleSEPlaying stops it); the battle files (60) green.
   Full suite on the branch: 440 e2e in 70 files, 439 passed, 25 min; the one failure (2c's Zap Cannon timeout) is
   fixed above and the file passes (7).
+
+### Audio batch D merged (AUDIO_PLAN.md complete; PRs #100-#111)
+
+- Merged, in order: #100 (the plan: batch D split into ten smaller units, decisions 20-22), #101 W-m4a 4a, #102
+  W-sound 7a, #103 W-m4a 4b, #106 W-ref 2, #104 W-sound 5a, #109 W-ref 2b, #108 W-sound 5b, #105 W-sound 6b, #107
+  W-sound 6a, #110 W-sound 7b, #111 W-sound 8. AUDIO_PLAN.md is marked complete; STATUS "Next up" points at the
+  postgame.
+- Conflict resolutions: only the docs (merge=union). DEVIATIONS' "Battles" entry came out of each battle merge as
+  two or three overlapping entries and was rewritten into one each time; union also restored lines a side had
+  removed (the trade and evolution entries' "no PSG parts until W-m4a 4", "Battle transitions: no SE_MUGSHOT")
+  and put DEV_NOTES' renamed "Scene sounds (W-sound 7a, 7b)" heading on the wrong section twice: all tidied.
+- Races and test fixes found while merging: audioOutput's tone test asserted the worklet's `dropped` frames (a host
+  stall under load drops some: tests/README.md rule 9 added); transitions' "every battle transition" (17 page
+  loads) got a 600 s test timeout; listMenuFlash's Flash circle and dark-cave transition are watched in the page
+  (Node polls missed them under load); audioBattle compares MUS_VS_WILD with the transition by frame (MapMusicMain
+  starts the song at the frame's end, so a hook-started battle's transition can come first in the tick);
+  audioBattleAnims (Growl's cries, Perish Song's mark) and audioBattleBalls (send-out cries without the faint
+  cries) filter out the other units' now-real cries; battleAnims.2d's Memento watched in the page (by W-sound 6b).
+- Test runs: per merge typecheck, unit and the touched e2e files; the full suite for #104 (417 in 65 files, all
+  passed), on master after #110 (436 in 69 files, all passed, 26 min) and at the end on master 1bde692:
+  typecheck clean, unit 583 in 43 files, e2e 440 in 70 files, all passed, 22 min. The workers' own full runs are
+  in their entries.
