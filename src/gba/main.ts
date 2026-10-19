@@ -47,7 +47,27 @@ export const gMain = {
   keyRepeatCounter: 0,
   state: 0,
   inBattle: false,
+  /**
+   * The u32 VBlankIntr increments each frame (SetVBlankCounter1Ptr); FRLG's only user is the Trainer Tower's
+   * challenge timer (gSaveBlock1Ptr->trainerTower[].timer, world/trainerTower.ts), so it points at that record.
+   */
+  vblankCounter1: null as { timer: number } | null,
 };
+
+/** SetVBlankCounter1Ptr */
+export function SetVBlankCounter1Ptr(counter: { timer: number }): void {
+  gMain.vblankCounter1 = counter;
+}
+
+/** DisableVBlankCounter1 (also SoftReset's InitMainCallbacks) */
+export function DisableVBlankCounter1(): void {
+  gMain.vblankCounter1 = null;
+}
+
+/** VBlankIntr's `if (gMain.vblankCounter1) (*gMain.vblankCounter1)++;`: once per frame on every screen. */
+export function VBlankCounter1Update(): void {
+  if (gMain.vblankCounter1) gMain.vblankCounter1.timer = (gMain.vblankCounter1.timer + 1) >>> 0;
+}
 
 // InitKeys
 const gKeyRepeatContinueDelay = 5;

@@ -44,7 +44,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Script timing: `special EnterHallOfFame` ends its script at the special (script/specials.ts) instead of
     keeping it in its `waitstate` until the screen warps out (as DoSeagallopFerryScene now does), so in theory the
     field could take input in the frame's ticks left after it. Not seen: the field sleeps under the HoF screen.
-  - White-out after the Trainer Tower: its challenge state isn't tracked, so `spokeToOwner` reads as FALSE.
+  - Trainer Tower (world/trainerTower.ts): DoTrainerTowerBattle is a stand-in until W-ttower unit 2: no battle, it
+    counts as won (VAR_RESULT B_OUTCOME_WON) and the map music comes back, so a challenge can be climbed without
+    fighting. ShowResultsBoard / CloseResultsBoard (`ttower_showresults` / `ttower_closeresults`, which no script
+    uses) validate the record but draw no window. The record times aren't XORed with an encryption key (no key in
+    the port). GetFloorAlreadyCleared on the roof with every floor cleared reads a zeroed floor where the C reads
+    past the set (heap memory); the roof's result changes nothing. The e-Reader sets are never read (link content).
   - VS Seeker (world/vsSeeker.ts): no quest log event. Task_VsSeeker_0
     takes the field controls lock itself (the field's overlay held the controls until the bag's callback, as for
     the Escape Rope). The movement scripts (Wait48, the trainers' emotes and step in place) run as MovementRunners
@@ -158,9 +163,12 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Wild encounters: GAME_STAT_* counters aren't kept.
   - Scripted wild battles (`dowildbattle`, StartLegendaryBattle): no GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES. `seteventmon` (CreateEnemyEventMon) doesn't set
     MON_DATA_MODERN_FATEFUL_ENCOUNTER (the port keeps no such field; IsBattlerModernFatefulEncounter is always
-    TRUE, so it makes no difference). Navel Rock and Birth Island need the Mystery Gift event tickets, which can't
-    be had, so only a dev start reaches Lugia, Ho-Oh and Deoxys; Navel Rock's `special ShakeScreen` (and the
-    other ShakeScreen users) isn't ported and warns once.
+    TRUE, so it makes no difference).
+  - The event islands (script/eventIslandSpecials.ts, world/deoxysRock.ts): FLDEFF_DESTROY_DEOXYS_ROCK's white flash
+    (BlendPalettes / BeginNormalPaletteFade on PALETTES_BG only) is the field's fade overlay, which whitens the
+    objects and the rock's fragments too for its 16 frames. Its and FLDEFF_MOVE_DEOXYS_ROCK's map num / group
+    arguments are ignored (the object is looked up on the current map; `setfieldeffectargument` can't evaluate
+    `MAP_NUM(...)`). ApplyGlobalFieldPaletteTint (the quest log's tints) is a no-op.
   - `setmaplayoutindex` (World.setCurrentLayout): the swapped layout replaces the current map's chunk after
     ON_TRANSITION rather than being picked before the grid is first built (same result; ON_TRANSITION can't see
     the grid on the GBA either). gSaveBlock1Ptr->mapLayoutId is saved inside the save's `location`
@@ -225,7 +233,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     what the port keeps; left out because the port doesn't keep them: the current map's object events and object
     templates (NPC positions, setobjectxyperm changes), game stats, the quest log, mail,
     Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, the fame
-    checker, Trainer Tower and minigame records, the enigma berry, mystery gift, link records and
+    checker, minigame records, the enigma berry, mystery gift, link records and
     the region map zoom option. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
   - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the title screen; the
@@ -265,9 +273,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Elevators: UpdateEscapeWarp isn't kept on warps.
   - Field ListMenu (ui/FieldListMenu.ts): the quest log's QL_AvoidDisplay is ignored.
   - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu.
-  - Interaction metatiles whose scripts need unported screens/specials (Trainer Tower clock, cable club
   - Hall of Fame (menus/hallOfFame.ts): no Champion
-    Ribbons (mons have no ribbons; REVISION 0 gives no event tickets either); the help system isn't toggled and the
+    Ribbons (mons have no ribbons; the event tickets come anyway: see "Deliberate QOL changes"); the help system isn't toggled and the
     quest log isn't saved; a failed save carries on (no DoSaveFailedScreen / gGameContinueCallback).
     Other game stats than GAME_STAT_ENTERED_HOF and
     GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted.
@@ -290,8 +297,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     SoftReset (BootScene's `softReset`) restarts the boot flow (the title screen) with a fresh Overworld scene and
     GameState; other module-level state isn't reset, and intro.c's movie isn't ported.
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
-  - Interaction metatiles whose scripts need unported screens/specials (Town Map, Trainer Tower clock, cable club
-    monitors) start their scripts and hit the unimplemented-special warnings.
+  - Interaction metatiles whose scripts need unported screens/specials (Town Map, cable club monitors) start their scripts and hit the unimplemented-special warnings.
   - No-op specials (`NO_OP` in `script/specials.ts`): quest log, help system, fame checker, GameCube link flags,
     CloseLink.
   - Player names are "PLAYER"/"RIVAL" until Oak's intro exists.
@@ -305,7 +311,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     frame later than a task ordered after Task_Fanfare would. The quest log's playback paths (no fanfare
     song, the BGM commands skipped, PlaySE skipped) aren't ported. The script engine models SetupNativeScript's frames
     (a native wait starts checking the next frame, and the script goes on the frame after it holds) only for the
-    audio commands; the port's other waits check in the same frame.
+    audio commands; `waitbuttonpress` starts checking the next frame too but goes on in the frame the press holds;
+    the port's other waits check in the same frame.
   - Cries (gba/sound.ts): Task_DuckBGMForPokemonCry is a sound task like Task_Fanfare (same caveats: ResetTasks
     doesn't remove it, and it runs after every screen task of the frame, as a priority-80 task after the usual
     priority-0 ones would). PlayCry_ReleaseDouble ducks in multi battles too (BATTLE_TYPE_MULTI is link only and
@@ -407,6 +414,16 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     ported (and UNDERWATER, which shares the fog's callbacks); the weathers no FRLG map or script reaches (rain, snow,
     thunder, ash, sandstorm, diagonal fog, drought, downpour, bubbles) run as WEATHER_NONE and log once
     (POSTGAME_PLAN.md decision 1); their saved number is kept. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
+  - Braille (`text/TextPrinter.ts`, `script/postgameSpecials.ts`): FONT_BRAILLE prints through RenderText's
+    control-code handling, not FontFunc_Braille's smaller set (braille_text.c prints CLEAR / SKIP / CLEAR_TO /
+    MIN_LETTER_SPACING's argument as a glyph and ignores {FONT}); FRLG's braille strings use none of them.
+    BrailleCursorToggle's text cursor is a field image moved by a field task (SpriteCB_TextCursor once a frame), not an
+    OAM sprite; the quest log's playback, which skips it, isn't ported.
+  - Field weather (world/weather.ts, W-weather unit 1): only WEATHER_NONE, SUNNY and SHADE are ported.
+    WEATHER_FOG_HORIZONTAL (Pokémon Tower 3F-7F and the Lost Cave's 14 rooms) runs as WEATHER_NONE until
+    W-weather unit 2, and the weathers no FRLG map or script reaches (rain, snow, thunder, ash, sandstorm, diagonal
+    fog, underwater, drought, downpour, bubbles) run as WEATHER_NONE and log once (POSTGAME_PLAN.md decision 1);
+    their saved number is kept. The gamma shift is applied to the map's atlases (tilesetVram's faded palettes) and to
     the field's sprite sheets redrawn in place (world/weatherTextures.ts: `spr_*` GAMMA_ALT, their reflection sheets
     and the loadfadedpal field effects GAMMA_NORMAL), not to palette RAM: a connected map with another secondary
     tileset isn't shifted until it's the current map. FadeScreen's fade-out copy of the shifted palettes into the
@@ -460,6 +477,12 @@ Places where we choose to differ from the GBA on purpose (not placeholders). Kee
     scroll off screen, and a trainer among them can still spot you; here a neighbour's trainers never do.
   - Future: any other per-object logic should likewise check that an object belongs to the current map where the
     GBA would only have current-map objects alive.
+- **The Hall of Fame gives the event tickets** (`GiveEventTickets` in menus/hallOfFame.ts; POSTGAME_PLAN.md decision
+  2). The port follows REVISION 0, where the Mystic and Aurora Tickets (Navel Rock, Birth Island) come only through
+  Mystery Gift (link content). EnterHallOfFame's `#if REVISION >= 0xA` block (FireRed 1.1) gives both, with
+  FLAG_ENABLE_SHIP_NAVEL_ROCK / _BIRTH_ISLAND and FLAG_RECEIVED_MYSTIC_TICKET / _AURORA_TICKET, when a party mon
+  gets its first Champion Ribbon and the bag has no Aurora Ticket. The port has no ribbons, so it gives them on any
+  entry while the bag has no Aurora Ticket; saves past the Hall of Fame get them on their next entry.
 - **A mute key, M** (`input/Input.ts` listenForOutputKeys, `audio/output.ts`; AUDIO_PLAN.md decision 10). The GBA
   has no volume control; M toggles all sound output on and off. It only silences the output: the m4a engine runs
   on, so nothing times differently. The setting is kept in localStorage (`firered-phaser:audio-muted`), not in

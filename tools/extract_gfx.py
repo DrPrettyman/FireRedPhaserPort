@@ -25,7 +25,8 @@ from extract import read_jasc
 # pouch, and the Pokédex (pokedex_screen.c with the mons' footprints, the area page's maps and
 # pokedex_area_markers.c's markers), the Itemfinder's arrows and star (itemfinder.c), and the trainer card
 # (trainer_card.c), the move relearner's scroll arrows (learn_move.c), the slot machine (slot_machine.c), and the
-# Seagallop ferry scene (seagallop.c), the S.S. Anne's departure (ss_anne.c).
+# Seagallop ferry scene (seagallop.c), the S.S. Anne's departure (ss_anne.c), Birth Island's triangle palettes
+# (field_specials.c's sDeoxysObjectPals) and the Deoxys rock's fragments (field_effect.c, already under field_effects/).
 GFX_PREFIXES = (
     "graphics/battle_interface/",
     "graphics/battle_terrain/",
@@ -72,6 +73,7 @@ GFX_PREFIXES = (
     "graphics/slot_machine/",
     "graphics/seagallop/",  # seagallop.c, the ferry scene (W-ferry)
     "graphics/easy_chat/",  # easy_chat_3.c, the Easy Chat screen (W-easychat)
+    "graphics/field_specials/",  # field_specials.c's sDeoxysObjectPals, Birth Island's triangle (W-events)
     "data/tilesets/",
 )
 

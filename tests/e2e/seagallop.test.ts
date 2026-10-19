@@ -302,8 +302,8 @@ test('the Rainbow Pass: Vermilion and every island harbor in turn, both pages, O
 }, 300_000);
 
 /**
- * Navel Rock and Birth Island. The event tickets aren't ported, so the trip there starts at the ticket menus'
- * targets, EventScript_SailToNavelRock / _SailToBirthIsland (the sailor's text, VAR_0x8004 VERMILION, VAR_0x8006 the
+ * Navel Rock and Birth Island. The trip there starts at the ticket menus' targets (the tickets and their menu are
+ * played in eventIslands.test.ts), EventScript_SailToNavelRock / _SailToBirthIsland (the sailor's text, VAR_0x8004 VERMILION, VAR_0x8006 the
  * island, EventScript_SetSail), run at Vermilion's sailor. Back, the harbor's sailor has MULTICHOICE_SEAGALLOP_VERMILION.
  */
 test('Navel Rock and Birth Island harbors: there from Vermilion (the tickets\' sail-off), back with B, EXIT, VERMILION', async () => {

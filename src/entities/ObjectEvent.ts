@@ -423,6 +423,27 @@ export class ObjectEvent {
     this.doGroundEffectsAfterMovement();
   }
 
+  /**
+   * ShiftObjectEventCoords called from outside a movement (FldEff_MoveDeoxysRock): the object is on (x, y) at once
+   * (its previous tile still blocks until shiftStillObjectEventCoords); the sprite stays where it was drawn.
+   */
+  shiftObjectEventCoords(x: number, y: number): void {
+    this.shiftCoords(x, y);
+    this.tileX = x;
+    this.tileY = y;
+  }
+
+  /** ShiftStillObjectEventCoords */
+  shiftStillObjectEventCoords(): void {
+    this.previousX = this.currentX;
+    this.previousY = this.currentY;
+  }
+
+  /** The sprite drawn (offX, offY) px off the object's tile (a field effect moving sprite->x / y itself). */
+  setSpriteOffset(offX: number, offY: number): void {
+    this.syncSprite(offX, offY, 0);
+  }
+
   /** ShiftObjectEventCoords */
   private shiftCoords(x: number, y: number): void {
     this.previousX = this.currentX;

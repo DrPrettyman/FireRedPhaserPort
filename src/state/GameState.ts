@@ -10,6 +10,7 @@ import type { PlayTime } from './playTime';
 import { NewGameInitPCItems } from './pcItems';
 import { InitEasyChatPhrases, InitQuestionnaireWords } from '../menus/easyChatData';
 import { boxMonFromMon, boxMonRestorePP, PokemonStorage } from './PokemonStorage';
+import { newTrainerTowerRecord, ResetTrainerTowerResults, type TrainerTowerRecord } from './trainerTowerRecord';
 
 /**
  * Save-block style game state: event flags, vars, names, options, party, bag, Pokédex.
@@ -124,6 +125,12 @@ export class GameState {
    * header on every map load; `setmaplayoutindex` (SetCurrentMapLayout) changes it from ON_TRANSITION.
    */
   mapLayoutId = 0;
+  /** gMapHeader.mapLayoutId: the current map header's own layout (LoadCurrentMapData); not saved. */
+  mapHeaderLayoutId = 0;
+  /** gSaveBlock1Ptr->towerChallengeId: the Trainer Tower challenge (CHALLENGE_TYPE_*) last started. */
+  towerChallengeId = 0;
+  /** gSaveBlock1Ptr->trainerTower[NUM_TOWER_CHALLENGE_TYPES] (world/trainerTower.ts); ResetTrainerTowerResults in the constructor. */
+  trainerTower: TrainerTowerRecord[] = [];
 
   private flags = new Set<number>();
   private vars = new Map<number, number>();
@@ -208,6 +215,8 @@ export class GameState {
     NewGameInitPCItems(this.pcItems, defines.require('ITEM_NONE'), defines.require('ITEM_POTION'));
     InitEasyChatPhrases(this); // NewGameInitData
     InitQuestionnaireWords(this); // ClearMysteryGift
+    this.trainerTower = Array.from({ length: defines.require('NUM_TOWER_CHALLENGE_TYPES') }, newTrainerTowerRecord);
+    ResetTrainerTowerResults(this); // NewGameInitData
     // ResetPokemonStorageSystem (NewGameInitData)
     this.storage = new PokemonStorage(
       {

@@ -46,6 +46,8 @@ function playedState(): TestGame['state'] {
   s.flashLevel = 4;
   s.savedMusic = s.defines.require('MUS_CYCLING');
   s.weather = s.defines.require('WEATHER_SHADE');
+  s.towerChallengeId = 2;
+  Object.assign(s.trainerTower[2], { timer: 4321, bestTime: 9000, floorsCleared: 3, unk9: 1, spokeToOwner: true, validated: true });
   s.pcItems[0] = { itemId: t.d('ITEM_POTION'), quantity: 1 };
   s.bag.add(t.d('ITEM_POTION'), 5);
   s.bag.add(t.d('ITEM_ANTIDOTE'), 2);
@@ -142,6 +144,8 @@ describe('save data (save.c / load_save.c)', () => {
       easyChatBattleLost: s.easyChatBattleLost,
       questionnaireWords: s.questionnaireWords,
       additionalPhrases: [0, 0, 0, 0, 1],
+      towerChallengeId: 2,
+      trainerTower: s.trainerTower,
     });
     // The loaded state shares nothing with the save it came from.
     loaded.party[0].moves[0] = 0;
@@ -168,6 +172,15 @@ describe('save data (save.c / load_save.c)', () => {
     expect(data.flags.every((f) => f < t.d('SPECIAL_FLAGS_START'))).toBe(true);
     const loaded = fromSaveData(data, newGame().state);
     expect(loaded.getVar('VAR_0x8004')).toBe(0);
+  });
+
+  test('a version 7 save (no Trainer Tower records) loads with the new-game records', () => {
+    const { trainerTower: _tower, ...v7 } = { ...toSaveData(playedState()), version: 7 };
+    const loaded = fromSaveData(v7, newGame().state);
+    expect(loaded.towerChallengeId).toBe(0);
+    expect(loaded.trainerTower).toEqual(newGame().state.trainerTower);
+    expect(loaded.trainerTower.every((r) => r.bestTime === t.d('TRAINER_TOWER_MAX_TIME'))).toBe(true);
+    expect(loaded.money).toBe(123456);
   });
 
   test('a version-6 save (no saved weather) loads with WEATHER_NONE', () => {

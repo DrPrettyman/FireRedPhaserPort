@@ -3,7 +3,7 @@ import { K } from '../battle/constants';
 import { IsSEPlaying, PlayBGM, PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import { CHAR_NEWLINE, CHAR_PROMPT_CLEAR, CHAR_PROMPT_SCROLL, EOS, EXT_CTRL_CODE_BEGIN, PLACEHOLDER_BEGIN } from './charmap';
-import type { Fonts } from './Font';
+import { FONT_BRAILLE, type Fonts } from './Font';
 import type { TextSurface } from './TextWindow';
 
 const CHAR_KEYPAD_ICON = 0xf8;
@@ -238,7 +238,8 @@ export class TextPrinter {
       }
     }
 
-    const font = this.fonts.get(this.glyphId);
+    // FontFunc_Braille (braille_text.c) always draws DecompressGlyph_Braille's glyphs, whatever {FONT} said
+    const font = this.fonts.get(this.t.fontId === FONT_BRAILLE ? FONT_BRAILLE : this.glyphId);
     const w = this.window.drawGlyph(font, c, this.currentX, this.currentY, this.fg, this.bg, this.shadow);
     if (this.minLetterSpacing) {
       this.currentX += w;

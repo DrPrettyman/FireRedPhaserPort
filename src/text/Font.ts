@@ -4,6 +4,8 @@ export const FONT_SMALL = 0;
 export const FONT_NORMAL = 2;
 export const FONT_MALE = 4;
 export const FONT_FEMALE = 5;
+/** FONT_BRAILLE (braille_text.c): 16x16 glyphs, every one 16 px wide (GetGlyphWidth_Braille). */
+export const FONT_BRAILLE = 6;
 
 /** Glyph cell size in the full-width latin font sheets (16 cells per row). */
 const CELL = 16;
@@ -14,6 +16,8 @@ export interface FontInfoData {
   /** .hwlatfont: 8x16 glyphs, 32 per row (otherwise 16x16 cells, 16 per row). */
   halfWidth?: boolean;
   widths: number[];
+  /** Every glyph's width (FONT_BRAILLE's GetGlyphWidth_Braille), instead of `widths`. */
+  fixedWidth?: number;
   maxLetterWidth: number;
   maxLetterHeight: number;
   letterSpacing: number;
@@ -59,6 +63,7 @@ export class Font {
   }
 
   width(code: number): number {
+    if (this.info.fixedWidth !== undefined) return this.info.fixedWidth;
     return this.info.widths[code] ?? 0;
   }
 

@@ -5,7 +5,7 @@
 
 import Phaser from 'phaser';
 import { DISPLAY_HEIGHT, DISPLAY_WIDTH } from '../gba/hw';
-import { CallCallbacks, gMain, ReadKeys } from '../gba/main';
+import { CallCallbacks, gMain, ReadKeys, VBlankCounter1Update } from '../gba/main';
 import { renderFrame } from '../gba/ppu';
 import { Input } from '../input/Input';
 import { logicSpeed } from '../dev/testHooks';
@@ -58,6 +58,7 @@ export abstract class GbaHostScene extends Phaser.Scene {
       ReadKeys(this.buttons, this.lEqualsA);
       CallCallbacks();
       if (this.playTime) PlayTimeCounter_Update(this.playTime);
+      VBlankCounter1Update(); // VBlankIntr: the Trainer Tower's timer
       AgbMainFrameEnd(); // the sound tasks, MapMusicMain, m4aSoundMain: every tick, also the one that hands over
       if (!this.running) break;
       gMain.vblankCallback?.();

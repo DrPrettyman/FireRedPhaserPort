@@ -14,14 +14,15 @@ import type { GameState, PlayerLocation, RoamerSave, WarpData } from './GameStat
 import type { PlayTime } from './playTime';
 import type { BoxPokemon } from './PokemonStorage';
 import type { DaycareMon } from '../world/daycare';
+import type { TrainerTowerRecord } from './trainerTowerRecord';
 
 /**
  * Bump when SaveData changes shape; fromSaveData refuses other versions. Older versions that only lack fields
  * are brought up to date by `upgradeSave` (version 1 had no gameStats, version 2 no options.sound, version 3 had
  * daycareStepCounter instead of daycare and no route5DayCareMon, version 4 no easyChat, version 5 no savedMusic,
- * version 6 no weather).
+ * version 6 no weather, version 7 no trainerTower).
  */
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 /** The localStorage key of the one save slot. */
 export const SAVE_STORAGE_KEY = 'firered-phaser:save';
@@ -141,6 +142,11 @@ export interface SaveData {
    * they would have on the GBA, where every new game ran them.
    */
   easyChat?: EasyChatSave;
+  /**
+   * gSaveBlock1Ptr->towerChallengeId and trainerTower[NUM_TOWER_CHALLENGE_TYPES] (state/trainerTowerRecord.ts);
+   * since version 8. Absent in an older save: the new-game records (ResetTrainerTowerResults) stay.
+   */
+  trainerTower?: { challengeId: number; records: TrainerTowerRecord[] };
 
   // ---- gPokemonStoragePtr
   storage: {
@@ -254,6 +260,7 @@ export function toSaveData(state: GameState): SaveData {
       questionnaireWords: [...state.questionnaireWords],
       additionalPhrases: [...state.additionalPhrases],
     },
+    trainerTower: { challengeId: state.towerChallengeId, records: state.trainerTower.map((r) => ({ ...r })) },
     storage: {
       currentBox: st.currentBox,
       boxes: st.boxes.map((box) => box.map((mon) => mon && boxMonSave(mon))),
@@ -327,6 +334,10 @@ export function fromSaveData(data: SaveData, state: GameState): GameState {
     state.questionnaireWords = [...data.easyChat.questionnaireWords];
     state.additionalPhrases = [...data.easyChat.additionalPhrases];
   }
+  if (data.trainerTower) {
+    state.towerChallengeId = data.trainerTower.challengeId;
+    state.trainerTower.forEach((r, i) => Object.assign(r, data.trainerTower!.records[i]));
+  }
 
   const st = state.storage;
   st.currentBox = data.storage.currentBox;
@@ -353,6 +364,8 @@ export function upgradeSave(data: SaveData): SaveData {
   if (data?.version === 5) data = { ...data, version: 6, savedMusic: 0 };
   // No weather was saved: WEATHER_NONE until the next map load sets the map's (a CONTINUE in a shaded map is lit).
   if (data?.version === 6) data = { ...data, version: 7, weather: 0 };
+  // No Trainer Tower records: fromSaveData keeps the new-game ones (ResetTrainerTowerResults).
+  if (data?.version === 7) data = { ...data, version: 8 };
   return data;
 }
 

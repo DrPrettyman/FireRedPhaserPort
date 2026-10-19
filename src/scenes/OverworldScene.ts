@@ -55,6 +55,7 @@ import { GetMapName } from '../world/regionMap';
 import { YesNoMenu } from '../ui/YesNoMenu';
 import { MonPicBox } from '../ui/MonPicBox';
 import { museumFossilPicGfxSymbols, registerMuseumFossilPic } from '../ui/MuseumFossilPic';
+import { brailleCursorGfxSymbols } from '../script/postgameSpecials';
 import { MoneyBox } from '../ui/MoneyBox';
 import { CoinsBox } from '../ui/CoinsBox';
 import { loadSlotMachineData } from '../menus/slotMachineLogic';
@@ -98,6 +99,8 @@ import { MapNamePopup } from '../ui/MapNamePopup';
 import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
 import { gFieldCallback, gFieldCallback2, type FieldCallbackHost } from '../menus/fieldCallbacks';
 import { RunMassageCooldownStepCounter } from '../script/miscSpecials';
+import { IncrementBirthIslandRockStepCount } from '../script/eventIslandSpecials';
+import { DEOXYS_ROCK_GFX, registerDeoxysRock, setDeoxysRockHost } from '../world/deoxysRock';
 import { UseRegisteredKeyItemOnField } from '../menus/registeredItem';
 import { activeFieldEffects, setFieldEffectScriptHost, setFieldEffectScripts } from '../world/fieldEffectScripts';
 import { fieldMoveGfxSymbols, prepareFieldMoveMenu, prepareRegionMap, registerFieldMoves, setFieldMoveHost, UnlockPlayerFieldControls, UpdateEscapeWarp, type FieldMoveHost } from '../world/fieldMoves';
@@ -119,6 +122,9 @@ import { ClearRematchStateByTrainerId, registerVsSeeker, ResetMovementOfRematcha
 import { FieldFlash, FldEff_UseFlash, IsMapTypeOutdoors, Overworld_GetFlashLevel, SetDefaultFlashLevel } from '../world/flash';
 import { fieldListMenuGfxSymbols, fieldListMenuProbe, type ListMenuHost } from '../ui/FieldListMenu';
 import { stringWidth } from '../text/stringWidth';
+import { setTrainerTowerStringWidth } from '../world/trainerTower';
+import { currentTrainerTowerRecord } from '../state/trainerTowerRecord';
+import { VBlankCounter1Update } from '../gba/main';
 import { MultichoiceGridMenu, MultichoiceMenu } from '../ui/MultichoiceMenu';
 import type { ShopFieldView } from '../menus/shop';
 import { setBgMosaic } from '../world/BgMosaic';
@@ -257,6 +263,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private arrivalFacing?: Direction;
   /** sVerticalCameraPan - 32: SetCameraPanning's offset from the standard framing. */
   private cameraPanY = 0;
+  /** sHorizontalCameraPan (ShakeScreen's horizontal shake). */
+  private cameraPanX = 0;
   /** sWarpDestination as set by `setwarp` (only Safari Zone's out-of-balls exit reads it so far). */
   private warpDestination?: { mapId: string; warpId: number; x: number; y: number };
   /** A fall warp's SetupWarp, which loads the destination's header before warpDestination is set. */
@@ -374,10 +382,11 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.setUpWeather();
     this.gbaScreen = new FieldGbaScreen(this, DEPTH_FADE + 10);
     setTransitionFieldCamera(() => this.gbaScreen.cameraPixelOffset());
-    await loadGfx([...mapTransitionGfxSymbols, ...fieldListMenuGfxSymbols, ...helpMessageWindowGfxSymbols, ...museumFossilPicGfxSymbols]);
+    await loadGfx([...mapTransitionGfxSymbols, ...fieldListMenuGfxSymbols, ...helpMessageWindowGfxSymbols, ...museumFossilPicGfxSymbols, ...brailleCursorGfxSymbols]);
     setUserFrameTypeSource(() => this.state.optionsWindowFrameType + 1); // the options' FRAME for field windows
     this.flash = new FieldFlash(this);
     this.fonts = new Fonts(this, this.assets.fonts);
+    setTrainerTowerStringWidth((str) => stringWidth(this.fonts, FONT_NORMAL, str, -1)); // TT_ConvertEasyChatMessageToString
     this.messageBox = new MessageBox(this, this.fonts, this.buttons, charmap, this.state);
     registerMuseumFossilPic({ scene: this, fonts: this.fonts, input: this.buttons });
     this.scripts = new ScriptEngine(
@@ -478,6 +487,21 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     });
     registerSSAnne();
     await loadGfx(SS_ANNE_GFX);
+    // Birth Island's triangle and FLDEFF_MOVE_DEOXYS_ROCK / FLDEFF_DESTROY_DEOXYS_ROCK (world/deoxysRock.ts)
+    setDeoxysRockHost({
+      scene: this,
+      cameraOrigin: () => ({ x: (this.cameraObject ?? this.player).anchor.x - this.cameras.main.width / 2, y: this.field.cameraTop - this.cameraPanY }),
+      cameraPan: () => ({ x: this.cameraPanX, y: this.cameraPanY }),
+      cameraTop: () => this.field.cameraTop,
+      objectByLocalId: (localId) => this.npcByLocalId(localId)?.brain.obj,
+      localToWorld: (x, y) => ({ x: this.world.current.originX + x, y: this.world.current.originY + y }),
+      removeObject: (localId) => this.removeObject(localId),
+      setCameraPanning: (dx, dy) => this.setCameraPanning(dy, dx),
+      bgWhiteFlash: () => this.screenFade.beginBlend(16, 0, 0xffffff, 0),
+      paletteFadeActive: () => this.screenFade.active,
+    });
+    registerDeoxysRock();
+    await loadGfx(DEOXYS_ROCK_GFX);
     this.cameras.main.startFollow(this.player.anchor, true, 1, 1, 0, CAMERA_FOLLOW_OFFSET_Y);
 
     if (start.continueGame) {
@@ -552,6 +576,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         movementDirection: this.player.movementDirection,
         spriteY2: this.player.sprite.y - (this.player.feetY + this.player.lift),
         cameraPanY: this.cameraPanY,
+        cameraPanX: this.cameraPanX,
       },
     };
   }
@@ -725,6 +750,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private tick(): void {
     this.tickField();
     PlayTimeCounter_Update(this.state.playTime); // AgbMain, once per frame
+    VBlankCounter1Update(); // VBlankIntr: the Trainer Tower's timer (world/trainerTower.ts)
     AgbMainFrameEnd(); // the sound tasks, MapMusicMain, m4aSoundMain
     this.flash.vblank(); // VBlankCB_Field's ScanlineEffect_InitHBlankDmaTransfer
     this.gbaScreen.frame(); // the GBA layer's half of the frame, when it's in use
@@ -879,6 +905,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }
     if (this.tryOnFrameScript()) return true;
     if (input.tookStep) RunMassageCooldownStepCounter(this.state);
+    if (input.tookStep) IncrementBirthIslandRockStepCount(this.state, this.world.current.data.id);
     if (input.tookStep && this.tryStartStepBasedScript(x, y, tile.behavior)) return true;
     if (input.checkStandardWildEncounter) {
       if ((!input.dpadDirection || input.dpadDirection === facing) && this.tryWalkIntoSignpost()) return true;
@@ -1525,6 +1552,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.state.currentMap = name;
     this.state.currentMapId = cur.data.id;
     this.state.currentMapSection = this.mapSection();
+    this.state.mapHeaderLayoutId = this.defines.require(cur.data.layoutId); // gMapHeader (LoadCurrentMapData)
     testEvent('map', { map: name });
     SetMapHeaderWeather(this.defines.require(cur.data.weather ?? 'WEATHER_NONE')); // LoadCurrentMapData's gMapHeader
     // A warp's (and CONTINUE's) ResumeMap makes a new Task_RunTimeBasedEvents; a connection's ResetFieldTasksArgs zeroes it
@@ -2280,10 +2308,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.fieldTasks.push(task);
   }
 
-  setCameraPanning(dy: number): void {
-    // A bigger sVerticalCameraPan scrolls the view down
+  /** SetCameraPanning(dx, dy) (field_camera.c); 0, 0 for InstallCameraPanAheadCallback's standard pan. */
+  setCameraPanning(dy: number, dx = 0): void {
+    // A bigger sVerticalCameraPan scrolls the view down, a bigger sHorizontalCameraPan right
     this.cameraPanY = dy;
-    this.cameras.main.setFollowOffset(0, CAMERA_FOLLOW_OFFSET_Y - dy);
+    this.cameraPanX = dx;
+    this.cameras.main.setFollowOffset(-dx, CAMERA_FOLLOW_OFFSET_Y - dy);
     this.updateFieldCamera();
   }
 
@@ -2798,8 +2828,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   /** SetWhiteoutRespawnWarpAndHealerNpc (heal_location.c). */
   private whiteOutRespawn(): { map: string; x: number; y: number; healer?: string } {
     if (this.state.getVar('VAR_MAP_SCENE_TRAINER_TOWER') === 1) {
-      // The Trainer Tower challenge isn't tracked yet, so spokeToOwner reads as FALSE.
-      this.state.setVar('VAR_MAP_SCENE_TRAINER_TOWER', 0);
+      if (!currentTrainerTowerRecord(this.state).spokeToOwner) this.state.setVar('VAR_MAP_SCENE_TRAINER_TOWER', 0);
       this.state.setVar('VAR_LAST_TALKED', 1);
       return { map: 'MAP_TRAINER_TOWER_LOBBY', x: 4, y: 11 };
     }
