@@ -20,9 +20,9 @@ import type { TrainerTowerRecord } from './trainerTowerRecord';
  * Bump when SaveData changes shape; fromSaveData refuses other versions. Older versions that only lack fields
  * are brought up to date by `upgradeSave` (version 1 had no gameStats, version 2 no options.sound, version 3 had
  * daycareStepCounter instead of daycare and no route5DayCareMon, version 4 no easyChat, version 5 no savedMusic,
- * version 6 no weather, version 7 no trainerTower).
+ * version 6 no weather, version 7 no trainerTower, version 8 no gcnLinkFlags).
  */
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 
 /** The localStorage key of the one save slot. */
 export const SAVE_STORAGE_KEY = 'firered-phaser:save';
@@ -99,6 +99,8 @@ export interface SaveData {
   /** struct Pokedex: seen / caught national dex numbers, ascending; nationalMagic as a flag. */
   pokedex: { seen: number[]; caught: number[]; nationalDexEnabled: boolean };
   specialSaveWarpFlags: number;
+  /** gSaveBlock2Ptr->gcnLinkFlags (SetUnlockedPokedexFlags, SetPostgameFlags); since version 9. */
+  gcnLinkFlags: number;
 
   // ---- gSaveBlock1
   /** location + pos + the player object (absent if the field never stored one). */
@@ -225,6 +227,7 @@ export function toSaveData(state: GameState): SaveData {
       nationalDexEnabled: state.nationalDexEnabled,
     },
     specialSaveWarpFlags: state.specialSaveWarpFlags,
+    gcnLinkFlags: state.gcnLinkFlags,
     location: clone(state.location),
     continueGameWarp: clone(state.continueGameWarp),
     dynamicWarp: clone(state.dynamicWarp),
@@ -300,6 +303,7 @@ export function fromSaveData(data: SaveData, state: GameState): GameState {
   for (const n of data.pokedex.caught) state.dexCaught.add(n);
   state.nationalDexEnabled = data.pokedex.nationalDexEnabled;
   state.specialSaveWarpFlags = data.specialSaveWarpFlags;
+  state.gcnLinkFlags = data.gcnLinkFlags;
 
   state.location = clone(data.location);
   state.continueGameWarp = clone(data.continueGameWarp);
@@ -366,6 +370,8 @@ export function upgradeSave(data: SaveData): SaveData {
   if (data?.version === 6) data = { ...data, version: 7, weather: 0 };
   // No Trainer Tower records: fromSaveData keeps the new-game ones (ResetTrainerTowerResults).
   if (data?.version === 7) data = { ...data, version: 8 };
+  // No gcnLinkFlags: 0 (their specials weren't ported yet; only the GameCube link reads them).
+  if (data?.version === 8) data = { ...data, version: 9, gcnLinkFlags: 0 };
   return data;
 }
 

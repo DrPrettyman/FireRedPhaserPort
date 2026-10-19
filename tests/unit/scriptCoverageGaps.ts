@@ -29,12 +29,7 @@ export const KNOWN_GAPS: KnownGap[] = [
   // (none left: the S.S. Anne departure and the league lighting were the last two, batch 2 of SIDE_PLAN.md)
   // ---------------------------------------------------------------- side: optional content before the Hall of Fame (NPCs, trades, the Game Corner, the daycare, the Sevii 1-3 trip).
   // ---------------------------------------------------------------- postgame: after the Hall of Fame (Sevii 4-7, Trainer Tower, the event islands) or the link features postgame areas share.
-  { kind: 'special', name: 'CompareHeracrossSize', tag: 'postgame', where: "SixIsland_WaterPath_House1" },
-  { kind: 'special', name: 'GetHeracrossSizeRecordInfo', tag: 'postgame', where: "SixIsland_WaterPath_House1" },
-  { kind: 'special', name: 'SampleResortGorgeousMonAndReward', tag: 'postgame', where: "FiveIsland_ResortGorgeous_House" },
-  { kind: 'special', name: 'SetPostgameFlags', tag: 'postgame', where: "OneIsland_PokemonCenter_1F" },
-  { kind: 'movement', name: 'disable_anim', tag: 'postgame', where: "SixIsland_DottedHole_SapphireRoom" },
-  { kind: 'movement', name: 'restore_anim', tag: 'postgame', where: "SixIsland_DottedHole_SapphireRoom" },
+  // (none left: POSTGAME_PLAN.md batch 10 ported the last 42)
   // ---------------------------------------------------------------- link: link cable / wireless features (union room, cable club, minigames, Mystery Gift, e-Reader).
   { kind: 'command', name: 'erasebox', tag: 'link', where: "(TradeCenter_ConfirmLeaveRoom), CeladonCity_PokemonCenter_2F, CeruleanCity_PokemonCenter_2F, CinnabarIsland_PokemonCenter_2F, FiveIsland_PokemonCenter_2F, ... (21 in all)" },
   { kind: 'command', name: 'hideobjectat', tag: 'link', where: "CeladonCity_PokemonCenter_2F, CeruleanCity_PokemonCenter_2F, CinnabarIsland_PokemonCenter_2F, FiveIsland_PokemonCenter_2F, FourIsland_PokemonCenter_2F, ... (20 in all)" },
@@ -78,6 +73,5 @@ export const KNOWN_GAPS: KnownGap[] = [
   { kind: 'special', name: 'StartSpecialBattle', tag: 'link', where: "SevenIsland_House_Room2" },
   { kind: 'special', name: 'TryBecomeLinkLeader', tag: 'link', where: "CeladonCity_PokemonCenter_2F, CeruleanCity_PokemonCenter_2F, CinnabarIsland_PokemonCenter_2F, FiveIsland_PokemonCenter_2F, FourIsland_PokemonCenter_2F, ... (20 in all)" },
   { kind: 'special', name: 'TryJoinLinkGroup', tag: 'link', where: "CeladonCity_PokemonCenter_2F, CeruleanCity_PokemonCenter_2F, CinnabarIsland_PokemonCenter_2F, FiveIsland_PokemonCenter_2F, FourIsland_PokemonCenter_2F, ... (20 in all)" },
-  { kind: 'special', name: 'ValidateEReaderTrainer', tag: 'link', where: "SevenIsland_House_Room1" },
   { kind: 'special', name: 'WonderNews_GetRewardInfo', tag: 'link', where: "CeruleanCity_House4" },
 ];

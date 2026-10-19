@@ -73,7 +73,6 @@ const NO_OP = [
   'Script_SetHelpContext',
   'SetFlavorTextFlagFromSpecialVars', // fame checker
   'UpdatePickStateFromSpecialVar8005',
-  'SetUnlockedPokedexFlags', // gcnLinkFlags, only used for GameCube link
   'InitUnionRoom', // wireless only (and stubbed out from REVISION 0xA): CableClub_OnResume in every Pokémon Center
   'CloseLink', // link play: nothing was opened (TryBattleLinkup below never connects)
   'HelpSystem_Enable', // help system
