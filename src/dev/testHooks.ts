@@ -7,6 +7,7 @@
 //   ?speed=N       run N logic ticks per 60 Hz frame (fast-forward); timings stay in GBA frames
 //   ?textSpeed=fast|mid|slow   the options text speed for the new game
 
+import { gBagMenuState } from '../menus/itemMenuState';
 import type Phaser from 'phaser';
 import type { Assets } from '../data/assets';
 import { g } from '../battle/env';
@@ -922,6 +923,8 @@ function createApi(game: Phaser.Game) {
     },
     /** The GBA task list's active tasks (gTasks), by function name: e.g. the bag's Task_BagMenu_HandleInput. */
     gbaTasks: () => gTasks.filter((t) => t.isActive).map((t) => t.func.name),
+    /** The bag's open pocket (gBagMenuState.pocket: POCKET_* - 1). */
+    bagPocket: () => gBagMenuState.pocket,
     /** Quantity of the first stack of ITEM_<name> in the bag (0 if none). */
     itemCount: (name: string) => {
       const id = define(`ITEM_${name}`);

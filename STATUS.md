@@ -36,8 +36,7 @@ registers are identical frame by frame on 31 songs, SEs and cries; the listening
 `/Users/joshua/Coding/PokemonProjects/wref-scratch/wref2/index.html`). Every call site the plan lists makes its
 sound: the field, map music (saved), the battle (music in the transition, the controllers, scripts, balls, the low
 HP beep, the anims' panned SEs and waits), the scenes (evolution, eggs, trades, Hall of Fame, credits, Pokédex,
-title), the ambient cries. Every audio wait times as on the GBA. Deferred: the rain weathers' sounds (no FRLG
-map has rain), quest log and link play (AUDIO_PLAN.md "Batch D result").
+title), the ambient cries. Every audio wait times as on the GBA. Deferred: the quest log and link play (AUDIO_PLAN.md "Batch D result").
 
 **The postgame is done** ([POSTGAME_PLAN.md](POSTGAME_PLAN.md) complete in one batch, batch 10: PRs #114-#125). The
 42 postgame gaps are ported: braille, field weather (FRLG's Shade and horizontal fog: Viridian Forest, Pokémon Tower,
@@ -64,7 +63,13 @@ Pokédude's four battles, his REGISTER bag and TM case demos). Save version 13.
 the grey field, the windows and texts, A / B skips, "saved the game at"), every QL_EVENT_* codec and its text, and
 the events from item use, the party menu, the PCs, the boxes and Fly.
 
-Next: the quest log's last two units (QUEST_LOG_PLAN.md, batch 13): QL4b (the shops, the TM case / berry pouch
+**The rest of FRLG's field weathers and the dynamic-graphics objects are done** ([GAPS_PLAN.md](GAPS_PLAN.md)
+"Batch 13", PRs #152-#156): every sWeatherFuncs row runs as the C has it (rain, thunderstorm, downpour with their
+SE3 loops and PlayRainStoppingSoundEffect; snow, ash, sandstorm; clouds, the diagonal fog, the drought, the bubbles)
+on a weather sprite layer with the GBA's BLDALPHA; no FRLG map reaches them, `setweather` / `doweather` do. Dynamic
+objects (`OBJ_EVENT_GFX_VAR_*`) load a sheet set mid-script on demand, so `addobject` spawns them that frame.
+
+Next: the quest log's last two units (QUEST_LOG_PLAN.md, batch 14): QL4b (the shops, the TM case / berry pouch
 transactions, the Pokémon Center, story items, the battles, the Game Corner) and QL5 (QL_AvoidDisplay,
 `goto_if_questlog`, the escalators, the Surf / Strength / fishing recordings, playback's fanfare / cry / text
 differences, its help contexts, a battle's end in playback, the "no quest log" DEVIATIONS sweep). After that, link
@@ -104,12 +109,9 @@ Other open work:
 
 Loose ends:
 
-- Two e2e tests fail now and then when other e2e files run alongside, and pass alone (batch 12's LOG entry):
-  postgameKantoLegendaries' bird catches (the A that opens the bag doesn't land; the test hangs to its timeout) and
-  postgameSevenIsland's Sevault Canyon (COOLTRAINER_LEROY's fight doesn't finish within the mash).
-- Dynamic-graphics objects (`OBJ_EVENT_GFX_VAR_*`) are only checked on Viridian's old man; other maps that use them
-  (e.g. rival appearances) are untested. A script that sets `VAR_OBJ_GFX_ID_*` and then `addobject`s in the same
-  run only works if that sprite was already preloaded; otherwise it logs `[overworld] no sprite loaded`.
+- postgameSevenIsland's Sevault Canyon fails now and then, alone too (also before batch 13): COOLTRAINER_LEROY's
+  fight doesn't finish within the mash (batch 12's and 13's LOG entries). (postgameKantoLegendaries' bird catches
+  were a test race, fixed in batch 13.)
 
 ## Checklist
 
@@ -158,7 +160,8 @@ Loose ends:
 - [x] Warps: doors (+ walk out), arrow/stair warps, step warps
 - [x] NPC movement types (wander, look around, face, pace)
 - [x] Hidden objects via flags
-- [x] Object spawning: all of a map's sprites preloaded on entry, synchronous `addobject`, in-view spawning as the camera moves (TrySpawnObjectEvents)
+- [x] Object spawning: all of a map's sprites preloaded on entry, synchronous `addobject` (a dynamic object's sheet
+  set mid-script loads on demand and spawns that frame), in-view spawning as the camera moves (TrySpawnObjectEvents)
 - [x] Object lifetime across connections: replaced by the neighbour-map QOL change (see "Deliberate QOL changes"); templates reloaded from the header on every map entry (LoadObjEventTemplatesFromHeader)
 - [x] `LOCALID_*` names resolved per map from map.json `local_id`
 - [x] Input module with all GBA buttons (A, B, Start, Select, L, R), sampled per logic tick
@@ -279,10 +282,11 @@ Loose ends:
   transitions (FlashTransition_Enter / _Exit from CB2_DoChangeMap), the barn door wipe leaving through a door
 - [x] Map preview screens (map_preview_screen.c, fldeff_flash.c's RunMapPreviewScreen: the cave banners before
   the flash, the forest banners on map load, shorter on a second visit)
-- [x] Field weather (field_weather.c, field_weather_util.c, field_weather_effects.c' FRLG weathers): None, Sunny,
-  Shade (the gamma shift on the field's palettes and sheets), horizontal fog (the sprites, BLDALPHA blend);
-  `setweather` / `doweather` / `resetweather`, the saved weather. Rain, snow and the other unused weathers aren't
-  ported (POSTGAME_PLAN.md decision 1)
+- [x] Field weather (field_weather.c, field_weather_util.c, field_weather_effects.c' FRLG weathers): every
+  sWeatherFuncs row: None, Sunny, Shade (the gamma shift on the field's palettes and sheets), horizontal fog (the
+  sprites, BLDALPHA blend), and the ones no FRLG map reaches (rain, thunderstorm, downpour with their SE3 loops and
+  PlayRainStoppingSoundEffect; snow, ash, sandstorm; clouds, diagonal fog, drought, bubbles) on the weather sprite
+  layer (world/weatherSprites.ts); `setweather` / `doweather` / `resetweather`, the saved weather
 - [x] The postgame (POSTGAME_PLAN.md): braille (FONT_BRAILLE, `braillemessage`, BrailleCursorToggle), field_tasks.c's
   step callbacks (Icefall Cave's ice), `warphole`, ShakeScreen, the Trainer Tower (trainer_tower.c, its battles,
   battle_records.c), the event islands (tickets, Lugia, Ho-Oh, the Deoxys triangle and rock effects), the postgame
@@ -294,8 +298,7 @@ Loose ends:
 - [x] Audio playback (AUDIO_PLAN.md): the m4a engine (`src/audio/`: sequencer, notes, channels, envelopes, the cry
   song, the DirectSound mixer and reverb, CgbSound and the PSG synth) runs every frame; sound.c (`gba/sound.ts`);
   map music (`gba/overworldMusic.ts`, savedMusic, the ambient cries); the field's, battle's and scenes' calls; the
-  AudioWorklet output with autoplay and the mute key M. The rain weathers and their sounds aren't ported (no FRLG
-  map has them)
+  AudioWorklet output with autoplay and the mute key M.
 - [x] Naming screen (naming_screen.c): every template (player, rival, PC box, nickname, caught mon); opened by
   ChangePokemonNickname from scripts and by the battle's nickname prompt after a catch
 - [x] Copyright screen and intro movie (intro.c), title screen (title_screen.c, clear save data screen) and Oak's

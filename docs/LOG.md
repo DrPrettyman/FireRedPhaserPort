@@ -4499,3 +4499,27 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   tests/e2e/weatherCloudsFogDroughtBubbles.test.ts (5: the clouds' positions, drift, blend steps and blended pixels;
   the diagonal fog's 20 sprites tick by tick, its blend and pixels; the drought's stuck step and fade in; the flash on
   screen; the bubbles and the fog; each finish), plus weatherRain.test.ts and weather.test.ts.
+
+### Batch 13 merge (GAPS_PLAN.md "Batch 13": dynamic-graphics objects, the rest of the field weathers)
+
+- Merged one at a time: #152 (the plan), #153 W-dyngfx, #154 W-weather 1, #155 W-weather 2, #156 W-weather 3. Each
+  merge ran typecheck, unit tests and the PR's own e2e files (#153: dynamicGfx, trainerTower, eventIslands, story;
+  #154: weatherRain, weather, transitions, dynamicGfx, seagallop; #155: weatherSnowAshSand, weatherRain, weather;
+  #156: weatherCloudsFogDroughtBubbles, weatherSnowAshSand, weatherRain, weather). No tools/ change in the batch.
+- Conflicts: #154's merge left LOG.md's W-dyngfx heading without its blank line (fixed). #156 against #155:
+  weather.ts (header comment, imports, gWeatherPtr fields, `ported()` rows, StartWeather's resets: both kept, the
+  unported-weather log dropped since every row is ported now), tests/unit/weather.test.ts (W-weather 3's test, no
+  fallback left), and the docs' union: DEVIATIONS' and DEV_NOTES' weather lines came in twice and were rewritten as
+  one; the LOG entries put in merge order.
+- The full e2e suite, once, on master f4ccf31: 555 passed, 3 failed (558 tests, 92 files, 34 minutes):
+  postgameKantoLegendaries' MOLTRES / ARTICUNO / ZAPDOS catches, postgameSevenIsland's Sevault Canyon. Rerun
+  alone, both files failed again. Bisected (MOLTRES alone): passes at ee4c4ec, #153 and #154, fails at #155, passes
+  at #156, so a race, not a break. The cause: `throwFirstBall` (postgameHelpers.ts) pressed RIGHT, RIGHT, A, A blind
+  after `waitForBag`, which waited for the palette fade only; Task_BagMenu_HandleInput also returns while
+  Task_AnimateWin0v (the bag's window opening) runs, so a RIGHT there was dropped, A used the wrong pocket's item
+  and the B mash never ended the battle. Fixed: `waitForBag` also waits for Task_AnimateWin0v to end, and
+  `throwFirstBall` presses RIGHT until `t.bagPocket()` (new hook: gBagMenuState.pocket) is POKé BALLS, each press
+  once the bag takes input, then A at the list and A at the context menu (Task_FieldItemContextMenuHandleInput).
+  postgameKantoLegendaries: 9 passed (124 s, it was 975 s failing). Five other bag users (postgameKanto,
+  scriptedBattles, berryPouch, audioBattleBalls, wildBattle): 25 passed. Sevault Canyon fails alone on the pre-batch
+  master ee4c4ec too: not this batch's, left as the STATUS loose end, not chased.

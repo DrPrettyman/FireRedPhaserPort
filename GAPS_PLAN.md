@@ -262,6 +262,19 @@ DEVIATIONS / DEV_NOTES weather entries' final wording (unit 2 adds its lines).
 | 1 | W-dyngfx, W-weather 1 | distinct files; unit 1 builds the sprite layer units 2 and 3 need |
 | 2 | W-weather 2, W-weather 3 | after unit 1 merges; their own modules |
 
+### Batch 13 result
+
+**Done.** Merged: #152 the plan; #153 W-dyngfx (a VarSet of a VAR_OBJ_GFX_ID_* starts loading the sheet; `addobject`
+holds the field's frame until it's in, so the object spawns that frame; every FRLG map with dynamic objects checked:
+Viridian's old man, Fuchsia's Kabuto / Omanyte, Birth Island's Deoxys, the Trainer Tower's singles / doubles /
+knockout: none was broken); #154 W-weather 1 (the weather sprite layer with BLDALPHA for sprites with transparent
+pixels, Rain / Thunderstorm / Downpour, the SE3 loops and PlayRainStoppingSoundEffect; the battle's switch-in
+weather now reads GetCurrentWeather, not the map header's); #155 W-weather 2 (Snow, Ash, Sandstorm); #156 W-weather 3
+(Clouds, the diagonal fog, the drought as FRLG's dummied-out C leaves it, the bubbles; no weather falls back to
+WEATHER_NONE). The end-of-batch e2e run (558 tests in 92 files) failed only the two known load-sensitive files:
+postgameKantoLegendaries' bird catches were a test race (a RIGHT in the bag before Task_AnimateWin0v ended was
+dropped), fixed in the STATUS PR; Sevault Canyon fails alone on the pre-batch master too and stays a loose end.
+
 ### Batch 13 rules
 
 Workers and merger: docs/WORKFLOW.md sections 3 and 4. **Testing:** workers run typecheck, `npm test`, their own

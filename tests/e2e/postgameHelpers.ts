@@ -1,6 +1,8 @@
 // Helpers for the postgame's e2e tests (POSTGAME_PLAN.md, W-sevii): the story state the Hall of Fame and Bill's
 // Sevii 1-3 trip leave, and a Pokédex filled far enough for Oak's National Dex. Builds on seagallopHelpers.ts.
 
+import { expect } from 'vitest';
+import type { TestApi } from '../../src/dev/testHooks';
 import type { Game } from './harness';
 import { afterBlaine, triPassState } from './seagallopHelpers';
 
@@ -155,8 +157,19 @@ export function foeOf(game: Game, what: string) {
 export async function throwFirstBall(game: Game) {
   await game.chooseAction('BAG');
   await game.waitForBag();
-  await game.pressTimes('RIGHT', 2);
-  await game.pressTimes('A', 2);
+  // To the POKé BALLS pocket and its first ball, waiting for the bag to take each button (a RIGHT during
+  // Task_AnimateSwitchPockets' or Task_AnimateWin0v's frames is dropped), then USE in the context menu.
+  const balls = await game.eval((t) => t.define('POCKET_POKE_BALLS') - 1);
+  const handlesInput = (t: TestApi) => t.gbaTasks().includes('Task_BagMenu_HandleInput') && !t.gbaTasks().includes('Task_AnimateWin0v') && !t.paletteFadeActive();
+  for (let i = 0; i < 10 && (await game.eval((t) => t.bagPocket())) !== balls; i++) {
+    await game.watch(handlesInput, { what: 'the bag to take input' });
+    await game.press('RIGHT');
+  }
+  expect(await game.eval((t) => t.bagPocket()), 'the POKé BALLS pocket').toBe(balls);
+  await game.watch(handlesInput, { what: 'the bag to take input' });
+  await game.press('A');
+  await game.watch((t) => t.gbaTasks().includes('Task_FieldItemContextMenuHandleInput'), { what: 'the context menu' });
+  await game.press('A');
   await game.mashUntil((t) => {
     const m = t.battle()?.message ?? '';
     if (/transferred/.test(m)) (window as any).__sentToPc = m;

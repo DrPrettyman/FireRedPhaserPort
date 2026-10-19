@@ -329,9 +329,13 @@ export class Game {
     await this.poll(expr, { what: `${callback2} to take input`, ...opts });
   }
 
-  /** The bag is up and has faded in (see waitForScreen). */
-  waitForBag(opts: WaitOptions = {}): Promise<void> {
-    return this.waitForScreen('CB2_BagMenuRun', { what: 'the bag to take input', ...opts });
+  /**
+   * The bag is up, has faded in (see waitForScreen) and its window opening (Task_AnimateWin0v, which
+   * Task_BagMenu_HandleInput also waits out) is over: a button before that is dropped.
+   */
+  async waitForBag(opts: WaitOptions = {}): Promise<void> {
+    await this.waitForScreen('CB2_BagMenuRun', { what: 'the bag to take input', ...opts });
+    await this.poll(`!window.__test.gbaTasks().includes('Task_AnimateWin0v')`, { what: "the bag's window to open", ...opts });
   }
 
   /** The party menu is up and has faded in (see waitForScreen). */
