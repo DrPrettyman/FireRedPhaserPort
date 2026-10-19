@@ -1,17 +1,15 @@
-// The AudioWorklet half of the output (AUDIO_PLAN.md decision 3): output.ts posts each frame's FIFO samples on
-// the node's MessagePort; this processor turns them into speaker samples as the GBA's DAC would (frameToDac),
-// buffers 3-4 frames and plays them upsampled by sample-and-hold (SampleHoldResampler). Loaded with
+// The AudioWorklet half of the output (AUDIO_PLAN.md decision 3): output.ts posts each frame's FIFO samples and
+// PSG register writes on the node's MessagePort; this processor turns them into speaker samples as the GBA's sound
+// circuit would (SoundCircuit: the PSG synth and the FIFOs through the DAC, 896 samples a frame), buffers 3-4
+// frames and plays them in the context's rate by sample-and-hold (SampleHoldResampler). Loaded with
 // `audioWorklet.addModule` from the URL Vite gives `./worklet.ts?worker&url` (bundled in dev and in the build).
-//
-// TODO W-m4a 4b: the PSG. The frame message carries the frame's PSG register writes (`psg`, `psgState`: see
-// PsgFrame in soundRegs.ts and docs/DEV_NOTES.md "PSG frames"); the four channels
-// (squares with duty and sweep, the wave channel, noise, the hardware envelope and length counters) are
-// synthesized here at the output rate and added in the DAC's 10-bit units before dacOutput.
 
 import {
-  frameToDac,
-  PCM_INPUT_RATE,
+  DAC_OVERSAMPLE,
+  DAC_RATE,
+  DAC_SAMPLES_PER_FRAME,
   SampleHoldResampler,
+  SoundCircuit,
   WORKLET_NAME,
   type FromWorklet,
   type ToWorklet,
@@ -30,7 +28,8 @@ declare const sampleRate: number;
 const STATS_EVERY = 64;
 
 class GbaSoundOutputProcessor extends AudioWorkletProcessor {
-  private resampler = new SampleHoldResampler(PCM_INPUT_RATE, sampleRate);
+  private resampler = new SampleHoldResampler(DAC_RATE, sampleRate, { frameLength: DAC_SAMPLES_PER_FRAME });
+  private circuit = new SoundCircuit();
   private muted = false;
   private frameL = new Float32Array(0);
   private frameR = new Float32Array(0);
@@ -49,11 +48,13 @@ class GbaSoundOutputProcessor extends AudioWorkletProcessor {
         const n = m.pcm.byteLength >> 1;
         const fifoA = new Int8Array(m.pcm, 0, n);
         const fifoB = new Int8Array(m.pcm, n, n);
-        if (this.frameL.length !== n) {
-          this.frameL = new Float32Array(n);
-          this.frameR = new Float32Array(n);
+        const out = n * DAC_OVERSAMPLE;
+        if (this.frameL.length !== out) {
+          this.frameL = new Float32Array(out);
+          this.frameR = new Float32Array(out);
         }
-        frameToDac(fifoA, fifoB, m.soundcntH, this.frameL, this.frameR);
+        const psg = m.psg && m.psgState ? { writes: new Uint16Array(m.psg), state: new Uint8Array(m.psgState) } : undefined;
+        this.circuit.frame(fifoA, fifoB, m.soundcntH, psg, this.frameL, this.frameR);
         this.resampler.push(this.frameL, this.frameR);
         break;
       }
@@ -62,6 +63,7 @@ class GbaSoundOutputProcessor extends AudioWorkletProcessor {
         break;
       case 'flush':
         this.resampler.flush();
+        this.circuit.reset();
         break;
     }
   }
