@@ -10,9 +10,9 @@
 //   Phaser, so the GPU does it in two passes, as for the horizontal fog but masked by the sprites' pixels: the
 //   blended sprites of one priority and subpriority are composited into one screen-sized pair of textures (OAM order:
 //   the front sprite's pixel wins, as the PPU's one OBJ pixel per dot does), a MULTIPLY pass of EVB / 16 grey where a
-//   sprite pixel is opaque and nothing elsewhere, then an ADD pass of the sprites' colours times EVA / 16. The
-//   arithmetic is on 8-bit colours, so a pixel can be a step of the 5-bit channel off the PPU's (the e2e test allows
-//   3 of 255). On the GBA a blended OBJ pixel hides the objects behind it and blends with the BG; here what's under
+//   sprite pixel is opaque and nothing elsewhere, then an ADD pass of the sprites' colours times EVA / 16 (less half a
+//   5-bit step: `addChannel`). The arithmetic is on 8-bit colours, so a pixel can be half a step of the 5-bit channel
+//   off the PPU's (the e2e test allows 5 of 255). On the GBA a blended OBJ pixel hides the objects behind it and blends with the BG; here what's under
 //   it, objects too, is blended (docs/DEVIATIONS.md).
 //
 // The GBA layer's copy of the field (world/fieldGbaScreen.ts, battle transitions) takes the same sprites through
@@ -159,13 +159,16 @@ export class WeatherSpriteRenderer {
   }
 
   /**
-   * Dev: the sprites as drawn (OAM order, front first), BLDALPHA, and the colour (JASC [r, g, b]) of the front sprite's
+   * Dev: the sprites' OAM as of now (front first), BLDALPHA, and the colour (JASC [r, g, b]) of the front sprite's
    * opaque pixel at screen pixel (px, py), if any, with whether that sprite blends.
    */
   probe(px?: number, py?: number) {
+    // BuildOamBuffer now (the drawn OAM is the last render's, a few ticks behind under the e2e harness's speed)
+    const oam = BuildWeatherOam(this.host.spriteCoordOffsetX(), this.host.spriteCoordOffsetY());
+    this.refreshFrames();
     let pixel: { rgb: number[]; blend: boolean; id: number } | undefined;
     if (px !== undefined && py !== undefined) {
-      for (const o of this.oam) {
+      for (const o of oam) {
         const rgb = this.pixelOf(o, px - o.x, py - o.y);
         if (rgb) {
           pixel = { rgb, blend: o.blend, id: o.id };
@@ -173,7 +176,7 @@ export class WeatherSpriteRenderer {
         }
       }
     }
-    return { sprites: this.oam.map((o) => ({ ...o, depth: depthOf(o) })), eva: this.eva, evb: this.evb, visible: this.visible, pixel };
+    return { sprites: oam.map((o) => ({ ...o, depth: depthOf(o) })), eva: this.eva, evb: this.evb, visible: this.visible, pixel };
   }
 
   /** Dev: hide the weather's sprites (an e2e test reads the field under them); drawn as they are at the next draw. */
@@ -301,7 +304,7 @@ export class WeatherSpriteRenderer {
             if (!rgb) continue;
             filled[p] = 1;
             mask.data.set([grey, grey, grey, 255], p * 4);
-            add.data.set([Math.round((rgb[0] * eva) / 16), Math.round((rgb[1] * eva) / 16), Math.round((rgb[2] * eva) / 16), 255], p * 4);
+            add.data.set([addChannel(rgb[0], eva), addChannel(rgb[1], eva), addChannel(rgb[2], eva), 255], p * 4);
           }
         }
       }
@@ -331,6 +334,15 @@ export class WeatherSpriteRenderer {
     this.groups.set(key, g);
     return g;
   }
+}
+
+/**
+ * The ADD pass's share of a channel: obj * EVA / 16, less half a 5-bit step. The PPU floors the 5-bit sum
+ * (obj * EVA + bg * EVB) >> 4; the GPU's sum of the two 8-bit passes has no floor, so it sits half a step lower to be
+ * within half a step of the PPU's (a step is 255 / 31: up to 4 or 5 off, where the plain sum was up to 8).
+ */
+function addChannel(c: number, eva: number): number {
+  return Math.max(0, Math.round((c * eva) / 16 - 255 / 62));
 }
 
 /** A sprite's depth on the field: its OAM priority and subpriority, then its screen top (SortSprites). */

@@ -88,6 +88,7 @@ import {
   WeatherTask,
   IsWeatherNotFadingIn,
   PlayRainStoppingSoundEffect,
+  GetCurrentWeather,
 } from '../world/weather';
 import { AnimateWeatherSprites } from '../world/weatherSprites';
 import { WeatherSpriteRenderer } from '../world/weatherSpriteRenderer';
@@ -3131,7 +3132,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       terrain: this.battleTerrainId(),
       mapBattleScene: d.get(map.battleScene ?? '') ?? d.require('MAP_BATTLE_SCENE_NORMAL'),
       mapType: d.get(map.mapType ?? '') ?? 0,
-      overworldWeather: d.get(map.weather ?? '') ?? 0,
+      overworldWeather: GetCurrentWeather(), // ABILITYEFFECT_SWITCH_IN_WEATHER's GetCurrentWeather (gWeatherPtr->currWeather)
       state: this.state,
       pokemon: this.state.pokemon,
       charmap: this.charmap,

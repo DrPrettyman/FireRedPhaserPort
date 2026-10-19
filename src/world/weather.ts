@@ -667,7 +667,7 @@ export function WeatherFadeInBlend(): number | undefined {
 }
 
 /** Weather_SetBlendCoeffs: BLDALPHA at once. */
-function Weather_SetBlendCoeffs(eva: number, evb: number): void {
+export function Weather_SetBlendCoeffs(eva: number, evb: number): void {
   sWeather.currBlendEVA = eva;
   sWeather.currBlendEVB = evb;
   sWeather.targetBlendEVA = eva;
@@ -676,7 +676,7 @@ function Weather_SetBlendCoeffs(eva: number, evb: number): void {
 }
 
 /** Weather_SetTargetBlendCoeffs: Weather_UpdateBlend moves toward these, a step every `delay` + 1 frames. */
-function Weather_SetTargetBlendCoeffs(eva: number, evb: number, delay: number): void {
+export function Weather_SetTargetBlendCoeffs(eva: number, evb: number, delay: number): void {
   sWeather.targetBlendEVA = eva;
   sWeather.targetBlendEVB = evb;
   sWeather.blendDelay = delay;
@@ -685,7 +685,7 @@ function Weather_SetTargetBlendCoeffs(eva: number, evb: number, delay: number): 
 }
 
 /** Weather_UpdateBlend: a step of EVA or EVB (in turn) toward the target; TRUE once there. */
-function Weather_UpdateBlend(): boolean {
+export function Weather_UpdateBlend(): boolean {
   if (sWeather.currBlendEVA === sWeather.targetBlendEVA && sWeather.currBlendEVB === sWeather.targetBlendEVB) return true;
   if (++sWeather.blendFrameCounter > sWeather.blendDelay) {
     sWeather.blendFrameCounter = 0;

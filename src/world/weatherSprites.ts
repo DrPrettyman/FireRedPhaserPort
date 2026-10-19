@@ -198,6 +198,8 @@ export interface WeatherOam {
   subpriority: number;
   /** ST_OAM_OBJ_BLEND: blended with the BG under it through BLDALPHA. */
   blend: boolean;
+  /** The sprite moves with the camera (gSpriteCoordOffsetX / Y added). */
+  coordOffsetEnabled: boolean;
 }
 
 /** SortSprites' y key (sortY in gba/sprite.ts). */
@@ -249,6 +251,7 @@ export function BuildWeatherOam(spriteCoordOffsetX: number, spriteCoordOffsetY: 
       priority: s.oam.priority,
       subpriority: s.subpriority,
       blend: s.oam.objMode === ST_OAM_OBJ_BLEND,
+      coordOffsetEnabled: s.coordOffsetEnabled,
     };
   });
 }
