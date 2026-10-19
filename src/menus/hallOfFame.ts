@@ -129,11 +129,11 @@ import {
   StopCryAndClearCrySongs,
 } from '../gba/sound';
 import { TryFadeOutOldMapMusic, type MapMusicHeader } from '../gba/overworldMusic';
+import { SpeciesToPokedexNum } from '../state/nationalDex';
 
 const PARTY_SIZE = 6;
 const HALL_OF_FAME_BG_PAL = RGB(22, 24, 29);
 const TAG_CONFETTI = 1001;
-const KANTO_SPECIES_END = 151;
 
 /** What the Hall of Fame screens need from outside hall_of_fame.c. */
 export const hofEnv = {
@@ -831,13 +831,6 @@ function HallOfFame_PrintWelcomeText(): void {
   CopyWindowToVram(0, COPYWIN_FULL);
 }
 
-/** SpeciesToPokedexNum: 0xFFFF past Kanto without the National Pokédex. */
-function SpeciesToPokedexNum(species: number): number {
-  const n = pokemon.nationalDex(species);
-  if (!state.nationalDexEnabled && n > KANTO_SPECIES_END) return 0xffff;
-  return n;
-}
-
 function HallOfFame_PrintMonInfo(currMon: HallofFameMon): void {
   const CHAR_0 = K.CHAR_0;
   FillWindowPixelBuffer(0, PIXEL_FILL(0));
@@ -846,7 +839,7 @@ function HallOfFame_PrintMonInfo(currMon: HallofFameMon): void {
   // dex number
   if (currMon.species !== K.SPECIES_EGG) {
     const text2 = text('gText_Number').slice(0, -1);
-    const dexNumber = SpeciesToPokedexNum(currMon.species);
+    const dexNumber = SpeciesToPokedexNum(state, currMon.species);
     if (dexNumber !== 0xffff) text2.push(Math.trunc(dexNumber / 100) + CHAR_0, Math.trunc((dexNumber % 100) / 10) + CHAR_0, (dexNumber % 10) + CHAR_0);
     else text2.push(K.CHAR_QUESTION_MARK, K.CHAR_QUESTION_MARK, K.CHAR_QUESTION_MARK);
     text2.push(EOS);

@@ -181,6 +181,7 @@ export class GameState {
   /** Pokédex seen/caught flags by national dex number. */
   readonly dexSeen = new Set<number>();
   readonly dexCaught = new Set<number>();
+  /** gSaveBlock2Ptr->pokedex.nationalMagic == 0xB9; IsNationalPokedexEnabled (state/nationalDex.ts) checks it too. */
   nationalDexEnabled = false;
   /** GetCurrentRegionMapSectionId(), kept current by the overworld. */
   currentMapSection = 'MAPSEC_NONE';

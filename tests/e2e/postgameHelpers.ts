@@ -83,7 +83,7 @@ export async function afterHallOfFame(game: Game) {
 export async function rainbowPassState(game: Game) {
   await game.eval((t) => {
     const s = t.state!;
-    s.nationalDexEnabled = true;
+    enableNationalDex(s);
     s.setVar('VAR_MAP_SCENE_PALLET_TOWN_OAK', 3);
     s.setVar('VAR_MAP_SCENE_PALLET_TOWN_PROFESSOR_OAKS_LAB', 8);
     s.setVar('VAR_MAP_SCENE_MT_EMBER_EXTERIOR', 2);

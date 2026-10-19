@@ -68,6 +68,7 @@ import { FreeAllWindowBuffers, IsTextPrinterActive, RunTextPrinters } from '../g
 import type { Pokemon } from '../pokemon/Pokemon';
 import { EOS, ExpandToStringVar4, GetMonNickname, gStringVar1, gStringVar2, gStringVar4 } from './common';
 import { menusData } from './data';
+import { IsNationalPokedexEnabled } from '../state/nationalDex';
 import {
   CycleEvolutionMonSprite,
   EVO_GRAPHICS_TASK_EVO_STOP,
@@ -454,7 +455,7 @@ function Task_EvolutionScene(taskId: number): void {
 
   // Automatically cancel if the Pokemon would evolve into a species you have not
   // yet unlocked, such as Crobat.
-  if (!state.nationalDexEnabled && d[tState] === EVOSTATE_WAIT_CYCLE_MON_SPRITE && d[tPostEvoSpecies] > K.SPECIES_MEW) {
+  if (!IsNationalPokedexEnabled(state) && d[tState] === EVOSTATE_WAIT_CYCLE_MON_SPRITE && d[tPostEvoSpecies] > K.SPECIES_MEW) {
     d[tState] = EVOSTATE_CANCEL;
     d[tEvoWasStopped] = 1;
     evoGraphicsTask().data[EVO_GRAPHICS_TASK_EVO_STOP] = 1;

@@ -6,6 +6,7 @@ import { ConvertIntToDecimalStringN, STR_CONV_MODE_LEADING_ZEROS, STR_CONV_MODE_
 import type { Defines } from '../script/Defines';
 import type { SaveData } from '../state/saveData';
 import type { PlayTime } from '../state/playTime';
+import { IsNationalPokedexEnabled } from '../state/nationalDex';
 import { EOS, type Charmap } from '../text/charmap';
 
 /** The parts of gSaveBlock1/2 the save stats read. GameState is one. */
@@ -14,15 +15,18 @@ export interface SaveBlockView {
   playerName: string;
   playerGender: 'male' | 'female';
   readonly playTime: PlayTime;
+  /** gSaveBlock2Ptr->pokedex.nationalMagic == 0xB9 (IsNationalPokedexEnabled also reads the var and the flag). */
   nationalDexEnabled: boolean;
   readonly dexSeen: ReadonlySet<number>;
   readonly dexCaught: ReadonlySet<number>;
   getFlag(flag: number): boolean;
+  getVar(v: number): number;
 }
 
 /** A save file seen as a save block (what LoadGameSave leaves in gSaveBlock1/2 before CONTINUE loads the game). */
 export function saveDataView(data: SaveData, defines: Defines): SaveBlockView {
   const flags = new Set(data.flags);
+  const vars = new Map(data.vars);
   return {
     defines,
     playerName: data.playerName,
@@ -32,6 +36,7 @@ export function saveDataView(data: SaveData, defines: Defines): SaveBlockView {
     dexSeen: new Set(data.pokedex.seen),
     dexCaught: new Set(data.pokedex.caught),
     getFlag: (flag) => flags.has(flag),
+    getVar: (v) => vars.get(v) ?? 0,
   };
 }
 
@@ -62,10 +67,13 @@ export function countBadges(sb: SaveBlockView): number {
   return n;
 }
 
-/** The caught count the save stats show: national when the National Dex is on, else Kanto (IsNationalPokedexEnabled). */
+/**
+ * The caught count the save stats show (SaveStatToString's SAVE_STAT_POKEDEX, main_menu.c's PrintDexCount): national
+ * when the National Dex is on (IsNationalPokedexEnabled), else Kanto.
+ */
 export function caughtDexCount(sb: SaveBlockView): number {
   const caught = sb.defines.require('FLAG_GET_CAUGHT');
-  return sb.nationalDexEnabled ? GetNationalPokedexCount(sb, caught) : GetKantoPokedexCount(sb, caught);
+  return IsNationalPokedexEnabled(sb) ? GetNationalPokedexCount(sb, caught) : GetKantoPokedexCount(sb, caught);
 }
 
 /**

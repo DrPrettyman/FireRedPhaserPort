@@ -129,6 +129,7 @@ import { CreateMonMarkingAllCombosSprite } from './monMarkings';
 import { CreateMonPicSprite, CreateMonPicSprite_HandleDeoxys, FreeAndDestroyMonPicSprite } from './picSprites';
 import { CreateMonIcon, DestroyMonIcon, SafeFreeMonIconPalette, SafeLoadMonIconPalette } from './pokemonIcon';
 import { boxMonToMon, type BoxPokemon } from '../state/PokemonStorage';
+import { SpeciesToPokedexNum } from '../state/nationalDex';
 
 // ------------------------------------------------------------------ struct PokemonSummaryScreenData
 
@@ -1295,8 +1296,7 @@ function BufferMonInfo(): void {
   const s = S();
   const mon = s.currentMon;
 
-  const natDex = pokemon.nationalDex(mon.species); // SpeciesToPokedexNum: FireRed numbers by the national dex
-  let dexNum = natDex === 0 ? 0xffff : natDex;
+  let dexNum = SpeciesToPokedexNum(state, mon.species);
   if (dexNum === 0xffff) s.summary.dexNumStrBuf = text('gText_PokeSum_DexNoUnknown');
   else s.summary.dexNumStrBuf = ConvertIntToDecimalStringN(dexNum, STR_CONV_MODE_LEADING_ZEROS, 3);
 

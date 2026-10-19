@@ -17,7 +17,7 @@ import {
 } from '../../src/state/save';
 import { fromSaveData, readSave, SAVE_STORAGE_KEY, SAVE_VERSION, toSaveData } from '../../src/state/saveData';
 import { ClearHofBuffer, emptyHofTeam, gHofBuffer, HOF_STORAGE_KEY, LoadHallOfFameSave } from '../../src/state/hallOfFame';
-import { countBadges, GetKantoPokedexCount, GetNationalPokedexCount, saveDataView, SaveStatToString } from '../../src/ui/saveMenuUtil';
+import { caughtDexCount, countBadges, GetKantoPokedexCount, GetNationalPokedexCount, saveDataView, SaveStatToString } from '../../src/ui/saveMenuUtil';
 import { newGame, type TestGame } from './gameData';
 
 let t: TestGame;
@@ -119,7 +119,10 @@ describe('save stats (save_menu_util.c, pokedex.c)', () => {
     // nBadges + CHAR_0, then 'こ' (10)
     expect(SaveStatToString(s, t.charmap, d('SAVE_STAT_BADGES'), 2)).toEqual([...prefix(2), d('CHAR_0') + 2, 10, 0xff]);
     expect(SaveStatToString(s, t.charmap, d('SAVE_STAT_POKEDEX'), 2)).toEqual([...prefix(2), ...enc('1')]);
-    s.nationalDexEnabled = true;
+    s.nationalDexEnabled = true; // EnableNationalPokedex: the magic, the var and the flag (IsNationalPokedexEnabled)
+    expect(SaveStatToString(s, t.charmap, d('SAVE_STAT_POKEDEX'), 2)).toEqual([...prefix(2), ...enc('1')]);
+    s.setVar('VAR_NATIONAL_DEX', 0x6258);
+    s.setFlag('FLAG_SYS_NATIONAL_DEX', true);
     expect(SaveStatToString(s, t.charmap, d('SAVE_STAT_POKEDEX'), 2)).toEqual([...prefix(2), ...enc('2')]);
     expect(SaveStatToString(s, t.charmap, d('SAVE_STAT_LOCATION'), 8, () => enc('ROUTE 1'))).toEqual([...prefix(8), ...enc('ROUTE 1')]);
   });
@@ -136,6 +139,20 @@ describe('save stats (save_menu_util.c, pokedex.c)', () => {
     for (const id of ['SAVE_STAT_NAME', 'SAVE_STAT_TIME', 'SAVE_STAT_BADGES', 'SAVE_STAT_POKEDEX']) {
       expect(SaveStatToString(view, t.charmap, t.d(id), 2)).toEqual(SaveStatToString(s, t.charmap, t.d(id), 2));
     }
+  });
+
+  test('a save file\'s dex count is national only with all of IsNationalPokedexEnabled\'s magic, var and flag', () => {
+    const s = t.state;
+    s.setDexFlags(1, true, true);
+    s.setDexFlags(152, true, true); // Chikorita: national only
+    const count = () => caughtDexCount(saveDataView(toSaveData(s), t.defines));
+    const kanto = count();
+    s.nationalDexEnabled = true;
+    s.setVar('VAR_NATIONAL_DEX', 0x6258);
+    expect(count()).toBe(kanto); // no FLAG_SYS_NATIONAL_DEX
+    s.setFlag('FLAG_SYS_NATIONAL_DEX', true);
+    expect(count()).toBe(kanto + 1);
+    expect(count()).toBe(caughtDexCount(s));
   });
 });
 

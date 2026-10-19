@@ -7,6 +7,7 @@ import { gMain } from '../gba/main';
 import { menusData } from '../menus/data';
 import { BeginEvolutionScene } from '../menus/evolutionScene';
 import type { Pokemon, Stat } from '../pokemon/Pokemon';
+import { IsNationalPokedexEnabled } from '../state/nationalDex';
 import { K } from './constants';
 import { emitGetMonData, markBattlerForControllerExec } from './controllers';
 import { bdata, g, gSpeciesInfo, itemHoldEffect, pokemon, state } from './env';
@@ -683,7 +684,7 @@ export function GetEvolutionTargetSpecies(mon: Pokemon, type: number, evolutionI
             if (param === heldItem) {
               targetSpecies = target;
               // Prevent cross-generational evolutions like Scizor and Steelix until the National Pokedex is obtained
-              if (state.nationalDexEnabled || targetSpecies <= K.KANTO_SPECIES_END) {
+              if (IsNationalPokedexEnabled(state) || targetSpecies <= K.KANTO_SPECIES_END) {
                 heldItem = K.ITEM_NONE;
                 mon.heldItem = heldItem;
                 targetSpecies = target;

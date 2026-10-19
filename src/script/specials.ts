@@ -3,6 +3,7 @@ import { adjustFriendship } from '../battle/pokemonBattle';
 import { ItemIdToBattleMoveId } from '../menus/partyMenu';
 import type { Input } from '../input/Input';
 import type { GameState } from '../state/GameState';
+import { IsNationalPokedexEnabled } from '../state/nationalDex';
 import type { Pokemon } from '../pokemon/Pokemon';
 import { DELTA } from '../world/direction';
 import { animateElevator, getElevatorFloor, initElevatorFloorSelectMenuPos } from '../world/elevator';
@@ -710,9 +711,9 @@ export function healPlayerParty(state: GameState): void {
   }
 }
 
-/** IsNationalPokedexEnabled */
+/** IsNationalPokedexEnabled (state/nationalDex.ts) */
 export function isNationalDexEnabled(state: GameState): boolean {
-  return state.nationalDexEnabled && state.getVar('VAR_NATIONAL_DEX') === 0x6258 && state.getFlag('FLAG_SYS_NATIONAL_DEX');
+  return IsNationalPokedexEnabled(state);
 }
 
 /** TryBattleLinkup / TryTradeLinkup without a link partner (see SPECIALS). */

@@ -172,6 +172,7 @@ import { BeginEvolutionScene, setCB2_AfterEvolution } from './evolutionScene';
 import { CreateMonIcon, LoadMonIconPalettes, SetPartyHPBarSprite, SpriteCB_MonIcon, UpdateMonIconFrame } from './pokemonIcon';
 import { testEvent } from '../dev/testHooks';
 import { GetNumberOfRelearnableMoves } from './learnMove';
+import { IsNationalPokedexEnabled } from '../state/nationalDex';
 
 const PARTY_PAL_SELECTED = 1 << 0;
 const PARTY_PAL_FAINTED = 1 << 1;
@@ -3821,7 +3822,7 @@ function CB2_UseEvolutionStone(): void {
 }
 
 function MonCanEvolve(): boolean {
-  return !(!state.nationalDexEnabled && GetEvolutionTargetSpecies(P(gPartyMenu.slotId), K.EVO_MODE_ITEM_USE, SpecialVar.ItemId) > K.KANTO_DEX_COUNT);
+  return !(!IsNationalPokedexEnabled(state) && GetEvolutionTargetSpecies(P(gPartyMenu.slotId), K.EVO_MODE_ITEM_USE, SpecialVar.ItemId) > K.KANTO_DEX_COUNT);
 }
 
 export function GetItemEffectType(item: number): number {
