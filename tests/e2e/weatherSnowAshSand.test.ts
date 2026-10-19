@@ -51,24 +51,42 @@ async function startedIdle(game: Game) {
 const blendAfter = (u: number) => [Math.ceil(u / 2), 16 - Math.floor(u / 2)];
 
 /**
- * BLDALPHA read back from the screen: points read with the weather's sprites hidden (the field under them), then
- * shown, each checked against the sprite pixel the render drew there (`drawn`: the OAM of that frame).
+ * BLDALPHA read back from the screen, one point at a time: a point where a weather sprite has an opaque pixel now
+ * (until 8 of them were still a sprite's pixel when drawn, 150 tries at most), then 8 where none has; the field there
+ * with the weather's sprites hidden, then shown, checked against the sprite pixel the render drew there (`drawn`: the
+ * OAM of that frame; the sprites move between the pick and the read, the sand by up to 4 pixels a frame).
  */
-async function sampleBlend(game: Game, points: [number, number][]) {
-  return game.eval(async (t, pts) => {
-    t.weatherSprites(undefined, undefined, false);
-    const unders: number[][] = [];
-    for (const [x, y] of pts) unders.push(await t.screenPixel(x, y));
-    t.weatherSprites(undefined, undefined, true);
+async function sampleBlend(game: Game) {
+  return game.eval(async (t) => {
+    const grid: [number, number][] = [];
+    for (let y = 1; y < 160; y += 3) for (let x = 1; x < 240; x += 3) grid.push([x, y]);
+    let next = 0;
     const out: { x: number; y: number; under: number[]; shown: number[]; sprite?: number[]; blend?: boolean; eva: number; evb: number }[] = [];
-    for (let i = 0; i < pts.length; i++) {
-      const [x, y] = pts[i];
+    let hits = 0;
+    let clear = 0;
+    for (let k = 0; k < 150 && (hits < 8 || clear < 8); k++) {
+      const wantOpaque = hits < 8;
+      let pt: [number, number] | undefined;
+      for (let j = 0; j < grid.length && !pt; j++) {
+        const q = grid[(next + j * 101) % grid.length];
+        if (!!t.weatherSprites(q[0], q[1])!.pixel === wantOpaque) {
+          pt = q;
+          next = (next + j * 101 + 37) % grid.length;
+        }
+      }
+      if (!pt) continue;
+      const [x, y] = pt;
+      t.weatherSprites(undefined, undefined, false);
+      const under = await t.screenPixel(x, y);
+      t.weatherSprites(undefined, undefined, true);
       const shown = await t.screenPixel(x, y);
       const p = t.weatherSprites(x, y, undefined, true)!;
-      out.push({ x, y, under: unders[i], shown, sprite: p.pixel?.rgb, blend: p.pixel?.blend, eva: p.eva, evb: p.evb });
+      out.push({ x, y, under, shown, sprite: p.pixel?.rgb, blend: p.pixel?.blend, eva: p.eva, evb: p.evb });
+      if (p.pixel) hits++;
+      else if (!wantOpaque) clear++;
     }
     return out;
-  }, points);
+  });
 }
 
 /** Check sampled pixels against BLDALPHA; returns how many were blended sprite pixels. */
@@ -91,14 +109,7 @@ function checkBlend(samples: Awaited<ReturnType<typeof sampleBlend>>) {
   return blended;
 }
 
-/** A grid of screen points. */
-const grid = (step: number): [number, number][] => {
-  const pts: [number, number][] = [];
-  for (let y = 5; y < 160; y += step) for (let x = 3; x < 240; x += step) pts.push([x, y]);
-  return pts;
-};
-
-test('snow: the shade, a snowflake every 37 frames up to 16, each falling tDeltaY / 128 a frame and swaying; drawn from its frame image; the finish takes one every 37 frames', async () => {
+test('snow: the shade, a snowflake every 37 frames up to 16, each falling tDeltaY / 128 a frame and swaying; the finish takes one every 37 frames', async () => {
   const game = await session.start(HOUSE);
   await startedIdle(game);
   const setUp = await game.eval(async (t) => {
@@ -156,29 +167,6 @@ test('snow: the shade, a snowflake every 37 frames up to 16, each falling tDelta
   }
   expect(falls).toBeGreaterThan(20);
 
-  // A flake on screen is drawn as is (ST_OAM_OBJ_NORMAL), in the weather palette through the shade's GAMMA_ALT row
-  const drawn = await game.eval(async (t) => {
-    const out: { shown: number[]; sprite: number[] }[] = [];
-    for (let tries = 0; tries < 30 && out.length < 4; tries++) {
-      const oam = t.weatherSprites()!.sprites.filter((o) => o.x >= 0 && o.y >= 0 && o.x < 232 && o.y < 152);
-      if (!oam.length) {
-        await t.waitFrames(1);
-        continue;
-      }
-      // the flake's opaque pixel nearest its centre, as the probe has it now; checked against the drawn frame after the read
-      const o = oam[0];
-      let pt: [number, number] | undefined;
-      for (let y = 0; y < 8 && !pt; y++) for (let x = 0; x < 8 && !pt; x++) if (t.weatherSprites(o.x + x, o.y + y)!.pixel) pt = [o.x + x, o.y + y];
-      if (!pt) continue;
-      const shown = await t.screenPixel(pt[0], pt[1]);
-      const p = t.weatherSprites(pt[0], pt[1], undefined, true)!.pixel;
-      if (p && !p.blend) out.push({ shown, sprite: p.rgb });
-    }
-    return out;
-  });
-  expect(drawn.length).toBeGreaterThan(0);
-  for (const d of drawn) d.shown.forEach((v, c) => expect(Math.abs(v - d.sprite[c]), `${d.shown} for ${d.sprite}`).toBeLessThanOrEqual(3));
-
   // The finish: a flake destroyed every 37 frames (Snow_Finish), then WEATHER_NONE and the shade back to 0
   const finish = await game.eval(async (t) => {
     const counts: { count: number; frame: number }[] = [];
@@ -199,8 +187,41 @@ test('snow: the shade, a snowflake every 37 frames up to 16, each falling tDelta
   expect(finish.w.palette).toEqual(finish.w.unfaded);
 });
 
+test('a snowflake is drawn from its frame image as is (ST_OAM_OBJ_NORMAL), in the weather palette through the gamma row', async () => {
+  // One logic tick a render: a flake falls half a pixel a frame, so the pixel picked is still the flake's when it's read
+  const game = await session.start({ ...HOUSE, speed: 1 });
+  await startedIdle(game);
+  await game.eval((t) => t.doWeather('WEATHER_SNOW'));
+  await game.waitFor((t) => (t.weatherPtr().snowflakeSpriteCount as number) >= 2, { what: 'two snowflakes' });
+  const drawn = await game.eval(async (t) => {
+    const out: { shown: number[]; sprite: number[] }[] = [];
+    const misses: unknown[] = [];
+    for (let tries = 0; tries < 30 && out.length < 4; tries++) {
+      const oam = t.weatherSprites()!.sprites.filter((o) => o.x >= 0 && o.y >= 0 && o.x < 232 && o.y < 152);
+      if (!oam.length) {
+        await t.waitFrames(1);
+        continue;
+      }
+      // the flake's opaque pixel nearest its centre, as the probe has it now; checked against the drawn frame after the read
+      const o = oam[0];
+      let pt: [number, number] | undefined;
+      for (let y = 0; y < 8 && !pt; y++) for (let x = 0; x < 8 && !pt; x++) if (t.weatherSprites(o.x + x, o.y + y)!.pixel) pt = [o.x + x, o.y + y];
+      if (!pt) continue;
+      const shown = await t.screenPixel(pt[0], pt[1]);
+      const p = t.weatherSprites(pt[0], pt[1], undefined, true)!.pixel;
+      if (p && !p.blend) out.push({ shown, sprite: p.rgb });
+      else misses.push({ pt, drawnOam: t.weatherSprites(undefined, undefined, undefined, true)!.sprites.filter((d) => Math.abs(d.x - pt![0]) < 12 && Math.abs(d.y - pt![1]) < 12).map((d) => [d.id, d.x, d.y, d.image]) });
+    }
+    return { out, misses };
+  });
+  expect(drawn.out.length, JSON.stringify(drawn.misses.slice(0, 5))).toBeGreaterThan(0);
+  for (const d of drawn.out) d.shown.forEach((v, c) => expect(Math.abs(v - d.sprite[c]), `${d.shown} for ${d.sprite}`).toBeLessThanOrEqual(3));
+
+});
+
 test('volcanic ash: BLDALPHA (64, 63) as written, 20 blended 64x64 sprites, the blend (0, 16) → (16, 0) a step every 2 frames, the drift; a blended pixel on screen; the finish', async () => {
-  const game = await session.start(HOUSE);
+  // (one logic tick a render, for the pixels read back: the sprites move little between the pick and the read)
+  const game = await session.start({ ...HOUSE, speed: 1 });
   await startedIdle(game);
   const setUp = await game.eval(async (t) => {
     const blends: { reg: number[]; curr: number[]; sprites: number }[] = [];
@@ -263,9 +284,9 @@ test('volcanic ash: BLDALPHA (64, 63) as written, 20 blended 64x64 sprites, the 
 
   // A blended pixel: BLDALPHA (10, 9) (set as the weather idles at its blend), read back from the screen
   await game.eval((t) => t.weatherBlendCoeffs(10, 9));
-  const samples = await sampleBlend(game, grid(9));
+  const samples = await sampleBlend(game);
   expect(samples.every((s) => s.eva === 10 && s.evb === 9)).toBe(true);
-  expect(checkBlend(samples), 'ash pixels among the samples').toBeGreaterThan(5);
+  expect(checkBlend(samples), 'ash pixels among the samples').toBeGreaterThanOrEqual(8);
 
   // The finish: back to (0, 16) a step every 2 frames, the sprites destroyed in that frame, then BLDALPHA 0
   const finish = await game.eval(async (t) => {
@@ -290,7 +311,7 @@ test('volcanic ash: BLDALPHA (64, 63) as written, 20 blended 64x64 sprites, the 
 });
 
 test('sandstorm: gSandstormWeatherPalette, 20 sand sprites and 5 swirls, the blend (0, 16) → (16, 0) a step a frame, the drift and the swirls tick by tick; a blended pixel; the finish', async () => {
-  const game = await session.start(HOUSE);
+  const game = await session.start({ ...HOUSE, speed: 1 });
   await startedIdle(game);
   const setUp = await game.eval(async (t) => {
     const blends: { curr: number[]; sprites: number }[] = [];
@@ -370,11 +391,11 @@ test('sandstorm: gSandstormWeatherPalette, 20 sand sprites and 5 swirls, the ble
 
   // The colours are gSandstormWeatherPalette's (LoadCustomWeatherSpritePalette), blended with BLDALPHA (10, 9)
   await game.eval((t) => t.weatherBlendCoeffs(10, 9));
-  const samples = await sampleBlend(game, grid(9));
+  const samples = await sampleBlend(game);
   for (const s of samples.filter((x) => x.sprite)) {
     expect(SAND_PALETTE.some((c) => c.every((v, i) => Math.abs(v - s.sprite![i]) <= 1)), `${s.sprite} in gSandstormWeatherPalette`).toBe(true);
   }
-  expect(checkBlend(samples), 'sand pixels among the samples').toBeGreaterThan(5);
+  expect(checkBlend(samples), 'sand pixels among the samples').toBeGreaterThanOrEqual(8);
 
   // The finish: back to (0, 16) a step a frame, then the sprites destroyed, then WEATHER_NONE
   const finish = await game.eval(async (t) => {
