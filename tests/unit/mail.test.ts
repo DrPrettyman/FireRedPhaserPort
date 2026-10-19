@@ -1,10 +1,15 @@
-// mail_data.c (src/world/mail.ts): the mail slots, giving and taking a mon's mail, the mail species; the save.
+// mail_data.c (src/world/mail.ts): the mail slots, giving and taking a mon's mail, the mail species; the save;
+// player_pc.c's mailbox data (CountPCMail, PCMailCompaction, SELECTED_MAIL).
 
 import { describe, expect, it } from 'vitest';
 import { fromSaveData, toSaveData } from '../../src/state/saveData';
 import { GameState } from '../../src/state/GameState';
 import {
   ClearMailData,
+  CountPCMail,
+  gPlayerPcMenuManager,
+  PCMailCompaction,
+  selectedPcMail,
   GiveMailToMon,
   GiveMailToMon2,
   MailSpeciesToSpecies,
@@ -134,3 +139,42 @@ describe('mail data (mail_data.c)', () => {
   });
 });
 
+describe("the player's PC mailbox data (player_pc.c)", () => {
+  /** PC slot `i` (6 + i) holding `item` with words [i]. */
+  const putPcMail = (state: GameState, i: number, item: number) => Object.assign(state.mail[6 + i], { itemId: item, words: [i, ...new Array(8).fill(0xffff)] });
+
+  it('CountPCMail counts the PC slots 6-15 only; PCMailCompaction moves them to the front in order', () => {
+    const { state, d } = setup();
+    expect(CountPCMail(state)).toBe(0);
+    GiveMailToMon(state, state.party[0], d('ITEM_RETRO_MAIL')); // a party slot: not the mailbox's
+    putPcMail(state, 2, d('ITEM_BEAD_MAIL'));
+    putPcMail(state, 5, d('ITEM_WOOD_MAIL'));
+    putPcMail(state, 9, d('ITEM_DREAM_MAIL'));
+    expect(CountPCMail(state)).toBe(3);
+    PCMailCompaction(state);
+    expect(state.mail.slice(6).map((m) => m.itemId)).toEqual([d('ITEM_BEAD_MAIL'), d('ITEM_WOOD_MAIL'), d('ITEM_DREAM_MAIL'), 0, 0, 0, 0, 0, 0, 0]);
+    expect(state.mail.slice(6, 9).map((m) => m.words[0])).toEqual([2, 5, 9]);
+    expect(state.mail[0].itemId).toBe(d('ITEM_RETRO_MAIL'));
+  });
+
+  it('SELECTED_MAIL: PC slot cursorPos (the scroll) + itemsAbove (the row)', () => {
+    const { state, d } = setup();
+    for (let i = 0; i < 10; i++) putPcMail(state, i, d('ITEM_ORANGE_MAIL'));
+    Object.assign(gPlayerPcMenuManager, { cursorPos: 2, itemsAbove: 5 });
+    expect(selectedPcMail(state)).toBe(state.mail[6 + 7]);
+    Object.assign(gPlayerPcMenuManager, { cursorPos: 0, itemsAbove: 0 });
+  });
+
+  it('a version-11 save frees the party mail slots no party mon points at (a daycare mon lost its slot before 12)', () => {
+    const { state, d, mon, defines, pokemon } = setup();
+    GiveMailToMon(state, mon, d('ITEM_RETRO_MAIL')); // slot 0, held
+    state.mail[1].itemId = d('ITEM_WOOD_MAIL'); // slot 1: leaked
+    putPcMail(state, 0, d('ITEM_BEAD_MAIL')); // a PC slot stays
+    const data = JSON.parse(JSON.stringify(toSaveData(state)));
+    data.version = 11;
+    const fresh = new GameState(defines, [], pokemon, {});
+    fromSaveData(data, fresh);
+    expect(fresh.mail.map((m) => m.itemId).slice(0, 7)).toEqual([d('ITEM_RETRO_MAIL'), 0, 0, 0, 0, 0, d('ITEM_BEAD_MAIL')]);
+    expect(fresh.mail[1].words).toEqual(state.mail[1].words);
+  });
+});

@@ -4,6 +4,8 @@
   nickname and otName as raw decomp strings (with EOS `$`, encoded at runtime), species, ivs (HP, Atk, Def, Speed,
   SpAtk, SpDef as struct InGameTrade orders them), abilityNum, otId, conditions (cool, beauty, cute, smart,
   tough), personality, heldItem, mailNum, otGender (MALE / FEMALE), sheen, requestedSpecies; constants resolved.
+- mailMessages: sInGameTradeMailMessages (the same file), by mailNum: each message's easy chat words (EC_WORD_* and
+  EC_POKEMON(X) resolved), for GetInGameTradeMail.
 """
 
 import json
@@ -11,6 +13,7 @@ import re
 
 from extract import c_value, parse_defines
 from extract_battle import c_array_body
+from extract_easy_chat import ec_value, strip_comments
 from extract_gfx import firered_only
 from extract_menus import by_index, designated_entries
 
@@ -36,8 +39,11 @@ def extract_trades(decomp, out):
     defines = parse_defines(decomp)
     text = firered_only((decomp / "src/data/ingame_trades.h").read_text(encoding="utf-8"))
     trades = by_index(designated_entries(c_array_body(text, "sInGameTrades")), defines, lambda v: trade_fields(v, defines))
-    (out / "trades.json").write_text(json.dumps({"ingameTrades": trades}, ensure_ascii=False, separators=(",", ":")))
-    print(f"  {len(trades)} in-game trades")
+    mail_body = strip_comments(c_array_body(text, "sInGameTradeMailMessages"))
+    mail_messages = [[ec_value(w, defines) for w in row.split(",") if w.strip()] for row in re.findall(r"\{([^{}]*)\}", mail_body)]
+    data = {"ingameTrades": trades, "mailMessages": mail_messages}
+    (out / "trades.json").write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")))
+    print(f"  {len(trades)} in-game trades, {len(mail_messages)} trade mail message(s)")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 // In-game trades (trade_scene.c's in-game path; the scene itself is menus/tradeScene.ts) and the Name Rater
 // (field_specials.c).
-// The trade data is sInGameTrades (src/data/ingame_trades.h) through tools/extract_trades.py (public/gen/trades.json),
-// set once at boot with initInGameTrades. No Phaser here: SPECIALS spreads TRADE_SPECIALS in.
+// The trade data is sInGameTrades and sInGameTradeMailMessages (src/data/ingame_trades.h) through
+// tools/extract_trades.py (public/gen/trades.json), set once at boot with initInGameTrades. No Phaser here: SPECIALS spreads TRADE_SPECIALS in.
 
 import { loadGfx } from '../gba/gfx';
 import { SetMainCallback2 } from '../gba/main';
@@ -10,6 +10,7 @@ import type { Pokemon } from '../pokemon/Pokemon';
 import type { GameState } from '../state/GameState';
 import type { Special } from './specials';
 import { HelpSystem_Disable } from '../ui/helpSystemContext';
+import { ClearMailStruct, GetMonMailId, GiveMailToMon2, newMail, type Mail } from '../world/mail';
 
 /** struct InGameTrade (trade_scene.c), as trades.json has it. Names are raw decomp strings ending in `$`. */
 export interface InGameTrade {
@@ -33,13 +34,21 @@ export interface InGameTrade {
 
 export interface TradesData {
   ingameTrades: InGameTrade[];
+  /** sInGameTradeMailMessages: by mailNum, the easy chat words */
+  mailMessages: number[][];
 }
 
 /** sInGameTrades, set once at boot (Assets.init → OverworldScene). */
 let sInGameTrades: InGameTrade[] = [];
+/** sInGameTradeMailMessages */
+let sInGameTradeMailMessages: number[][] = [];
+
+/** gLinkPartnerMail (trade.c): the trade partner's mails; an in-game trade's mon brings its mail in slot 0. */
+export const gLinkPartnerMail: Mail[] = [];
 
 export function initInGameTrades(data: TradesData): void {
   sInGameTrades = data.ingameTrades;
+  sInGameTradeMailMessages = data.mailMessages ?? [];
 }
 
 /** Friendship of a mon received in a trade (TradeMons). */
@@ -83,8 +92,8 @@ export function GetTradeSpecies(state: GameState): number {
  * CreateInGameTradePokemonInternal: the trade's mon into gEnemyParty[0] at the level of the player's mon in
  * `playerSlot`, with the trade's fixed personality, OT id, IVs, nickname, OT name and gender, ability and held
  * item, met in a trade (METLOC_IN_GAME_TRADE). CreateMon still rolls random IVs before they're overwritten, as
- * on the GBA. Not modelled: the contest conditions and sheen (Pokémon have no such fields) and the mail
- * (GetInGameTradeMail into gLinkPartnerMail): a mail item is held without a message.
+ * on the GBA. A mail item comes with its message (GetInGameTradeMail into gLinkPartnerMail[0], the mon's mail id
+ * 0: TradeMons gives it a slot). Not modelled: the contest conditions and sheen (Pokémon have no such fields).
  */
 export function CreateInGameTradePokemonInternal(state: GameState, playerSlot: number, inGameTradeIdx: number): Pokemon {
   const trade = inGameTrade(inGameTradeIdx);
@@ -106,8 +115,12 @@ export function CreateInGameTradePokemonInternal(state: GameState, playerSlot: n
   mon.otGender = trade.otGender === d.require('FEMALE') ? 'female' : 'male';
   mon.abilityNum = trade.abilityNum;
   // SetMonData(MON_DATA_BEAUTY / CUTE / COOL / SMART / TOUGH / SHEEN): contest stats aren't modelled
+  const mailNum = 0;
   if (trade.heldItem !== d.require('ITEM_NONE')) {
-    // ItemIsMail: GetInGameTradeMail + MON_DATA_MAIL aren't modelled (no mail); the item is held either way
+    if (isMailItem(state, trade.heldItem)) {
+      gLinkPartnerMail[0] = GetInGameTradeMail(state, trade);
+      mon.mail = mailNum; // SetMonData(MON_DATA_MAIL)
+    }
     mon.heldItem = trade.heldItem;
   }
   data.calculateStats(mon);
@@ -115,16 +128,50 @@ export function CreateInGameTradePokemonInternal(state: GameState, playerSlot: n
   return mon;
 }
 
+/** ItemIsMail */
+function isMailItem(state: GameState, itemId: number): boolean {
+  return itemId >= state.defines.require('ITEM_ORANGE_MAIL') && itemId <= state.defines.require('ITEM_RETRO_MAIL');
+}
+
 /**
- * TradeMons(playerPartyIdx, partnerPartyIdx): swaps the player's mon with gEnemyParty[partnerPartyIdx]; the mon
- * received has 70 friendship (unless it's an egg) and goes in the Pokédex. No mail is modelled, so none moves.
+ * GetInGameTradeMail: the trade's message (sInGameTradeMailMessages[mailNum]) from its OT (the name, the OT id
+ * big-endian, as the C writes it), on the offered species, with the trade's mail item. The name's bytes past its EOS
+ * are the C's uninitialised stack: EOS here.
+ */
+export function GetInGameTradeMail(state: GameState, trade: InGameTrade): Mail {
+  const d = state.defines;
+  const mail = newMail(d);
+  const words = sInGameTradeMailMessages[trade.mailNum] ?? [];
+  for (let i = 0; i < d.require('MAIL_WORDS_COUNT'); i++) mail.words[i] = words[i] ?? 0xffff;
+  const otName = state.pokemon.encodeName(trade.otName.replace(/\$$/, ''));
+  const size = d.require('PLAYER_NAME_LENGTH') + 1;
+  mail.playerName = new Array<number>(size).fill(0xff);
+  for (let i = 0; i < size && i < otName.length && otName[i] !== 0xff; i++) mail.playerName[i] = otName[i]; // StringCopy
+  const otId = trade.otId >>> 0;
+  mail.trainerId = [(otId >>> 24) & 0xff, (otId >>> 16) & 0xff, (otId >>> 8) & 0xff, otId & 0xff];
+  mail.species = trade.species;
+  mail.itemId = trade.heldItem;
+  return mail;
+}
+
+/**
+ * TradeMons(playerPartyIdx, partnerPartyIdx): swaps the player's mon with gEnemyParty[partnerPartyIdx]. The mail the
+ * player's mon held is cleared from its slot (it leaves with the mon); the mon received has 70 friendship (unless
+ * it's an egg), holds its partner mail in a party mail slot (GiveMailToMon2 from gLinkPartnerMail) and goes in the
+ * Pokédex.
  */
 export function TradeMons(state: GameState, playerPartyIdx: number, partnerPartyIdx: number): void {
+  const d = state.defines;
+  const MAIL_NONE = d.require('MAIL_NONE');
   const playerMon = state.party[playerPartyIdx];
+  const playerMail = GetMonMailId(d, playerMon);
   const partnerMon = state.enemyParty[partnerPartyIdx];
+  const partnerMail = GetMonMailId(d, partnerMon);
+  if (playerMail !== MAIL_NONE) ClearMailStruct(d, state.mail[playerMail]);
   state.party[playerPartyIdx] = partnerMon;
   state.enemyParty[partnerPartyIdx] = playerMon;
   if (!partnerMon.isEgg) partnerMon.friendship = TRADE_FRIENDSHIP;
+  if (partnerMail !== MAIL_NONE) GiveMailToMon2(state, partnerMon, gLinkPartnerMail[partnerMail]);
   UpdatePokedexForReceivedMon(state, playerPartyIdx);
 }
 

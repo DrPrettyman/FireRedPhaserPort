@@ -13,7 +13,7 @@ import type { ItemSlot } from './Bag';
 import type { GameState, PlayerLocation, RoamerSave, WarpData } from './GameState';
 import type { PlayTime } from './playTime';
 import type { BoxPokemon } from './PokemonStorage';
-import type { DaycareMon } from '../world/daycare';
+import type { DayCareMail, DaycareMon } from '../world/daycare';
 import type { TrainerTowerRecord } from './trainerTowerRecord';
 import type { FameCheckerSaveData } from './fameChecker';
 import type { Mail } from '../world/mail';
@@ -23,9 +23,9 @@ import type { Mail } from '../world/mail';
  * are brought up to date by `upgradeSave` (version 1 had no gameStats, version 2 no options.sound, version 3 had
  * daycareStepCounter instead of daycare and no route5DayCareMon, version 4 no easyChat, version 5 no savedMusic,
  * version 6 no weather, version 7 no trainerTower, version 8 no gcnLinkFlags, version 9 no fameChecker,
- * version 10 no mail).
+ * version 10 no mail, version 11 no daycare mail).
  */
-export const SAVE_VERSION = 11;
+export const SAVE_VERSION = 12;
 
 /** The localStorage key of the one save slot. */
 export const SAVE_STORAGE_KEY = 'firered-phaser:save';
@@ -68,6 +68,8 @@ export type MonSave = Pokemon;
 /** struct DaycareMon (world/daycare.ts). */
 export interface DaycareMonSave {
   mon: BoxMonSave | null;
+  /** struct DayCareMail; since version 12 (absent: none, as every daycare mon of an older save) */
+  mail?: DayCareMail;
   steps: number;
 }
 /** The Easy Chat words of gSaveBlock1 (GameState's fields of the same names). */
@@ -189,11 +191,13 @@ function monSave(mon: Pokemon): MonSave {
 }
 
 function daycareMonSave(m: DaycareMon): DaycareMonSave {
-  return { mon: m.mon && boxMonSave(m.mon), steps: m.steps };
+  return { mon: m.mon && boxMonSave(m.mon), ...(m.mail && { mail: clone(m.mail) }), steps: m.steps };
 }
 
 function loadDaycareMon(m: DaycareMon, saved: DaycareMonSave | undefined): void {
   m.mon = clone(saved?.mon ?? null);
+  if (saved?.mail) m.mail = clone(saved.mail);
+  else delete m.mail;
   m.steps = saved?.steps ?? 0;
 }
 
@@ -393,6 +397,13 @@ export function upgradeSave(data: SaveData): SaveData {
   if (data?.version === 9) data = { ...data, version: 10 };
   // No mail: fromSaveData keeps the new-game slots (ClearMailData); no mon held mail.
   if (data?.version === 10) data = { ...data, version: 11 };
+  // No daycare mail: a mon left in a daycare before version 12 kept its mail item but lost its slot, which stayed
+  // taken; free the party mail slots (0-5) no party mon points at, so they can be used again.
+  if (data?.version === 11) {
+    const held = new Set(data.party.map((m) => m.mail));
+    const mail = data.mail?.map((m, i) => (i < 6 && m.itemId !== 0 && !held.has(i) ? { ...m, itemId: 0 } : m));
+    data = { ...data, version: 12, ...(mail && { mail }) };
+  }
   return data;
 }
 
