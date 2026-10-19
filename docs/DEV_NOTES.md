@@ -1440,6 +1440,15 @@ or extend them:
   SE_M_STRENGTH) are live. Bike: GetOnOffBike / ForcePlayerOntoBike (world/bike.ts); surf: FldEff_UseSurf
   (world/surf.ts) and CreateStopSurfingTask (world/playerAvatar.ts). The Seagallop ferry: Overworld_FadeOutMapMusic,
   then Task_Seagallop_2 waits for BGMusicStopped. Scripts: `playbgm` (save flag), `savebgm`, `fadedefaultbgm`.
+- **Ambient cries** (overworld.c:1131-1191, field_tasks.c's Task_RunTimeBasedEvents): ChooseAmbientCrySpecies in
+  `onMapLoaded` (LoadMapFromWarp / LoadMapFromCameraTransition, before the roamer moves) and `continueSavedGame`
+  (Overworld_ResetStateOnContinue) calls the host's `getLocalWildMon` (WildEncounters.getLocalWildMon: Random() rolls,
+  so a map load with a wild header moves the RNG as on the GBA). OverworldScene keeps the task's data
+  (`ambientCry`: state, delayCounter), zeroed on every map load and in `resumeMap` (ResumeMap's new task,
+  ResetFieldTasksArgs), and runs UpdateAmbientCry after the field tasks while the field is free: the first cry
+  1200-3599 frames in, then one every 1200-2399 (PlayCry_NormalNoDucking, pan -44..43, volume 50-79,
+  CRY_PRIORITY_AMBIENT; a water mon only while the player is on water). Tests: `tests/unit/overworldMusic.test.ts`
+  (the rolls against an independent LCG, water, KEEP / STOP), `tests/e2e/audioSweep.test.ts` (Route 1's cries).
 - **Timing:** a warp into a map with other music takes 16 × 2 + 1 frames (indoors) or 16 × 4 + 1 (outdoors) from its
   fade's start, more than the screen fade; the same song: no fade, no restart. A connection fades at speed 8 and
   MapMusicMain starts the new song 128 frames after the fade (on the bike: a crossfade, 4 out and 4 in).
@@ -1491,7 +1500,11 @@ or extend them:
   SOUND_PAN_TARGET for the foe's), CONTROLLER_PLAYSE (panned by side, except the Oak/Old Man controller's plain
   PlaySE), PLAYFANFARE, PLAYBGM (the player's only; the others just complete), FAINTINGCRY (player / opponent:
   PlayCry_ByMode(species, -25 / 25, CRY_MODE_FAINT); Oak/Old Man and Safari: PlayCry_Normal(species, 25)), Cmd55's
-  FadeOutMapMusic(5).
+  FadeOutMapMusic(5), PlayerHandleCmd23's BattleStopLowHpSound.
+- **IsBattleSEPlaying** (battle/gfx.ts): the player's and the opponent's MOVEANIMATION, STATUSICONUPDATE,
+  STATUSANIMATION and BATTLEANIMATION handlers return at once (and run again the next frame from XBufferRunCommand)
+  while an SE plays on SE1 / SE2, for up to 30 calls, then stop both players (as the C; the Oak/Old Man and Safari
+  controllers don't wait). `tests/e2e/audioSweep.test.ts` holds PSYCHIC's anim behind a long SE_EXP.
 - **Waits:** Intro_WaitForShinyAnimAndHealthbox (player, opponent) and SwitchIn_HandleSoundAndEnd hold until
   `!IsCryPlayingOrClearCrySongs()` (the send-out cry), then put the BGM back to 256 (m4aMPlayContinue in multi
   battles). The Oak/Old Man intro doesn't wait: it starts Task_PlayerController_RestoreBgmAfterCry (exported by
@@ -1515,9 +1528,8 @@ or extend them:
   level-100 mon: the C skips it there too), the level-up's HandleLowHpMusicChange (battle/gfx.ts), the yes / no
   boxes' SE_SELECT, VARIOUS_WAIT_FANFARE (`waitfanfare`, only the Poké Flute's script uses it); `playse`, `fanfare`
   and `playfaintcry` emit to the controllers, as in the C.
-- **The hooks:** BattleUi's `playSE / playCry / playBGM / playFanfare` pass through to sound.ts (PlayCry_Normal(species,
-  0): no mode or pan) for the callers not converted yet; new code calls sound.ts (AUDIO_PLAN.md decision 21: W-sound
-  8 deletes them). MainMenuScene's and tradeScene's BattleUi stand-ins keep no-op hooks.
+- **No hooks:** BattleUi has no sound hooks (W-sound 8 deleted the `play*` pass-throughs, AUDIO_PLAN.md decision 21):
+  battle code calls gba/sound.ts directly, with the C's cry modes and pans.
 - **After the battle:** returnToField's Overworld_PlaySpecialMapMusic brings the map's music back (the battle song is
   the map music state's current song, so it always differs). The level-up fanfare pauses the victory music for 80
   frames but holds nothing: BattleScript_LevelUp has no `waitfanfare`.
@@ -1531,8 +1543,7 @@ or extend them:
   DOUBLES-then-NORMAL pair and its BGM volume 128) and battle_main.c's wild-mon cry (SpriteCB_MoveWildMonToRight:
   PlayCry_Normal(species, 25)); battle_gfx_sfx_util.c's low HP beep (HandleLowHpMusicChange: SE_LOW_HEALTH on SE3,
   stopped with m4aSongNumStop; BattleStopLowHpSound before the victory music; HandleBattleLowHpMusicChange, called
-  by the party menu after a healing item) and IsBattleSEPlaying (the controllers' SE wait before an anim; not
-  called yet, see DEVIATIONS). `battle/battleInterface.ts`: the party trays' SE_BALL_TRAY_ENTER / _BALL / _EXIT,
+  by the party menu after a healing item) and IsBattleSEPlaying (the controllers' SE wait before an anim, see "the controllers"). `battle/battleInterface.ts`: the party trays' SE_BALL_TRAY_ENTER / _BALL / _EXIT,
   panned. pokeball.c's throw path (SpriteCB_BallThrow*) has no caller and isn't ported; the real ball throw's SEs
   are battle_anim_special.c's (`battle/anim/special.ts`). Tests: `tests/e2e/audioBattleBalls.test.ts` (send-out
   and wild cries with pan / mode, a weak cry, the trays, the beep starting on a hit / at a send-out and stopping on
@@ -1550,8 +1561,8 @@ or extend them:
   `menus/eggHatch.ts` (daycare.c): VAR_0x8005 = GetCurrentMapMusic(), Task_EggHatchPlayBGM (StopMapMusic, then
   PlayBGM MUS_EVOLUTION_INTRO, MUS_EVOLUTION 60 frames later), SE_BALL, SE_EGG_HATCH, the cry, the MUS_EVOLVED
   fanfare. `menus/tradeScene.ts` (trade_scene.c's wireless path): cachedMapMusic + PlayNewMapMusic(MUS_EVOLUTION) at
-  STATE_START, PlayNewMapMusic(cachedMapMusic) at the end, the two cries, the balls' / signal's SEs, MUS_EVOLVED; its
-  stand-in BattleUi's `playSE` is PlaySE (the ball open particles' SE_BALL_OPEN).
+  STATE_START, PlayNewMapMusic(cachedMapMusic) at the end, the two cries, the balls' / signal's SEs, MUS_EVOLVED; the ball
+  open particles' SE_BALL_OPEN is battle_anim_special.c's PlaySE (its stand-in BattleUi has no sound hooks).
 - **m4aMPlayAllStop:** `gba/sound.ts` wraps the engine's and reports a `stop` per player that had a live track.
 - **Map music after script screens:** `OverworldScene.runScreenFromScript` calls Overworld_PlaySpecialMapMusic when
   the screen left neither gFieldCallback nor gFieldCallback2: every screen it runs returns through a callback that
@@ -1575,8 +1586,8 @@ or extend them:
   the SE_SELECTs, SE_BALL_TRAY_ENTER and the NoDucking cries (FRLG's Pokédex has no SE_DEX_* sounds). The title
   screen (MUS_TITLE, the Charizard cry, FadeOutMapMusic(10) / FadeOutBGM(4)), the trainer card (SE_CARD_*, the
   opening's IsSEPlaying wait), the bag and item use (item_menu.c's calls but Teachy TV's, the bike bell, the Poké
-  Flute's fanfare and WaitFanfare, SE_REPEL's wait) and the main menu were live already; MainMenuScene's stand-in
-  BattleUi plays Oak's speech's ball-open SE_BALL_OPEN through PlaySE. Not ported: Task_MysteryGiftError's SE_SELECT
+  Flute's fanfare and WaitFanfare, SE_REPEL's wait) and the main menu were live already; Oak's speech's ball-open
+  SE_BALL_OPEN is battle_anim_special.c's PlaySE. Not ported: Task_MysteryGiftError's SE_SELECT
   (no Mystery Gift), the berry fix program's m4aMPlayAllStop (REVISION 0), Teachy TV's bag tutorials.
 - **Tests:** `tests/e2e/audioScenes.test.ts`: a Rare Candy evolution (the scene's stop of MUS_ROUTE1, Charmander's
   cry, MUS_EVOLUTION_INTRO, MUS_EVOLUTION exactly the intro's length later, the four sparkle SEs, SE_EXP and the stop

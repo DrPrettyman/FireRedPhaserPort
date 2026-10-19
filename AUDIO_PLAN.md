@@ -774,6 +774,21 @@ Waves: 4a, 5a, 6b, 7a first (4a starts the critical path 4a → 4b → W-ref 2);
 once 4a merged; then W-sound 8 and W-ref 2. At most four at once; the units that lengthen waits take turns on the
 full suite through `/Users/joshua/Coding/PokemonProjects/.e2e-full.lock` (decision 19), and so does the merger.
 
+**Batch D result** (W-sound 8, the sweep): every call site this plan lists plays its sound; BattleUi's `play*` hooks
+are gone; the ambient cries, the controllers' IsBattleSEPlaying and PlayerHandleCmd23's BattleStopLowHpSound were
+the last ports; the other "silent" entries in docs/DEVIATIONS.md were stale (their screens already made the C's
+calls). What stays deferred, one line each (docs/DEVIATIONS.md keeps the approximations, "Not in this plan" the rest):
+- Field weather's SE3 loops (SE_RAIN, SE_THUNDERSTORM, SE_DOWNPOUR) and PlayRainStoppingSoundEffect: no field weather.
+- The help system's BGM halving: no help system.
+- The quest log's playback (its muted BGM, PlaySE and fanfare skips, PlayCry_Script's skip): no quest log.
+- Link play: the cable club / Union Room / wireless minigames, the link trade's FadeOutBGM / IsBGMStopped wait,
+  SetBattleEndCallbacks' m4aSongNumStop(SE_LOW_HEALTH), ReloadSave's SetPokemonCryStereo, the Pokédude controller.
+- Screens not ported: intro.c's movie, Teachy TV, the e-Reader and Mystery Gift, the berry fix program.
+- Field pieces not ported: ShakeScreen, LoopWingFlapSound and Birth Island's Deoxys (postgame), escalators, the Acro
+  Bike and secret base mats, the mailbox, the item-use anim (pokemon_special_anim.c), the level-up stripes.
+- Agreed GBA-exact / synth deviations: the 60 Hz frame (output 13,440 Hz, 0.46% high), the PSG synth's sampling,
+  the sound tasks outside gTasks (docs/DEVIATIONS.md, "Audio output", "The PSG synth", "sound.c", "Cries").
+
 ### Shared building blocks and owners
 
 - The JSON shapes in section 4: fixed here; W-audiodata owns any change and says so in its PR.

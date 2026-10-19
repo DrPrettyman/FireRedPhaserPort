@@ -62,13 +62,6 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Raise-hand movement types (entities/NpcBrain.ts, MOVEMENT_TYPE_RAISE_HAND_AND_*): leaving one zeroes the
     sprite's x2/y2 (the GBA keeps them unless ResetMovementOfRematchableTrainers zeroes them); a frozen jumper
     (any, not only `lock`'s selected object) lands before it holds still.
-  - Battles: every battle file calls gba/sound.ts with the C's pans and cry modes (BattleScene's `ui.play*`
-    pass-throughs, AUDIO_PLAN.md decision 21, are left for W-sound 8 to delete), and the waits (the controllers'
-    intro and switch-in cries, Task_PlayerController_RestoreBgmAfterCry, the anims' SE waits, the sound tasks'
-    cries, the quiet BGM of Sing / Perish Song / Grass Whistle, the caught jingle) time as on the GBA. The
-    controllers don't call IsBattleSEPlaying yet (battle/gfx.ts has it: a move / status anim doesn't wait up to 30
-    frames for an SE to end, and doesn't stop SE1 / SE2 after), and PlayerHandleCmd23 doesn't call
-    BattleStopLowHpSound (controller files, W-sound 8).
   - Field sounds: puddles: UpdateFeetInFlowingWaterFieldEffect's SE_PUDDLE checks the splash's `invisible`, which
     the port never sets for an object off screen (UpdateObjectEventSpriteInvisibility's bounds check).
   - Audio output (audio/output.ts, audio/worklet.ts): the PCM plays at 224 samples per 60 Hz frame, 13,440 Hz,
@@ -327,8 +320,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     destination's header before its TryFadeOutOldMapMusic (a frame or two later than on the GBA, behind the black
     screen) and has no WarpFadeOutScreen (the screen is black already). Of the screens that come back through FieldCB_ContinueScriptHandleMusic,
     SelectMoveDeleterMove's field callback (menus/partyMenuSpecials.ts) plays no Overworld_PlaySpecialMapMusic (the
-    deleter never changes the map music, so nothing is missed). The ambient cries (ChooseAmbientCrySpecies,
-    UpdateAmbientCry, PlayAmbientCry) aren't ported. Cable club /
+    deleter never changes the map music, so nothing is missed). The ambient cries' Task_RunTimeBasedEvents is a step
+    of the field's tick after its tasks (OverworldScene.tickField); it counts while the field is free as the port
+    sees it (no script, overlay, field-task lock, trainer approach, warp or map load in flight), so a connection's
+    asynchronous load (no GBA frames) doesn't count down. Cable club /
     union room / link-return warps (DoCableClubWarp, ReturnFromLinkRoom, DoUnionRoomWarp) aren't ported (no link
     play).
   - `fadescreen` is an alpha overlay, not a palette blend: same ramp and timing, not bit-identical; weather palettes ignored.
