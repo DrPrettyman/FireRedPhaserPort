@@ -4533,3 +4533,9 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - CLAUDE.md (progress docs), docs/WORKFLOW.md (section 1 step 6) and the get-on skill now put new plans in
   `docs/plans/` and add them to the README's table.
 - Verified: docs only; every relative link to a plan resolves.
+
+### Project renamed to FireRedPhaserPort
+
+- The GitHub repo and the local folder are renamed from PhaserRebuild to FireRedPhaserPort
+  (`/Users/joshua/Coding/PokemonProjects/FireRedPhaserPort`). The get-on skill's sub-coordinator prompt had the only
+  absolute path; it's updated. GitHub redirects the old URL.

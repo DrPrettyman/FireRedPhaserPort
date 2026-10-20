@@ -51,7 +51,7 @@ A permission a sub-coordinator or worker was denied is never yours to retry: sto
 ## Sub-coordinator prompt
 
 > You are the sub-coordinator for batch N of a FireRed port to Phaser 3 + TypeScript. The repo is
-> /Users/joshua/Coding/PokemonProjects/PhaserRebuild (the main checkout: never switch its branch or edit it; work
+> /Users/joshua/Coding/PokemonProjects/FireRedPhaserPort (the main checkout: never switch its branch or edit it; work
 > in worktrees next to it). The decomp is /Users/joshua/Coding/PokemonProjects/pret/firered.
 >
 > Run one batch of docs/WORKFLOW.md, start to finish: read CLAUDE.md, STATUS.md and docs/WORKFLOW.md first.
