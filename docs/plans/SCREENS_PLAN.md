@@ -1,5 +1,7 @@
 # Screens and items: plan for what a player notices is missing
 
+**Status: Done: batches 1-2, PRs #30-#54.** Plans index: [README.md](README.md).
+
 Status as of 2026-10-17 (master at `abcb7d0`; batch 2 planned at `64e4565`). MAIN_PATH_PLAN.md is done; this plan picks up STATUS.md "Next up":
 the Pokédex screen, and the bag items that still say "not implemented".
 

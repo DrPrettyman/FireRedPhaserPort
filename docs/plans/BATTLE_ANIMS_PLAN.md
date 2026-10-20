@@ -1,5 +1,7 @@
 # Battle animations: plan to finish
 
+**Status: Done: PRs #2, #6-#13.** Plans index: [README.md](README.md).
+
 **Done (2026-10-16): every battle_anim_*.c file is ported and all 397 scripts run.** Steps 2-3 ran as eight
 workers in two batches (PRs #6-#13). Kept for the record; the one open question (healthbox corner lines) is in
 STATUS.md "Loose ends".

@@ -21,6 +21,8 @@ FireRed rebuilt in Phaser 3 + TypeScript (Vite). See README.md for setup and arc
   - docs/DEV_NOTES.md: add or update the entry for the subsystem (where it lives, how to hook in, how to test it).
   - docs/DEVIATIONS.md: add placeholders/approximations you leave behind; remove the ones you fix. Deliberate QOL
     changes go in its own section there.
+  - docs/plans/: one plan per big piece of work (README.md lists them with their status); update the plan's
+    status and batch results as work lands.
   - docs/LOG.md: append an entry (what changed, fixes found on the way, how it was verified). It's long: search it,
     don't read it end to end.
 

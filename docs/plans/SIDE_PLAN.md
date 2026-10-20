@@ -1,5 +1,7 @@
 # Side content: plan for what a player meets off the main path
 
+**Status: Done: batches 1-3, PRs #56-#82.** Plans index: [README.md](README.md).
+
 The main path is done ([MAIN_PATH_PLAN.md](MAIN_PATH_PLAN.md)) and the screens a player opens from the start menu
 are in ([SCREENS_PLAN.md](SCREENS_PLAN.md)). This plan takes the side content a player meets on the way to the
 Hall of Fame, ordered by how often a player meets it: Prof. Oak's Pokédex rating, the move tutors / deleter /

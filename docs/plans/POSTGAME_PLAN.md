@@ -1,5 +1,7 @@
 # The postgame: plan for what a player meets after the Hall of Fame
 
+**Status: Done: one batch, PRs #114-#126.** Plans index: [README.md](README.md).
+
 The main path is done ([MAIN_PATH_PLAN.md](MAIN_PATH_PLAN.md)), so is the side content before the Hall of Fame
 ([SIDE_PLAN.md](SIDE_PLAN.md)) and the audio ([AUDIO_PLAN.md](AUDIO_PLAN.md)). This plan takes the postgame, in the
 order a player meets it: back to One Island (Oak's National Dex, Celio asks for the Ruby), Kindle Road and Mt. Ember

@@ -29,7 +29,7 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
 
 ## Next up
 
-**Audio is done** ([AUDIO_PLAN.md](AUDIO_PLAN.md) complete: batches A-D, PRs #84-#111). `npm run dev`, press any
+**Audio is done** ([AUDIO_PLAN.md](docs/plans/AUDIO_PLAN.md) complete: batches A-D, PRs #84-#111). `npm run dev`, press any
 key (M mutes): the m4a engine (`src/audio/`: sequencer, DirectSound mixer, CgbSound and the PSG synth) plays every
 song, SE and cry, checked against the ROM in mGBA (W-ref 2: the DirectSound mix, the CgbChannels and the sound
 registers are identical frame by frame on 31 songs, SEs and cries; the listening page is in
@@ -38,14 +38,14 @@ sound: the field, map music (saved), the battle (music in the transition, the co
 HP beep, the anims' panned SEs and waits), the scenes (evolution, eggs, trades, Hall of Fame, credits, Pokédex,
 title), the ambient cries. Every audio wait times as on the GBA. Deferred: the quest log and link play (AUDIO_PLAN.md "Batch D result").
 
-**The postgame is done** ([POSTGAME_PLAN.md](POSTGAME_PLAN.md) complete in one batch, batch 10: PRs #114-#125). The
+**The postgame is done** ([POSTGAME_PLAN.md](docs/plans/POSTGAME_PLAN.md) complete in one batch, batch 10: PRs #114-#125). The
 42 postgame gaps are ported: braille, field weather (FRLG's Shade and horizontal fog: Viridian Forest, Pokémon Tower,
 the Mansion, Berry Forest, the Lost Cave, the Tanoby chambers, Navel Rock), Icefall Cave's ice (field_tasks.c step
 callbacks, `warphole`), the Heracross record, Resort Gorgeous, SetPostgameFlags, the Trainer Tower (trainer_tower.c,
 its battles, the records board, battle_records.c), ShakeScreen, the event islands (the tickets from the Hall of
 Fame as in REVISION 0xA, a deliberate QOL change; Lugia, Ho-Oh, the Deoxys triangle). Save version 9.
 
-**The single-player gaps are closed** ([GAPS_PLAN.md](GAPS_PLAN.md) complete in batch 11: PRs #127-#134): the map
+**The single-player gaps are closed** ([GAPS_PLAN.md](docs/plans/GAPS_PLAN.md) complete in batch 11: PRs #127-#134): the map
 preview screens (map_preview_screen.c: every cave and forest banner), the L/R help system (help_system.c,
 help_system_util.c: the menus, the text, the BGM halving, the contexts at every ported screen), the intro movie
 (intro.c: the copyright screen, the Game Freak scene, Gengar vs Nidorino, the title screen's timeout back to it), and
@@ -53,17 +53,17 @@ a Kanto postgame sweep (Cerulean Cave through Mewtwo's battle, every legendary's
 IsNationalPokedexEnabled now checks all three of the C's conditions everywhere; the Elite Four rematch teams and
 Kanto's postgame NPCs checked).
 
-**Mail, the Fame Checker and Teachy TV are done** ([FIELD_ITEMS_PLAN.md](FIELD_ITEMS_PLAN.md) complete in batch 12:
+**Mail, the Fame Checker and Teachy TV are done** ([FIELD_ITEMS_PLAN.md](docs/plans/FIELD_ITEMS_PLAN.md) complete in batch 12:
 PRs #136-#148): mail (mail_data.c, the mail screen, the party menu's mail actions, the PC mailbox, the daycare's
 and DONTAE's Fab Mail), the Fame Checker (fame_checker.c and its two specials), Teachy TV (teachy_tv.c, the
 Pokédude's four battles, his REGISTER bag and TM case demos). Save version 13.
 
-**The quest log is in up to its menu calls** ([QUEST_LOG_PLAN.md](QUEST_LOG_PLAN.md) QL1-QL4a, batch 12): recording
+**The quest log is in up to its menu calls** ([QUEST_LOG_PLAN.md](docs/plans/QUEST_LOG_PLAN.md) QL1-QL4a, batch 12): recording
 (the four scenes in the save, the departed / arrived locations), playback on CONTINUE ("Previously on your quest",
 the grey field, the windows and texts, A / B skips, "saved the game at"), every QL_EVENT_* codec and its text, and
 the events from item use, the party menu, the PCs, the boxes and Fly.
 
-**The rest of FRLG's field weathers and the dynamic-graphics objects are done** ([GAPS_PLAN.md](GAPS_PLAN.md)
+**The rest of FRLG's field weathers and the dynamic-graphics objects are done** ([GAPS_PLAN.md](docs/plans/GAPS_PLAN.md)
 "Batch 13", PRs #152-#156): every sWeatherFuncs row runs as the C has it (rain, thunderstorm, downpour with their
 SE3 loops and PlayRainStoppingSoundEffect; snow, ash, sandstorm; clouds, the diagonal fog, the drought, the bubbles)
 on a weather sprite layer with the GBA's BLDALPHA; no FRLG map reaches them, `setweather` / `doweather` do. Dynamic
@@ -75,11 +75,11 @@ transactions, the Pokémon Center, story items, the battles, the Game Corner) an
 differences, its help contexts, a battle's end in playback, the "no quest log" DEVIATIONS sweep). After that, link
 play is the big area left (needs a decision from the user about networking).
 
-[SIDE_PLAN.md](SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
+[SIDE_PLAN.md](docs/plans/SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
 `bufferdecorationname` (and the other decoration commands) and FLDEFF_USE_DIVE with DoDiveWarp, ported as FRLG's C
 has them; the `unused` gap tag is gone.
 
-[SIDE_PLAN.md](SIDE_PLAN.md) batch 2 is in (PRs #69-#77): the Seagallop ferry from every harbor and Bill's
+[SIDE_PLAN.md](docs/plans/SIDE_PLAN.md) batch 2 is in (PRs #69-#77): the Seagallop ferry from every harbor and Bill's
 One Island trip and back, the S.S. Anne's departure (ss_anne.c) and a sweep of the S.S. Anne (nothing else was
 wrong), the Elite Four / Champion rooms' lighting, `multichoice` resuming a frame after the choice, and Easy Chat
 (easy_chat*.c: the Pewter profile, the questionnaire, the trainer card's profile words; save version 5).
@@ -89,7 +89,7 @@ their trade scene, the Name Rater, the Game Corner (coins box, clerks, prize roo
 the museum's fossil pics and the fossil revival, the Route 5 and Four Island daycares, eggs, `giveegg`, egg
 hatching, holes (DoFallWarp), Daisy's grooming, the Magikarp record, the diploma and the Trainer Fan Club.
 
-[MAIN_PATH_PLAN.md](MAIN_PATH_PLAN.md) is done. [SCREENS_PLAN.md](SCREENS_PLAN.md) batches 1 and 2 are in: the
+[MAIN_PATH_PLAN.md](docs/plans/MAIN_PATH_PLAN.md) is done. [SCREENS_PLAN.md](docs/plans/SCREENS_PLAN.md) batches 1 and 2 are in: the
 Pokédex, TM case, berry pouch, field items, registered SELECT items, the option menu and start menu help window,
 the trainer card, and headless story checks from Brock to the Hall of Fame.
 

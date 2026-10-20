@@ -1,5 +1,7 @@
 # Audio: plan for sound effects, cries and music
 
+**Status: Done: batches A-D, PRs #80-#112 (plan #80, work #83-#112).** Plans index: [README.md](README.md).
+
 Every sound in the port is a no-op today: `src/gba/sound.ts` stubs the C's sound.c API, the script engine's audio
 commands do nothing, the GBA-layer menus call the stubs, and the field, the battle and some scenes dropped
 their calls for a comment. This plan says how the GBA

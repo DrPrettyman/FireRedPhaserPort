@@ -59,8 +59,8 @@ A permission a sub-coordinator or worker was denied is never yours to retry: sto
 >
 > 1. First deal with open PRs (`gh pr list`): merge what's mergeable per section 4, or say why not.
 > 2. Pick the next step from STATUS.md "Next up" (or the focus), check it against the decomp and the port, and write
->    the batch into a plan doc (continue the current plan, or start a new `<NAME>_PLAN.md` at the root like
->    MAIN_PATH_PLAN.md) as a docs-only PR, and merge it.
+>    the batch into a plan doc (continue the current plan, or start a new `docs/plans/<NAME>_PLAN.md`, added to
+>    docs/plans/README.md's table) as a docs-only PR, and merge it.
 > 3. Start workers (section 2) in the background, one unit each, and run section 2's watchdog. How many at once (at
 >    most four) is your estimate from the work and the machine load (section 1). When a worker hands back with
 >    units left, start a continuation worker on the same branch. Workers don't start agents of their own.

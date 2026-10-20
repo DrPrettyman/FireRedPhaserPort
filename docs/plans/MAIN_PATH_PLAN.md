@@ -1,5 +1,7 @@
 # Main path: plan to unblock a full playthrough
 
+**Status: Done: batches 1-3, PRs #14-#28.** Plans index: [README.md](README.md).
+
 Status as of 2026-10-16 (master at `8a00924`). See STATUS.md "Next up" for where this list comes from.
 
 The game is playable from the new game to Brock, but a playthrough stalls on four things:

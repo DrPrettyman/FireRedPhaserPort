@@ -2601,7 +2601,7 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 
 ### AUDIO_PLAN.md: the audio plan (SIDE_PLAN.md batch 3, W-audioplan; docs only)
 
-- New [AUDIO_PLAN.md](../AUDIO_PLAN.md): how the GBA's m4a engine and sound.c work, every place the game uses audio
+- New [AUDIO_PLAN.md](plans/AUDIO_PLAN.md): how the GBA's m4a engine and sound.c work, every place the game uses audio
   (call counts, the port's stubs, the ~40 DEVIATIONS entries), the waits that depend on it (fanfares are frame
   counters; `waitse`, cries and `BGMusicStopped` depend on the engine's track and channel state), the options
   (live engine, pre-rendered files, hybrids), integration, testing and a three-workstream split. Recommends porting
@@ -4523,3 +4523,13 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   postgameKantoLegendaries: 9 passed (124 s, it was 975 s failing). Five other bag users (postgameKanto,
   scriptedBattles, berryPouch, audioBattleBalls, wildBattle): 25 passed. Sevault Canyon fails alone on the pre-batch
   master ee4c4ec too: not this batch's, left as the STATUS loose end, not chased.
+
+### Plans moved to docs/plans/
+
+- The nine `*_PLAN.md` files moved from the repo root to `docs/plans/` (history kept with `git mv`), each with a
+  **Status** line under its title, and `docs/plans/README.md` indexes them: eight done, QUEST_LOG_PLAN.md in
+  progress (QL4b, QL5 left). Links fixed in STATUS.md, docs/DEV_NOTES.md and docs/LOG.md; links between plans are
+  unchanged (same folder). Code comments that name a plan ("AUDIO_PLAN.md section 4") still find it by name.
+- CLAUDE.md (progress docs), docs/WORKFLOW.md (section 1 step 6) and the get-on skill now put new plans in
+  `docs/plans/` and add them to the README's table.
+- Verified: docs only; every relative link to a plan resolves.

@@ -1,5 +1,7 @@
 # The quest log: "Previously on your quest"
 
+**Status: In progress: QL1-QL4a are in (batch 12, PRs #136-#150); QL4b and QL5 are left.** Plans index: [README.md](README.md).
+
 FireRed's quest log (quest_log.c, quest_log_events.c, quest_log_objects.c, quest_log_player.c, quest_log_battle.c:
 ~4,500 lines, plus ~400 lines of hooks in 50 other C files). While the player plays, it records up to four scenes;
 on CONTINUE it plays them back in grey, with a "Previously on your quest" header and a line of text per event,

@@ -1,5 +1,7 @@
 # The single-player gaps: map previews, the help system, the intro, the Kanto postgame
 
+**Status: Done: batch 11 (PRs #127-#135) and batch 13 (PRs #152-#157).** Plans index: [README.md](README.md).
+
 The main path, the side content, the audio and the Sevii postgame are done ([MAIN_PATH_PLAN.md](MAIN_PATH_PLAN.md),
 [SIDE_PLAN.md](SIDE_PLAN.md), [AUDIO_PLAN.md](AUDIO_PLAN.md), [POSTGAME_PLAN.md](POSTGAME_PLAN.md)). This plan takes
 what a single player still meets that isn't ported, most visible first: the map preview screens (every cave and

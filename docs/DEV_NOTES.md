@@ -1567,7 +1567,7 @@ this is the next level down. When you add or change a subsystem, update its entr
 
 ## Audio
 
-The plan is [AUDIO_PLAN.md](../AUDIO_PLAN.md): the m4a engine ported to TypeScript (`src/audio/`), fed from
+The plan is [AUDIO_PLAN.md](plans/AUDIO_PLAN.md): the m4a engine ported to TypeScript (`src/audio/`), fed from
 `public/gen/audio/`.
 
 ### Audio data: songs

@@ -1,8 +1,8 @@
 # Parallel batches: coordinator, workers, merger
 
 How big pieces of work get done here: one session (the coordinator) plans a batch, runs up to four workers in
-parallel, then merges their PRs. Used for BATTLE_ANIMS_PLAN.md (PRs #6-#13) and MAIN_PATH_PLAN.md batches 1-3
-(PRs #14-#28). The git rules in CLAUDE.md still apply; this file adds what's specific to running a batch.
+parallel, then merges their PRs. Every plan in [docs/plans/](plans/README.md) ran this way, starting with
+BATTLE_ANIMS_PLAN.md (PRs #6-#13). The git rules in CLAUDE.md still apply; this file adds what's specific to running a batch.
 
 ## 0. Running it autonomously
 
@@ -43,7 +43,9 @@ batch is run by hand.
    they call outside themselves (menu.c windows, bg.c affine BGs, SoftReset, palette helpers, ...). If two
    workstreams need the same one, the plan names the owner; the others leave it out and reuse it once it merges, or
    wait a batch. (Batch 3 got three duplicates without this: affine BGs, the top bar window and SoftReset.)
-6. **Write the batch into the plan doc** (workstreams, their units, owners, what's shared, what's left out). The coordinator
+6. **Write the batch into the plan doc** in `docs/plans/` (continue the current plan, or start a new
+   `<NAME>_PLAN.md` there and add it to docs/plans/README.md's table; set the plan's **Status** line when its
+   last batch lands) (workstreams, their units, owners, what's shared, what's left out). The coordinator
    can't push to master (auto mode blocks it), so plan and STATUS updates go in as small docs-only PRs. Merge them
    with `gh pr merge --squash` after a look at the diff (they need no test run), then clean up as in section 4
    "Cleaning up a merged PR".

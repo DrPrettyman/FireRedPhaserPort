@@ -1,5 +1,7 @@
 # Mail, the Fame Checker, Teachy TV (and the quest log's start)
 
+**Status: Done: batch 12, PRs #136-#150 (shared with the quest log).** Plans index: [README.md](README.md).
+
 The single-player gaps left after [GAPS_PLAN.md](GAPS_PLAN.md): Teachy TV (the Viridian old man gives it after
 his catching tutorial), the Fame Checker (the rival gives it in Cerulean after his battle), mail (Celadon Dept. Store
 4F sells Retro Mail, Six Island's mart Dream Mail; DONTAE's Jynx holds a Fab Mail) and the quest log ("Previously on
