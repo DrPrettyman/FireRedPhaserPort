@@ -405,6 +405,8 @@ export interface MonSpec {
   status?: string;
   /** A personality that makes it shiny (for the player's OT id). */
   shiny?: boolean;
+  /** A fixed personality (Spinda's spots, Unown's letter); `shiny` wins over it. */
+  personality?: number;
   /**
    * An egg with this many egg cycles left (friendship), made by world/daycare.ts' createEgg (CreateEgg: level
    * EGG_HATCH_LEVEL, met level 0, Poké Ball, the egg nickname, a random personality); `level`, `iv` and `shiny`
@@ -499,7 +501,7 @@ function createApi(game: Phaser.Game) {
             metLocation: s.currentMapSection,
             fixedIV: spec.iv,
             // shiny value = otId hi ^ otId lo ^ personality hi ^ personality lo = 0
-            personality: spec.shiny ? ((((s.trainerId >>> 16) ^ (s.trainerId & 0xffff)) << 16) >>> 0) : undefined,
+            personality: spec.shiny ? ((((s.trainerId >>> 16) ^ (s.trainerId & 0xffff)) << 16) >>> 0) : spec.personality,
           });
     if (spec.moves) {
       mon.moves = [0, 0, 0, 0];
