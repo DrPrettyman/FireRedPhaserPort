@@ -957,7 +957,7 @@ export function Cmd_switchinanim(): void {
       (K.BATTLE_TYPE_LINK | K.BATTLE_TYPE_LEGENDARY | K.BATTLE_TYPE_OLD_MAN_TUTORIAL | K.BATTLE_TYPE_POKEDUDE | K.BATTLE_TYPE_EREADER_TRAINER | K.BATTLE_TYPE_GHOST)
     )
   )
-    handleSetPokedexFlag(speciesToNationalPokedexNum(g.battleMons[ab].species), K.FLAG_SET_SEEN);
+    handleSetPokedexFlag(speciesToNationalPokedexNum(g.battleMons[ab].species), K.FLAG_SET_SEEN, g.battleMons[ab].personality);
   g.absentBattlerFlags &= ~bit(ab);
   emitSwitchInAnim(K.BUFFER_A, g.battlerPartyIndexes[ab], b(2));
   markBattlerForControllerExec(ab);

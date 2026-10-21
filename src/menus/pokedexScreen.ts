@@ -2066,9 +2066,16 @@ export function DexScreen_DexPageZoomEffectFrame(bg: number, scale: number): voi
   FillBgTilemapBufferRect_Palette0(bg, 2, left + 1, divY + 1, width, top + height - divY);
 }
 
-/** DexScreen_GetDefaultPersonality: the save's Unown / Spinda personalities aren't kept (see DEVIATIONS), so 0. */
-export function DexScreen_GetDefaultPersonality(_species: number): number {
-  return 0;
+/** DexScreen_GetDefaultPersonality: the first Unown / Spinda seen (HandleSetPokedexFlag), else 0. */
+export function DexScreen_GetDefaultPersonality(species: number): number {
+  switch (species) {
+    case K.SPECIES_SPINDA:
+      return state.dexSpindaPersonality;
+    case K.SPECIES_UNOWN:
+      return state.dexUnownPersonality;
+    default:
+      return 0;
+  }
 }
 
 /** The graphics the mon page draws for `species`: its front pic, its palettes and its footprint. */

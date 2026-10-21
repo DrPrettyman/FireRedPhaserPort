@@ -1395,8 +1395,17 @@ def extract_pokemon(decomp, out):
         hoenn_cries[defines[name] - hoenn_start] = defines[cry]
     hoenn_species_cry_ids = [hoenn_cries[i] for i in range(len(hoenn_cries))]
 
+    # sSpindaSpotGraphics (pokemon.c, for DrawSpindaSpots): each spot's base x / y and its 16 rows of u16 bits
+    # (graphics/spinda_spots/spot_N.bin, INCBIN_U16, little-endian).
+    spinda_spots = []
+    spot_body = re.search(r"sSpindaSpotGraphics\[\] =\s*\{(.*?)\n\};", pokemon_c, re.S).group(1)
+    for x, y, path in re.findall(r"\.x = (\d+), \.y = (\d+), \.image = INCBIN_U16\(\"(.+?)\"\)", spot_body):
+        raw = (decomp / path).read_bytes()
+        spinda_spots.append({"x": int(x), "y": int(y), "image": [raw[i] | raw[i + 1] << 8 for i in range(0, len(raw), 2)]})
+
     tables = {
         "hoennSpeciesIdToCryId": hoenn_species_cry_ids,
+        "spindaSpots": spinda_spots,
         "experience": exp_tables,
         "eggMoves": egg_moves,
         "eggMovesSpeciesOffset": egg_offset,

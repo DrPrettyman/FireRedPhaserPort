@@ -287,4 +287,13 @@ export interface PokemonTables {
   eggMovesSpeciesOffset: number;
   /** sHoennSpeciesIdToCryId (data/pokemon/cry_ids.h): the cry id of SPECIES_TREECKO onwards (SpeciesToCryId). */
   hoennSpeciesIdToCryId: number[];
+  /** sSpindaSpotGraphics (pokemon.c): DrawSpindaSpots' four spots. */
+  spindaSpots: SpindaSpot[];
+}
+
+/** struct SpindaSpot (pokemon.h): a spot's base position on the 64x64 front pic and its 16 rows (bit 0 = the left pixel). */
+export interface SpindaSpot {
+  x: number;
+  y: number;
+  image: number[];
 }

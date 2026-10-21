@@ -15,7 +15,7 @@ import { AllocateMonSpritesGfx, DecompressPicFromTable, FreeMonSpritesGfx, gMonS
 import { BattleCreateYesNoCursorAt, BattleDestroyYesNoCursorAt, BattlePutTextOnWindow, HandleBattleWindow } from '../battle/battleWindow';
 import { bufferMoveToLearnIntoBattleTextBuff2, isHMMove2 } from '../battle/bsCommands3';
 import { battleStringExpandPlaceholdersToDisplayedString, encodeBattleText, gBattleStringsTable } from '../battle/message';
-import { calculateMonStats, handleSetPokedexFlag, monTryLearningNewMove, removeMonPPBonus, setMonMoveSlot, speciesToNationalPokedexNum } from '../battle/pokemonBattle';
+import { calculateMonStats, monTryLearningNewMove, removeMonPPBonus, setMonMoveSlot, speciesToNationalPokedexNum } from '../battle/pokemonBattle';
 import { prepareMoveBuffer } from '../battle/textBuffers';
 import { Cos, Sin } from '../battle/trig';
 import { BG_ATTR_PRIORITY, CopyBgTilemapBufferToVram, CopyToBgTilemapBuffer, LoadBgTiles, SetBgAttribute, ShowBg } from '../gba/bg';
@@ -383,8 +383,7 @@ function CreateShedinja(preEvoSpecies: number, mon: Pokemon): void {
     calculateMonStats(shedinja);
     state.party.push(shedinja); // CalculatePlayerPartyCount
 
-    handleSetPokedexFlag(speciesToNationalPokedexNum(target), K.FLAG_SET_SEEN);
-    handleSetPokedexFlag(speciesToNationalPokedexNum(target), K.FLAG_SET_CAUGHT);
+    state.setDexFlags(speciesToNationalPokedexNum(target), true, true); // GetSetPokedexFlag(FLAG_SET_SEEN / FLAG_SET_CAUGHT)
     // The Japanese-language Shedinja name: every mon here is English
   }
 }
@@ -579,8 +578,7 @@ function Task_EvolutionScene(taskId: number): void {
         mon.species = d[tPostEvoSpecies];
         calculateMonStats(mon);
         EvolutionRenameMon(mon, d[tPreEvoSpecies], d[tPostEvoSpecies]);
-        handleSetPokedexFlag(speciesToNationalPokedexNum(d[tPostEvoSpecies]), K.FLAG_SET_SEEN);
-        handleSetPokedexFlag(speciesToNationalPokedexNum(d[tPostEvoSpecies]), K.FLAG_SET_CAUGHT);
+        state.setDexFlags(speciesToNationalPokedexNum(d[tPostEvoSpecies]), true, true); // GetSetPokedexFlag(FLAG_SET_SEEN / FLAG_SET_CAUGHT)
         // IncrementGameStat(GAME_STAT_EVOLVED_POKEMON): game stats aren't tracked yet
         testEvent('evolution', { from: d[tPreEvoSpecies], to: d[tPostEvoSpecies], stopped: false });
       }
