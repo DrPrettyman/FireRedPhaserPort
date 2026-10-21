@@ -4767,5 +4767,9 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   Task_ExitNonDoor's FreezeObjectEvents (the warps' `busy` wait leaves the objects free).
 - Verified: typecheck, `npm test` (798), tests/e2e/stairWarp.test.ts (4: the house's stairs both ways frame by frame
   against the C's numbers, Route 16's north gate on the bike, CONTINUE on 2F's stairs, the 1F mat's arrow), and the
-  e2e files that go through stairs or the arrival paths: field, weather (Pokémon Tower 3F's stairs), weatherRain,
-  newGame, questLog (the scene starts and playback), saveContinue, trainerTower.
+  e2e files that go through stairs or the arrival paths: field (5), weather (7: Pokémon Tower 3F's stairs),
+  weatherRain (7), newGame (1), questLog (11: the scene starts and playback), questLogPlayback (7), saveContinue (6),
+  hallOfFame (3: warpFromScreen), trainerTower (9: eight floors of stairs).
+- Race fixed on the way: weather.test.ts' Tanoby chamber test failed once with seven files running: Ruin Maniac
+  Benjamin (121, 11, MOVEMENT_TYPE_LOOK_AROUND) spotted the player started at (120, 11) before the walk up. It now
+  starts at (120, 12), out of his sight lines, marks him beaten, then steps up.
