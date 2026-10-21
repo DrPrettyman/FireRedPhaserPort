@@ -3,6 +3,7 @@
 // the exp-bar tasks of the player-side controllers.
 
 import { m4aSongNumStop } from '../audio/m4a';
+import { testEvent } from '../dev/testHooks';
 import { PlaySE } from '../gba/sound';
 import { gSprites } from '../gba/sprite';
 import { CreateTask, DestroyTask, gTasks, type TaskFunc } from '../gba/task';
@@ -10,6 +11,8 @@ import { IsTextPrinterActive } from '../gba/window';
 import type { Pokemon, Stat } from '../pokemon/Pokemon';
 import { MoveBattleBar, SetBattleBarStruct, SetHealthboxSpriteVisible, UpdateHealthboxAttribute, UpdateHpTextInHealthbox } from './battleInterface';
 import { MoveBattlerSpriteToBG, ResetBattleAnimBg } from './anim/battleAnim';
+import { CreateLevelUpVerticalSpritesTask, LevelUpVerticalSpritesTaskIsRunning } from '../menus/pokemonSpecialAnimScene';
+import { IsMonGettingExpSentOut } from './bsCommands3';
 import { K } from './constants';
 import { emitDataTransfer, emitTwoReturnValues, u16, u32 } from './controllers';
 import { g, gSpeciesInfo, pokemon } from './env';
@@ -281,14 +284,16 @@ function makeGiveExpToMon(onDone: (b: number) => void, levelUpEffects: boolean):
         break;
       case 2:
         PlaySE(K.SE_RS_SHOP);
-        // if (IsMonGettingExpSentOut()) CreateLevelUpVerticalSpritesTask(...): pokemon_special_anim_scene.c's
-        // stripes aren't ported (docs/DEVIATIONS.md), so LevelUpVerticalSpritesTaskIsRunning is FALSE at once.
+        if (IsMonGettingExpSentOut()) CreateLevelUpVerticalSpritesTask(sprite.x + sprite.x2, sprite.y + sprite.y2, 10000, 10000, 1, 0);
+        testEvent('levelUpStripes', { phase: 'start', battler: battlerId, stripes: LevelUpVerticalSpritesTaskIsRunning() });
         ++data[15];
         break;
       case 3:
-        // if (!LevelUpVerticalSpritesTaskIsRunning())
-        sprite.invisible = false;
-        ++data[15];
+        if (!LevelUpVerticalSpritesTaskIsRunning()) {
+          testEvent('levelUpStripes', { phase: 'end', battler: battlerId });
+          sprite.invisible = false;
+          ++data[15];
+        }
         break;
       case 5:
         ResetBattleAnimBg(isOnBg2);

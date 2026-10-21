@@ -8,6 +8,22 @@ import { PALETTES_ALL, RGB_BLACK } from '../gba/hw';
 import { IsDma3ManagerBusyWithBgCopy, SetBgAttribute, ShowBg, BG_ATTR_PRIORITY } from '../gba/bg';
 import { gfx, gfx16 } from '../gba/gfx';
 import { gMain } from '../gba/main';
+import {
+  CreateSprite,
+  DestroySprite,
+  FreeSpritePaletteByTag,
+  FreeSpriteTilesByTag,
+  gDummySpriteAffineAnimTable,
+  gDummySpriteAnimTable,
+  gSprites,
+  LoadSpritePalette,
+  LoadSpriteSheet,
+  oam,
+  SPRITE_SHAPE,
+  type Sprite,
+  type SpriteTemplate,
+} from '../gba/sprite';
+import { GetMonIconPtr, GetValidMonIconPalettePtr } from '../menus/pokemonIcon';
 import { GetMoveSlotToReplace, ShowSelectMovePokemonSummaryScreen } from '../menus/summaryScreen';
 import { BattleMainCB2 } from './battleCallbacks';
 import { ReshowBattleScreenAfterMenu } from './reshowBattleScreen';
@@ -454,7 +470,7 @@ const LEVEL_UP_BANNER_START = 416;
 const LEVEL_UP_BANNER_END = 512;
 
 /** IsMonGettingExpSentOut */
-function isMonGettingExpSentOut(): boolean {
+export function IsMonGettingExpSentOut(): boolean {
   if (g.battlerPartyIndexes[0] === g.battleStruct.expGetterMonId) return true;
   return !!(g.battleTypeFlags & K.BATTLE_TYPE_DOUBLE && g.battlerPartyIndexes[2] === g.battleStruct.expGetterMonId);
 }
@@ -522,8 +538,7 @@ function InitLevelUpBanner(): void {
   CopyToWindowPixelBuffer(K.B_WIN_LEVEL_UP_BANNER, gfx('sLevelUpBanner_Gfx'), 0, 0);
   PutWindowTilemap(K.B_WIN_LEVEL_UP_BANNER);
   CopyWindowToVram(K.B_WIN_LEVEL_UP_BANNER, COPYWIN_FULL);
-  // PutMonIconOnLvlUpBanner: mon icons aren't extracted yet
-  console.warn('[battle] level up banner mon icon not implemented');
+  PutMonIconOnLvlUpBanner();
 }
 
 /** SlideInLevelUpBanner */
@@ -593,11 +608,53 @@ function SlideOutLevelUpBanner(): boolean {
   return g.battle_BG2_X !== LEVEL_UP_BANNER_START;
 }
 
+const TAG_LVLUP_BANNER_MON_ICON = 55130;
+
+const sOamData_MonIconOnLvlUpBanner = oam({ shape: SPRITE_SHAPE['32x32'][0], size: SPRITE_SHAPE['32x32'][1], priority: 0 });
+
+const sSpriteTemplate_MonIconOnLvlUpBanner: SpriteTemplate = {
+  tileTag: TAG_LVLUP_BANNER_MON_ICON,
+  paletteTag: TAG_LVLUP_BANNER_MON_ICON,
+  oam: sOamData_MonIconOnLvlUpBanner,
+  anims: gDummySpriteAnimTable,
+  images: null,
+  affineAnims: gDummySpriteAffineAnimTable,
+  callback: SpriteCB_MonIconOnLvlUpBanner,
+};
+
+// PutMonIconOnLvlUpBanner / SpriteCB_MonIconOnLvlUpBanner's sprite data
+const sDestroy = 0;
+const sXOffset = 1;
+
+/** PutMonIconOnLvlUpBanner: the exp getter's icon (its first frame, not animated) at x 256, moved with BG2's scroll. */
+function PutMonIconOnLvlUpBanner(): void {
+  const mon = g.playerParty[g.battleStruct.expGetterMonId]!;
+  const species = mon.species;
+  const personality = mon.personality;
+  LoadSpriteSheet({ data: GetMonIconPtr(species, personality, true), size: 0x200, tag: TAG_LVLUP_BANNER_MON_ICON });
+  LoadSpritePalette({ data: GetValidMonIconPalettePtr(species), tag: TAG_LVLUP_BANNER_MON_ICON });
+  const spriteId = CreateSprite(sSpriteTemplate_MonIconOnLvlUpBanner, 256, 10, 0);
+  gSprites[spriteId].data[sDestroy] = 0;
+  gSprites[spriteId].data[sXOffset] = g.battle_BG2_X;
+}
+
+/** SpriteCB_MonIconOnLvlUpBanner: follows the banner in and out; destroyed once it is back where it started. */
+function SpriteCB_MonIconOnLvlUpBanner(sprite: Sprite): void {
+  sprite.x2 = sprite.data[sXOffset] - g.battle_BG2_X;
+  if (sprite.x2 !== 0) {
+    sprite.data[sDestroy] = 1;
+  } else if (sprite.data[sDestroy]) {
+    DestroySprite(sprite);
+    FreeSpriteTilesByTag(TAG_LVLUP_BANNER_MON_ICON);
+    FreeSpritePaletteByTag(TAG_LVLUP_BANNER_MON_ICON);
+  }
+}
+
 export function Cmd_drawlvlupbox(): void {
   const scr = g.battleScripting;
   if (scr.drawlvlupboxState === 0) {
     // If the Pokémon getting exp is not in-battle then slide out a banner with their name and icon.
-    scr.drawlvlupboxState = isMonGettingExpSentOut() ? 3 : 1;
+    scr.drawlvlupboxState = IsMonGettingExpSentOut() ? 3 : 1;
   }
   switch (scr.drawlvlupboxState) {
     case 1: // Start level up banner

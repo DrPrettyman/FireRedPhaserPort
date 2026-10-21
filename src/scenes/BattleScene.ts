@@ -90,7 +90,7 @@ export function sharedBattleData(): Promise<BattleData> {
 /** Graphics the battle can touch: interface, terrain, balls, and pics for everyone involved. */
 function gfxSymbolsFor(data: BattleData, start: BattleStart): string[] {
   const a = data.anims;
-  const syms = new Set<string>([...battleBgGfxSymbols(), ...battleSpriteGfxSymbols(), 'gPPTextPalette', 'sLevelUpBanner_Gfx', 'sLevelUpBanner_Pal']);
+  const syms = new Set<string>([...battleBgGfxSymbols(), ...battleSpriteGfxSymbols(), 'gPPTextPalette', 'sLevelUpBanner_Gfx', 'sLevelUpBanner_Pal', 'sLevelUp_Gfx', 'sLevelUp_Pal']);
   const add = (s: string | null | undefined) => {
     if (s) syms.add(s);
   };

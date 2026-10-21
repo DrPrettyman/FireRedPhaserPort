@@ -3,9 +3,10 @@
 // 64x64 sprite that zooms in steps of "closeness" (friendship: 1x to 2x), the item icon an affine sprite on it, with
 // the sparkles (the outward spiral dots), the forget-move stars and the TM's wobble / zoom out.
 //
-// Not here: CreateLevelUpVerticalSpritesTask / Task_LevelUpVerticalSprites (the battle level-up's rising stripes),
-// which no item use starts (PSA_CreateLevelUpVerticalSpritesTask is unused in the C); battle_controller_player.c's
-// caller is FINISH_PLAN.md unit A2. DrawLevelUpWindowPg1 / Pg2 are battle/bsCommands3.ts's.
+// CreateLevelUpVerticalSpritesTask / Task_LevelUpVerticalSprites (the battle level-up's rising stripes) are here too:
+// no item use starts them (PSA_CreateLevelUpVerticalSpritesTask is unused in the C), battle_controller_player.c's
+// Task_CreateLevelUpVerticalStripes does (battle/controllerCommon.ts). DrawLevelUpWindowPg1 / Pg2 are
+// battle/bsCommands3.ts's.
 
 import { K } from '../battle/constants';
 import { GET_UNOWN_LETTER, GetMonSpritePalFromSpeciesAndPersonality, LoadSpecialPokePic } from '../battle/gfx';
@@ -25,7 +26,7 @@ import {
   type BgTemplate,
 } from '../gba/bg';
 import { gfx, gfx16, hasGfx } from '../gba/gfx';
-import { DISPCNT_MODE_0, DISPCNT_OBJ_1D_MAP, DISPCNT_OBJ_ON, REG_OFFSET_BLDCNT, REG_OFFSET_DISPCNT, RGB, RGB_BLACK, RGB_WHITE, SetGpuReg, SetGpuRegBits, vram } from '../gba/hw';
+import { BLDALPHA_BLEND, BLDCNT_EFFECT_NONE, BLDCNT_TGT2_ALL, DISPCNT_MODE_0, DISPCNT_OBJ_1D_MAP, DISPCNT_OBJ_ON, REG_OFFSET_BLDALPHA, REG_OFFSET_BLDCNT, REG_OFFSET_DISPCNT, RGB, RGB_BLACK, RGB_WHITE, SetGpuReg, SetGpuRegBits, vram } from '../gba/hw';
 import { ClearStdWindowAndFrameToTransparent, DecompressAndCopyTileDataToVram, DrawTextBorderOuter, FreeTempTileDataBuffersIfPossible, GetTextSpeedSetting, LoadUserWindowGfx, ResetTempTileDataBuffers } from '../gba/menu';
 import { BeginNormalPaletteFade, BG_PLTT_ID, BlendPalettes, gPaletteFade, LoadPalette, ResetPaletteFadeControl } from '../gba/palette';
 import { PlaySE } from '../gba/sound';
@@ -36,6 +37,8 @@ import {
   ANIMCMD_FRAME,
   CreateSprite,
   DestroySprite,
+  FreeSpritePaletteByTag,
+  FreeSpriteTilesByTag,
   gDummySpriteAffineAnimTable,
   gDummySpriteAnimTable,
   gSprites,
@@ -51,6 +54,7 @@ import {
   StartSpriteAffineAnim,
   StartSpriteAnim,
   ST_OAM_AFFINE_DOUBLE,
+  ST_OAM_OBJ_BLEND,
   type AffineAnimCmd,
   type AnimCmd,
   type Sprite,
@@ -475,12 +479,17 @@ export function PSA_UseTM_RunMachineSetWobble(): boolean {
   return true;
 }
 
+/** PSA_CreateLevelUpVerticalSpritesTask (unused in the C, as here) */
+export function PSA_CreateLevelUpVerticalSpritesTask(): void {
+  CreateLevelUpVerticalSpritesTask(120, 56, 4, 4, 2, 0);
+}
+
 /**
- * PSA_LevelUpVerticalSpritesTaskIsRunning (LevelUpVerticalSpritesTaskIsRunning): nothing in the item-use anim starts
- * Task_LevelUpVerticalSprites (PSA_CreateLevelUpVerticalSpritesTask is unused), so it is never running here.
+ * PSA_LevelUpVerticalSpritesTaskIsRunning: nothing in the item-use anim starts the stripes
+ * (PSA_CreateLevelUpVerticalSpritesTask is unused), so Task_UseItem_Normal's state 5 goes on at once, as on the GBA.
  */
 export function PSA_LevelUpVerticalSpritesTaskIsRunning(): boolean {
-  return false;
+  return LevelUpVerticalSpritesTaskIsRunning();
 }
 
 /** LoadBgGfxByAnimType */
@@ -1061,4 +1070,110 @@ function LoadOutwardSpiralDotsGfx(): void {
 
 function IsOutwardSpiralDotsTaskRunning(): boolean {
   return FuncIsActiveTask(Task_UseItem_OutwardSpiralDots);
+}
+
+// ---------------------------------------------------------------- the level-up's vertical stripes
+
+// Task_LevelUpVerticalSprites' data
+const tLState = 0;
+const tLActiveSprCt = 1;
+const tLMadeSprCt = 2;
+const tLTimer = 3;
+const tLXpos = 4;
+const tLYpos = 5;
+const tLTileTag = 6;
+const tLPaletteTag = 7;
+const tLPriority = 8;
+const tLSubpriority = 9;
+// SpriteCB_LevelUpVertical's
+const tsYsubpixel = 1;
+const tsLSpeed = 2;
+const tsLTaskId = 7;
+
+const sOamData_LevelUpVertical = oam({ objMode: ST_OAM_OBJ_BLEND, shape: SPRITE_SHAPE['8x16'][0], size: SPRITE_SHAPE['8x16'][1], priority: 1 });
+
+const sAnimTable_LevelUpVertical: AnimCmd[][] = [[ANIMCMD_FRAME(0, 3), ANIMCMD_END]];
+
+const sSpriteTemplate_LevelUpVertical: SpriteTemplate = {
+  tileTag: 0,
+  paletteTag: 0,
+  oam: sOamData_LevelUpVertical,
+  anims: sAnimTable_LevelUpVertical,
+  images: null,
+  affineAnims: gDummySpriteAffineAnimTable,
+  callback: SpriteCB_LevelUpVertical,
+};
+
+/**
+ * CreateLevelUpVerticalSpritesTask: 18 translucent 8x16 stripes, one every other frame, rising from (x - 32 + 0..63,
+ * y + 32) at 2-6 px a frame (BLDALPHA 12 / 6 over everything); the task ends once the last has risen 64 px.
+ */
+export function CreateLevelUpVerticalSpritesTask(x: number, y: number, tileTag: number, paletteTag: number, priority: number, subpriority: number): void {
+  const sheet = gfx('sLevelUp_Gfx');
+  LoadCompressedSpriteSheet({ data: sheet, size: sheet.length, tag: tileTag });
+  LoadSpritePalette({ data: gfx16('sLevelUp_Pal'), tag: paletteTag });
+  const taskId = CreateTask(Task_LevelUpVerticalSprites, 0);
+  const data = gTasks[taskId].data;
+  data[tLXpos] = x - 32;
+  data[tLYpos] = y + 32;
+  data[tLTileTag] = tileTag;
+  data[tLPaletteTag] = paletteTag;
+  data[tLPriority] = priority;
+  data[tLSubpriority] = subpriority;
+  SetGpuReg(REG_OFFSET_BLDCNT, BLDCNT_EFFECT_NONE | BLDCNT_TGT2_ALL);
+  SetGpuReg(REG_OFFSET_BLDALPHA, BLDALPHA_BLEND(12, 6));
+}
+
+/** LevelUpVerticalSpritesTaskIsRunning */
+export function LevelUpVerticalSpritesTaskIsRunning(): boolean {
+  return FuncIsActiveTask(Task_LevelUpVerticalSprites);
+}
+
+/** Task_LevelUpVerticalSprites */
+function Task_LevelUpVerticalSprites(taskId: number): void {
+  const data = gTasks[taskId].data;
+  switch (data[tLState]) {
+    case 0:
+      if (data[tLTimer] === 0) {
+        data[tLTimer]++;
+        CreateLevelUpVerticalSprite(taskId, data);
+        if (data[tLMadeSprCt] > 17) data[tLState]++;
+      } else {
+        data[tLTimer]++;
+        if (data[tLTimer] === 2) data[tLTimer] = 0;
+      }
+      break;
+    case 1:
+      if (data[tLActiveSprCt] === 0) {
+        FreeSpriteTilesByTag(data[tLTileTag]);
+        FreeSpritePaletteByTag(data[tLPaletteTag]);
+        DestroyTask(taskId);
+      }
+      break;
+  }
+}
+
+/** CreateLevelUpVerticalSprite */
+function CreateLevelUpVerticalSprite(taskId: number, data: Int16Array): void {
+  const template: SpriteTemplate = { ...sSpriteTemplate_LevelUpVertical, tileTag: data[tLTileTag], paletteTag: data[tLPaletteTag] };
+  data[tLMadeSprCt]++;
+  const spriteId = CreateSprite(template, ((data[tLMadeSprCt] * 219) & 0x3f) + data[tLXpos], data[tLYpos], data[tLSubpriority]);
+  if (spriteId !== MAX_SPRITES) {
+    const s = gSprites[spriteId];
+    s.oam.priority = data[tLPriority];
+    s.data[tsYsubpixel] = 0;
+    s.data[tsLSpeed] = (ISO_RANDOMIZE1(data[tLMadeSprCt]) & 0x3f) + 0x20;
+    s.data[tsLTaskId] = taskId;
+    data[tLActiveSprCt]++;
+  }
+}
+
+/** SpriteCB_LevelUpVertical */
+function SpriteCB_LevelUpVertical(sprite: Sprite): void {
+  sprite.data[tsYsubpixel] -= sprite.data[tsLSpeed];
+  sprite.y2 = sprite.data[tsYsubpixel] >> 4;
+  if (sprite.y2 < -0x40) {
+    gTasks[sprite.data[tsLTaskId]].data[tLActiveSprCt]--;
+    DestroySprite(sprite);
+  }
 }
