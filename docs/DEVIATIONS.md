@@ -216,6 +216,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     does. `setdivewarp` (ScrCmd_setdivewarp) isn't ported (no FRLG script uses it), so sFixedDiveWarp is always the
     dummy warp and a map without a dive/emerge connection never dives. As in the C, that case leaves the player
     locked (DiveFieldEffect_Init's preventStep and _ShowMon's LockPlayerFieldControls are never undone).
+  - Escalators (world/escalator.ts): the escalator's fade (Escalator_BeginFadeOutToNewMap, 8 frames after the steps
+    start) waits for SetupWarp's load of the other floor's header the first time (the port loads map data
+    asynchronously; WarpFadeOutScreen needs the header for the fade's colour and TryFadeOutOldMapMusic for its music),
+    so the first ride from a floor can start its fade a few frames late; the player's sprite keeps sliding meanwhile, as
+    EscalatorWarpEffect_4 / _6 would. FieldCB_EscalatorWarpIn runs when the port's map load ends (a promise), and its
+    task from the next frame. DrawWholeMapView redraws only the cells the escalator changed (every other grid change
+    is drawn at once). CameraObjectReset2 / CameraObjectReset1 are nothing: the camera follows the player's tile, never
+    its sprite's x2 / y2.
   - Object animations follow the step's progress (first half step frame, second half standing) instead of
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
   - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or

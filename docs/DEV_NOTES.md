@@ -516,6 +516,24 @@ this is the next level down. When you add or change a subsystem, update its entr
   Six Island's Dotted Hole after. Test events `fallWarp` (map), `fallWarpLanded`, `fallWarpDone`; the field probe's
   `avatar.spriteY2` / `avatar.cameraPanY`. Tests: tests/e2e/sideSpecials.test.ts (Pokémon Mansion 3F (18, 17)
   walking down; Seafoam B3F (6, 17) into the B4F current).
+- **Escalators (the Pokémon Centers' 1F ↔ 2F):** `world/escalator.ts`. Stepping onto MB_UP_ESCALATOR /
+  MB_DOWN_ESCALATOR with a warp (OverworldScene.tryStartWarpEventScript, TryStartWarpEventScript's
+  MetatileBehavior_IsEscalator branch) runs SetupWarp (`warpSetup` → `warpDestination`, as the fall warp) and
+  DoEscalatorWarp: Task_EscalatorWarpFieldEffect (EscalatorWarpEffect_1-6: freeze, StartEscalator,
+  QuestLog_OnEscalatorWarp(QL_ESCALATOR_OUT), face, SE_ESCALATOR, the sprite's x2 / y2 a pixel every 2 frames,
+  the fade on the 7th frame, then `FieldMoveHost.warpIntoMap(..., FieldCB_EscalatorWarpIn, warpId)`), and on the
+  other floor Task_EscalatorWarpInFieldEffect (EscalatorWarpInEffect_1-7: from 16 px off, the steps until
+  IsEscalatorMoving is FALSE, then the controls back, QL_ESCALATOR_IN and the step off east). special_field_anim.c's
+  Task_DrawEscalator sets the 3x3 around the player one section a frame (METATILE_PokemonCenter_Escalator_* from the
+  extracted defines through `K`) and draws them on its 8th: the grid changes go through `EscalatorHost`
+  (`MapChunk.setBlock(..., false)`, then `drawBlock` at DrawWholeMapView). The C's tasks run in the module's own
+  gTasks list (CreateTask's InsertTask by priority, RunTasks following `next`) from one field task, because the
+  draw task's order against the warp tasks decides the frame IsEscalatorMoving reads; `ResetEscalatorTasks` is the
+  field's ResetTasks (enterMap, resumeMap). Probes: `__test.field().escalator` (the draw task's state, stage,
+  drawing), `avatar.spriteX2` / `spriteY2`, `__test.metatileAt(x, y)` (the grid's metatile, collision, and whether
+  the BG shows it); events `escalatorWarp` (up), `escalatorStart` (goingUp), `escalatorFadeOut`, `escalatorWarpIn`,
+  `escalatorStop`, `escalatorDone`. Test: tests/e2e/escalator.test.ts (ViridianCity_PokemonCenter_1F from (2, 6)
+  walking left: up, down, up again; a recorded ride played back on CONTINUE).
 - **Egg hatching:** `menus/eggHatch.ts` is daycare.c's hatching half. ShouldEggHatch (world/daycare.ts) leaves the
   egg's slot in VAR_0x8004; OverworldScene counts GAME_STAT_HATCHED_EGGS and runs EventScript_EggHatch, whose
   `special EggHatch` (EGG_HATCH_SPECIALS, spread into SPECIALS) fades out and `runScreenFromScript(StartEggHatch,
@@ -2122,8 +2140,8 @@ or extend them:
 - **Doors:** `FieldDoors.getDoorSoundEffect(x, y)` (world coords) is GetDoorSoundEffect; `opendoor` plays it via
   the ScriptHost's `doorSoundEffect` (map-local); the warps' door SEs (Task_DoorWarp, Task_ExitDoor) use it too.
 - **Not here:** the warp tasks' sounds (Escape Rope, Dig, Teleport, the fall arrival, Fly's music) and map music
-  ("Map music"), the cries' timing (W-sound 2), the bike bell (item_use.c: menus/itemUse.ts). Not in the port: escalators,
-  the Lavaridge warps, FldEff_NpcFlyOut, Birth Island's rock (SE_THUNDER), ShakeScreen, LoopWingFlapSound, the
+  ("Map music"), the cries' timing (W-sound 2), the bike bell (item_use.c: menus/itemUse.ts), the escalator's SE_ESCALATOR
+  (world/escalator.ts). Not in the port: the Lavaridge warps, FldEff_NpcFlyOut, Birth Island's rock (SE_THUNDER), ShakeScreen, LoopWingFlapSound, the
   Acro Bike and secret base mats (field_player_avatar.c's SE_BIKE_HOP / SE_WARP_IN), the mailbox. The rain weathers'
   sounds are the weather's ("Field weather").
 - **Tests:** `tests/e2e/fieldSounds.test.ts` (a bump's SE_WALL_HIT, a ledge's SE_LEDGE, talking's SE_SELECT, Bill's

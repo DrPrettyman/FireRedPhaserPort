@@ -4539,3 +4539,29 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - The GitHub repo and the local folder are renamed from PhaserRebuild to FireRedPhaserPort
   (`/Users/joshua/Coding/PokemonProjects/FireRedPhaserPort`). The get-on skill's sub-coordinator prompt had the only
   absolute path; it's updated. GitHub redirects the old URL.
+
+### W-ql5b 1: the Pokémon Center escalators (QUEST_LOG_PLAN.md QL5b1, batch 14)
+
+- New `world/escalator.ts`: field_fadetransition.c's DoEscalatorWarp; field_effect.c's StartEscalatorWarp,
+  Task_EscalatorWarpFieldEffect / EscalatorWarpEffect_1-6, Escalator_AnimatePlayerGoingDown / Up,
+  Escalator_BeginFadeOutToNewMap, Escalator_TransitionToWarpInEffect, FieldCB_EscalatorWarpIn,
+  Task_EscalatorWarpInFieldEffect / EscalatorWarpInEffect_1-7; special_field_anim.c's StartEscalator,
+  CreateEscalatorTask, Task_DrawEscalator, SetEscalatorMetatile, StopEscalator, IsEscalatorMoving and the
+  sEscalatorMetatiles_* tables (the METATILE_PokemonCenter_Escalator_* ids were already in the extracted defines:
+  read through `K`, no extractor change). Every Pokémon Center's escalator was a plain warp (DEV_NOTES' "Not in the
+  port"); now the player rides it: frozen objects, SE_ESCALATOR, the sprite sliding off a pixel every 2 frames, the
+  fade on EscalatorWarpEffect_3's 7th frame, the steps' metatiles cycling (one section a frame, drawn every 8th), the
+  ride in on the other floor and the step off east 39 frames after the steps start there.
+- The C's task order matters (IsEscalatorMoving is read by the warp-in task before the draw task runs that frame,
+  and the draw task created by EscalatorWarpInEffect_1 runs a second time in its first frame), so escalator.ts runs
+  its tasks in a gTasks list of its own (InsertTask by priority, RunTasks following `next`) from one field task;
+  `ResetEscalatorTasks` beside ResetLeagueLightingTasks in enterMap / resumeMap.
+- QuestLog_OnEscalatorWarp (world/questLog.ts, both halves were there) is called: OUT closes the frames so far with
+  an empty action and stops counting (RECORDING_NO_DELAY) in recording, holds the actions (ACTION_END) in playback;
+  IN undoes it. A recorded ride plays back on CONTINUE (the recorded step and input start the escalator in playback).
+- Shared: OverworldScene's tryStartWarpEventScript escalator branch (SetupWarp then DoEscalatorWarp), the
+  EscalatorHost, ResetEscalatorTasks calls, `testMetatile`; MapChunk.setBlock gets `draw = true` and `drawBlock`
+  (DrawWholeMapView's half), `drawnMatchesGrid`; testHooks: `field().escalator`, `avatar.spriteX2`, `metatileAt`.
+- Verified: typecheck; `npm test` (774); e2e escalator.test.ts (new, 2: up / down / up again with the map, position,
+  metatiles, collision, the drawn view, the sprite offsets and the frames against the C worked by hand; a recorded ride
+  with its playback states, played back on CONTINUE), questLog.test.ts, field.test.ts, fieldMoves.test.ts: all pass.
