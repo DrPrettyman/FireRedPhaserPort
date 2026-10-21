@@ -4539,3 +4539,36 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - The GitHub repo and the local folder are renamed from PhaserRebuild to FireRedPhaserPort
   (`/Users/joshua/Coding/PokemonProjects/FireRedPhaserPort`). The get-on skill's sub-coordinator prompt had the only
   absolute path; it's updated. GitHub redirects the old URL.
+
+### W-ql5a 1: QL_AvoidDisplay and its callers, `goto_if_questlog` in playback (QUEST_LOG_PLAN.md QL5a1, batch 14)
+
+- `world/questLog.ts`: quest_log.c's QL_AvoidDisplay (RECORDING: QuestLog_CutRecording, the display goes ahead;
+  PLAYBACK: QL_PLAYBACK_STATE_ACTION_END and Task_AvoidDisplay, the display skipped). `world/questLogPlayback.ts`:
+  Task_AvoidDisplay (127 frames, the fade to black and END_MODE_SCENE, then after the fade the actions stopped, the
+  callback and QuestLog_AdvancePlayhead), ended by the playback's next map load as ResetTasks ends it on the GBA
+  (the port's field tasks outlive map loads). New `script/scriptMenuAvoidDisplay.ts`: script_menu.c's
+  QL_DestroyAbortedDisplay (EventScript_ReleaseEnd in place of the script, the mon pic, the fossil pic's sprite) and
+  `avoidDisplay(env)`.
+- Callers: ScriptEngine's multichoice / multichoicedefault (ignoreBPress bit 1, the nurse's, skips the check, as
+  DrawVerticalMultichoiceMenu does), multichoicegrid, yesnobox (now also VAR_RESULT = SCR_MENU_UNSET first, as
+  ScriptMenu_YesNo), showmoneybox, showcoinsbox, showmonpic; the specials ListMenu, DrawElevatorCurrentFloorWindow,
+  DrawSeagallopDestinationMenu (ferrySpecials.ts) and OpenMuseumFossilPic. An avoided menu keeps its script stopped
+  until QL_DestroyAbortedDisplay; ListMenu's and the Seagallop menu's `waitstate` too. DisplayBerryPowderVendorMenu
+  isn't ported (a link gap), so it has no call yet.
+- `goto_if_questlog` branches in playback (GetQuestLogState has been real since QL1): checked with a recorded trainer
+  battle, which plays back through EventScript_EndQuestLogBattle (SetBattledTrainerFlag, no battle). On that path,
+  two playback differences the C has: PlayTrainerEncounterMusic plays nothing in playback (QL_IS_PLAYBACK_STATE),
+  and ScrCmd_waitbuttonpress / WaitForAorBPress ends by itself after 120 frames (sQuestLogWaitButtonPressTimer;
+  in playback the held-key closing doesn't apply). This is the one piece of QL5a2's text list taken early: without
+  it no recorded script with a message gets past its first `waitbuttonpress` in playback. The auto-scroll at \p / \l
+  is still QL5a2's.
+- Shared: OverworldScene.openYesNo reports a `yesNoMenu` test event (tests/README.md). DEVIATIONS: the Seagallop
+  ferry's, the multichoice's ignoreBPress bit, Field ListMenu's, Surf's "`goto_if_questlog` never branches" and the
+  quest log entry's QL_AvoidDisplay / WaitForAorBPress parts are gone.
+- Tests: tests/unit/questLogAvoidDisplay.test.ts (7: no quest log, RECORDING's cut, PLAYBACK's 127 frames / fade /
+  callback / next scene, a skip ending the task, the script commands in both states, waitbuttonpress' 120 frames),
+  tests/e2e/questLogPlayback.test.ts (4: the nurse's YES/NO doesn't cut a recording, the Trainer School blackboard's
+  multichoicegrid does; the Safari Zone attendant's YES/NO in playback: no menu, the fade 127 frames after the
+  yesnobox, EventScript_ReleaseEnd once, the saved field after; Viridian Forest's Charlie played back: no battle,
+  his flag set by EventScript_EndQuestLogBattle, no encounter music, the intro up 120+ frames). Ran questLog,
+  listMenuFlash, seagallop, sideEvents, gameCorner, newGame and trainerBattle e2e files: all pass.

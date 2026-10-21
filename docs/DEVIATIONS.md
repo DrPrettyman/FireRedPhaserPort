@@ -36,8 +36,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     its text like `messageautoscroll` does, as a plain field message (no auto-scroll; the profile's two lines fit one
     box). InitEasyChatPhrases clears additionalPhrases only
     (the C's non-UBFIX loop clears 64 bytes, into the Mauville old man's data that's re-initialized right after).
-  - Seagallop ferry (menus/seagallop.ts, script/ferrySpecials.ts): no quest log (DrawSeagallopDestinationMenu's
-    QL_AvoidDisplay). The script that ran DoSeagallopFerryScene stays in its `waitstate` until the scene warps, then
+  - Seagallop ferry (menus/seagallop.ts, script/ferrySpecials.ts): the script that ran DoSeagallopFerryScene stays in its `waitstate` until the scene warps, then
     runs on to its `end` (in C, CB2_LoadMap's ScriptContext_Init drops it). The scene's WarpFadeOutScreen is a plain palette fade to
     black (FadeScreen's white fade is for underwater maps, and no harbor is one).
   - Script timing: `special EnterHallOfFame` ends its script at the special (script/specials.ts) instead of
@@ -205,7 +204,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     same frame, but Fishing11 / Fishing16 see a finished message a frame later than RunTextPrinters would. The
     player's sprite anim (AnimateSprites) is run by the fishing task after its state functions, as the GBA's sprite
     pass would after the tasks.
-  - Surf and Waterfall (world/surf.ts): no quest log (`goto_if_questlog` never branches). FldEff_UseSurf takes the
+  - Surf and Waterfall (world/surf.ts): FldEff_UseSurf takes the
     field controls lock at once: the C holds FieldCallback_PrepareFadeInFromMenu's (or the script's) lock until
     the task takes it, which the port's hand-offs don't. Like CreateFieldEffectShowMon, the banner waits for its
     graphics to load (UseSurfEffect_3, waterfall_1). The surf blob is the player's only `fieldEffectSpriteId`
@@ -292,9 +291,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - CONTINUE (OverworldScene.continueSavedGame): the map's objects spawn from its templates (object events aren't
     saved, see Save data); gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
-    link play); the quest log's QL_AvoidDisplay bit of ignoreBPress is ignored.
+    link play).
   - Elevators: UpdateEscapeWarp isn't kept on warps.
-  - Field ListMenu (ui/FieldListMenu.ts): the quest log's QL_AvoidDisplay is ignored.
   - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu.
   - Hall of Fame (menus/hallOfFame.ts): no Champion
     Ribbons (mons have no ribbons; the event tickets come anyway: see "Deliberate QOL changes"); a
@@ -333,7 +331,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     window over another doesn't clear its tilemap, so CommitQuestLogWindow1 (the field message box's
     ClearDialogWindowAndFrame in playback) has nothing to put back and has no caller yet (QL5). In playback, a script (one a recorded input starts, or a map's ON_FRAME
     scene the scene's restored vars bring back, as the Four Island rival's) runs with the normal message box, which
-    waits for A or B (the auto-scroll, WaitForAorBPress' 120-frame timeout and QL_AvoidDisplay: QL5); the fishing
+    waits for A or B at a \p or \l (text.c's auto-scroll: QL5a2; `waitbuttonpress` ends after 120 frames, and the
+    script menus and the other QL_AvoidDisplay callers end the scene, as in the C); the fishing
     rod's and the VS Seeker's gfx changes don't play (QL5), and getting off a mon changes the music. QL_LoadObjects
     sets the snapshot's position and facing on the objects the field spawned from the scene's flags (not each saved
     object's other fields; previousCoords are the current ones); a QL_START_WARP scene's player state comes from the

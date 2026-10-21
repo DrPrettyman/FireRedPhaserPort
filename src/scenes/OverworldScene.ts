@@ -2866,6 +2866,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   // ------------------------------------------------------------------ ScriptHost
 
   openYesNo(): YesNoMenu {
+    testEvent('yesNoMenu', {});
     const text = (label: string) => this.charmap.encode(this.assets.strings[label] ?? '?$');
     return new YesNoMenu(this, this.fonts, this.buttons, { yesNo: text('gText_YesNo'), cursor: text('gText_SelectorArrow2') }, { seOnNo: true });
   }

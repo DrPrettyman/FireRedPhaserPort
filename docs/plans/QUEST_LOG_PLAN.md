@@ -209,6 +209,11 @@ Three at once (load average ~5 at the start; each runs one or two e2e files).
 
 (Filled in as the PRs merge.)
 
+- **QL5a1** (branch `ql5-playback`, draft PR): QL_AvoidDisplay / Task_AvoidDisplay / QL_DestroyAbortedDisplay and
+  every caller the port has (the berry powder vendor isn't ported), `goto_if_questlog` checked through a recorded
+  trainer battle (EventScript_EndQuestLogBattle), PlayTrainerEncounterMusic's playback skip, and WaitForAorBPress'
+  120 frames taken from QL5a2's list (the trainer test needs it). QL5a2 follows on the same branch.
+
 ## Shared files (QL1-QL5)
 
 - `scenes/OverworldScene.ts`: CB1_Overworld's hooks (record, playback), the map change. Small hooks; the logic in

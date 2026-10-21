@@ -880,6 +880,27 @@ this is the next level down. When you add or change a subsystem, update its entr
     (sLocationNameTexts, sLocationToDepartedTextId, sDepartedLocationTexts, sGymCityMapSecs in questLog.json).
     `CommitQuestLogWindow1` is exported for QL5's message box; QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode for
     any other warp exit.
+  - **Avoided displays (QL5a1):** `QL_AvoidDisplay(callback)` (questLog.ts) is quest_log.c's: RECORDING cuts the scene
+    (QuestLog_CutRecording) and lets the display through; PLAYBACK sets QL_PLAYBACK_STATE_ACTION_END and starts
+    Task_AvoidDisplay (questLogPlayback.ts, registered with `registerAvoidDisplayTask`): 127 frames, then
+    FadeScreen(FADE_TO_BLACK, 0) and END_MODE_SCENE, and once the fade is over the actions stop, the callback runs and
+    QuestLog_AdvancePlayhead loads the next scene. The port's field tasks outlive a map load, so the task ends itself
+    when the playback loads another map (`sMapLoads`: the GBA's ResetTasks). The callback is always script_menu.c's
+    QL_DestroyAbortedDisplay (`script/scriptMenuAvoidDisplay.ts`: ScriptContext_SetupScript(EventScript_ReleaseEnd),
+    the mon pic and, through `registerAbortedDisplayCleanup`, the fossil pic's sprite); callers write
+    `avoidDisplay(env)` with the special's env (or ScriptEngine's specialEnv). Callers: ScriptEngine's `multichoice` /
+    `multichoicedefault` (not with ignoreBPress bit 1: the nurse's) and `multichoicegrid`, `yesnobox`, `showmoneybox`,
+    `showcoinsbox`, `showmonpic`; the specials ListMenu, DrawElevatorCurrentFloorWindow, DrawSeagallopDestinationMenu
+    and OpenMuseumFossilPic. An avoided menu leaves its script stopped (`ctx.wait` / a `waitstate` that never ends)
+    until the callback replaces it; the boxes and pics let it run on. berry_powder.c's DisplayBerryPowderVendorMenu
+    isn't ported (a link gap): it calls `avoidDisplay` first when it is. `goto_if_questlog` (the extractor expands it
+    to `special GetQuestLogState`, compare 2) branches in playback: a recorded trainer battle goes through
+    trainer_battle.inc's EventScript_EndQuestLogBattle (SetBattledTrainerFlag, no battle); PlayTrainerEncounterMusic
+    is skipped in playback (QL_IS_PLAYBACK_STATE) and `waitbuttonpress` ends by itself after 120 frames
+    (sQuestLogWaitButtonPressTimer). Tests: tests/unit/questLogAvoidDisplay.test.ts, tests/e2e/questLogPlayback.test.ts
+    (the nurse's YES/NO doesn't cut, the Trainer School blackboard's grid does; the Safari Zone attendant's YES/NO
+    skipped in playback with its frames; Viridian Forest's Charlie played back without a battle). Probes:
+    `__test.questLog().playback.avoidDisplay` (tasks created, the live ones' tTimer / tState), the `yesNoMenu` event.
   - **Tests:** tests/unit/questLog.test.ts ("playback": the actions at their recorded frames, the NPC by local id,
     the input; locked controls hold them), tests/e2e/questLog.test.ts (two scenes recorded in Pallet Town, then
     CONTINUE: each scene's flags / empty bag / placeholder Rattata, the player and NPCs end where they were

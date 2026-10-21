@@ -599,7 +599,7 @@ function waitForScriptEnable(): () => boolean {
 /**
  * special ListMenu: a list of sListMenuLabels[VAR_0x8004] (Silph Co.'s floor list starts where
  * InitElevatorFloorSelectMenuPos left it). Returns the wait for the script's `waitstate`, or undefined
- * when there's no list (an unknown id: VAR_RESULT = 127). QL_AvoidDisplay is the quest log's.
+ * when there's no list (an unknown id: VAR_RESULT = 127). (QL_AvoidDisplay comes first, in the special: script/specials.ts.)
  */
 export function ListMenu(state: GameState, host: ListMenuHost): (() => boolean) | undefined {
   const listMenuId = state.getVar('VAR_0x8004');
