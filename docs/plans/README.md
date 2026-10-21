@@ -15,4 +15,4 @@ below.
 | [POSTGAME_PLAN.md](POSTGAME_PLAN.md) | Sevii Islands 4-7, Trainer Tower, event islands, field weather (FRLG's subset) | Done (#114-#126) |
 | [GAPS_PLAN.md](GAPS_PLAN.md) | Map previews, help system, intro movie, Kanto postgame; batch 13: dynamic-graphics objects, every weather | Done (#127-#135, #152-#157) |
 | [FIELD_ITEMS_PLAN.md](FIELD_ITEMS_PLAN.md) | Mail, the Fame Checker, Teachy TV | Done (#136-#150) |
-| [QUEST_LOG_PLAN.md](QUEST_LOG_PLAN.md) | The quest log ("Previously on your quest") | **In progress**: QL4b, QL5 left |
+| [QUEST_LOG_PLAN.md](QUEST_LOG_PLAN.md) | The quest log ("Previously on your quest") | **In progress**: QL4b, QL5 in batch 14 |

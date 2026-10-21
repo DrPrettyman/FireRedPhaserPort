@@ -1,6 +1,6 @@
 # The quest log: "Previously on your quest"
 
-**Status: In progress: QL1-QL4a are in (batch 12, PRs #136-#150); QL4b and QL5 are left.** Plans index: [README.md](README.md).
+**Status: In progress: QL1-QL4a are in (batch 12, PRs #136-#150); QL4b and QL5 run in batch 14 ("Batch 14" below).** Plans index: [README.md](README.md).
 
 FireRed's quest log (quest_log.c, quest_log_events.c, quest_log_objects.c, quest_log_player.c, quest_log_battle.c:
 ~4,500 lines, plus ~400 lines of hooks in 50 other C files). While the player plays, it records up to four scenes;
@@ -129,7 +129,87 @@ Left for batch 13:
   (QL3) and are called only by unit tests and `__test.questLogEvent` so far.
 - **QL5:** as unit 5 above.
 
-## Shared files
+## Batch 14
+
+Checked against the decomp and the port before splitting (`grep -n "QuestLog\|QL_" src/*.c` outside quest_log*.c;
+`grep -rniE "quest ?log" src` in the port):
+
+- **QL4b is small:** every entry point exists (QL3) and needs only its caller: shop.c's RecordItemTransaction /
+  RecordTransactionForQuestLog (the port's ShopMenu.ts / shop.ts), the SELL paths of item_menu.c, tm_case.c and
+  berry_pouch.c (RecordItemTransaction), SetUsedPkmnCenterQuestLogEvent (script/storySpecials.ts, a no-op now),
+  item.c's TrySetObtainedItemQuestLogEvent from ScrCmd_additem (not in the port), battle_main.c's
+  TrySetQuestLogBattleEvent (battle/main.ts:1345 skips it), slot_machine.c's SetQLPlayedTheSlots.
+- **QL5 is a mosaic of small playback hooks** plus one real gap: **the escalators aren't ported at all.** Every
+  FRLG Pokémon Center's escalator to 2F (MB_UP_ESCALATOR / MB_DOWN_ESCALATOR in the pokemon_center tileset) is a
+  plain warp in the port (DEV_NOTES: "Not in the port: escalators"). QuestLog_OnEscalatorWarp's recording half is
+  in `world/questLog.ts` with no caller. So QL5's escalators unit ports field_control_avatar.c's DoEscalatorWarp
+  path, field_effect.c's escalator warp (StartEscalatorWarp, Task_EscalatorWarpFieldEffect,
+  EscalatorWarpEffect_1-6, FieldCB_EscalatorWarpIn, EscalatorWarpInEffect_1-7: ~300 lines) and
+  special_field_anim.c's escalator half (StartEscalator, Task_DrawEscalator, IsEscalatorMoving, StopEscalator:
+  ~150 lines), with the quest log's two calls (decision 4).
+- The rest of QL5: QL_AvoidDisplay (quest_log.c, not in the port) and its callers (script_menu.c: the
+  multichoices, YES/NO, the grid, the mon pic, the museum fossil pic, the Seagallop menu; scrcmd.c: the money and
+  coins boxes; field_specials.c: the elevator's floor window and ListMenu; berry_powder.c's vendor menu);
+  `goto_if_questlog` (a macro over `special GetQuestLogState`, 85 uses; GetQuestLogState is real since QL1, so the
+  unit checks it branches in playback, e.g. trainer_battle.inc's EventScript_EndQuestLogBattle); scrcmd.c's music
+  commands skipped in playback (playbgm, fadedefaultbgm, fadenewbgm, fadeoutbgm, fadeinbgm), text.c's PLAY_BGM and
+  the 50-frame auto-scroll, WaitForAorBPress' 120-frame timeout, sound.c's fanfare (sFanfareCounter = 0xFF) and
+  PlayCry_Script's skip, the map music on load; new_menu_helpers.c / field_message_box.c / text_window.c's quest
+  log windows (LoadQuestLogWindowTiles, CommitQuestLogWindow1); help_system.c's check, map_preview_screen.c's
+  MapHasPreviewScreen_HandleQLState2, trainer_see.c's QL_IsTrainerSightDisabled (check which are already in);
+  quest_log_player.c's playback gfx (Task_QLFishMovement, QL_GfxTransition_StartSurf / StopSurf*, VS Seeker),
+  field_player_avatar.c's Strength / Surf / fishing recordings (several are in already: check), and
+  field_effect.c's QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode calls (some are in).
+
+### Workstreams
+
+Three at once (load average ~5 at the start; each runs one or two e2e files).
+
+- **W-ql4b** (branch `ql4b-menus`, one unit): every QL4b call site above. Owns `menus/shop.ts`, `ui/ShopMenu.ts`,
+  the SELL paths in `menus/itemMenu.ts`, `menus/tmCase.ts`, `menus/berryPouch.ts`, `menus/slotMachine.ts`,
+  `script/storySpecials.ts`'s SetUsedPkmnCenterQuestLogEvent, `battle/main.ts`'s TrySetQuestLogBattleEvent call,
+  `state/` item helpers for TrySetObtainedItemQuestLogEvent (item.c), and ScrCmd_additem's one-line call in
+  `script/ScriptEngine.ts`. E2e: `tests/e2e/questLogMenus.test.ts` (new): a scene per family (bought / sold at a
+  mart, sold from the TM case or berry pouch, the Pokémon Center, a story item, a won trainer battle and a wild
+  one, the slots) played back to its line.
+- **W-ql5a** (branch `ql5-playback`, two units):
+  - **QL5a1:** QL_AvoidDisplay with Task_AvoidDisplay and QL_DestroyAbortedDisplay (`world/questLog*.ts`), every
+    caller listed above (ScriptEngine.ts's multichoice / YES/NO / money / coins box commands, `ui/FieldListMenu.ts`,
+    the elevator, `ui/MuseumFossilPic.ts`, `script/ferrySpecials.ts`, the berry powder vendor, the mon pic), both
+    halves (recording: QuestLog_CutRecording; playback: skip and clean up); `goto_if_questlog` checked in playback
+    and EventScript_EndQuestLogBattle (a recorded trainer battle in playback). E2e: `tests/e2e/questLogPlayback.test.ts`
+    (new): playback through a trainer battle and a multichoice / YES/NO script; a multichoice cuts a recording.
+  - **QL5a2:** the audio and text differences in playback (scrcmd.c's music commands, text.c's PLAY_BGM and
+    auto-scroll delay, WaitForAorBPress' 120 frames, sound.c's fanfare and PlayCry_Script, PlayNewMapMusic's
+    playback check), the quest log windows of new_menu_helpers.c / field_message_box.c / text_window.c
+    (LoadQuestLogWindowTiles, CommitQuestLogWindow1's caller), help_system.c, MapHasPreviewScreen_HandleQLState2,
+    QL_IsTrainerSightDisabled (whatever isn't in yet). Then **the DEVIATIONS sweep**: every "no quest log" /
+    "quest log isn't ported" entry and source comment left after the other workstreams, fixed or reworded to what
+    is actually left. E2e: extends `questLogPlayback.test.ts`.
+- **W-ql5b** (branch `ql5-field`, two units):
+  - **QL5b1: the escalators.** As above: a new `world/escalator.ts` (special_field_anim.c's half) and the escalator
+    warp field effect, hooked where `world/behaviors.ts` / the warp code send MB_*_ESCALATOR to a plain warp today;
+    QuestLog_OnEscalatorWarp's calls. E2e: `tests/e2e/escalator.test.ts` (new): up and down a Pokémon Center's
+    escalator (the player's position, the map, the metatile animation running, the timing in frames), and a
+    recorded escalator ride played back.
+  - **QL5b2: the field moves and the player's gfx in playback.** quest_log_player.c's playback half
+    (Task_QLFishMovement, QL_GfxTransition_StartSurf / StopSurf*, the VS Seeker's), field_player_avatar.c's Surf /
+    Strength / fishing recordings checked against the C, field_effect.c's header redraws. E2e:
+    `tests/e2e/questLogField.test.ts` (new): playback through Surf, a Strength push and fishing.
+
+### Shared files
+
+- `world/questLog.ts`: W-ql5a adds QL_AvoidDisplay (owner); W-ql5b only calls QuestLog_OnEscalatorWarp (exists).
+- `world/questLogPlayback.ts`, `world/questLogScreen.ts`: W-ql5a. `world/questLogPlayer.ts`: W-ql5b.
+- `script/ScriptEngine.ts`: W-ql5a's commands; W-ql4b's one line in `additem`.
+- `world/questLogEvents.ts` / `questLogBattle.ts`: W-ql4b calls them; small fixes there go in its PR's list.
+- `scenes/OverworldScene.ts` / the warp code: W-ql5b's escalator hook only.
+
+## Batch 14 result
+
+(Filled in as the PRs merge.)
+
+## Shared files (QL1-QL5)
 
 - `scenes/OverworldScene.ts`: CB1_Overworld's hooks (record, playback), the map change. Small hooks; the logic in
   `world/questLog*.ts`.
@@ -146,3 +226,10 @@ Left for batch 13:
    durations are GBA frames, as everywhere else.
 3. **The end of playback reloads the save slot** (coordinator, revisit if you disagree), as LoadGameSave does, so
    nothing playback changed (the cleared bag, the placeholder party, the scene's flags) survives.
+4. **The escalators are ported in QL5** (coordinator, revisit if you disagree): they aren't in the port at all
+   (every Pokémon Center's escalator is a plain warp), and QuestLog_OnEscalatorWarp needs their field effect. The
+   full escalator (special_field_anim.c's metatile animation, field_effect.c's warp effect) goes in, not only the
+   quest log's hook.
+5. **The DEVIATIONS sweep is QL5a2's** (coordinator, revisit if you disagree): each worker removes the "no quest
+   log" entries its own unit fixes; QL5a2 runs last and rewords or removes whatever is left, so the file says
+   only what's still missing (link play's events).
