@@ -84,6 +84,7 @@ import { FONT_NORMAL } from '../text/Font';
 import { caughtDexCount, countBadges, type SaveBlockView } from '../ui/saveMenuUtil';
 import { testEvent } from '../dev/testHooks';
 import { CB2_InitTitleScreen } from './titleScreen';
+import { setExitStairsMovementDisabled } from '../world/stairWarp';
 
 // enum MainMenuType
 const MAIN_MENU_NEWGAME = 0;
@@ -351,7 +352,7 @@ function Task_ExecuteMainMenuSelection(taskId: number): void {
   switch (menuAction) {
     default:
     case MAIN_MENU_NEWGAME:
-      // gExitStairsMovementDisabled = FALSE: no Task_ExitStairs in the port
+      setExitStairsMovementDisabled(false); // gExitStairsMovementDisabled = FALSE
       FreeAllWindowBuffers();
       DestroyTask(taskId);
       mainMenuEnv.startNewGame(); // StartNewGameScene
@@ -359,6 +360,7 @@ function Task_ExecuteMainMenuSelection(taskId: number): void {
     case MAIN_MENU_CONTINUE:
       gPlttBufferUnfaded[0] = RGB_BLACK;
       gPlttBufferFaded[0] = RGB_BLACK;
+      setExitStairsMovementDisabled(false); // gExitStairsMovementDisabled = FALSE
       FreeAllWindowBuffers();
       // TryStartQuestLogPlayback runs as the field starts (world/questLogPlayback.ts, from
       // OverworldScene.continueSavedGame): the saved scenes play first, else CB2_ContinueSavedGame

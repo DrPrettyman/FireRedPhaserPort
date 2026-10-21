@@ -120,7 +120,7 @@ export function NewKeyState(): KeyState {
 export function ReadKeys(input: Input, lEqualsA = false, keys: KeyState = gMain): void {
   const gMain = keys;
   let keyInput = 0;
-  for (const [b, bit] of BUTTON_BITS) if (input.held(b)) keyInput |= bit;
+  for (const [b, bit] of BUTTON_BITS) if (input.heldRaw(b)) keyInput |= bit;
   gMain.newKeysRaw = keyInput & ~gMain.heldKeysRaw;
   gMain.newKeys = gMain.newKeysRaw;
   gMain.newAndRepeatedKeys = gMain.newKeysRaw;

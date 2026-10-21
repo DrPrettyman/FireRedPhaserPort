@@ -204,7 +204,7 @@ export class SaveDialog {
   };
 
   private doSave = (): number => {
-    // IncrementGameStat(GAME_STAT_SAVED_GAME): no game stats
+    this.host.state.incrementGameStat(this.host.state.defines.require('GAME_STAT_SAVED_GAME'));
     this.host.storeLocationForSave();
     if (gSave.differentSaveFile) {
       TrySavingData(SAVE_OVERWRITE_DIFFERENT_FILE, this.host.state);

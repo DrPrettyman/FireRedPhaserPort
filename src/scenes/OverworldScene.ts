@@ -10,7 +10,7 @@ import { loadGfx } from '../gba/gfx';
 import { RGB_BLACK, RGB_WHITE } from '../gba/hw';
 import { loadMenusData } from '../menus/data';
 import { expandPlaceholders } from '../text/placeholders';
-import { FieldEffects } from '../entities/FieldEffects';
+import { FieldEffects, type FieldEffectSprite } from '../entities/FieldEffects';
 import { GroundEffects } from '../entities/groundEffects';
 import { FieldPoisonEffect } from '../entities/FieldPoisonEffect';
 import { NpcBrain, setInitialMovementTypeFacing } from '../entities/NpcBrain';
@@ -100,6 +100,7 @@ import { CommitQuestLogWindow1, globalFieldTintMode, installQuestLogScreen, mapJ
 import { QuestLogWindows, questLogWindowsGfxSymbols } from '../ui/QuestLogWindows';
 import { FogHorizontal } from '../world/fogHorizontal';
 import { DoEscalatorWarp, escalatorProbe, ResetEscalatorTasks, setEscalatorHost } from '../world/escalator';
+import { DoStairWarp, gExitStairsMovementDisabled, MetatileBehavior_IsDirectionalStairWarp, setExitStairsMovementDisabled, setStairWarpHost, StartExitStairs } from '../world/stairWarp';
 import { leagueLightingProbe, loadLeagueLightingData, registerLeagueLighting, ResetLeagueLightingTasks, setLeagueLightingHost, StopPokemonLeagueLightingEffectTask } from '../world/leagueLighting';
 import { tilesetVram } from '../world/TilesetVram';
 import { ShopMenu, type ShopHost } from '../ui/ShopMenu';
@@ -114,11 +115,12 @@ import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
 import { gFieldCallback, gFieldCallback2, type FieldCallbackHost } from '../menus/fieldCallbacks';
 import { RunMassageCooldownStepCounter } from '../script/miscSpecials';
 import { IncrementBirthIslandRockStepCount } from '../script/eventIslandSpecials';
+import { IncrementRenewableHiddenItemStepCounter, TryRegenerateRenewableHiddenItems } from '../world/renewableHiddenItems';
 import { SetUpFieldTasks, Task_RunPerStepCallback, type PerStepCallbackHost } from '../world/fieldTasks'; // W-sevii
 import { DEOXYS_ROCK_GFX, registerDeoxysRock, setDeoxysRockHost } from '../world/deoxysRock';
 import { UseRegisteredKeyItemOnField } from '../menus/registeredItem';
 import { activeFieldEffects, setFieldEffectScriptHost, setFieldEffectScripts } from '../world/fieldEffectScripts';
-import { fieldMoveGfxSymbols, prepareFieldMoveMenu, prepareRegionMap, registerFieldMoves, setFieldMoveHost, UnlockPlayerFieldControls, UpdateEscapeWarp, type FieldMoveHost } from '../world/fieldMoves';
+import { fieldMoveGfxSymbols, fieldMoveHost, prepareFieldMoveMenu, prepareRegionMap, registerFieldMoves, setFieldMoveHost, UnlockPlayerFieldControls, UpdateEscapeWarp, type FieldMoveHost } from '../world/fieldMoves';
 import { setDiveHost } from '../world/dive';
 import {
   BOB_MON_ONLY,
@@ -234,6 +236,10 @@ import { directionOf, dirNumber, QL_LoadTemplates, QL_TryStopSurfing, questLogOb
 
 /** GBA runs at ~59.73Hz; we tick game logic at a fixed 60Hz regardless of display refresh. */
 const FRAME_MS = 1000 / 60;
+/** include/fieldmap.h: the view's margin in VMap, and SaveMapView's MAP_OFFSET_W x MAP_OFFSET_H cells */
+const MAP_OFFSET = 7;
+const MAP_OFFSET_W = MAP_OFFSET * 2 + 1;
+const MAP_OFFSET_H = MAP_OFFSET * 2;
 const PLAYER_GFX = 'OBJ_EVENT_GFX_RED_NORMAL';
 /** The camera centres on the middle of the player's tile, 8 px above its feet (ignoring jump lift). */
 const CAMERA_FOLLOW_OFFSET_Y = TILE / 2;
@@ -346,6 +352,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private warpDestination?: { mapId: string; warpId: number; x: number; y: number };
   /** A fall warp's SetupWarp, which loads the destination's header before warpDestination is set. */
   private warpSetup: Promise<void> = Promise.resolve();
+  /** A stair warp's SetupWarp destination with its header: undefined while it loads, null if there's none. */
+  private stairWarpDest: { name: string; data: MapData; warpId: number; x: number; y: number } | null | undefined = null;
+  /** The player's warp arrow sprite (objectEvent->warpArrowSpriteId), made again after a map load cleared it. */
+  private warpArrowSprite?: FieldEffectSprite;
   /** FldEffPoison's task while it runs. */
   private poisonEffect?: FieldPoisonEffect;
   /** The approach task of the trainer that last saw the player (trainer_see.c), until it ends. */
@@ -359,7 +369,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   /**
    * Object templates per loaded map, editable by setobjectxyperm/setobjectmovementtype. The current
    * map's are reloaded from the header on entry (LoadObjEventTemplatesFromHeader), so script edits
-   * only last until the map is left; a neighbour keeps the ones it had while it was current.
+   * only last until the map is left; a neighbour keeps the ones it had while it was current. The current map's
+   * are gSaveBlock1Ptr->objectEventTemplates: a save keeps them and CONTINUE loads them back (saveblockMapLoad).
    */
   private templates = new Map<string, ObjectEventData[]>();
   /** OBJ_EVENT_GFX_* name by number, for resolving the values of VAR_OBJ_GFX_ID_*. */
@@ -409,6 +420,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private savedGame?: SaveData;
   /** The quest log's LockPlayerFieldControls (a flag, as the C's, held as one count of controlsLocked) */
   private qlControlsLocked = false;
+  /** CONTINUE's steps inside the saved map's load: the save's templates, map view and objects (saveblockMapLoad). */
+  private continueMapLoad?: { templates(): void; mapView(): void; objects(): void };
   /** LoadMap_QLPlayback's steps inside a map load: the scene's templates (before the objects spawn) and objects (after). */
   private qlMapLoad?: { templates(): void; objects(): void };
   /** A quest log scene's map is loading (CB1_Overworld doesn't run). */
@@ -592,6 +605,18 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         chunk?.drawBlock(x - chunk.originX, y - chunk.originY);
       },
     });
+    setStairWarpHost({
+      warpDestinationHeader: () => (this.stairWarpDest === undefined ? undefined : (this.stairWarpDest?.data ?? null)),
+      warpFadeOutScreen: () => {
+        if (this.stairWarpDest) this.warpFadeOutScreen(this.world.current.data, this.stairWarpDest.data);
+      },
+      paletteFadeActive: () => this.screenFade.active,
+      warpIntoMap: () => {
+        // CB2_LoadMap, then FieldCB_DefaultWarpExit; Task_ExitNonDoor / Task_ExitStairs give the controls back
+        const d = this.stairWarpDest;
+        if (d) fieldMoveHost().warpIntoMap(d.data.id, d.x, d.y, undefined, d.warpId);
+      },
+    });
     setDiveHost({
       connections: () => this.world.current.data.connections,
       runOnDiveWarpMapScript: () => {
@@ -709,6 +734,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       vsSeeker: vsSeekerProbe(),
       escalator: escalatorProbe(),
       itemfinder: itemfinderProbe(),
+      warpArrow: this.warpArrowSprite?.inUse
+        ? { visible: !this.warpArrowSprite.invisible, x: this.warpArrowSprite.data[0], y: this.warpArrowSprite.data[1], animNum: this.warpArrowSprite.animNum, image: this.warpArrowSprite.image }
+        : undefined,
       avatar: {
         flags: Object.keys(this.assets.scripts.defines)
           .filter((k) => k.startsWith('PLAYER_AVATAR_FLAG_') && gPlayerAvatar.flags & this.defines.require(k))
@@ -720,6 +748,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         movementDirection: this.player.movementDirection,
         spriteY2: this.player.sprite.y - (this.player.feetY + this.player.lift),
         spriteX2: this.player.sprite.x - this.player.anchor.x,
+        priority: this.player.priority,
         cameraPanY: this.cameraPanY,
         cameraPanX: this.cameraPanX,
       },
@@ -953,6 +982,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         this.spawnsWaiting = false;
         this.updateObjectsForCamera(); // the last camera step's TrySpawnObjectEvents, now the sheet is in
       }
+      // ReadKeys' L=A: on the GBA every reader (the field's too) sees A while L is pressed in that button mode
+      this.buttons.lEqualsA = this.state.optionsButtonMode === K.OPTIONS_BUTTON_MODE_L_EQUALS_A;
       this.buttons.sample();
       // CallCallbacks: RunHelpSystemCallback first; while the help is up the field's callbacks and VBlank don't run
       help = this.help?.tick(this.buttons) ?? false;
@@ -1193,6 +1224,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       return true;
     }
     if (this.tryOnFrameScript()) return true;
+    if (input.tookStep) this.state.incrementGameStat(K.GAME_STAT_STEPS);
+    if (input.tookStep) IncrementRenewableHiddenItemStepCounter(this.state);
     if (input.tookStep) RunMassageCooldownStepCounter(this.state);
     if (input.tookStep) IncrementResortGorgeousStepCounter(this.state);
     if (input.tookStep) IncrementBirthIslandRockStepCount(this.state, this.world.current.data.id);
@@ -1252,13 +1285,36 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     return true;
   }
 
-  /** TryArrowWarp: pushing the way an arrow mat or a directional stair warp points. */
+  /**
+   * TryArrowWarp: pushing the way an arrow mat points (SetupWarp, DoWarp) or a directional stair warp goes
+   * (SetupWarp, DoStairWarp: world/stairWarp.ts; off the bike first, with 12 frames' delay).
+   */
   private tryArrowWarp(x: number, y: number, behavior: number, dir: Direction): boolean {
     const warp = this.warpAt(x, y);
     if (!warp || !this.behaviors.isPushWarp(behavior, dir)) return false;
-    // A stair warp gets the player off the bike first (DoStairWarp's delay isn't ported).
-    if (this.behaviors.isDirectionalStairWarp(behavior, dir) && TestPlayerAvatarFlags(PLAYER_AVATAR_FLAG.MACH_BIKE | PLAYER_AVATAR_FLAG.ACRO_BIKE)) {
-      SetPlayerAvatarTransitionFlags(PLAYER_AVATAR_FLAG.ON_FOOT);
+    if (this.behaviors.isDirectionalStairWarp(behavior, dir)) {
+      let delay = 0;
+      if (TestPlayerAvatarFlags(PLAYER_AVATAR_FLAG.MACH_BIKE | PLAYER_AVATAR_FLAG.ACRO_BIKE)) {
+        SetPlayerAvatarTransitionFlags(PLAYER_AVATAR_FLAG.ON_FOOT);
+        delay = 12;
+      }
+      StoreInitialPlayerAvatarState();
+      // SetupWarp: the destination's header is usually loaded already (prefetchStairWarpDestinations); if not, it
+      // loads meanwhile and Task_StairWarp holds before the music fades until it's there
+      const name = warp.dest_map !== 'MAP_DYNAMIC' ? this.assets.mapNameForId(warp.dest_map) : undefined;
+      const loaded = name ? this.assets.loadedMap(name) : undefined;
+      if (name && loaded) {
+        const dest = this.setupWarpLoaded(warp, loaded, this.world.current, this.player.tileX, this.player.tileY);
+        this.stairWarpDest = { name, data: loaded, warpId: dest.warpId, x: dest.x, y: dest.y };
+      } else {
+        this.stairWarpDest = undefined;
+        void this.setupWarp(warp).then(async (dest) => {
+          const destName = dest && this.assets.mapNameForId(dest.mapId);
+          this.stairWarpDest = dest && destName ? { name: destName, data: await this.assets.loadMap(destName), warpId: dest.warpId, x: dest.x, y: dest.y } : null;
+        });
+      }
+      DoStairWarp(behavior, delay);
+      return true;
     }
     StoreInitialPlayerAvatarState();
     void this.takeWarp(warp);
@@ -1531,6 +1587,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const cur = this.world.current;
     const { tileX: x, tileY: y } = this.player; // gSaveBlock1Ptr->pos
     const destData = await this.assets.loadMap(name);
+    return this.setupWarpLoaded(w, destData, cur, x, y);
+  }
+
+  /** SetupWarp's part after the destination's header is loaded (`cur`, x, y: the map and position at the push). */
+  private setupWarpLoaded(w: WarpEventData, destData: MapData, cur: MapChunk, x: number, y: number): { mapId: string; warpId: number; x: number; y: number } {
+    const destIndex = Number(w.dest_warp_id);
     UpdateEscapeWarp(this.mapType(cur.data), this.mapType(destData), w.x, w.y);
     if (destData.warpEvents[destIndex]?.dest_map === 'MAP_DYNAMIC') {
       this.state.dynamicWarp = { mapId: cur.data.id, warpId: cur.data.warpEvents.indexOf(w), x: x - cur.originX, y: y - cur.originY };
@@ -1538,10 +1600,22 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     return { mapId: w.dest_map, warpId: destIndex, x: -1, y: -1 };
   }
 
+  /**
+   * A stair warp's destination header, fetched when the map loads (enterMap), so that SetupWarp at the push has it
+   * at once (Task_StairWarp's TryFadeOutOldMapMusic comes the frame after a push on foot).
+   */
+  private prefetchStairWarpDestinations(): void {
+    const cur = this.world.current;
+    for (const w of cur.data.warpEvents) {
+      const name = this.assets.mapNameForId(w.dest_map);
+      if (name && MetatileBehavior_IsDirectionalStairWarp(this.world.tileAt(cur.originX + w.x, cur.originY + w.y).behavior)) void this.assets.loadMap(name);
+    }
+  }
+
   /** SetupWarp, then the warp (`kind`: see warpTo). */
   private async takeWarp(w: WarpEventData, kind: WarpKind = 'warp'): Promise<void> {
     // Lock the controls now: the destination may still be loading on the next frames, and a held push
-    // direction (stairs, arrow mats) must not set up the same warp again meanwhile.
+    // direction (arrow mats) must not set up the same warp again meanwhile.
     this.busy = true;
     this.warping = true;
     const dest = await this.setupWarp(w);
@@ -1704,10 +1778,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /**
    * Warp to a warp event index, or to explicit coordinates when warpId < 0. `kind`: 'warp' is DoWarp (stepping onto
-   * a warp, arrow mats, stairs, `warp`: SE_EXIT), 'silent' DoDiveWarp (`warpsilent`), 'door' Task_DoorWarp's case 4
-   * (after the door's SE and walk in; `warpdoor`). Each starts TryFadeOutOldMapMusic with the fade out, and
-   * Task_Teleport2Warp waits for both (WaitWarpFadeOutScreen, BGMusicStopped): 32 or 64 more frames when the music
-   * changes.
+   * a warp, arrow mats, `warp`: SE_EXIT; the stairs run Task_StairWarp: world/stairWarp.ts), 'silent' DoDiveWarp
+   * (`warpsilent`), 'door' Task_DoorWarp's case 4 (after the door's SE and walk in; `warpdoor`). Each starts
+   * TryFadeOutOldMapMusic with the fade out, and Task_Teleport2Warp waits for both (WaitWarpFadeOutScreen,
+   * BGMusicStopped): 32 or 64 more frames when the music changes.
    */
   private async warpTo(name: string, warpId: number, x: number, y: number, kind: WarpKind = 'warp'): Promise<void> {
     this.busy = true;
@@ -1715,7 +1789,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const data = await this.assets.loadMap(name);
     TryFadeOutOldMapMusic(data);
     const white = this.warpFadeOutScreen(from, data);
-    PlayRainStoppingSoundEffect(); // DoWarp, DoDiveWarp, Task_DoorWarp's case 4, Task_StairWarp
+    PlayRainStoppingSoundEffect(); // DoWarp, DoDiveWarp, Task_DoorWarp's case 4
     if (kind === 'warp') PlaySE(K.SE_EXIT);
     await this.waitFrames(() => !this.screenFade.active && BGMusicStopped());
     const isExit = await this.loadWarpedMap(name, warpId, x, y, white);
@@ -1730,10 +1804,36 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private async defaultWarpExit(isExit: boolean): Promise<void> {
     Overworld_PlaySpecialMapMusic();
     QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode();
-    const arrival = this.world.tileAt(this.player.tileX, this.player.tileY);
-    if (this.behaviors.isDoor(arrival.behavior)) this.exitDoor(isExit);
-    else this.warpFadeInScreen(isExit);
-    await this.waitFrames(() => this.fieldFadeTransitionBackgroundEffectIsFinished()); // Task_ExitNonDoor
+    await this.waitFrames(this.setUpWarpExitTask(false, isExit).done); // Task_ExitNonDoor / Task_ExitStairs
+  }
+
+  /**
+   * SetUpWarpExitTask (`playerNotMoving`: FieldCB_WarpExitFadeFromBlack's TRUE): on a door
+   * (MetatileBehavior_IsWarpDoor_2) Task_ExitDoor; otherwise ExitWarpFadeInScreen (WarpFadeInScreen, or
+   * FadeInFromBlack when the player isn't moving), then Task_ExitStairs on a staircase (world/stairWarp.ts) unless
+   * gExitStairsMovementDisabled, else Task_ExitNonDoor. Clears gExitStairsMovementDisabled. `done`: the exit
+   * task is over (Task_ExitNonDoor's wait for the fade; Task_ExitDoor runs on as an overlay).
+   */
+  private setUpWarpExitTask(playerNotMoving: boolean, isExit: boolean): { kind: 'door' | 'stairs' | 'nonDoor'; done: () => boolean } {
+    const { x, y } = this.player.current; // PlayerGetDestCoords
+    const behavior = this.world.tileAt(x, y).behavior;
+    let kind: 'door' | 'stairs' | 'nonDoor' = 'nonDoor';
+    let done = () => this.fieldFadeTransitionBackgroundEffectIsFinished();
+    if (this.behaviors.isDoor(behavior)) {
+      kind = 'door';
+      this.exitDoor(isExit);
+    } else {
+      this.warpFadeInScreen(playerNotMoving ? false : isExit);
+      if (MetatileBehavior_IsDirectionalStairWarp(behavior) && !gExitStairsMovementDisabled()) {
+        kind = 'stairs';
+        done = StartExitStairs({
+          warpFadeInScreen: () => this.warpFadeInScreen(isExit),
+          fieldFadeTransitionBackgroundEffectIsFinished: () => this.fieldFadeTransitionBackgroundEffectIsFinished(),
+        });
+      }
+    }
+    setExitStairsMovementDisabled(false);
+    return { kind, done };
   }
 
   /** FieldFadeTransitionBackgroundEffectIsFinished: the fade in is over and no forest preview is up. */
@@ -1820,6 +1920,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.removeCameraObject();
     this.objectsFrozen = false; // the map's objects are created anew
     await this.world.load(name);
+    this.prefetchStairWarpDestinations();
     const anims = this.assets.tilesetAnimInfo(this.world.current.data.tilesetPair);
     InitTilesetAnimations(anims.primary, anims.secondary);
     this.player.setVisible(true); // the GBA recreates the player object on every warp
@@ -1850,7 +1951,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /**
    * Before a save (state/saveData.ts): what gSaveBlock1Ptr->location / pos and the saved player object hold:
-   * the current map, the player's map-local tile, facing and avatar state (SaveObjectEvents).
+   * the current map, the player's map-local tile, facing and avatar state; SaveSerializedGame's SaveObjectEvents
+   * (the current map's other objects), the current map's templates (gSaveBlock1Ptr->objectEventTemplates, which
+   * the port keeps in `templates`) and StartMenu_PrepareForSave's SaveMapView. CONTINUE puts them back
+   * (`saveblockMapLoad`).
    */
   storeLocationForSave(): void {
     const cur = this.world.current;
@@ -1863,18 +1967,106 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       avatarFlags: gPlayerAvatar.flags & (F.ON_FOOT | F.MACH_BIKE | F.ACRO_BIKE | F.SURFING),
       mapLayoutId: this.state.mapLayoutId,
     };
+    this.state.objectEvents = this.npcs.filter((n) => n.chunk === cur).map((n) => this.npcObjectEvent(n));
+    this.state.objectEventTemplates = this.templatesFor(cur).map(({ script: _script, ...t }) => ({ ...t }));
+    this.state.mapView = this.saveMapView();
+  }
+
+  /**
+   * SaveMapView: gBackupMapData's MAP_OFFSET_W x MAP_OFFSET_H cells from gSaveBlock1Ptr->pos, which in VMap is the
+   * player's tile less MAP_OFFSET: map-local x - 7 .. x + 7, y - 7 .. y + 6, row by row. Cells outside the current
+   * map (the GBA's VMap has the border and the connections' strips there) are saved as 0 and not loaded back.
+   */
+  private saveMapView(): number[] {
+    const cur = this.world.current;
+    const { x, y } = this.playerLocal();
+    const view: number[] = [];
+    for (let j = y - MAP_OFFSET; j < y - MAP_OFFSET + MAP_OFFSET_H; j++) {
+      for (let i = x - MAP_OFFSET; i < x - MAP_OFFSET + MAP_OFFSET_W; i++) view.push(cur.blockAt(cur.originX + i, cur.originY + j) ?? 0);
+    }
+    return view;
+  }
+
+  /**
+   * CB2_ContinueSavedGame's save block in the saved map's load (onMapLoaded calls these): the saved templates with
+   * the header's scripts (LoadSaveblockObjEventScripts) before ON_LOAD, InitMapFromSavedGame's LoadSavedMapView
+   * between the layout and ON_LOAD, and LoadObjectEvents' objects once the templates' have spawned. A save from
+   * before version 14 has none of them: the map loads with the header's templates and objects, as a warp would.
+   */
+  private saveblockMapLoad(loc: PlayerLocation): { templates(): void; mapView(): void; objects(): void } {
+    const s = this.state;
+    const isSavedMap = () => this.world.current.data.id === loc.mapId;
+    return {
+      templates: () => {
+        const cur = this.world.current;
+        if (!s.objectEventTemplates || !isSavedMap()) return;
+        const header = cur.data.objectEvents;
+        this.templates.set(cur.name, s.objectEventTemplates.map((t, i) => ({ ...t, script: header[i]?.script ?? '0' })));
+      },
+      mapView: () => {
+        const view = s.mapView;
+        s.mapView = undefined; // ClearSavedMapView
+        if (!view?.some((v) => v !== 0) || !isSavedMap()) return; // SavedMapViewIsEmpty
+        const cur = this.world.current;
+        let k = 0;
+        for (let j = loc.y - MAP_OFFSET; j < loc.y - MAP_OFFSET + MAP_OFFSET_H; j++) {
+          for (let i = loc.x - MAP_OFFSET; i < loc.x - MAP_OFFSET + MAP_OFFSET_W; i++, k++) {
+            if (cur.blockAt(cur.originX + i, cur.originY + j) !== undefined && view[k] !== undefined) cur.setBlock(i, j, view[k]);
+          }
+        }
+      },
+      objects: () => {
+        if (s.objectEvents && isSavedMap()) this.loadObjectEvents(s.objectEvents);
+      },
+    };
+  }
+
+  /**
+   * LoadObjectEvents, then SpawnObjectEventsOnReturnToField's sprites: the saved objects of the current map back
+   * where the save had them (currentCoords, facing, movement type, visibility and the flags the port's
+   * ObjectEvent keeps). The port has spawned the map's objects from the (saved) templates already; one they don't
+   * spawn (shown with `addobject` over its hide flag when the game was saved) is spawned as `addobject` does.
+   */
+  private loadObjectEvents(saved: QuestLogObjectEvent[]): void {
+    const cur = this.world.current;
+    const { mapGroup, mapNum } = mapGroupAndNum(cur.data.id);
+    for (const o of saved) {
+      if (!o.active || o.isPlayer || o.mapGroup !== mapGroup || o.mapNum !== mapNum) continue;
+      if (!this.npcByLocalId(o.localId)) this.addObject(o.localId);
+      const n = this.npcByLocalId(o.localId);
+      if (!n) continue;
+      const obj = n.brain.obj;
+      if (constant(n.brain.movementType) !== o.movementType) {
+        const type = this.movementTypeName(o.movementType);
+        if (type) n.brain.setMovementType(type);
+      }
+      obj.setPosition(cur.originX + o.x - MAP_OFFSET, cur.originY + o.y - MAP_OFFSET);
+      obj.face(directionOf(o.facingDirection));
+      obj.facingDirectionLocked = !!o.facingDirectionLocked;
+      obj.disableAnim = !!o.disableAnim;
+      obj.enableAnim = !!o.enableAnim;
+      obj.inanimate = !!o.inanimate;
+      obj.fixedPriority = !!o.fixedPriority;
+      obj.triggerGroundEffectsOnStop = !!o.triggerGroundEffectsOnStop;
+      obj.disableCoveringGroundEffects = !!o.disableCoveringGroundEffects;
+      obj.landingJump = !!o.landingJump;
+      obj.disableJumpLandingGroundEffect = !!o.disableJumpLandingGroundEffect;
+      obj.setVisible(!o.invisible);
+    }
   }
 
   /**
    * Map entry sequence: templates reloaded, temps cleared, ON_TRANSITION, ON_LOAD, objects spawned, ON_WARP_INTO.
    * `continued` (CONTINUE: CB2_ContinueSavedGame's InitMapFromSavedGame) runs only ON_LOAD, keeps the saved temps
-   * and flash level, and puts the player back as saved.
+   * and flash level, and puts the player back as saved; CONTINUE's `continueMapLoad` adds the save's templates,
+   * map view and objects.
    */
   private async onMapLoaded(warped: boolean, continued?: PlayerLocation): Promise<void> {
     const cur = this.world.current;
     const name = cur.name;
     await this.preloadMapSprites();
     this.templates.set(name, cur.data.objectEvents.map((e) => ({ ...e }))); // LoadObjEventTemplatesFromHeader
+    this.continueMapLoad?.templates(); // CONTINUE: the save's templates (LoadSaveblockObjEventScripts)
     this.state.currentMap = name;
     this.state.currentMapId = cur.data.id;
     this.state.currentMapSection = this.mapSection();
@@ -1902,10 +2094,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       Overworld_ClearSavedMusic(); // before RunOnTransitionMapScript (Cycling Road's sets it again)
       const transition = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_TRANSITION');
       if (transition) this.scripts.runImmediately(transition);
+      TryRegenerateRenewableHiddenItems(this.state); // after RunOnTransitionMapScript
     } else {
       this.state.mapLayoutId = continued.mapLayoutId ?? this.defines.require(cur.data.layoutId); // LoadSaveblockMapHeader
     }
     await this.initMapLayout();
+    this.continueMapLoad?.mapView(); // InitMapFromSavedGame's LoadSavedMapView, before RunOnLoadMapScript
     const load = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_LOAD');
     if (load) this.scripts.runImmediately(load);
     await this.preloadMapSprites(); // again, now the map scripts have set any VAR_OBJ_GFX_ID_*
@@ -1940,6 +2134,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     // The player object is made anew: while playback runs, its callback is QL_UpdateObject
     if (warped || continued) this.playerQuestLog = !this.scripts.running && QL_GetPlaybackState() === K.QL_PLAYBACK_STATE_RUNNING;
     this.syncNpcsWithLoadedMaps();
+    this.continueMapLoad?.objects(); // CONTINUE: the saved objects (LoadObjectEvents)
     this.qlMapLoad?.objects(); // QL_LoadObjects: the scene's objects where the snapshot has them
     if (warped) {
       const table = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_WARP_INTO_MAP_TABLE');
@@ -2016,7 +2211,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     updateLocationHistoryForRoamer(s);
     roamerMoveToOtherLocationSet(s);
     PlayTimeCounter_Start(s.playTime);
-    // gExitStairsMovementDisabled = TRUE: the port has no Task_ExitStairs
+    setExitStairsMovementDisabled(true); // gExitStairsMovementDisabled = TRUE
     if (UseContinueGameWarp(s) && s.continueGameWarp) {
       ClearContinueGameWarpStatus(s);
       const w = s.continueGameWarp;
@@ -2032,11 +2227,15 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       this.showMapNameOnWarpArrival(undefined);
       // FieldCB_DefaultWarpExit → SetUpWarpExitTask(FALSE)
       Overworld_PlaySpecialMapMusic();
-      if (this.behaviors.isDoor(this.world.tileAt(this.player.tileX, this.player.tileY).behavior)) this.exitDoor(false);
-      else this.warpFadeInScreen(false);
+      this.setUpWarpExitTask(false, false);
     } else {
       const name = this.assets.mapNameForId(loc.mapId) ?? start.map;
-      await this.enterMap(name, loc.x, loc.y, loc.facing, false, loc);
+      this.continueMapLoad = this.saveblockMapLoad(loc);
+      try {
+        await this.enterMap(name, loc.x, loc.y, loc.facing, false, loc);
+      } finally {
+        this.continueMapLoad = undefined;
+      }
       this.resumeMap(); // ResumeMap's RunOnResumeMapScript, ReloadObjectsAndRunReturnToFieldMapScript
       if (fromQuestLog) {
         FieldCB2_FinalScene(); // (its FieldCB_WarpExitFadeFromBlack's music: the host's warpExitFadeFromBlack)
@@ -2045,7 +2244,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       Overworld_PlaySpecialMapMusic();
       // FieldCB_ShowMapNameOnContinue, then FieldCB_WarpExitFadeFromBlack → SetUpWarpExitTask(TRUE): FadeInFromBlack
       if (this.world.current.data.showMapName) this.showMapNamePopup();
-      this.warpFadeInScreen(false);
+      this.setUpWarpExitTask(true, false);
     }
     // Task_ExitNonDoor: the controls stay locked until the fade is done
     if (!this.overlay) this.overlay = { tick: () => this.fieldFadeTransitionBackgroundEffectIsFinished() };
@@ -2083,10 +2282,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         Overworld_PlaySpecialMapMusic();
         QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode();
         this.qlLock();
-        this.warpFadeInScreen(false);
+        const exit = this.setUpWarpExitTask(true, false); // (gExitStairsMovementDisabled is TRUE: Task_ExitNonDoor)
         this.overlay = {
           tick: () => {
-            if (!this.fieldFadeTransitionBackgroundEffectIsFinished()) return false;
+            if (!exit.done()) return false;
             this.qlUnlock();
             return true;
           },
@@ -2188,6 +2387,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     };
     try {
       ResetInitialPlayerAvatarState();
+      setExitStairsMovementDisabled(!isWarp); // LoadMap_QLPlayback: FALSE before LoadMapFromWarp, else TRUE
       if (isWarp) {
         // WarpIntoMap with the scene's warp, LoadMapFromWarp
         const warpId = scene.warpId === 0xff ? -1 : scene.warpId;
@@ -2213,12 +2413,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     QL_StartPlaybackScene();
     Overworld_PlaySpecialMapMusic();
     QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode();
-    if (isWarp && this.behaviors.isDoor(this.world.tileAt(x, y).behavior)) {
-      this.exitDoor(false); // FieldCB_DefaultWarpExit
-    } else {
-      this.warpFadeInScreen(false); // FieldCB_WarpExitFadeFromBlack
-      if (!this.overlay) this.overlay = { tick: () => this.fieldFadeTransitionBackgroundEffectIsFinished() };
-    }
+    // FieldCB_DefaultWarpExit / FieldCB_WarpExitFadeFromBlack: SetUpWarpExitTask(FALSE / TRUE); Task_ExitStairs locks
+    // the controls itself (and leaves the objects free)
+    const exit = this.setUpWarpExitTask(!isWarp, false);
+    if (exit.kind === 'nonDoor' && !this.overlay) this.overlay = { tick: exit.done };
     this.busy = false;
   }
 
@@ -2817,10 +3015,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     ResetInitialPlayerAvatarState();
     const isExit = await this.loadWarpedMap(name, w.warpId, w.x, w.y, false);
     Overworld_PlaySpecialMapMusic(); // FieldCB_DefaultWarpExit
-    const arrival = this.world.tileAt(this.player.tileX, this.player.tileY);
-    if (this.behaviors.isDoor(arrival.behavior)) this.exitDoor(isExit);
-    else this.warpFadeInScreen(isExit);
-    await this.waitFrames(() => this.fieldFadeTransitionBackgroundEffectIsFinished());
+    await this.waitFrames(this.setUpWarpExitTask(false, isExit).done);
     this.busy = false;
   }
 
@@ -3056,6 +3251,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       battleTypeFlags |= d.require('BATTLE_TYPE_FIRST_BATTLE');
     }
     const speech = (label?: string) => (label && this.assets.strings[label] !== undefined ? this.charmap.encode(this.assets.strings[label]) : undefined);
+    // DoTrainerBattle
+    this.state.incrementGameStat(K.GAME_STAT_TOTAL_BATTLES);
+    this.state.incrementGameStat(K.GAME_STAT_TRAINER_BATTLES);
     return this.runBattle({
       battleTypeFlags,
       trainerBattleOpponent_A: battle.trainer,
@@ -3212,6 +3410,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /** The DoStandardWildBattle / StartRoamerBattle / DoGhostBattle part: battle, then CB2_EndWildBattle. */
   private runWildBattle(battleTypeFlags: number, enemy: Pokemon, song = 0): void {
+    this.state.incrementGameStat(K.GAME_STAT_TOTAL_BATTLES);
+    this.state.incrementGameStat(K.GAME_STAT_WILD_BATTLES);
     const run = this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty: [enemy] }, this.wildBattleTransition(enemy), song);
     let fadeIn: (() => boolean) | undefined;
     this.overlay = {
@@ -3538,9 +3738,29 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   // ------------------------------------------------------------------ player avatar
 
+  /** An NPC as its gObjectEvents entry (questLogObjectEventFrom): QL_RecordObjects' snapshot and SaveObjectEvents. */
+  private npcObjectEvent(n: Npc): QuestLogObjectEvent {
+    const { mapGroup, mapNum } = mapGroupAndNum(n.chunk.data.id);
+    return questLogObjectEventFrom(n.brain.obj, {
+      localId: n.localId,
+      mapNum,
+      mapGroup,
+      originX: n.chunk.originX,
+      originY: n.chunk.originY,
+      isPlayer: false,
+      graphicsId: constant(n.graphicsId) ?? 0,
+      movementType: constant(n.brain.movementType) ?? 0,
+      trainerType: constant(n.spawnedAs.trainer_type) ?? 0,
+      trainerRange_berryTreeId: Number(n.spawnedAs.trainer_sight_or_berry_tree_id) || (constant(n.spawnedAs.trainer_sight_or_berry_tree_id) ?? 0),
+      frozen: this.objectsFrozen,
+      trackedByCamera: this.cameraObject === n.brain.obj,
+    });
+  }
+
   /** What field_player_avatar.c (world/playerAvatar.ts) reads and does on the field. */
   /** What quest_log.c reads from gSaveBlock1Ptr / gObjectEvents (world/questLog.ts). */
   private createQuestLogHost(): QuestLogHost {
+    // (the NPCs' entries: npcObjectEvent)
     const cur = () => this.world.current;
     const info = (localId: number) => {
       const { mapGroup, mapNum } = mapGroupAndNum(cur().data.id);
@@ -3569,18 +3789,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         ];
         for (const n of this.npcs) {
           if (n.chunk !== cur() || out.length >= OBJECT_EVENTS_COUNT) continue;
-          out.push(
-            questLogObjectEventFrom(n.brain.obj, {
-              ...info(n.localId),
-              isPlayer: false,
-              graphicsId: constant(n.graphicsId) ?? 0,
-              movementType: constant(n.brain.movementType) ?? 0,
-              trainerType: constant(n.spawnedAs.trainer_type) ?? 0,
-              trainerRange_berryTreeId: Number(n.spawnedAs.trainer_sight_or_berry_tree_id) || (constant(n.spawnedAs.trainer_sight_or_berry_tree_id) ?? 0),
-              frozen: this.objectsFrozen,
-              trackedByCamera: this.cameraObject === n.brain.obj,
-            }),
-          );
+          out.push(this.npcObjectEvent(n));
         }
         return out;
       },
@@ -3632,6 +3841,14 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       partyKnowsSurf: () => {
         const surf = this.defines.require('MOVE_SURF');
         return this.state.party.some((m) => m.moves.includes(surf));
+      },
+      // objectEvent->warpArrowSpriteId: CreateWarpArrowSprite with the player (made here when a map load has cleared it)
+      showWarpArrowSprite: (direction, x, y) => {
+        if (!this.warpArrowSprite?.inUse) this.warpArrowSprite = this.fieldEffects.createWarpArrowSprite();
+        this.fieldEffects.showWarpArrowSprite(this.warpArrowSprite, direction, x, y);
+      },
+      hideWarpArrowSprite: () => {
+        if (this.warpArrowSprite?.inUse) this.warpArrowSprite.invisible = true; // SetSpriteInvisible
       },
     };
   }

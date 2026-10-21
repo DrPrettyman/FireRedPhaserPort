@@ -475,7 +475,7 @@ const NOT_SEEN_FLAGS = () =>
   K.BATTLE_TYPE_EREADER_TRAINER | K.BATTLE_TYPE_POKEDUDE | K.BATTLE_TYPE_LINK | K.BATTLE_TYPE_GHOST | K.BATTLE_TYPE_OLD_MAN_TUTORIAL | K.BATTLE_TYPE_LEGENDARY;
 
 function setSeen(battler: number): void {
-  handleSetPokedexFlag(speciesToNationalPokedexNum(g.battleMons[battler].species), K.FLAG_SET_SEEN);
+  handleSetPokedexFlag(speciesToNationalPokedexNum(g.battleMons[battler].species), K.FLAG_SET_SEEN, g.battleMons[battler].personality);
 }
 
 function battleIntroGetMonsData(): void {

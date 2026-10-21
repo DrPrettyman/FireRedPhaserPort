@@ -119,8 +119,12 @@ test('Viridian Forest is shaded: the fade in blends to the shaded palettes in 16
 });
 
 test('a Tanoby chamber darkens through EventScript_TryDarkenRuins (its header says NONE), not once the ruins are unlocked', async () => {
-  const game = await session.start({ start: 'after-rival', map: 'SevenIsland_TanobyRuins', x: 120, y: 11 });
+  // Ruin Maniac Benjamin (121, 11) looks around: started at (120, 11) he could spot the player before the walk (a
+  // battle under load). Start out of his sight, beat him on paper, then step up beside him.
+  const game = await session.start({ start: 'after-rival', map: 'SevenIsland_TanobyRuins', x: 120, y: 12 });
   await startedIdle(game);
+  await game.eval((t) => t.state!.setFlag(t.define('TRAINER_FLAGS_START') + t.define('TRAINER_RUIN_MANIAC_BENJAMIN'), true));
+  expect(await game.walk('up'), 'a step up to the entrance').toMatchObject({ x: 120, y: 11, arrived: true });
   await warp(game, 'up', 'SevenIsland_TanobyRuins_MoneanChamber');
   const dark = await probe(game);
   expect(dark.savedWeather, 'setweather WEATHER_SHADE').toBe(WEATHER_SHADE);

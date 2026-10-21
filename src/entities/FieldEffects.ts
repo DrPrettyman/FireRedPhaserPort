@@ -466,6 +466,32 @@ export class FieldEffects {
 
   // ------------------------------------------------------------------ field_effect_helpers.c
 
+  /**
+   * CreateWarpArrowSprite: FLDEFFOBJ_ARROW at OAM priority 1, subpriority 0x52, invisible (the player's
+   * warpArrowSpriteId; not a field effect, so not on the active list).
+   */
+  createWarpArrowSprite(): FieldEffectSprite {
+    const s = this.create('FLDEFFOBJ_ARROW', 'Arrow', 0, 0, 0x52, () => {}); // SpriteCallbackDummy
+    s.priority = 1;
+    s.invisible = true;
+    return s;
+  }
+
+  /**
+   * ShowWarpArrowSprite: on world tile (x, y), pointing `direction`; the anim restarts only when it was hidden or
+   * the tile changed (data[0] / data[1]).
+   */
+  showWarpArrowSprite(s: FieldEffectSprite, direction: Direction, x: number, y: number): void {
+    if (s.invisible || s.data[0] !== x || s.data[1] !== y) {
+      s.x = x * TILE + 8; // SetSpritePosToMapCoords + 8
+      s.y = y * TILE + 8;
+      s.invisible = false;
+      s.data[0] = x;
+      s.data[1] = y;
+      s.startAnim(DIR_NUM[direction] - 1); // sAnimTable_Arrow[direction - 1]
+    }
+  }
+
   /** SetUpReflection: a copy of the object's sprite, flipped, at OAM priority 3 with its reflection palette. */
   setUpReflection(obj: ObjectEvent, stillReflection: boolean): void {
     const info = obj.info;

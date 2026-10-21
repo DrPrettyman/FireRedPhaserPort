@@ -1261,7 +1261,7 @@ export function Cmd_trysetcaughtmondexflags(): void {
   if (state.dexCaught.has(dex)) {
     g.battlescriptCurrInstr = w(1);
   } else {
-    handleSetPokedexFlag(dex, K.FLAG_SET_CAUGHT);
+    handleSetPokedexFlag(dex, K.FLAG_SET_CAUGHT, mon.personality);
     adv(5);
   }
 }

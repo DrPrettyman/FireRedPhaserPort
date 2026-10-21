@@ -325,7 +325,8 @@ export function Cmd_swapattackerwithtarget(): void {
 }
 
 export function Cmd_incrementgamestat(): void {
-  // IncrementGameStat: game stats aren't tracked yet
+  // GAME_STAT_USED_STRUGGLE / _USED_SPLASH, for the player's side only
+  if (getBattlerSide(g.battlerAttacker) === K.B_SIDE_PLAYER) state.incrementGameStat(b(1));
   adv(2);
 }
 

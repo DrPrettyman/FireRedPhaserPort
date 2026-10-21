@@ -10,6 +10,7 @@ import { loadGfx } from '../gba/gfx';
 import { initEasyChatData, type EasyChatData } from '../menus/easyChatData';
 import { initTrainerTowerData, type TrainerTowerData } from '../world/trainerTower';
 import { initFameCheckerData, type FameCheckerData } from '../state/fameChecker';
+import { initRenewableHiddenItems } from '../world/renewableHiddenItems';
 import { initHelpSystemData, type HelpSystemData } from '../ui/helpSystemContext';
 import { initQuestLogData, type QuestLogData } from '../world/questLog';
 import { FieldDoors, type DoorData } from '../world/doors';
@@ -52,6 +53,7 @@ export class Assets {
   trades!: TradesData;
 
   private maps = new Map<string, Promise<MapData>>();
+  private loadedMaps = new Map<string, MapData>();
   private layoutIndex?: Promise<Record<string, string>>;
 
   async init(): Promise<void> {
@@ -78,6 +80,7 @@ export class Assets {
     initEasyChatData(await fetchJson<EasyChatData>(`${GEN}/easyChat.json`)); // before any GameState (InitEasyChatPhrases)
     initTrainerTowerData(await fetchJson<TrainerTowerData>(`${GEN}/trainerTower.json`)); // world/trainerTower.ts
     initFameCheckerData(await fetchJson<FameCheckerData>(`${GEN}/fameChecker.json`)); // state/fameChecker.ts
+    initRenewableHiddenItems(constants.renewableHiddenItems); // before any GameState (NewGameInitData's SetAllRenewableItemFlags)
     initHelpSystemData(await fetchJson<HelpSystemData>(`${GEN}/helpSystem.json`)); // ui/helpSystemMenu.ts
     initQuestLogData(await fetchJson<QuestLogData>(`${GEN}/questLog.json`)); // world/questLog.ts
     await loadGfx(FieldDoors.gfxSymbols(this.doors));
@@ -105,10 +108,15 @@ export class Assets {
   loadMap(name: string): Promise<MapData> {
     let p = this.maps.get(name);
     if (!p) {
-      p = fetchJson<MapData>(`${GEN}/maps/${name}.json`);
+      p = fetchJson<MapData>(`${GEN}/maps/${name}.json`).then((data) => (this.loadedMaps.set(name, data), data));
       this.maps.set(name, p);
     }
     return p;
+  }
+
+  /** A map loadMap has finished loading, synchronously (undefined until then). */
+  loadedMap(name: string): MapData | undefined {
+    return this.loadedMaps.get(name);
   }
 
   /**

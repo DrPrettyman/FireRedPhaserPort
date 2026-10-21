@@ -140,6 +140,7 @@ import { encodeRaw, text } from './common';
 import { menusData } from './data';
 import { CB2_ReturnToField } from './fieldCallbacks';
 import { CB2_ReturnToPartyMenuFromFlyMap, SetUsedFlyQuestLogEvent } from './partyMenu';
+import { setExitStairsMovementDisabled } from '../world/stairWarp';
 
 // ------------------------------------------------------------------ data
 
@@ -583,7 +584,7 @@ function allocRegionMap(type: number, savedCallback: MainCallback | null): void 
     mainTask: Task_RegionMap,
     savedCallback,
   };
-  // (gExitStairsMovementDisabled = TRUE: the field's walk out of a staircase warp isn't ported)
+  setExitStairsMovementDisabled(true); // gExitStairsMovementDisabled = TRUE
   InitRegionMapType();
   SetMainCallback2(CB2_OpenRegionMap);
 }

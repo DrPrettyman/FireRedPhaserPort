@@ -1124,13 +1124,16 @@ function DexScreen_LoadCategoryPageGfx(category: number, pageNum: number): boole
   return page.map((species) => !(DexScreen_CanShowMonInDex(species) && DexScreen_GetSetPokedexFlag(state, species, FLAG_GET_SEEN, true)) || DexScreen_LoadMonGfx(species)).every(Boolean);
 }
 
-/** The graphics the registered page after catching `species` draws: the screen's and its habitat page's mons'. */
-export function dexRegisterGfxSymbols(species: number): string[] {
+/**
+ * The graphics the registered page after catching `species` (at `personality`) draws: the screen's and its habitat
+ * page's mons'. The caught mon's own personality: catching it (HandleSetPokedexFlag) makes it the Unown / Spinda one.
+ */
+export function dexRegisterGfxSymbols(species: number, personality?: number): string[] {
   const syms = new Set(pokedexScreenGfxSymbols());
   for (const category of pokedexData.categories) {
     for (const page of category) {
       if (!page.includes(species)) continue;
-      for (const s of page) dexMonGfxSymbols(s).forEach((sym) => syms.add(sym));
+      for (const s of page) dexMonGfxSymbols(s, s === species ? personality : undefined).forEach((sym) => syms.add(sym));
     }
   }
   return [...syms];
@@ -2066,16 +2069,23 @@ export function DexScreen_DexPageZoomEffectFrame(bg: number, scale: number): voi
   FillBgTilemapBufferRect_Palette0(bg, 2, left + 1, divY + 1, width, top + height - divY);
 }
 
-/** DexScreen_GetDefaultPersonality: the save's Unown / Spinda personalities aren't kept (see DEVIATIONS), so 0. */
-export function DexScreen_GetDefaultPersonality(_species: number): number {
-  return 0;
+/** DexScreen_GetDefaultPersonality: the first Unown / Spinda seen (HandleSetPokedexFlag), else 0. */
+export function DexScreen_GetDefaultPersonality(species: number): number {
+  switch (species) {
+    case K.SPECIES_SPINDA:
+      return state.dexSpindaPersonality;
+    case K.SPECIES_UNOWN:
+      return state.dexUnownPersonality;
+    default:
+      return 0;
+  }
 }
 
-/** The graphics the mon page draws for `species`: its front pic, its palettes and its footprint. */
-export function dexMonGfxSymbols(species: number): string[] {
-  const syms = [monPicSymbol(true, species, DexScreen_GetDefaultPersonality(species)), ...monPalSymbols(species)];
+/** The graphics the mon page draws for `species` (at `personality`): its front pic, its palettes and its footprint. */
+export function dexMonGfxSymbols(species: number, personality = DexScreen_GetDefaultPersonality(species)): string[] {
+  const syms = [monPicSymbol(true, species, personality), ...monPalSymbols(species)];
   // The area page's icon (ListMenu_DrawMonIconGraphics)
-  syms.push(monIconSymbol(GetIconSpecies(species, DexScreen_GetDefaultPersonality(species))));
+  syms.push(monIconSymbol(GetIconSpecies(species, personality)));
   const footprint = pokedexData.footprints[species];
   if (footprint && hasGfx(footprint)) syms.push(footprint);
   return syms;

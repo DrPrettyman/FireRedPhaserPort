@@ -75,6 +75,7 @@ import {
   ItemUseCB_TryRestorePP,
   setItemUseCB,
 } from './partyMenu';
+import { setExitStairsMovementDisabled } from '../world/stairWarp';
 
 /** sExitCallbackByItemType[ITEM_TYPE_* - 1] */
 function sExitCallbackByItemType(itemType: number): MainCallback | null {
@@ -192,13 +193,14 @@ function SetFieldCallback2ForItemUse(): void {
 
 /**
  * FieldCB2_UseItemFromField + Task_ItemUseWaitForFade: freeze the objects and hold the controls while the field
- * fades in from black, then give both back. (gExitStairsMovementDisabled = FALSE: no Task_ExitStairs in the port.)
+ * fades in from black, then give both back; gExitStairsMovementDisabled = FALSE.
  */
 function FieldCB2_UseItemFromField(field: FieldCallbackHost): () => boolean {
   const f = fieldFuncs();
   avatarField().freezeObjectEvents(); // FreezeObjectEvents
   f.LockPlayerFieldControls();
   const faded = field.fadeInFromBlack(); // FadeInFromBlack; the wait is IsWeatherNotFadingIn
+  setExitStairsMovementDisabled(false);
   return () => {
     if (!faded()) return false;
     avatarField().unfreezeObjectEvents(); // UnfreezeObjectEvents
@@ -387,9 +389,10 @@ function FieldUseFunc_VsSeeker(taskId: number): void {
   }
 }
 
-/** ItemUseOutOfBattle_Itemfinder (IncrementGameStat(GAME_STAT_USED_ITEMFINDER): game stats aren't tracked yet) */
+/** ItemUseOutOfBattle_Itemfinder */
 function ItemUseOutOfBattle_Itemfinder(taskId: number): void {
   const f = fieldFuncs();
+  state.incrementGameStat(K.GAME_STAT_USED_ITEMFINDER);
   // (world/itemfinder.ts runs its own field task, as for the VS Seeker)
   sItemUseOnFieldCB = (id) => {
     f.ItemUseOnFieldCB_Itemfinder();

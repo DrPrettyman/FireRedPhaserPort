@@ -6,6 +6,7 @@
 import { loadGfx } from '../gba/gfx';
 import { SetMainCallback2 } from '../gba/main';
 import { CB2_InitInGameTrade, tradeSceneGfxSymbols } from '../menus/tradeScene';
+import { FLAG_SET_CAUGHT, FLAG_SET_SEEN, GetSetPokedexFlag, HandleSetPokedexFlag } from '../menus/pokedex';
 import type { Pokemon } from '../pokemon/Pokemon';
 import type { GameState } from '../state/GameState';
 import type { Special } from './specials';
@@ -180,7 +181,8 @@ export function UpdatePokedexForReceivedMon(state: GameState, partyIdx: number):
   const mon = state.party[partyIdx];
   if (mon.isEgg) return;
   const nationalNum = state.pokemon.nationalDex(mon.species);
-  state.setDexFlags(nationalNum, true, true); // GetSetPokedexFlag(FLAG_SET_SEEN) + HandleSetPokedexFlag(FLAG_SET_CAUGHT)
+  GetSetPokedexFlag(state, nationalNum, FLAG_SET_SEEN);
+  HandleSetPokedexFlag(state, nationalNum, FLAG_SET_CAUGHT, mon.personality);
 }
 
 /** GetPlayerTrainerId vs MON_DATA_OT_ID of party slot VAR_0x8004. */

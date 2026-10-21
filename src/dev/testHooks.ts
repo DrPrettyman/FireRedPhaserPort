@@ -308,6 +308,11 @@ export interface FieldProbe {
    * each arrow / star's screen position, anim (0-3 arrows, 4 the star), affine anim (0 left, 1 down, 2 right, 3 up).
    */
   itemfinder: { running: boolean; sprites: { x: number; y: number; anim: number; affineAnim: number; image: number }[] } | undefined;
+  /**
+   * The player's warp arrow sprite (HandleWarpArrowSpriteHideShow), once made: shown or not, the world tile it was
+   * last shown on, its anim (sAnimTable_Arrow: 0 south, 1 north, 2 west, 3 east) and frame.
+   */
+  warpArrow: { visible: boolean; x: number; y: number; animNum: number; image: number } | undefined;
   /** gPlayerAvatar and the player's held movement (world/playerAvatar.ts). */
   avatar: {
     /** PLAYER_AVATAR_FLAG_* set, without the prefix (ON_FOOT, MACH_BIKE, SURFING, FORCED, ...). */
@@ -325,6 +330,8 @@ export interface FieldProbe {
     spriteY2: number;
     /** The player sprite's x offset off its tile (sprite->x2: the escalator ride). */
     spriteX2: number;
+    /** The player sprite's oam.priority (1 on a stair warp's walk in). */
+    priority: number;
     /** SetCameraPanning's vertical offset (the fall warp's landing shake, the elevator). */
     cameraPanY: number;
     /** SetCameraPanning's horizontal offset (ShakeScreen). */
@@ -406,6 +413,8 @@ export interface MonSpec {
   status?: string;
   /** A personality that makes it shiny (for the player's OT id). */
   shiny?: boolean;
+  /** A fixed personality (Spinda's spots, Unown's letter); `shiny` wins over it. */
+  personality?: number;
   /**
    * An egg with this many egg cycles left (friendship), made by world/daycare.ts' createEgg (CreateEgg: level
    * EGG_HATCH_LEVEL, met level 0, Poké Ball, the egg nickname, a random personality); `level`, `iv` and `shiny`
@@ -500,7 +509,7 @@ function createApi(game: Phaser.Game) {
             metLocation: s.currentMapSection,
             fixedIV: spec.iv,
             // shiny value = otId hi ^ otId lo ^ personality hi ^ personality lo = 0
-            personality: spec.shiny ? ((((s.trainerId >>> 16) ^ (s.trainerId & 0xffff)) << 16) >>> 0) : undefined,
+            personality: spec.shiny ? ((((s.trainerId >>> 16) ^ (s.trainerId & 0xffff)) << 16) >>> 0) : spec.personality,
           });
     if (spec.moves) {
       mon.moves = [0, 0, 0, 0];
