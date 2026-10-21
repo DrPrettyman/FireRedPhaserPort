@@ -4768,3 +4768,5 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   row) and the files that go through a field item use: evolution, audioScenes, tmCase, registeredItems,
   postgameKantoNational, questLog, berryPouch. Screens checked by eye: the candy at Charmander's mouth at 2x, the
   dots, "Huh?", the darkened mon with the stars at "Poof!", the disc's wobble and the blue flash with the dots.
+- Unfixed: one early run of itemUseAnim's Fire Stone test (the first after the import changes) timed out at 120 s
+  without a failing assertion; five later runs passed and the cause wasn't found (PR #170 names it).
