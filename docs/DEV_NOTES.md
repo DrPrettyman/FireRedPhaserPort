@@ -516,6 +516,24 @@ this is the next level down. When you add or change a subsystem, update its entr
   Six Island's Dotted Hole after. Test events `fallWarp` (map), `fallWarpLanded`, `fallWarpDone`; the field probe's
   `avatar.spriteY2` / `avatar.cameraPanY`. Tests: tests/e2e/sideSpecials.test.ts (Pokémon Mansion 3F (18, 17)
   walking down; Seafoam B3F (6, 17) into the B4F current).
+- **Escalators (the Pokémon Centers' 1F ↔ 2F):** `world/escalator.ts`. Stepping onto MB_UP_ESCALATOR /
+  MB_DOWN_ESCALATOR with a warp (OverworldScene.tryStartWarpEventScript, TryStartWarpEventScript's
+  MetatileBehavior_IsEscalator branch) runs SetupWarp (`warpSetup` → `warpDestination`, as the fall warp) and
+  DoEscalatorWarp: Task_EscalatorWarpFieldEffect (EscalatorWarpEffect_1-6: freeze, StartEscalator,
+  QuestLog_OnEscalatorWarp(QL_ESCALATOR_OUT), face, SE_ESCALATOR, the sprite's x2 / y2 a pixel every 2 frames,
+  the fade on the 7th frame, then `FieldMoveHost.warpIntoMap(..., FieldCB_EscalatorWarpIn, warpId)`), and on the
+  other floor Task_EscalatorWarpInFieldEffect (EscalatorWarpInEffect_1-7: from 16 px off, the steps until
+  IsEscalatorMoving is FALSE, then the controls back, QL_ESCALATOR_IN and the step off east). special_field_anim.c's
+  Task_DrawEscalator sets the 3x3 around the player one section a frame (METATILE_PokemonCenter_Escalator_* from the
+  extracted defines through `K`) and draws them on its 8th: the grid changes go through `EscalatorHost`
+  (`MapChunk.setBlock(..., false)`, then `drawBlock` at DrawWholeMapView). The C's tasks run in the module's own
+  gTasks list (CreateTask's InsertTask by priority, RunTasks following `next`) from one field task, because the
+  draw task's order against the warp tasks decides the frame IsEscalatorMoving reads; `ResetEscalatorTasks` is the
+  field's ResetTasks (enterMap, resumeMap). Probes: `__test.field().escalator` (the draw task's state, stage,
+  drawing), `avatar.spriteX2` / `spriteY2`, `__test.metatileAt(x, y)` (the grid's metatile, collision, and whether
+  the BG shows it); events `escalatorWarp` (up), `escalatorStart` (goingUp), `escalatorFadeOut`, `escalatorWarpIn`,
+  `escalatorStop`, `escalatorDone`. Test: tests/e2e/escalator.test.ts (ViridianCity_PokemonCenter_1F from (2, 6)
+  walking left: up, down, up again; a recorded ride played back on CONTINUE).
 - **Egg hatching:** `menus/eggHatch.ts` is daycare.c's hatching half. ShouldEggHatch (world/daycare.ts) leaves the
   egg's slot in VAR_0x8004; OverworldScene counts GAME_STAT_HATCHED_EGGS and runs EventScript_EggHatch, whose
   `special EggHatch` (EGG_HATCH_SPECIALS, spread into SPECIALS) fades out and `runScreenFromScript(StartEggHatch,
@@ -784,8 +802,9 @@ this is the next level down. When you add or change a subsystem, update its entr
   - `world/questLogBattle.ts` is quest_log_battle.c: TrySetQuestLogBattleEvent (the battle's end: the trainer
     class picks GYM_LEADER / E4_MEMBER / CHAMPION / TRAINER via `questLogTrainerBattleEventId`, the HP fraction from
     the player's side; a won or caught wild battle) and TrySetQuestLogLinkBattleEvent (gLinkPlayers as an argument).
-    QL4 calls them from battle/main.ts (HandleEndTurn_FinishBattle's comment marks the spot); the trainer events wait
-    in SetQuestLogEvent's deferred slot until CB2_EndTrainerBattle's QuestLogEvents_HandleEndTrainerBattle (wired).
+    battle/main.ts's HandleEndTurn_FinishBattle calls TrySetQuestLogBattleEvent (QL4b); the trainer events wait in
+    SetQuestLogEvent's deferred slot until CB2_EndTrainerBattle's QuestLogEvents_HandleEndTrainerBattle
+    (ScriptEngine.endTrainerBattle: both early-rival outcomes and a won battle, not a rematch).
   - **The menus' call sites (QL4a):** `ItemUse_SetQuestLogEvent` (item_use.c) is in questLogEvents.ts (a mon as
     `{species, isEgg}` or null for 0xFFFF). Callers, each where the C calls it: menus/itemUse.ts (Coin Case, Powder
     Jar, Poké Flute, Teachy TV, Repel, Black / White Flute, the Escape Rope with `questLogHost().mapSec()`, Fame
@@ -798,11 +817,27 @@ this is the next level down. When you add or change a subsystem, update its entr
     SetFlyWarpDestination calls it), menus/itemPc.ts (WITHDREW_ITEM_PC), menus/itemMenu.ts's Task_TryDoItemDeposit
     (DEPOSITED_ITEM_PC) and menus/pokemonStorage.ts's SetPokeStorageQuestLogEvent, whose QL_EVENT_* choice is
     `pokeStorageQuestLogEvent` in menus/pokemonStorageQuestLog.ts (no screen state: unit tested). Map sections of a
-    MAP_* come from `mapSecOf` (questLogLocations.ts, questLog.json's maps). Still to wire (QL4b): the shops, the TM
-    case / berry pouch transactions, SetUsedPkmnCenterQuestLogEvent, the story items, TrySetQuestLogBattleEvent, the
-    Game Corner. Tests: tests/unit/questLogCalls.test.ts, tests/e2e/questLog.test.ts's "QL4a" tests (the menus driven
-    by key presses, each event loaded back with `__test.questLogEventLine`; the party menu's played on CONTINUE,
-    caught from gStringVar4 while sPlaybackControl.state is 1).
+    MAP_* come from `mapSecOf` (questLogLocations.ts, questLog.json's maps). Tests: tests/unit/questLogCalls.test.ts,
+    tests/e2e/questLog.test.ts's "QL4a" tests (the menus driven by key presses, each event loaded back with
+    `__test.questLogEventLine`; the party menu's played on CONTINUE, caught from gStringVar4 while
+    sPlaybackControl.state is 1).
+  - **The rest of the call sites (QL4b):** shop.c's transaction history is `menus/shopQuestLog.ts` (sHistory,
+    RecordItemTransaction, RecordTransactionForQuestLog; kept out of shop.ts so the bag, TM case and berry pouch don't
+    import the buy menu): ui/ShopMenu.ts resets it when the mart opens (CreatePokemartMenu, both entries' mapSec) and
+    sends BOUGHT / SOLD on SEE YA! (Task_HandleShopMenuQuit); shop.ts's BuyMenuTryMakePurchase and the three SELL
+    paths (itemMenu.ts's Task_FinalizeSaleToShop, tmCase.ts's Task_DoSaleOfTMs, berryPouch.ts's
+    Task_SellBerries_PlaySfxAndRemoveBerries) record into it. script/storySpecials.ts's SetUsedPkmnCenterQuestLogEvent
+    (never starts a scene: only one already recording takes it). `world/questLogStoryItem.ts` is item.c's
+    TrySetObtainedItemQuestLogEvent (questLog.json's storyItems, read from the C's condition; the Town Map only in the
+    rival's house), from ScriptEngine's `additem` (ScrCmd_additem: every `giveitem`); a story item only starts a
+    scene, it isn't recorded into one. battle/main.ts calls TrySetQuestLogBattleEvent. menus/slotMachine.ts calls
+    SetQLPlayedTheSlots as the reels start, so leaving the Game Corner records DEPARTED. Tests:
+    tests/unit/questLogMenus.test.ts (the history's rules, the story items), tests/e2e/questLogMenus.test.ts (a scene
+    per family driven by key presses and played back on CONTINUE to its line: a mart's BUY and SELL from the TM case,
+    the berry pouch and the bag; the nurse in a scene that arriving in Lavender started; Oak's Parcel; Rick and a wild
+    Rattata after the Hall of Fame; the slots and the Game Corner's exit). A trainer seen in playback runs his
+    approach script, whose message waits until QL5's auto-scroll / `goto_if_questlog`: the e2e test records Rick's
+    battle in its own scene (it starts after the battle, so its playback has him beaten).
   - `world/questLogLocations.ts` is field_specials.c's QuestLog_CheckDepartingIndoorsMap /
     QuestLog_TryRecordDepartedLocation; `world/questLogObjects.ts` is QL_RecordObjects (and
     `questLogObjectEventFrom`, the port's ObjectEvent as a gObjectEvents entry, map coordinates with MAP_OFFSET);
@@ -816,7 +851,7 @@ this is the next level down. When you add or change a subsystem, update its entr
     the departed check; ResetQuestLog on a new game, QL_ResetOnSoftReset and TryStartQuestLogPlayback on CONTINUE, QuestLog_CutRecording after a
     white-out and before a Victory Road switch's script. playerAvatar.ts records the steps (PlayerSetAnimId), the gfx
     transitions, getting off Surf and Strength; NpcBrain's `onSingleMovement` records NPC faces and steps; fishing and
-    the VS Seeker record their gfx changes. ScriptEngine: a rematch's trainerbattle ends the scene, CB2_EndTrainerBattle
+    the VS Seeker record their gfx changes (played back: "Quest log, playback" below). ScriptEngine: a rematch's trainerbattle ends the scene, CB2_EndTrainerBattle
     runs QuestLogEvents_HandleEndTrainerBattle. The save dialog and the Hall of Fame call SaveQuestLogData; the
     specials GetQuestLogState, QuestLog_CutRecording (also ShowTownMap, ShowDiploma) and
     QuestLog_StartRecordingInputsAfterDeferredEvent are real. The save keeps the scenes since version 12
@@ -851,6 +886,28 @@ this is the next level down. When you add or change a subsystem, update its entr
     (no script) move only through QL_UpdateObject: NpcBrain's `questLogUpdate`, `playerQuestLog` for the player;
     ObjectEvent.setHeldMovement replaces a held action in playback (as ObjectEventSetHeldMovement). The keys don't
     reach the player; QL_IsTrainerSightDisabled gates CheckForTrainersWantingBattle; wild encounters are off.
+  - **The player's gfx and the field moves (QL5b2):** QL_UpdateObject's recorded gfx change runs
+    QuestLogUpdatePlayerSprite (world/playerAvatar.ts, sQLGfxTransitions): QL_GfxTransition_Normal / _Bike /
+    _StartSurf there (the avatar transitions record, then call them, as PlayerAvatarTransition_* do), _StopSurf* →
+    CreateStopSurfingTask_NoMusicChange; QL_GfxTransition_Fish → Task_QLFishMovement (world/fishing.ts: the rod
+    out for 61 frames of state 1, put away, the controls locked meanwhile, so the actions wait) and
+    QL_GfxTransition_VSSeeker → FLDEFF_USE_VS_SEEKER + Task_QLVSSeekerMovement (world/vsSeeker.ts; priority 0:
+    `CreateTask(tick, 0)` puts a field task first) are registered from registerFieldItems / registerVsSeeker
+    (`registerQLGfxTransition`, questLogPlayer.ts), which keeps fishing.ts out of playerAvatar.ts' imports. The
+    recordings are the C's: CanStopSurfing / SeafoamIslandsB4F_CurrentDumpsPlayerOnLand (16 frames), the stop-surf
+    tasks' jump and face and Strength's push (QL_TryRecord*WithDuration*), StartFishing + QL_AfterRecordFishActionSuccessful,
+    FldEff_UseVsSeeker (89 frames). Replayed, the stop-surf task's QL_TryRecordPlayerStepWithDuration0 writes over the
+    recorded jump and face at the playhead and steps past them (RecordHeadAtEndOfEntry doesn't check the state), so
+    they aren't played twice. Returning to the field from the bag records a NORMAL gfx change
+    (SetPlayerAvatarObjectEventIdAndObjectId's transition), as in the C. Using Surf records nothing (FldEff_UseSurf
+    sets the state itself; QL_AvoidDisplay in the A-press script's YES/NO cuts the recording, the party menu's USED_FIELD_MOVE ends the
+    scene); QL_PLAYER_GFX_SURF comes from SetPlayerAvatarTransitionFlags (ForcePlayerToStartSurfing, the Seafoam fall).
+    Every field_effect.c QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode caller is in (FieldCB_FallWarpExit,
+    FieldCB_EscalatorWarpIn, FieldCallback_EscapeRopeExit, FieldCallback_TeleportIn) except
+    FieldCB_LavaridgeGymB1FWarpExit (no FRLG map has the Lavaridge warps). Probes: `field().fishing` (`step` -1 and
+    `questLogState` for Task_QLFishMovement), events `questLogFishing`, `questLogVsSeeker`, `questLogVsSeekerEnd`.
+    Test: tests/e2e/questLogField.test.ts (Surf off and on, a Strength push, a cast, the VS Seeker: recorded, saved,
+    played back on CONTINUE).
   - **The end:** QuestLog_AdvancePlayhead / QuestLog_WaitFadeAndCancelPlayback → QuestLog_StartFinalScene: the host's
     `enterFieldFromQuestLog` reloads the save slot as CONTINUE read it (`savedGame`, cloned in create: decision 3)
     and runs enterSavedField(…, true) (CB2_EnterFieldFromQuestLog = CB2_ContinueSavedGame's steps) with
@@ -953,6 +1010,7 @@ this is the next level down. When you add or change a subsystem, update its entr
   The buy menu's map view reads the field through `ShopFieldView` (`OverworldScene.shopFieldView`), and
   `LoadFieldTilesetsForShop` puts the map's tiles/palettes where the overworld would have left them in VRAM.
   `menus/objectEventGraphics.ts` is CreateObjectGraphicsSprite for any GBA-layer screen that needs NPC sprites.
+  The quest log's transaction history (RecordItemTransaction) is `menus/shopQuestLog.ts` ("Quest log, recording").
   Test: `?start=after-rival&map=PewterCity_Mart&x=4&y=3`, face left, A (TM layout: Celadon Dept. Store 2F, x=3 y=6).
 - **Game Corner (coins box, slot machine, photo printer):** `ui/CoinsBox.ts` is coins.c's field window (ShowCoinsWindow /
   PrintCoinsString / HideCoinsWindow), drawn like `ui/MoneyBox.ts`; the script commands `showcoinsbox` /
@@ -2171,8 +2229,8 @@ or extend them:
 - **Doors:** `FieldDoors.getDoorSoundEffect(x, y)` (world coords) is GetDoorSoundEffect; `opendoor` plays it via
   the ScriptHost's `doorSoundEffect` (map-local); the warps' door SEs (Task_DoorWarp, Task_ExitDoor) use it too.
 - **Not here:** the warp tasks' sounds (Escape Rope, Dig, Teleport, the fall arrival, Fly's music) and map music
-  ("Map music"), the cries' timing (W-sound 2), the bike bell (item_use.c: menus/itemUse.ts). Not in the port: escalators,
-  the Lavaridge warps, FldEff_NpcFlyOut, Birth Island's rock (SE_THUNDER), ShakeScreen, LoopWingFlapSound, the
+  ("Map music"), the cries' timing (W-sound 2), the bike bell (item_use.c: menus/itemUse.ts), the escalator's SE_ESCALATOR
+  (world/escalator.ts). Not in the port: the Lavaridge warps, FldEff_NpcFlyOut, Birth Island's rock (SE_THUNDER), ShakeScreen, LoopWingFlapSound, the
   Acro Bike and secret base mats (field_player_avatar.c's SE_BIKE_HOP / SE_WARP_IN), the mailbox. The rain weathers'
   sounds are the weather's ("Field weather").
 - **Tests:** `tests/e2e/fieldSounds.test.ts` (a bump's SE_WALL_HIT, a ledge's SE_LEDGE, talking's SE_SELECT, Bill's

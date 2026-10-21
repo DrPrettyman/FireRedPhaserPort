@@ -8,8 +8,7 @@
 // CB2_ReturnToFieldContinueScriptPlayMapMusic) on FieldMenuScene (script/gameCornerSpecials.ts).
 //
 // The win fanfares hold the payout for their sFanfares count (gba/sound.ts); nothing is audible before the mixer
-// (AUDIO_PLAN.md W-m4a 3). No quest log (SetQLPlayedTheSlots) and no game stats
-// (GAME_STAT_SLOT_JACKPOTS).
+// (AUDIO_PLAN.md W-m4a 3). No game stats (GAME_STAT_SLOT_JACKPOTS).
 
 import { K } from '../battle/constants';
 import { state } from '../battle/env';
@@ -182,6 +181,7 @@ import {
   StopCurrentReel,
   slotMachineData,
 } from './slotMachineLogic';
+import { SetQLPlayedTheSlots } from '../world/questLogEvents';
 
 // Only 4 icons are actually visible per reel at a single time, with 1 on deck. Only 3 visible when not spinning.
 const REEL_LOAD_LENGTH = 5;
@@ -486,7 +486,7 @@ function MainTask_SlotsGameLoop(taskId: number): void {
       }
       break;
     case 2:
-      // SetQLPlayedTheSlots: no quest log
+      SetQLPlayedTheSlots(); // leaving the Game Corner now counts as QL_EVENT_DEPARTED
       CalcSlotBias();
       StartReels();
       s.currentReel = 0;

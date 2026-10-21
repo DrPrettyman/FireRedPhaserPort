@@ -4572,6 +4572,91 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   yesnobox, EventScript_ReleaseEnd once, the saved field after; Viridian Forest's Charlie played back: no battle,
   his flag set by EventScript_EndQuestLogBattle, no encounter music, the intro up 120+ frames). Ran questLog,
   listMenuFlash, seagallop, sideEvents, gameCorner, newGame and trainerBattle e2e files: all pass.
+### W-ql5b 1: the Pokémon Center escalators (QUEST_LOG_PLAN.md QL5b1, batch 14)
+
+- New `world/escalator.ts`: field_fadetransition.c's DoEscalatorWarp; field_effect.c's StartEscalatorWarp,
+  Task_EscalatorWarpFieldEffect / EscalatorWarpEffect_1-6, Escalator_AnimatePlayerGoingDown / Up,
+  Escalator_BeginFadeOutToNewMap, Escalator_TransitionToWarpInEffect, FieldCB_EscalatorWarpIn,
+  Task_EscalatorWarpInFieldEffect / EscalatorWarpInEffect_1-7; special_field_anim.c's StartEscalator,
+  CreateEscalatorTask, Task_DrawEscalator, SetEscalatorMetatile, StopEscalator, IsEscalatorMoving and the
+  sEscalatorMetatiles_* tables (the METATILE_PokemonCenter_Escalator_* ids were already in the extracted defines:
+  read through `K`, no extractor change). Every Pokémon Center's escalator was a plain warp (DEV_NOTES' "Not in the
+  port"); now the player rides it: frozen objects, SE_ESCALATOR, the sprite sliding off a pixel every 2 frames, the
+  fade on EscalatorWarpEffect_3's 7th frame, the steps' metatiles cycling (one section a frame, drawn every 8th), the
+  ride in on the other floor and the step off east 39 frames after the steps start there.
+- The C's task order matters (IsEscalatorMoving is read by the warp-in task before the draw task runs that frame,
+  and the draw task created by EscalatorWarpInEffect_1 runs a second time in its first frame), so escalator.ts runs
+  its tasks in a gTasks list of its own (InsertTask by priority, RunTasks following `next`) from one field task;
+  `ResetEscalatorTasks` beside ResetLeagueLightingTasks in enterMap / resumeMap.
+- QuestLog_OnEscalatorWarp (world/questLog.ts, both halves were there) is called: OUT closes the frames so far with
+  an empty action and stops counting (RECORDING_NO_DELAY) in recording, holds the actions (ACTION_END) in playback;
+  IN undoes it. A recorded ride plays back on CONTINUE (the recorded step and input start the escalator in playback).
+- Shared: OverworldScene's tryStartWarpEventScript escalator branch (SetupWarp then DoEscalatorWarp), the
+  EscalatorHost, ResetEscalatorTasks calls, `testMetatile`; MapChunk.setBlock gets `draw = true` and `drawBlock`
+  (DrawWholeMapView's half), `drawnMatchesGrid`; testHooks: `field().escalator`, `avatar.spriteX2`, `metatileAt`.
+- Verified: typecheck; `npm test` (774); e2e escalator.test.ts (new, 2: up / down / up again with the map, position,
+  metatiles, collision, the drawn view, the sprite offsets and the frames against the C worked by hand; a recorded ride
+  with its playback states, played back on CONTINUE), questLog.test.ts, field.test.ts, fieldMoves.test.ts: all pass.
+
+### W-ql5b 2: the field moves and the player's gfx in quest log playback (QUEST_LOG_PLAN.md QL5b2, batch 14)
+
+- quest_log_player.c's playback half: QuestLogUpdatePlayerSprite runs sQLGfxTransitions as the C does. playerAvatar.ts
+  splits QL_GfxTransition_Normal / _Bike / _StartSurf out of PlayerAvatarTransition_* (which record, then call them);
+  QL_GfxTransition_StopSurfSouth/North/West/East → the new CreateStopSurfingTask_NoMusicChange (no
+  Overworld_ClearSavedMusic / ChangeMusicToDefault: getting off a mon in playback no longer changes the music).
+  fishing.ts has QL_GfxTransition_Fish (StartPlayerAvatarFishAnim goes through it) and Task_QLFishMovement (the
+  rod out, 61 frames of state 1, put away, the normal or riding graphics back; the controls locked meanwhile and
+  preventStep left set, as in the C); vsSeeker.ts has QL_GfxTransition_VSSeeker (FLDEFF_USE_VS_SEEKER alone) and
+  Task_QLVSSeekerMovement at priority 0. Both are registered into questLogPlayer.ts' table at boot
+  (`registerQLGfxTransition`), so playerAvatar.ts doesn't import fishing.ts; the "unported player gfx change"
+  debug line is gone.
+- field_player_avatar.c's recordings checked against the C: the Surf dismount (sQuestLogSurfDismountActionIds, 16
+  frames; SeafoamIslandsB4F_CurrentDumpsPlayerOnLand's playback check), Strength's push
+  (QL_TryRecordPlayerStepWithDuration0 / QL_TryRecordNPCStepWithDuration32), the stop-surf tasks' jump and face,
+  StartFishing's QL_AfterRecordFishActionSuccessful, FldEff_UseVsSeeker's (8, 89) were all in; the secret base mats'
+  (FALSE behaviours in FRLG) aren't reachable. Found on the way: in playback the stop-surf task's
+  QL_TryRecordPlayerStepWithDuration0 overwrites the recorded jump and face at the playhead and skips them (the C's
+  RecordHeadAtEndOfEntry doesn't check the state); the port does the same, so nothing jumps twice. Returning from
+  the bag records a NORMAL gfx change (SetPlayerAvatarObjectEventIdAndObjectId), as in the C. Using Surf records no
+  gfx change in the C (FldEff_UseSurf sets the state itself), so the test mounts with ForcePlayerToStartSurfing.
+- field_effect.c's QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode callers (lines 1159, 1462, 1872, 2273,
+  2450): FieldCB_FallWarpExit (fallWarp.ts), FieldCB_EscalatorWarpIn (escalator.ts, QL5b1),
+  FieldCallback_EscapeRopeExit and FieldCallback_TeleportIn (fieldMoves.ts) were in;
+  FieldCB_LavaridgeGymB1FWarpExit isn't ported (no FRLG map has the Lavaridge warps).
+- Shared: OverworldScene's avatar host `createTask(tick, priority)` (priority 0 unshifts; fieldMoves' CreateTask
+  passes it on), testHooks' `field().fishing` type (`step` -1 / `questLogState`). DEVIATIONS: Fishing's "no quest log
+  playback" and the quest log entry's "the fishing rod's and the VS Seeker's gfx changes don't play, and getting off
+  a mon changes the music" removed.
+- Verified: typecheck; `npm test` (774); e2e questLogField.test.ts (new, 4: Surf off and on, a Strength push, a cast
+  with its 62 frames from rod out to put away, the VS Seeker with Task_QLVSSeekerMovement a frame after the effect
+  ends; each recorded, saved and played back on CONTINUE), escalator.test.ts, questLog.test.ts, playerAvatar.test.ts,
+  fieldItems.test.ts, vsSeeker.test.ts, surf.test.ts: all pass (43).
+### QL4b: the quest log's menu-side calls (batch 14, W-ql4b)
+
+- Every QL4b entry point now has the C's caller: shop.c's transaction history is `menus/shopQuestLog.ts`
+  (sHistory, RecordItemTransaction, RecordTransactionForQuestLog), reset by ui/ShopMenu.ts as the mart opens
+  (CreatePokemartMenu) and sent on SEE YA! (Task_HandleShopMenuQuit); BuyMenuTryMakePurchase and the three SELL
+  paths (item_menu.c's Task_FinalizeSaleToShop, tm_case.c's Task_DoSaleOfTMs, berry_pouch.c's
+  Task_SellBerries_PlaySfxAndRemoveBerries) record into it. SetUsedPkmnCenterQuestLogEvent is real. item.c's
+  TrySetObtainedItemQuestLogEvent is `world/questLogStoryItem.ts`, from `additem` (ScrCmd_additem); its 20 items
+  are questLog.json's new `storyItems` (tools/extract_quest_log.py reads the C's condition). battle/main.ts's
+  HandleEndTurn_FinishBattle calls TrySetQuestLogBattleEvent; CB2_EndTrainerBattle's three
+  QuestLogEvents_HandleEndTrainerBattle calls were already in (ScriptEngine.endTrainerBattle). slot_machine.c's
+  SetQLPlayedTheSlots is called as the reels start.
+- On the way: the shop history lives apart from shop.ts because shop.ts imports the bag (an import cycle
+  otherwise), and its empty entry can't read `K` at module load (the constants fill in later). No bugs found in
+  questLogEvents.ts / questLogBattle.ts; their comments that said "QL4 calls it" now name the callers.
+- Not done here (QL5): a trainer who sees the player in playback runs his approach script, whose message waits for
+  a key until the auto-scroll and `goto_if_questlog` (EventScript_EndQuestLogBattle) are ported; so the e2e test
+  records Rick's battle in a scene of its own (it starts after the battle: Rick is beaten in its playback).
+- DEVIATIONS: the nurse's, the TM case's, the berry pouch's, the Poké Mart's and the slot machine's "no quest log"
+  and the quest log entry's QL4b sentence are gone.
+- Verified: typecheck; unit 779 passed (new tests/unit/questLogMenus.test.ts: the history's merge / caps / half
+  price, BOUGHT then SOLD, the story items and the Town Map rule); e2e: new tests/e2e/questLogMenus.test.ts 5
+  passed (a mart's BUY and SELL from the TM case, the berry pouch and the bag; the nurse; Oak's Parcel; Rick and a
+  wild Rattata after the Hall of Fame; the slots and the Game Corner's exit, each played back on CONTINUE to its
+  line), questLog, pokemart, tmCase, berryPouch, gameCorner, trainerBattle 31 passed, fameChecker's Brock test (a
+  gym leader's battle is now a scene that CONTINUE plays) passed.
 ### Stale DEVIATIONS entries removed
 
 - An audit of what's left to port (decomp files against the port, DEVIATIONS.md, the script coverage gaps) found

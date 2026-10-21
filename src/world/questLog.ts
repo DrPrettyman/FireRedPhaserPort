@@ -146,6 +146,8 @@ export interface QuestLogData {
   departedTexts: Record<string, string>;
   /** sGymCityMapSecs (by badge) */
   gymCityMapSecs: string[];
+  /** item.c's TrySetObtainedItemQuestLogEvent: the key items that record QL_EVENT_OBTAINED_STORY_ITEM */
+  storyItems: string[];
 }
 
 let sData: QuestLogData | undefined;
@@ -780,7 +782,7 @@ export function QL_RecordFieldInput(fieldInput: QuestLogFieldInput): void {
   }
 }
 
-/** QuestLog_OnEscalatorWarp's recording half (QL5 calls it from the escalator field effects) */
+/** QuestLog_OnEscalatorWarp: both halves (world/escalator.ts calls it from the escalator warp's field effects) */
 export function QuestLog_OnEscalatorWarp(direction: number): void {
   const state = QL_GetPlaybackState();
   if (direction === QL_ESCALATOR_OUT) {

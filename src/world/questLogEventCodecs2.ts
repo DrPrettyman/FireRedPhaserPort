@@ -63,7 +63,7 @@ export interface QuestLogEventFieldMove {
   fieldMove: number;
   mapSec: number;
 }
-/** struct QuestLogEvent_Shop (shop.c's RecordTransactionForQuestLog fills it: QL4) */
+/** struct QuestLogEvent_Shop (shop.c's RecordTransactionForQuestLog sends it: menus/shopQuestLog.ts) */
 export interface QuestLogEventShop {
   totalMoney: number;
   lastItemId: number;

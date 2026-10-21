@@ -70,14 +70,28 @@ export class MapChunk {
   }
 
   /** MapGridSetMetatileIdAt with map-local coords; `value` is the full grid value (metatile | collision). */
-  setBlock(x: number, y: number, value: number): void {
+  setBlock(x: number, y: number, value: number, draw = true): void {
     if (x < 0 || y < 0 || x >= this.data.width || y >= this.data.height) return;
     const old = this.blocks[y * this.data.width + x];
     this.blocks[y * this.data.width + x] = (old & ~0x0fff) | (value & 0x0fff);
-    if (this.pair) {
-      const gid = this.pair.gid(value & MAPGRID_METATILE_ID_MASK);
-      for (const m of this.maps) m.putTileAt(gid, x, y);
-    }
+    if (draw) this.drawBlock(x, y);
+  }
+
+  /**
+   * The BG tilemaps' cell redrawn from the map grid (map-local coords): what DrawWholeMapView does for a cell
+   * that `setBlock(..., false)` changed (the escalator sets the grid first and draws it later, as the C does).
+   */
+  drawBlock(x: number, y: number): void {
+    if (!this.pair || x < 0 || y < 0 || x >= this.data.width || y >= this.data.height) return;
+    const gid = this.pair.gid(this.blocks[y * this.data.width + x] & MAPGRID_METATILE_ID_MASK);
+    for (const m of this.maps) m.putTileAt(gid, x, y);
+  }
+
+  /** Dev: whether the BG tilemaps' cell shows the map grid's metatile (map-local coords). */
+  drawnMatchesGrid(x: number, y: number): boolean {
+    if (!this.pair) return false;
+    const gid = this.pair.gid(this.blocks[y * this.data.width + x] & MAPGRID_METATILE_ID_MASK);
+    return this.maps.every((m) => m.getTileAt(x, y, true)?.index === gid);
   }
 
   /** Show or hide this map's tiles at a map-local cell on every layer (a door drawn over it). */

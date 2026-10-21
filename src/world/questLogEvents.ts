@@ -619,7 +619,7 @@ function LoadEvent_DepartedLocation(eventData: ScriptPtr): QuestLogEventDeparted
   return { mapSec, locationId, next: advance(record, 1) };
 }
 
-/** SetQLPlayedTheSlots (the slot machine; QL4 calls it) */
+/** SetQLPlayedTheSlots (slot_machine.c's MainTask_SlotsGameLoop, as the reels start: menus/slotMachine.ts) */
 export function SetQLPlayedTheSlots(): void {
   sPlayedTheSlots = true;
 }

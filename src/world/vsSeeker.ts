@@ -1,7 +1,8 @@
 // The VS Seeker: vs_seeker.c's field side (Task_VsSeeker_0..3, GatherNearbyTrainerInfo, GetVsSeekerResponseInArea,
 // StartAllRespondantIdleMovements, ClearRematchStateByTrainerId, ResetMovementOfRematchableTrainers and
 // EventScript_VsSeekerChargingDone's specials), field_effect.c's FldEff_UseVsSeeker (UseVsSeekerEffect_1..4) and
-// field_player_avatar.c's StartPlayerAvatarVsSeekerAnim. The table lookups are world/rematches.ts; the step
+// field_player_avatar.c's StartPlayerAvatarVsSeekerAnim, and quest_log_player.c's QL_GfxTransition_VSSeeker /
+// Task_QLVSSeekerMovement (the recorded use in quest log playback). The table lookups are world/rematches.ts; the step
 // counter (UpdateVsSeekerStepCounter) and MapResetTrainerRematches' state part are world/stepCounters.ts; the
 // bag's FieldUseFunc_VsSeeker is menus/itemUse.ts, which reaches Task_VsSeeker_0 through registerVsSeeker.
 //
@@ -23,7 +24,7 @@ import { registerSpecials } from '../script/specials';
 import { MovementRunner, type Instruction } from '../script/MovementRunner';
 import { random } from '../util/random';
 import type { Direction } from './direction';
-import { QuestLogRecordUseVsSeeker } from './questLogPlayer';
+import { QL_PLAYER_GFX_VSSEEKER, QuestLogRecordUseVsSeeker, registerQLGfxTransition } from './questLogPlayer';
 import { ItemUse_SetQuestLogEvent } from './questLogEvents';
 import { FieldEffectActiveListContains, FieldEffectActiveListRemove, FieldEffectStart, registerFieldEffectNatives } from './fieldEffectScripts';
 import { DisplayItemMessageOnField, fieldItemsHost } from './fieldItems';
@@ -603,6 +604,28 @@ function UseVsSeekerEffect_4(task: UseVsSeekerTask): void {
 
 const sUseVsSeekerEffectFuncs = [UseVsSeekerEffect_1, UseVsSeekerEffect_2, UseVsSeekerEffect_3, UseVsSeekerEffect_4];
 
+/**
+ * QL_GfxTransition_VSSeeker (quest log playback, QL_UpdateObject's recorded gfx change): FLDEFF_USE_VS_SEEKER's anim
+ * alone (no rematch checks: Task_VsSeeker_* aren't replayed), and Task_QLVSSeekerMovement (priority 0, so it runs
+ * before the effect's task and sees it end the frame after) gives the objects and the controls back.
+ */
+function QL_GfxTransition_VSSeeker(): void {
+  FieldEffectStart('FLDEFF_USE_VS_SEEKER');
+  testEvent('questLogVsSeeker');
+  CreateTask(Task_QLVSSeekerMovement, 0);
+}
+
+/** Task_QLVSSeekerMovement */
+function Task_QLVSSeekerMovement(): boolean {
+  if (!FieldEffectActiveListContains('FLDEFF_USE_VS_SEEKER')) {
+    avatarField().unfreezeObjectEvents();
+    UnlockPlayerFieldControls();
+    testEvent('questLogVsSeekerEnd');
+    return true; // DestroyTask
+  }
+  return false;
+}
+
 /** sPlayerAvatarVsSeekerBikeGfxIds */
 const sPlayerAvatarVsSeekerBikeGfxIds = ['OBJ_EVENT_GFX_RED_VS_SEEKER_BIKE', 'OBJ_EVENT_GFX_GREEN_VS_SEEKER_BIKE'];
 
@@ -650,6 +673,7 @@ export function registerVsSeeker(): void {
     Task_VsSeeker_0,
   });
   registerFieldEffectNatives({ FldEff_UseVsSeeker });
+  registerQLGfxTransition(QL_PLAYER_GFX_VSSEEKER, QL_GfxTransition_VSSeeker);
   registerSpecials({
     /** The script's waitstate ends once the player and the raise-hand jumpers stand still. */
     VsSeekerFreezeObjectsAfterChargeComplete: ({ setWaitState }) => setWaitState(VsSeekerFreezeObjectsAfterChargeComplete()),

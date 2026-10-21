@@ -5,7 +5,7 @@
 // (BERRYPOUCH_FROMMARTSELL: how many, YES/NO) and the battle bag (BERRYPOUCH_FROMBATTLE: USE / TOSS / EXIT).
 // USE runs the berry's item_use.c function with this screen's task (FieldUseFunc_Medicine → the party menu,
 // which comes back through CB2_ReturnToBerryPouchMenu = BERRYPOUCH_NA). Not ported: Berry Crush
-// (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room menus, the quest log (RecordItemTransaction) and SEs.
+// (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room menus and SEs.
 
 import { K } from '../battle/constants';
 import { state } from '../battle/env';
@@ -132,6 +132,7 @@ import { PrintMoneyAmount, PrintMoneyAmountInMoneyBox, PrintMoneyAmountInMoneyBo
 import { CB2_ChooseMonToGiveItem, CB2_GiveHoldItem } from './partyMenu';
 import { CB2_ReturnToPokeStorage } from './pokemonStorage';
 import { SortAndCompactBagPocket } from './tmCase';
+import { RecordItemTransaction } from './shopQuestLog';
 
 // enum BerryPouchType (include/berry_pouch.h)
 export const BERRYPOUCH_FROMFIELD = 0;
@@ -1118,7 +1119,7 @@ function Task_SellBerries_PlaySfxAndRemoveBerries(taskId: number): void {
   PlaySE(K.SE_SHOP);
   RemoveBagItem(SpecialVar.ItemId, data[tQuantity]);
   state.addMoney(Math.trunc(ItemId_GetPrice(SpecialVar.ItemId) / 2) * data[tQuantity]);
-  // RecordItemTransaction(..., QL_EVENT_SOLD_ITEM): the quest log isn't ported
+  RecordItemTransaction(SpecialVar.ItemId, data[tQuantity], K.QL_EVENT_SOLD_ITEM - K.QL_EVENT_USED_POKEMART);
   rebuildList(taskId);
   BerryPouchSetArrowCursorFromListMenu(data[tListTaskId], 2);
   PrintMoneyAmountInMoneyBox(GetVariableWindowId(VWIN_MONEY), state.money, 0);
