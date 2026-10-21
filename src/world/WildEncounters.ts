@@ -159,7 +159,7 @@ export class WildEncounters {
 
   /**
    * FishingWildEncounter: GenerateFishingEncounter for the rod (OLD_ROD / GOOD_ROD / SUPER_ROD), then
-   * StartWildBattle. (IncrementGameStat(GAME_STAT_FISHING_CAPTURES): game stats aren't kept.)
+   * IncrementGameStat(GAME_STAT_FISHING_CAPTURES) (every bite that starts a battle) and StartWildBattle.
    */
   fishingWildEncounter(rod: number): void {
     const info = this.currentHeader()?.fishing_mons;
@@ -168,6 +168,7 @@ export class WildEncounters {
     const slot = ChooseWildMonIndex_Fishing(random(), rod, this.data.chances.fishing_mons);
     const level = this.chooseWildMonLevel(info, slot);
     this.generateWildMon(this.species(info, slot), level, slot);
+    this.state.incrementGameStat(this.state.defines.require('GAME_STAT_FISHING_CAPTURES'));
     this.startWildBattle();
   }
 

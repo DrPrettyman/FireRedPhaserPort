@@ -765,6 +765,7 @@ function BuyMenuTryMakePurchase(taskId: number): void {
 }
 
 function BuyMenuSubtractMoney(taskId: number): void {
+  state.incrementGameStat(K.GAME_STAT_SHOPPED);
   state.removeMoney(sShopData.itemPrice);
   PlaySE(K.SE_SHOP);
   PrintMoneyAmountInMoneyBox(0, state.money, 0);

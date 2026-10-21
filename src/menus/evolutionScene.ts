@@ -581,7 +581,7 @@ function Task_EvolutionScene(taskId: number): void {
         EvolutionRenameMon(mon, d[tPreEvoSpecies], d[tPostEvoSpecies]);
         handleSetPokedexFlag(speciesToNationalPokedexNum(d[tPostEvoSpecies]), K.FLAG_SET_SEEN);
         handleSetPokedexFlag(speciesToNationalPokedexNum(d[tPostEvoSpecies]), K.FLAG_SET_CAUGHT);
-        // IncrementGameStat(GAME_STAT_EVOLVED_POKEMON): game stats aren't tracked yet
+        state.incrementGameStat(K.GAME_STAT_EVOLVED_POKEMON);
         testEvent('evolution', { from: d[tPreEvoSpecies], to: d[tPostEvoSpecies], stopped: false });
       }
       break;

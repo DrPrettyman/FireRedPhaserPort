@@ -513,7 +513,7 @@ function MainTask_SlotsGameLoop(taskId: number): void {
           if (s.slotRewardClass === PAYOUT_NONE) {
             SetMainTask(MainTask_DarnNoPayout);
           } else {
-            // (PAYOUT_7: IncrementGameStat(GAME_STAT_SLOT_JACKPOTS); game stats aren't kept)
+            if (s.slotRewardClass === PAYOUT_7) state.incrementGameStat(K.GAME_STAT_SLOT_JACKPOTS);
             ResetMachineBias();
             SetMainTask(MainTask_WinHandlePayout);
           }

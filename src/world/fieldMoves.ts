@@ -397,7 +397,7 @@ function FieldCallback_UseRockSmash(): void {
 
 function FldEff_UseRockSmash(): boolean {
   CreateFieldEffectShowMon(StartRockSmashFieldEffect);
-  // (IncrementGameStat(GAME_STAT_USED_ROCK_SMASH): game stats aren't kept)
+  state.incrementGameStat(K.GAME_STAT_USED_ROCK_SMASH);
   return false;
 }
 
@@ -506,7 +506,7 @@ function FieldCallback_CutGrass(): void {
 
 function FldEff_UseCutOnGrass(): boolean {
   CreateFieldEffectShowMon(FieldMoveCallback_CutGrass);
-  // (IncrementGameStat(GAME_STAT_USED_CUT))
+  state.incrementGameStat(K.GAME_STAT_USED_CUT);
   return false;
 }
 
@@ -517,6 +517,7 @@ function FieldCallback_CutTree(): void {
 
 function FldEff_UseCutOnTree(): boolean {
   CreateFieldEffectShowMon(FieldMoveCallback_CutTree);
+  state.incrementGameStat(K.GAME_STAT_USED_CUT);
   return false;
 }
 
