@@ -295,9 +295,6 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     HelpSystem_IsSinglePlayer is always TRUE (no link play: GAPS_PLAN.md decision 4). The
     title screen sets up its own GameState from the save (LoadGameSave's gSaveBlock1/2) for the help's flags and
     button mode.
-  - CONTINUE (OverworldScene.continueSavedGame): the map's objects spawn from its templates (object events aren't
-    saved, see Save data).
-  - CONTINUE (OverworldScene.continueSavedGame): gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
     link play).
   - Elevators: UpdateEscapeWarp isn't kept on warps.
