@@ -4764,12 +4764,16 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   seen mon, and the first sighting overwrites them.
 - Fix on the way: the evolution scene called the battle's HandleSetPokedexFlag where evolution_scene.c calls
   GetSetPokedexFlag (seen + caught, no personality); it sets the flags directly now.
+- BattleScene's preload of the registered page (Cmd_displaydexinfo) uses the wild mon's own personality for its
+  species (`dexRegisterGfxSymbols(species, personality)`): catching it is what sets the Unown personality, so the
+  page draws the caught letter (its icon would otherwise be fetched on demand).
 - Test hooks: MonSpec `personality` (a fixed personality for `party` / `startWildBattle`).
 - DEVIATIONS: removed Spinda's spots from "Battles", the Unown / Spinda personalities from "Save data" and
   "Pokédex screen".
 - Tests: tests/unit/spindaSpots.test.ts (12: the extracted spots, a pixel model of the macro against five
   personalities on colours 1-3, colours 0 / 4-15 untouched, the u8 wrap with a small and a 0x2000 buffer, the real
   Spinda front pic vs back pic vs Pikachu, HandleSetPokedexFlag's first seen / first caught, the save round trip and
-  the version 13 upgrade); tests/e2e/spinda.test.ts (2: two wild Spinda's sprites in OBJ VRAM with their own spots,
+  the version 13 upgrade); tests/e2e/spinda.test.ts (3: two wild Spinda's sprites in OBJ VRAM with their own spots,
   the Pokédex keeping the first and an Unown F, its habitat page and mon page drawing them; a party Spinda's summary
-  sprite with its spots). Also run: pokedex, pokedexArea, saveContinue, evolution, inGameTrades (28 passed).
+  sprite with its spots; catching an Unown K after an F was seen: the registered page draws the K) — 3 passed. Also
+  run: pokedex, pokedexArea, saveContinue, evolution, inGameTrades (28 passed); npm test 810 passed.

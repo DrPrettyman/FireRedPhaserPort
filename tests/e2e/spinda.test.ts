@@ -214,3 +214,47 @@ test("a party Spinda's summary screen shows its spots", async () => {
   expect(r).toEqual({ differs: true, shown: true, plainShown: false });
   await game.screenshot('spinda-summary');
 }, 180_000);
+
+test("catching an Unown that was seen as another letter: the registered page draws the caught one's letter", async () => {
+  // GET_UNOWN_LETTER(0x0202) = 2 << 2 | 2 = 10, K
+  const P_UNOWN_K = 0x00000202;
+  const game = await session.start({ start: 'after-rival', map: 'Route1', x: 12, y: 7, party: [{ species: 'MEWTWO', level: 100, moves: ['PSYCHIC'] }] });
+  await installHelpers(game);
+  const unown = await game.eval((t) => t.define('SPECIES_UNOWN'));
+  // Unown F seen before (not caught): HandleSetPokedexFlag(FLAG_SET_CAUGHT) replaces it with the caught one's
+  await game.eval(
+    (t, unown, p) => {
+      const s = t.state!;
+      s.setFlag('FLAG_SYS_POKEDEX_GET', true);
+      s.nationalDexEnabled = true;
+      s.setVar('VAR_NATIONAL_DEX', 0x6258);
+      s.setFlag('FLAG_SYS_NATIONAL_DEX', true);
+      s.dexSeen.add(s.pokemon.nationalDex(unown));
+      s.dexUnownPersonality = p;
+      s.bag.add(t.define('ITEM_MASTER_BALL'), 1);
+    },
+    unown,
+    P_UNOWN_F,
+  );
+  await game.eval((t, p) => t.startWildBattle({ species: 'UNOWN', level: 5, personality: p }), P_UNOWN_K);
+  await game.chooseAction('BAG');
+  await game.waitForBag();
+  await game.pressTimes('RIGHT', 2);
+  await game.pressTimes('A', 2);
+  await game.mashUntil((t) => t.pokedex()?.task === 'Task_DexScreen_RegisterMonToPokedex', { what: 'the registered page' });
+  const r = await game.eval(
+    async (t, unown, pK) => {
+      const sp = (window as unknown as { __sp: any }).__sp;
+      const letter = ((((pK >>> 24) & 3) << 6) | (((pK >>> 16) & 3) << 4) | (((pK >>> 8) & 3) << 2) | (pK & 3)) % 28;
+      const k = await sp.plainPic(t.define('NUM_SPECIES') + letter);
+      const up = await t.until(() => !!t.pokedex()?.ready && t.pokedex()?.monPage?.species === unown && sp.windowShows(k));
+      return { up, personality: t.state!.dexUnownPersonality >>> 0 };
+    },
+    unown,
+    P_UNOWN_K,
+  );
+  expect(r).toEqual({ up: true, personality: P_UNOWN_K });
+  await game.screenshot('unown-registered');
+  await game.press('A');
+  await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the field after the battle' });
+});
