@@ -18,6 +18,7 @@ import {
 import { EOS } from '../text/charmap';
 import { SCR_MENU_CANCEL, SCR_MENU_UNSET } from '../ui/MultichoiceMenu';
 import type { Special } from './specials';
+import { avoidDisplay } from './scriptMenuAvoidDisplay';
 
 const SEAGALLOP_MORE = 254; // include/constants/seagallop.h
 const MULTICHOICE_NONE = 255;
@@ -102,10 +103,13 @@ export const FERRY_SPECIALS: Record<string, Special> = {
    * DrawSeagallopDestinationMenu (script_menu.c): the Rainbow Pass menu, a std-framed window from rect
    * (17, top, 11, numItems * 2) with 16 px rows, on the multichoice input task (CreateMCMenuInputHandlerTask:
    * B cancels, it wraps with more than 3 items). Its `waitstate` ends the frame after the choice, with it in
-   * VAR_RESULT. (The quest log's QL_AvoidDisplay has no port.)
+   * VAR_RESULT. QL_AvoidDisplay first: in playback no menu, and the `waitstate` stops the script until
+   * QL_DestroyAbortedDisplay replaces it.
    */
-  DrawSeagallopDestinationMenu({ state, host, setWaitState, encodeText }) {
+  DrawSeagallopDestinationMenu(env) {
+    const { state, host, setWaitState, encodeText } = env;
     state.setVar('VAR_RESULT', SCR_MENU_UNSET);
+    if (avoidDisplay(env)) return setWaitState(() => false);
     const { destinations, top, numItems } = SeagallopDestinationMenuItems(state.getVar('VAR_0x8004'), state.getVar('VAR_0x8005'));
     const item = (label: string) => [...encodeText(label), EOS];
     const items = [...destinations.map((dest) => item(sSeagallopDestStrings[dest])), item('gText_Other'), item('gOtherText_Exit')];

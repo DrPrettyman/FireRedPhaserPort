@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { gfx, gfx16 } from '../gba/gfx';
 import type { Input } from '../input/Input';
 import { registerSpecials } from '../script/specials';
+import { avoidDisplay, registerAbortedDisplayCleanup } from '../script/scriptMenuAvoidDisplay';
 import type { Fonts } from '../text/Font';
 import { DEPTH_UI, MenuWindow } from './MenuWindow';
 
@@ -74,13 +75,22 @@ function fossilTexture(scene: Phaser.Scene, tilesSym: string, palSym: string): s
  */
 export function registerMuseumFossilPic(field: MuseumFossilPicHost): void {
   sTask = undefined; // a new scene: the old one's task and objects are gone
+  // QL_DestroyAbortedDisplay's part: a fossil pic's sprite before Task_WaitMuseumFossilPic freed it
+  registerAbortedDisplayCleanup('museumFossilPic', () => {
+    if (sTask && sTask.tState < 2) {
+      sTask.sprite?.destroy(); // DestroySprite + FreeSpriteTilesByTag(GFXTAG_FOSSIL)
+      sTask.sprite = undefined;
+    }
+  });
   registerSpecials({
     /**
      * OpenMuseumFossilPic: VAR_0x8004 = SPECIES_KABUTOPS / SPECIES_AERODACTYL, VAR_0x8005 / 0x8006 = the window's
-     * tile x / y (minus one). Returns FALSE if a pic is already up or the species has no fossil pic.
-     * (QL_AvoidDisplay: the quest log isn't played back, so it never avoids the display.)
+     * tile x / y (minus one). Returns FALSE if a pic is already up or the species has no fossil pic; TRUE without
+     * a pic when QL_AvoidDisplay skips it (the quest log's playback).
      */
-    OpenMuseumFossilPic({ state, host }) {
+    OpenMuseumFossilPic(env) {
+      const { state, host } = env;
+      if (avoidDisplay(env)) return 1;
       if (sTask) return 0;
       const d = state.defines;
       const species = Object.keys(FOSSIL_GFX).find((s) => d.require(s) === state.getVar('VAR_0x8004'));

@@ -31,7 +31,9 @@ import { FadeInBGM, FadeOutBGMTemporarily, IsBGMPausedOrStopped, IsFanfareTaskIn
 import { IsCryFinished, PlayCry_Script } from '../gba/sound'; // the cries (W-sound 2)
 import { Overworld_ChangeMusicToDefault, Overworld_SetSavedMusic } from '../gba/overworldMusic';
 import { gStringVar4 } from '../menus/common';
-import { QL_FinishRecordingScene } from '../world/questLog';
+import { K } from '../battle/constants';
+import { gQL, QL_FinishRecordingScene, QL_GetPlaybackState } from '../world/questLog';
+import { avoidDisplay } from './scriptMenuAvoidDisplay';
 import { QuestLog_RecordEnteredMap, QuestLogEvents_HandleEndTrainerBattle } from '../world/questLogEvents';
 
 export interface ScriptsData {
@@ -649,8 +651,10 @@ export class ScriptEngine {
   }
 
   /**
-   * The multichoice commands' arguments are bytes in the script, not vars. Bit 1 of ignoreBPress only
-   * matters to the quest log (QL_AvoidDisplay).
+   * The multichoice commands' arguments are bytes in the script, not vars. DrawVerticalMultichoiceMenu (multichoice,
+   * multichoicedefault) asks QL_AvoidDisplay unless bit 1 of ignoreBPress is set (the nurse's YES/NO, which neither
+   * cuts a recording nor is skipped in playback); ScriptMenu_MultichoiceGrid always asks. Avoided in playback, the
+   * script stays stopped (ScriptContext_Stop) until QL_DestroyAbortedDisplay replaces it.
    */
   private multichoice(ctx: ScriptContext, args: { left: string; top: string; mcId: string; ignoreBPress: string; initPos?: string; columns?: string }): void {
     const d = this.defines;
@@ -661,12 +665,17 @@ export class ScriptEngine {
       return;
     }
     this.state.setVar('VAR_RESULT', SCR_MENU_UNSET);
+    const ignoreBPress = d.require(args.ignoreBPress);
+    if ((args.columns !== undefined || (ignoreBPress & 2) === 0) && avoidDisplay(this.specialEnv)) {
+      ctx.wait = () => false;
+      return;
+    }
     const menu = this.host.openMultichoice({
       left: d.require(args.left),
       top: d.require(args.top),
       mcId,
       items: items.map((label) => this.charmap.encode(this.strings[label] ?? '?$')),
-      ignoreBPress: (d.require(args.ignoreBPress) & 1) !== 0,
+      ignoreBPress: (ignoreBPress & 1) !== 0,
       initPos: args.initPos !== undefined ? d.require(args.initPos) : 0,
       columns: args.columns !== undefined ? d.require(args.columns) : undefined,
     });
@@ -895,26 +904,37 @@ export class ScriptEngine {
     },
     /**
      * ScrCmd_waitbuttonpress: WaitForAorBPress. Before a release, a held direction (other than the way the
-     * player faced), L, R, START or SELECT also closes the message, and is then replayed as field input.
+     * player faced), L, R, START or SELECT also closes the message, and is then replayed as field input (not in the
+     * quest log's playback). In playback the wait also ends by itself after 120 frames
+     * (sQuestLogWaitButtonPressTimer), as A and B are the playback's skips.
      */
     waitbuttonpress(this: ScriptEngine, ctx: ScriptContext) {
       // SetupNativeScript(ctx, WaitForAorBPress): the script stops for this frame, so the A or B that let an
       // earlier wait through in this frame can't also pass this one (braillemessage_wait prints at once: one A
       // went through all of Mt. Ember B5F's messages). (The frame the press holds, the port goes on at once.)
       let setUp = true;
+      const inPlayback = () => QL_GetPlaybackState() === K.QL_PLAYBACK_STATE_RUNNING || gQL.state === K.QL_STATE_PLAYBACK;
+      let questLogTimer = 0; // sQuestLogWaitButtonPressTimer = 0 (in playback)
       ctx.wait = () => {
         if (setUp) {
           setUp = false;
           return false;
         }
         if (this.input.pressedAorB()) return true;
-        if (!this.nextCommandEndsScript(ctx)) return false;
-        const b = this.questLogInput();
-        if (b === undefined) return false;
-        this.registeredInput = b; // RegisterQuestLogInput
-        this.msgBoxIsCancelable = false; // ClearMsgBoxCancelableState
-        this.registeredInputIsDpad = true; // SetQuestLogInputIsDpadFlag (any key but A/B)
-        return true;
+        if (this.nextCommandEndsScript(ctx)) {
+          const b = this.questLogInput();
+          if (b !== undefined && gQL.state !== K.QL_STATE_PLAYBACK) {
+            this.registeredInput = b; // RegisterQuestLogInput
+            this.msgBoxIsCancelable = false; // ClearMsgBoxCancelableState
+            this.registeredInputIsDpad = true; // SetQuestLogInputIsDpadFlag (any key but A/B)
+            return true;
+          }
+        }
+        if (inPlayback()) {
+          if (questLogTimer === 120) return true;
+          questLogTimer++;
+        }
+        return false;
       };
     },
     closemessage(this: ScriptEngine) {
@@ -933,6 +953,12 @@ export class ScriptEngine {
     },
     /** ScriptMenu_YesNo: VAR_RESULT = TRUE for YES, FALSE for NO or B. Position args are ignored in FRLG. */
     yesnobox(this: ScriptEngine, ctx: ScriptContext) {
+      this.state.setVar('VAR_RESULT', SCR_MENU_UNSET);
+      // QL_AvoidDisplay: in playback no menu, and the script stays stopped until QL_DestroyAbortedDisplay
+      if (avoidDisplay(this.specialEnv)) {
+        ctx.wait = () => false;
+        return;
+      }
       const menu = this.host.openYesNo();
       ctx.wait = () => {
         if (!menu.tick()) return false;
@@ -1220,8 +1246,9 @@ export class ScriptEngine {
     removemoney(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       if (!this.state.value(a[1] ?? '0')) this.state.removeMoney(this.state.value(a[0]));
     },
+    /** ScrCmd_showmoneybox: DrawMoneyBox unless `ignore` or QL_AvoidDisplay (the script goes on either way) */
     showmoneybox(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
-      if (!this.state.value(a[2] ?? '0')) this.host.showMoneyBox(this.state.value(a[0]), this.state.value(a[1]));
+      if (!this.state.value(a[2] ?? '0') && !avoidDisplay(this.specialEnv)) this.host.showMoneyBox(this.state.value(a[0]), this.state.value(a[1]));
     },
     updatemoneybox(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       if (!this.state.value(a[0] ?? '0')) this.host.updateMoneyBox();
@@ -1305,9 +1332,9 @@ export class ScriptEngine {
     removecoins(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       this.state.setVar('VAR_RESULT', this.state.removeCoins(this.state.value(a[0])) ? 0 : 1);
     },
-    /** ScrCmd_showcoinsbox: ShowCoinsWindow(GetCoins(), x, y) */
+    /** ScrCmd_showcoinsbox: ShowCoinsWindow(GetCoins(), x, y) unless QL_AvoidDisplay */
     showcoinsbox(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
-      this.host.showCoinsBox(this.state.value(a[0]), this.state.value(a[1]));
+      if (!avoidDisplay(this.specialEnv)) this.host.showCoinsBox(this.state.value(a[0]), this.state.value(a[1]));
     },
     /** ScrCmd_updatecoinsbox: PrintCoinsString(GetCoins()); the x, y it reads are unused */
     updatecoinsbox(this: ScriptEngine) {
@@ -1416,10 +1443,10 @@ export class ScriptEngine {
     getpartysize(this: ScriptEngine) {
       this.state.setVar('VAR_RESULT', this.state.party.length);
     },
-    /** ScrCmd_showmonpic: ScriptMenu_ShowPokemonPic, then PlayCry_Script(species, CRY_MODE_NORMAL). */
+    /** ScrCmd_showmonpic: ScriptMenu_ShowPokemonPic (not if QL_AvoidDisplay), then PlayCry_Script(species, CRY_MODE_NORMAL). */
     showmonpic(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       const species = this.state.value(a[0]);
-      this.host.showMonPic(species, this.defines.get(a[1]) ?? 0, this.defines.get(a[2]) ?? 0);
+      if (!avoidDisplay(this.specialEnv)) this.host.showMonPic(species, this.defines.get(a[1]) ?? 0, this.defines.get(a[2]) ?? 0);
       PlayCry_Script(species, this.defines.require('CRY_MODE_NORMAL'));
     },
     hidemonpic(this: ScriptEngine, ctx: ScriptContext) {

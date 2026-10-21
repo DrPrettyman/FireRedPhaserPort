@@ -31,6 +31,7 @@ import { EVENT_ISLAND_SPECIALS } from './eventIslandSpecials';
 import { TRAINER_TOWER_SPECIALS } from './trainerTowerSpecials';
 import * as Help from '../ui/helpSystemContext';
 import { GetQuestLogState, QuestLog_CutRecording } from '../world/questLog';
+import { avoidDisplay } from './scriptMenuAvoidDisplay';
 import { QuestLog_StartRecordingInputsAfterDeferredEvent } from '../world/questLogEvents';
 import { SetFlavorTextFlagFromSpecialVars, UpdatePickStateFromSpecialVar8005 } from '../state/fameChecker';
 import { StartDroughtWeatherBlend } from '../world/weatherDrought';
@@ -412,8 +413,13 @@ export const SPECIALS: Record<string, Special> = {
     return initElevatorFloorSelectMenuPos(state);
   },
 
-  /** ListMenu (field_specials.c): a scrolling list; VAR_RESULT = the item's index or SCR_MENU_CANCEL. */
-  ListMenu({ state, host, setWaitState }) {
+  /**
+   * ListMenu (field_specials.c): a scrolling list; VAR_RESULT = the item's index or SCR_MENU_CANCEL. QL_AvoidDisplay
+   * first: in playback no task, and the script's `waitstate` stops it until QL_DestroyAbortedDisplay replaces it.
+   */
+  ListMenu(env) {
+    const { state, host, setWaitState } = env;
+    if (avoidDisplay(env)) return setWaitState(() => false);
     const wait = ListMenu(state, host.listMenuHost());
     if (wait) setWaitState(wait);
   },
@@ -424,9 +430,10 @@ export const SPECIALS: Record<string, Special> = {
     if (wait) setWaitState(wait);
   },
 
-  /** DrawElevatorCurrentFloorWindow: "Now on:" and the floor gSpecialVar_0x8005 names */
-  DrawElevatorCurrentFloorWindow({ state, host }) {
-    host.elevatorFloorWindow(state.getVar('VAR_0x8005'));
+  /** DrawElevatorCurrentFloorWindow: "Now on:" and the floor gSpecialVar_0x8005 names (not if QL_AvoidDisplay) */
+  DrawElevatorCurrentFloorWindow(env) {
+    if (avoidDisplay(env)) return;
+    env.host.elevatorFloorWindow(env.state.getVar('VAR_0x8005'));
   },
 
   CloseElevatorCurrentFloorWindow({ host }) {

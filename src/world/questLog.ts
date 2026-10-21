@@ -587,6 +587,36 @@ export function QuestLog_CutRecording(): void {
   gQL.recordingPointer = null;
 }
 
+/** Task_AvoidDisplay's start (questLogPlayback.ts registers it: the task ends the scene being played) */
+let sStartAvoidDisplayTask: ((callback: (() => void) | null) => void) | null = null;
+
+/** questLogPlayback.ts hands over Task_AvoidDisplay's creation. */
+export function registerAvoidDisplayTask(start: (callback: (() => void) | null) => void): void {
+  sStartAvoidDisplayTask = start;
+}
+
+/**
+ * QL_AvoidDisplay (quest_log.c): the windows and pictures a scene can't show or record (the script menus, the money
+ * and coins boxes, the elevator's floor window, the field ListMenu, the mon and fossil pics, the Seagallop menu).
+ * RECORDING: the scene is cut (QuestLog_CutRecording) and the display goes ahead (FALSE). PLAYBACK: the actions
+ * stop (QL_PLAYBACK_STATE_ACTION_END) and Task_AvoidDisplay ends the scene 127 frames later, running `callback`
+ * (always script_menu.c's QL_DestroyAbortedDisplay) once its fade is over; TRUE: the caller skips the display.
+ * Otherwise (no quest log, or the final scene) FALSE.
+ */
+export function QL_AvoidDisplay(callback: (() => void) | null): boolean {
+  switch (gQL.state) {
+    case K.QL_STATE_RECORDING:
+      QuestLog_CutRecording();
+      break;
+    case K.QL_STATE_PLAYBACK:
+      gQL.playbackState = K.QL_PLAYBACK_STATE_ACTION_END;
+      if (!sStartAvoidDisplayTask) throw new Error('[quest log] QL_AvoidDisplay in playback without its task');
+      sStartAvoidDisplayTask(callback); // CreateTask(Task_AvoidDisplay, 80), tTimer = tState = 0, the callback in data[14-15]
+      return true;
+  }
+  return false;
+}
+
 /** SortQuestLogInSav1: the used scenes in recording order, oldest first; the next scene goes after them. */
 function SortQuestLogInSav1(): void {
   const state = host().state;
