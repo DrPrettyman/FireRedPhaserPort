@@ -319,7 +319,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
   - Interaction metatiles whose scripts need unported screens/specials (the cable club monitors) start their scripts and hit the unimplemented-special warnings.
   - Quest log (world/questLog*.ts; QUEST_LOG_PLAN.md QL1 records, QL2a plays back, QL2b draws the playback's
-    screen, QL3 has the events, QL4 their callers, QL5 to come): the tints (world/questLogScreen.ts) are on the field's palette path,
+    screen, QL3 has the events, QL4 their callers, QL5 the playback paths): the tints (world/questLogScreen.ts) are on the field's palette path,
     so they cover what the port's palettes are: the current map's BG palettes 0-12 (a connected map drawn with other
     tilesets, as the port draws them, keeps its colours; the GBA draws connections with the current map's tiles) and
     the object and field effect sheets (`spr_*`, `fldeff_obj_*`; the S.S. Anne's smoke, the fog and other sprites
@@ -331,13 +331,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     field (ui/QuestLogWindows.ts), not BG0 tiles: the field message box's frame in playback (gQuestLogWindow_Gfx)
     hides the bottom bar and the description window while it's up rather than overwriting their tilemap rows, and
     CommitQuestLogWindow1 shows the bar again when it closes; a window that one of them draws over the box while
-    it's up shows over it (the box is below them), as on BG0 the last tilemap written would. The fishing
-    rod's and the VS Seeker's gfx changes don't play (QL5), and getting off a mon changes the music. QL_LoadObjects
-    (BG 13-15) aren't touched. The windows are Phaser windows over the field (ui/QuestLogWindows.ts), not BG0 tiles: a
-    window over another doesn't clear its tilemap, so CommitQuestLogWindow1 (the field message box's
-    ClearDialogWindowAndFrame in playback) has nothing to put back and has no caller yet (QL5). In playback, a script (one a recorded input starts, or a map's ON_FRAME
-    scene the scene's restored vars bring back, as the Four Island rival's) runs with the normal message box, which
-    waits for A or B (the auto-scroll, WaitForAorBPress' 120-frame timeout and QL_AvoidDisplay: QL5). QL_LoadObjects
+    it's up shows over it (the box is below them), as on BG0 the last tilemap written would. QL_LoadObjects
     sets the snapshot's position and facing on the objects the field spawned from the scene's flags (not each saved
     object's other fields; previousCoords are the current ones); a QL_START_WARP scene's player state comes from the
     warp, not the snapshot's graphics. A warp in playback into a disabled location ends the scene once the field has
