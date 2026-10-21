@@ -1767,9 +1767,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   /**
    * Warp to a warp event index, or to explicit coordinates when warpId < 0. `kind`: 'warp' is DoWarp (stepping onto
    * a warp, arrow mats, `warp`: SE_EXIT; the stairs run Task_StairWarp: world/stairWarp.ts), 'silent' DoDiveWarp
-   * (`warpsilent`), 'door' Task_DoorWarp's case 4 (after the door's SE and walk in; `warpdoor`). Each starts TryFadeOutOldMapMusic with the fade out, and
-   * Task_Teleport2Warp waits for both (WaitWarpFadeOutScreen, BGMusicStopped): 32 or 64 more frames when the music
-   * changes.
+   * (`warpsilent`), 'door' Task_DoorWarp's case 4 (after the door's SE and walk in; `warpdoor`). Each starts
+   * TryFadeOutOldMapMusic with the fade out, and Task_Teleport2Warp waits for both (WaitWarpFadeOutScreen,
+   * BGMusicStopped): 32 or 64 more frames when the music changes.
    */
   private async warpTo(name: string, warpId: number, x: number, y: number, kind: WarpKind = 'warp'): Promise<void> {
     this.busy = true;
