@@ -2,7 +2,9 @@
 // Kept apart from specials.ts so story workers can add theirs without touching each other's entries; SPECIALS
 // spreads this table in. No Phaser here: specials that draw go through `registerSpecials` from their module.
 
+import { K } from '../battle/constants';
 import { random } from '../util/random';
+import { SetQuestLogEvent } from '../world/questLogEvents';
 import { GetStarterSpecies } from '../world/roamer';
 import type { Special } from './specials';
 
@@ -86,8 +88,14 @@ export const STORY_SPECIALS: Record<string, Special> = {
   BufferUnionRoomPlayerName() {
     return 0;
   },
-  /** SetUsedPkmnCenterQuestLogEvent: the quest log isn't kept (like the other quest log specials). */
-  SetUsedPkmnCenterQuestLogEvent() {},
+  /**
+   * SetUsedPkmnCenterQuestLogEvent (field_specials.c; the nurse's EventScript_PkmnCenterNurse_HealPkmn): the
+   * Pokémon Center's QL_EVENT_USED_PKMN_CENTER, recorded only into a scene already recording
+   * (ShouldRegisterEvent_HandlePartyActions).
+   */
+  SetUsedPkmnCenterQuestLogEvent() {
+    SetQuestLogEvent(K.QL_EVENT_USED_PKMN_CENTER, null);
+  },
 
   /**
    * GetStarterSpecies (field_specials.c): the starter's species, by VAR_STARTER_MON. Oak's congratulations in the

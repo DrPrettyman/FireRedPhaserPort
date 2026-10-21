@@ -167,6 +167,7 @@ import { InitTMCase, Pokedude_InitTMCase, TMCASE_GIVE_PARTY, TMCASE_GIVE_PC, TMC
 import { BERRYPOUCH_FROMMARTSELL, BERRYPOUCH_FROMPARTYGIVE, BERRYPOUCH_FROMPOKEMONSTORAGEPC, InitBerryPouch } from './berryPouch';
 import { SetHelpContext } from '../ui/helpSystemContext';
 import { ItemUse_SetQuestLogEvent } from '../world/questLogEvents';
+import { RecordItemTransaction } from './shopQuestLog';
 
 const LIST_TILES_WIDTH = 18;
 const LIST_TILES_HEIGHT = 12;
@@ -1588,7 +1589,7 @@ function Task_FinalizeSaleToShop(taskId: number): void {
   PlaySE(K.SE_SHOP);
   RemoveBagItem(SpecialVar.ItemId, data[8]);
   state.addMoney(Math.trunc(ItemId_GetPrice(SpecialVar.ItemId) / 2) * data[8]);
-  // RecordItemTransaction: the quest log isn't implemented
+  RecordItemTransaction(SpecialVar.ItemId, data[8], K.QL_EVENT_SOLD_ITEM - K.QL_EVENT_USED_POKEMART);
   destroyBagList(data[0]);
   Pocket_CalculateNItemsAndMaxShowed(gBagMenuState.pocket);
   PocketCalculateInitialCursorPosAndItemsAbove(gBagMenuState.pocket);

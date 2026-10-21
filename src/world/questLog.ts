@@ -145,6 +145,8 @@ export interface QuestLogData {
   departedTexts: Record<string, string>;
   /** sGymCityMapSecs (by badge) */
   gymCityMapSecs: string[];
+  /** item.c's TrySetObtainedItemQuestLogEvent: the key items that record QL_EVENT_OBTAINED_STORY_ITEM */
+  storyItems: string[];
 }
 
 let sData: QuestLogData | undefined;

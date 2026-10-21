@@ -82,6 +82,7 @@ import {
   weatherHasEffect,
 } from './util';
 import { getBattlerTurnOrderNum } from './bsCommands1';
+import { TrySetQuestLogBattleEvent } from '../world/questLogBattle';
 
 /** gBattleScriptsForMoveEffects[effect] */
 function moveEffectScript(move: number): number {
@@ -1342,7 +1343,8 @@ function handleEndTurn_FinishBattle(): void {
         }
       }
     }
-    // TrySetQuestLogBattleEvent / ClearRematchStateByTrainerId: no quest log or rematches yet
+    TrySetQuestLogBattleEvent();
+    // ClearRematchStateByTrainerId: ScriptEngine.runTrainerBattle's host.clearRematchStateByTrainerId
     BeginFastPaletteFade(3);
     FadeOutMapMusic(5);
     g.battleMainFunc = freeResetData_ReturnToOvOrDoEvolutions;

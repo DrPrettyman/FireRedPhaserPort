@@ -12,6 +12,7 @@
 - locationNameTexts / departedTextIds / departedTexts / gymCityMapSecs: LoadEvent_DepartedLocation's tables
   (sLocationNameTexts and sLocationToDepartedTextId by QL_LOCATION_*, sDepartedLocationTexts by QL_DEPARTED_*,
   sGymCityMapSecs by badge).
+- storyItems: item.c's TrySetObtainedItemQuestLogEvent's ITEM_* (the key items that record QL_EVENT_OBTAINED_STORY_ITEM).
 """
 
 import json
@@ -65,6 +66,12 @@ def extract_quest_log(decomp, out):
     departed_texts = dict(re.findall(r"\[(QL_DEPARTED_\w+)\]\s*=\s*(\w+)", _array_body(events, "sDepartedLocationTexts")))
     gym_mapsecs = re.findall(r"MAPSEC_\w+", re.search(r"sGymCityMapSecs\[[^\]]*\]\s*=\s*\{(.*?)\};", events, re.S).group(1))
 
+    item_c = (decomp / "src/item.c").read_text()
+    story_items = []
+    for name in re.findall(r"itemId == (ITEM_\w+)", _function_body(item_c, "TrySetObtainedItemQuestLogEvent")):
+        if name not in story_items:
+            story_items.append(name)
+
     data = {
         "maps": maps,
         "insideOutsidePairs": pairs,
@@ -78,5 +85,6 @@ def extract_quest_log(decomp, out):
         "departedTextIds": departed_ids,
         "departedTexts": departed_texts,
         "gymCityMapSecs": gym_mapsecs,
+        "storyItems": story_items,
     }
     (out / "questLog.json").write_text(json.dumps(data, separators=(",", ":")))
