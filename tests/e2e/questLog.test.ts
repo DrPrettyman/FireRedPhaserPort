@@ -625,7 +625,8 @@ test("QL4a: the party menu's GIVE / TAKE / SWITCH and a Potion used from the bag
   await game.waitForPartyMenu();
   await game.press('DOWN');
   await game.press('A');
-  await game.waitFor((t) => t.itemCount('POTION') === 0, { what: 'the Potion used' });
+  // (the item-use anim waits for A at its end, or A held cancels it)
+  await game.mashUntil((t) => t.itemCount('POTION') === 0, { what: 'the Potion used' });
   await game.mashUntil((t) => !t.gbaScreen() && t.idle(), { button: 'B', what: 'the field again' });
 
   const lines = {

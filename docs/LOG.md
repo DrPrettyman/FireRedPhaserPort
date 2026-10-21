@@ -4738,3 +4738,33 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   trainerBattle, wildBattle, pokemart, pcStorage, questLog, story); the full suite only when a batch finishes a plan
   or changes shared core (the script engine, the tick loop, the battle engine, the save format).
 - Verified: the ten files on master f6644cc, 66 passed in 153 s (story.test.ts is the long pole at 152 s).
+
+### Batch 15 W-anim A1: the item-use animation (pokemon_special_anim.c)
+
+- Ported pokemon_special_anim.c (`menus/pokemonSpecialAnim.ts`: StartUseItemAnim_Normal / _CantEvolve /
+  _ForgetMoveAndLearnTMorHM, AllocPSA, CB2_PSA / VBlankCB_PSA, Task_UseItem_Normal, Task_ForgetMove,
+  Task_EvoStone_CantEvolve, Task_UseTM_NoForget, Task_MachineSet, Task_CleanUp, GetAnimTypeByItemId,
+  GetClosenessFromFriendship, the PSA_Get* accessors, PSA_IsCancelDisabled) and pokemon_special_anim_scene.c but the
+  level-up stripes (`menus/pokemonSpecialAnimScene.ts`: InitPokemonSpecialAnimScene, the message window and
+  PSA_PrintMessage, the mon sprite's zoom by closeness (Task_ZoomAnim, GetYPosByScale), the item's anim
+  (Task_ItemUseOnMonAnim and its dots), the forget-move stars and darkening, the TM's wobble, zoom out, blue flash and
+  Task_UseItem_OutwardSpiralDots with its own ISO_RANDOMIZE1 RNG), and menu2.c's Menu2_GetMonPosAttribute.
+- Party menu (menus/partyMenu.ts): CB2_DoUseItemAnim starts the anim (the stone's CantEvolve path, the evolution scene
+  after the stone's), CB2_ReturnToPartyMenuWhileLearningMove starts the forget-move one, and CB2_UseItem /
+  CB2_UseTMHMAfterForgettingMove have their PSA_IsCancelDisabled() branches (the TM taught and used up there, the
+  forget path's QL_EVENT_USED_ITEM with the forgotten move). DEVIATIONS: the "Item use" skip and the quest log's
+  "CB2_UseTMHMAfterForgettingMove's event never runs" are gone.
+- Extractor: graphics/pokemon_special_anim/ in extract_gfx.py (its sBg_Pal / sBg_Tilemap / sStar_* clash with other
+  files' and come as `pokemon_special_anim_scene.<symbol>`); menus.json's `monPosAttributes` (menu2.c's
+  sMonPosAttributes, the FIRERED rows). prepareMenus loads the gfx index first, since menuGfxSymbols picks the
+  scene's symbol names from it.
+- Found on the way: battle medicine never runs the anim (item_use.c's ItemUseInBattle sets ItemUseCB_MedicineStep;
+  the Pokédude's too), so the battle host doesn't need it. Tests that waited for a field item's effect without
+  pressing now have to get past the anim's last A: questLog.test.ts's QL4a Potion (mashUntil) and
+  postgameKantoNational.test.ts's closeBag (B through "Huh?"); tests that mash A cancel it (JOY_HELD), as on the GBA.
+- Verified: typecheck; `npm test` (66 files, 800 tests); tests/e2e/itemUseAnim.test.ts (8: Rare Candy at closeness 3
+  with its SEs and frame gaps, HP UP, a Potion with A held, Fire Stone → the evolution scene, Gloom's Sun Stone "Huh?",
+  TM06 over SCRATCH with the quest log line, a TM cancelled with B, a battle Potion without the anim; three runs in a
+  row) and the files that go through a field item use: evolution, audioScenes, tmCase, registeredItems,
+  postgameKantoNational, questLog, berryPouch. Screens checked by eye: the candy at Charmander's mouth at 2x, the
+  dots, "Huh?", the darkened mon with the stars at "Poof!", the disc's wobble and the blue flash with the dots.

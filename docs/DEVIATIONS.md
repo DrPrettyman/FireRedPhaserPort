@@ -124,7 +124,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     over the map's top layer meanwhile, and the field is its normal colour during the battle transition that
     follows. The show-mon banner's graphics load while the player's pose plays, so a very slow load would hold the
     banner back. Dig/Escape Rope with no escape warp saved (a dev start in a cave) go to the last heal location.
-  - Item use: the item-use animation (pokemon_special_anim.c) is skipped. Mail's CHECK (CB2_CheckMail) reads an
+  - Item use: Mail's CHECK (CB2_CheckMail) reads an
     uninitialised struct Mail with only its item set; the port's has SPECIES_NONE, so Bead / Dream Mail show no icon. Berry
     powder reads as 0. ItemUseOnFieldCB_EscapeRope takes the field controls lock itself (on the GBA the start menu's lock is
     still held when the bag returns; here the field's overlay held the controls until then). RemoveUsedItem after
@@ -339,8 +339,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     the help again). Every QL_EVENT_* has its recorder and loader (QL1: DEPARTED / ARRIVED, QL3a: 3-29, QL3b: 30-40),
     and every caller sends its own (QL4a: item use, the party menu's held items / order / items / field moves, Fly, the
     item PC, the boxes; QL4b: the Poké Mart's purchases and the bag's, TM case's and berry pouch's sales, the Pokémon
-    Center, story items from `additem`, the battles' TrySetQuestLogBattleEvent, the slots). CB2_UseTMHMAfterForgettingMove's event (PSA_IsCancelDisabled's path)
-    never runs: without the item-use animation the TM's event is Task_ReplaceMoveWithTMHM's, as in the C's other path. The link events (12-19) and
+    Center, story items from `additem`, the battles' TrySetQuestLogBattleEvent, the slots).
+    The link events (12-19) and
     TrySetQuestLogLinkBattleEvent (which takes gLinkPlayers as an argument) have no callers (no link play). The
     scene's objects snapshot is the player and the current map's objects in the port's order (the C's gObjectEvents
     slots, offScreen, the sprite anim backups and directionSequenceIndex aren't kept: 0); a scene's flags and vars

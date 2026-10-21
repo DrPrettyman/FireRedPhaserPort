@@ -218,7 +218,12 @@ async function useFirstTmFromField(game: Game) {
 
 test('a TM over a forgotten move: "1, 2, and... Poof!", Machine set!, the wobble and zoom out, the fanfare; the move replaced', async () => {
   const game = await session.start({ ...ROUTE1, party: [{ species: 'CHARMANDER', level: 10, moves: ['SCRATCH', 'GROWL', 'EMBER', 'LEER'] }] });
-  await game.eval((t) => t.state!.bag.add(t.define('ITEM_TM06'), 2));
+  await game.eval((t) => {
+    t.state!.bag.add(t.define('ITEM_TM06'), 2);
+    // the party / item quest log events count only after the Hall of Fame and once linking with R/S is allowed
+    t.state!.setFlag('FLAG_SYS_GAME_CLEAR');
+    t.state!.setFlag('FLAG_SYS_CAN_LINK_WITH_RS');
+  });
   await useFirstTmFromField(game);
   // CHARMANDER → "...can't learn more than four moves" YES → the summary screen → A on SCRATCH.
   await game.press('A');
@@ -245,6 +250,15 @@ test('a TM over a forgotten move: "1, 2, and... Poof!", Machine set!, the wobble
   // CB2_UseTMHMAfterForgettingMove (PSA_IsCancelDisabled): the move replaced, one TM06 used, straight back to the TM case.
   expect((await game.eval((t) => t.party()))[0].moves).toEqual(['TOXIC', 'GROWL', 'EMBER', 'LEER']);
   expect(await game.eval((t) => t.itemCount('TM06'))).toBe(1);
+  // ...and its quest log event (ItemUse_SetQuestLogEvent with the forgotten move), which the cancelled path leaves to
+  // Task_ReplaceMoveWithTMHM.
+  const used = await game.eval((t) => {
+    const id = t.define('QL_EVENT_USED_ITEM');
+    const scene = t.questLog().scenes.findIndex((sc: { commands: { id: number }[] }) => sc.commands.some((c) => c.id === id));
+    return scene < 0 ? null : t.questLogEventLine(scene, 'QL_EVENT_USED_ITEM');
+  });
+  expect(used).toMatch(/SCRATCH/);
+  expect(used).toMatch(/TOXIC/);
 });
 
 test('a TM the mon has room for, cancelled with B: the party menu teaches it ("CHARMANDER learned TOXIC!")', async () => {

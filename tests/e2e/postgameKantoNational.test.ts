@@ -125,8 +125,9 @@ async function useOnlyItemOnFirstMon(game: Game) {
   await game.press('A');
 }
 
-/** Out of the bag (after the item's use is over) to the field. */
+/** Out of the bag (after the item's use is over: B gets through the item-use anim's "Huh?") to the field. */
 async function closeBag(game: Game) {
+  await game.mashUntil((t) => t.gbaScreen() === 'CB2_BagMenuRun', { button: 'B', what: 'the bag' });
   await game.waitForBag();
   await game.press('B');
   await game.mashUntil((t) => t.idle(), { button: 'B', what: 'the field' });
@@ -136,8 +137,8 @@ test('without the National Dex a Sun Stone does nothing to Gloom and Golbat stop
   const game = await session.start({ start: 'after-rival', map: 'Route1', x: 12, y: 7, party: [{ species: 'GLOOM', level: 30 }] });
   const party = () => game.eval((t) => t.party().map((m) => m.species));
 
-  // party_menu.c's MonCanEvolve: Bellossom (182) is past KANTO_DEX_COUNT, so CB2_DoUseItemAnim goes straight back
-  // to the bag (StartUseItemAnim_CantEvolve) and the stone stays
+  // party_menu.c's MonCanEvolve: Bellossom (182) is past KANTO_DEX_COUNT, so CB2_DoUseItemAnim runs
+  // StartUseItemAnim_CantEvolve ("Huh?") and goes back to the bag, and the stone stays
   await game.eval((t) => t.state!.bag.add(t.define('ITEM_SUN_STONE'), 1));
   const mark = await game.mark();
   await useOnlyItemOnFirstMon(game);
