@@ -4572,3 +4572,14 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   yesnobox, EventScript_ReleaseEnd once, the saved field after; Viridian Forest's Charlie played back: no battle,
   his flag set by EventScript_EndQuestLogBattle, no encounter music, the intro up 120+ frames). Ran questLog,
   listMenuFlash, seagallop, sideEvents, gameCorner, newGame and trainerBattle e2e files: all pass.
+### Stale DEVIATIONS entries removed
+
+- An audit of what's left to port (decomp files against the port, DEVIATIONS.md, the script coverage gaps) found
+  entries describing gaps that have since been closed. Removed: HallOfFamePCBeginFade "not implemented" (ported in
+  script/specials.ts), the Town Map among the interaction metatiles that hit unported specials (ShowTownMap is
+  ported), the PC box's GIVE not opening the TM case / berry pouch (GoToTMCase_PCBox / GoToBerryPouch_PCBox are in
+  menus/itemMenu.ts), the Hall of Fame entry's "other game stats aren't counted" (12 are; the per-subsystem entries
+  name the ones still missing). menus/itemMenu.ts's header comment no longer says the Teachy TV, item PC and storage
+  bags are unported. The other game-stat entries were checked and are still accurate (SAVED_GAME, USED_CUT,
+  USED_ROCK_SMASH, USED_ITEMFINDER, the wild battle stats aren't incremented).
+- Verified: docs and a comment only; no tests.

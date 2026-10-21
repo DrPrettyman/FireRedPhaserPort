@@ -129,8 +129,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     uninitialised struct Mail with only its item set; the port's has SPECIES_NONE, so Bead / Dream Mail show no icon. Berry
     powder reads as 0. ItemUseOnFieldCB_EscapeRope takes the field controls lock itself (on the GBA the start menu's lock is
     still held when the bag returns; here the field's overlay held the controls until then). RemoveUsedItem after
-    the bag has closed skips the bag display's item counts (the GBA writes them through a freed NULL pointer). The TM case
-    and berry pouch can't be opened to give from (the PC box's GIVE, GoToTMCase_PCBox / GoToBerryPouch_PCBox).
+    the bag has closed skips the bag display's item counts (the GBA writes them through a freed NULL pointer).
   - Registered items (menus/registeredItem.ts, SELECT on the field): the field doesn't run the GBA task list, so
     the item's task (data[3] = 1) runs its first step in the frame SELECT is read (as RunTasks would, after the
     input callback) and then once a frame from a field task of its own, which stops when the task is destroyed;
@@ -294,11 +293,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     link play).
   - Elevators: UpdateEscapeWarp isn't kept on warps.
   - PC: HallOfFamePCBeginFade logs "not implemented" and goes straight back to the PC menu.
+  - Field ListMenu (ui/FieldListMenu.ts): the quest log's QL_AvoidDisplay is ignored.
   - Hall of Fame (menus/hallOfFame.ts): no Champion
     Ribbons (mons have no ribbons; the event tickets come anyway: see "Deliberate QOL changes"); a
     failed save carries on (no DoSaveFailedScreen / gGameContinueCallback).
-    Other game stats than GAME_STAT_ENTERED_HOF and
-    GAME_STAT_FIRST_HOF_PLAY_TIME aren't counted.
   - Pokédex screen (menus/pokedexScreen.ts, menus/pokedexArea.ts): the mon page and the habitat pages load the shown mons'
     pics, palettes, footprints and icons (for the area page) when they're first drawn (fetched on demand, not
     preloaded; the battle preloads the registered page's), so the first view of a mon or a page can take a frame or
@@ -318,7 +316,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     SoftReset (BootScene's `softReset`) restarts the boot flow (the copyright screen, the intro, the title screen)
     with a fresh Overworld scene and GameState; other module-level state isn't reset.
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
-  - Interaction metatiles whose scripts need unported screens/specials (Town Map, cable club monitors) start their scripts and hit the unimplemented-special warnings.
+  - Interaction metatiles whose scripts need unported screens/specials (the cable club monitors) start their scripts and hit the unimplemented-special warnings.
   - Quest log (world/questLog*.ts; QUEST_LOG_PLAN.md QL1 records, QL2a plays back, QL2b draws the playback's
     screen, QL3 has the events, QL4-QL5 to come): the tints (world/questLogScreen.ts) are on the field's palette path,
     so they cover what the port's palettes are: the current map's BG palettes 0-12 (a connected map drawn with other
