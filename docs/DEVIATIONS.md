@@ -158,15 +158,8 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     the C, nothing calls it.
   - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
     overworld's ScreenFade.
-  - Battles: Spinda's spots aren't drawn; HP-as-text (SwapHpBarsWithHpText) and link/multi battles aren't
-    implemented.
+  - Battles: HP-as-text (SwapHpBarsWithHpText) and link/multi battles aren't implemented.
   - Battles: the link battles' end (SetBattleEndCallbacks with its m4aSongNumStop(SE_LOW_HEALTH)) isn't ported.
-  - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon;
-    HP-as-text (SwapHpBarsWithHpText) and link/multi battles aren't implemented.
-  - Battles: the level-up's vertical stripes (CreateLevelUpVerticalSpritesTask, pokemon_special_anim_scene.c) aren't
-    drawn: Task_CreateLevelUpVerticalStripes (controllerCommon.ts) moves the mon to the BG and plays SE_RS_SHOP, then
-    goes on at once where the GBA waits ~35-65 frames for the 18 stripes to rise. The link battles' end
-    (SetBattleEndCallbacks with its m4aSongNumStop(SE_LOW_HEALTH)) isn't ported.
   - Map preview screens (world/mapPreviewScreen.ts, W-preview): the forest banner (Task_RunMapPreviewScreenForest)
     is the field's BG0 over a Phaser field, so BLDALPHA's blend of it over the field is done by the GPU as the fog's
     is (a screen-sized EVB / 16 grey rectangle in MULTIPLY mode, then the PPU's render of BG0 with its colours times
