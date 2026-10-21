@@ -363,7 +363,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   /**
    * Object templates per loaded map, editable by setobjectxyperm/setobjectmovementtype. The current
    * map's are reloaded from the header on entry (LoadObjEventTemplatesFromHeader), so script edits
-   * only last until the map is left; a neighbour keeps the ones it had while it was current.
+   * only last until the map is left; a neighbour keeps the ones it had while it was current. The current map's
+   * are gSaveBlock1Ptr->objectEventTemplates: a save keeps them and CONTINUE loads them back (saveblockMapLoad).
    */
   private templates = new Map<string, ObjectEventData[]>();
   /** OBJ_EVENT_GFX_* name by number, for resolving the values of VAR_OBJ_GFX_ID_*. */
@@ -1963,7 +1964,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   /**
    * Map entry sequence: templates reloaded, temps cleared, ON_TRANSITION, ON_LOAD, objects spawned, ON_WARP_INTO.
    * `continued` (CONTINUE: CB2_ContinueSavedGame's InitMapFromSavedGame) runs only ON_LOAD, keeps the saved temps
-   * and flash level, and puts the player back as saved.
+   * and flash level, and puts the player back as saved; CONTINUE's `continueMapLoad` adds the save's templates,
+   * map view and objects.
    */
   private async onMapLoaded(warped: boolean, continued?: PlayerLocation): Promise<void> {
     const cur = this.world.current;

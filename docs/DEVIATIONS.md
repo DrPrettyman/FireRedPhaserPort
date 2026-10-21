@@ -247,12 +247,19 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Save data (state/saveData.ts): one JSON save in browser localStorage instead of the flash's two 14-sector
     save slots, so there are no sector checksums, no alternating slots / save counter, no backup of the previous
     save and no encryption of money, coins and bag quantities (gSaveBlock2Ptr->encryptionKey). The save holds
-    what the port keeps; left out because the port doesn't keep them: the current map's object events and object
-    templates (NPC positions, setobjectxyperm changes), game stats,
+    what the port keeps; left out because the port doesn't keep them:
     Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, minigame
     records, the enigma berry, mystery gift, link records and
     the region map zoom option. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
+    The object events (gSaveBlock1Ptr->objectEvents) are the current map's NPCs only (the player's entry is the
+    location; the neighbouring maps' objects, a QOL change, aren't saved and spawn from their templates on
+    CONTINUE), each with the fields the port's ObjectEvent keeps (questLogObjectEventFrom: currentCoords, facing,
+    movement type, invisibility, the ground effect / anim bits). Not kept: previousCoords and initialCoords (a
+    restored object stands still on its tile; a wanderer's range is centred on its template's position), the
+    movement in progress and its type's step (sprite data, not in the C's save either). The map view
+    (gSaveBlock2Ptr->mapView) saves 0 for the cells outside the current map, where the GBA's VMap has the border
+    and the connections' strips, and CONTINUE writes back only the cells inside it.
   - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the copyright screen, the
     intro and the title screen. Dev starts (`?start=`, `?map=`) skip all of them and the main menu; dev
     `?skipIntro` (the e2e harness's default) skips the copyright screen, the intro, the title screen and Oak's
@@ -274,8 +281,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     RNG approximation), not by the naming screen's SeedRngAndSetTrainerId. CB2_NewGame hands only the names and the
     gender to the field, whose new GameState is NewGameInitData's.
   - Save dialog (ui/SaveDialog.ts): no GAME_STAT_SAVED_GAME. A failed write shows the save error message without
-    DoSaveFailedScreen. SaveMapView isn't ported: the map view isn't saved, so CONTINUE rebuilds the map from its
-    header and ON_LOAD script (metatiles a script changed later aren't restored).
+    DoSaveFailedScreen.
   - Option menu (menus/optionMenu.ts): the L=A button mode applies on the GBA-layer
     screens (GbaHostScene's ReadKeys) but not on the field, whose input reads the buttons directly (on the GBA,
     ReadKeys turns L into A everywhere). The field isn't on the GBA layer, so FieldMenuScene sets the backdrop
@@ -290,8 +296,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     HelpSystem_IsSinglePlayer is always TRUE (no link play: GAPS_PLAN.md decision 4). The
     title screen sets up its own GameState from the save (LoadGameSave's gSaveBlock1/2) for the help's flags and
     button mode.
-  - CONTINUE (OverworldScene.continueSavedGame): the map's objects spawn from its templates (object events aren't
-    saved, see Save data); gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
+  - CONTINUE (OverworldScene.continueSavedGame): gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
     link play).
   - Elevators: UpdateEscapeWarp isn't kept on warps.

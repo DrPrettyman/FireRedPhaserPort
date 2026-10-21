@@ -4738,3 +4738,25 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   trainerBattle, wildBattle, pokemart, pcStorage, questLog, story); the full suite only when a batch finishes a plan
   or changes shared core (the script engine, the tick loop, the battle engine, the save format).
 - Verified: the ten files on master f6644cc, 66 passed in 153 s (story.test.ts is the long pole at 152 s).
+
+### W-continue: CONTINUE restores the object events, templates and map view (FINISH_PLAN.md unit 2, batch 15)
+
+- load_save.c's SaveObjectEvents / LoadObjectEvents, gSaveBlock1Ptr->objectEventTemplates and fieldmap.c's
+  SaveMapView / LoadSavedMapView. Save version 14 (`upgradeSave` 13 → 14 adds nothing: an older save loads the
+  header's templates and objects, as before). New GameState / SaveData fields `objectEvents` (the current map's
+  NPCs as world/questLogObjects.ts' QuestLogObjectEvent, the player being `location`), `objectEventTemplates`
+  (ObjectEventData without the script) and `mapView` (15 x 14 grid values), all written by
+  `OverworldScene.storeLocationForSave` (the save dialog and the Hall of Fame call it).
+- CONTINUE (enterSavedField's saved-map branch, which the quest log's final scene runs too): `saveblockMapLoad`
+  hooks into onMapLoaded like the quest log's `qlMapLoad`: the save's templates with the header's scripts
+  (LoadSaveblockObjEventScripts) before ON_LOAD, the map view after the layout and before ON_LOAD
+  (InitMapFromSavedGame's order), the saved objects after the templates' spawn. Before, a pushed Victory Road 1F
+  boulder (copyobjectxytoperm) went back to (7, 18) after CONTINUE though VAR_MAP_SCENE_VICTORY_ROAD_1F was 100.
+- Shared bits: the quest log host's NPC → gObjectEvents conversion moved into `npcObjectEvent` (also used by the
+  save); GameState gained the three fields and the SavedObjectEventTemplate type.
+- DEVIATIONS: "Save data" no longer lists the object events / templates (or the game stats, saved since version 2)
+  and says what the saved objects leave out; "Save dialog" drops SaveMapView; "CONTINUE" keeps only
+  gExitStairsMovementDisabled (W-stairs').
+- Tests: tests/e2e/continueObjects.test.ts (new: 3 tests; all three fail without the restore), tests/unit/saveData.test.ts
+  (round trip with the new fields, a version 13 save, copies), saveContinue, questLog, questLogField,
+  questLogPlayback, postgameFourIsland, escalator.
