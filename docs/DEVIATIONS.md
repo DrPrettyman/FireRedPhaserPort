@@ -157,7 +157,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     the C, nothing calls it.
   - Bag/party run in their own scene (FieldMenuScene) when opened from the field; the field side fades with the
     overworld's ScreenFade.
-  - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon; Spinda's spots aren't drawn;
+  - Battles: the level-up banner (exp to a mon that isn't sent out) has no mon icon;
     HP-as-text (SwapHpBarsWithHpText) and link/multi battles aren't implemented.
   - Battles: the level-up's vertical stripes (CreateLevelUpVerticalSpritesTask, pokemon_special_anim_scene.c) aren't
     drawn: Task_CreateLevelUpVerticalStripes (controllerCommon.ts) moves the mon to the BG and plays SE_RS_SHOP, then
@@ -249,7 +249,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     save and no encryption of money, coins and bag quantities (gSaveBlock2Ptr->encryptionKey). The save holds
     what the port keeps; left out because the port doesn't keep them: the current map's object events and object
     templates (NPC positions, setobjectxyperm changes), game stats,
-    Pokédex order/mode and the Unown/Spinda personalities, the second copies of the dex seen flags, minigame
+    Pokédex order/mode, the second copies of the dex seen flags, minigame
     records, the enigma berry, mystery gift, link records and
     the region map zoom option. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
@@ -301,8 +301,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Pokédex screen (menus/pokedexScreen.ts, menus/pokedexArea.ts): the mon page and the habitat pages load the shown mons'
     pics, palettes, footprints and icons (for the area page) when they're first drawn (fetched on demand, not
     preloaded; the battle preloads the registered page's), so the first view of a mon or a page can take a frame or
-    two longer. Unown and Spinda are drawn with personality 0 (the save's unownPersonality / spindaPersonality
-    aren't kept; Spinda's spots aren't drawn anywhere). The anticheat's second and third copies of the seen flags
+    two longer. The anticheat's second and third copies of the seen flags
     aren't kept (one `dexSeen` set), so "caught" just needs "seen" too. The Pokédex keeps the field's DISPCNT,
     which the port sets in FieldMenuScene since the field isn't on the GBA layer.
   - Trainer card (menus/trainerCard.ts): the berry picking and Pokémon Jump records (a star for 200 of each) and the link stats are always 0 (no

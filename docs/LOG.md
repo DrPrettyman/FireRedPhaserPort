@@ -4738,3 +4738,38 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   trainerBattle, wildBattle, pokemart, pcStorage, questLog, story); the full suite only when a batch finishes a plan
   or changes shared core (the script engine, the tick loop, the battle engine, the save format).
 - Verified: the ten files on master f6644cc, 66 passed in 153 s (story.test.ts is the long pole at 152 s).
+
+### W-spinda: Spinda's spots and the Pokédex personalities (FINISH_PLAN.md unit 5 / P1, batch 15)
+
+- pokemon.c's DrawSpindaSpots (the DRAW_SPINDA_SPOTS macro) is `src/pokemon/spindaSpots.ts`, called at the end of
+  battle/gfx.ts's LoadSpecialPokePic as decompress.c does (front pics only). sSpindaSpotGraphics comes from
+  tools/extract.py (pokemon/tables.json's `spindaSpots`: the base x / y and graphics/spinda_spots/spot_N.bin's 16
+  u16 rows). The C's u8 coordinates are kept: a y nibble of 0 puts spot 0's first row at y 255, past the frame (in the
+  C's 0x2000-byte sprite buffers; dropped where the port's buffer is smaller). The old `console.warn('Spinda spots
+  not drawn')` is gone.
+- Callers checked against the C: every pic decompress.c's LoadSpecialPokePic / HandleLoadSpecialPokePic(_DontHandle
+  Deoxys) loads goes through the port's LoadSpecialPokePic already (battle_gfx_sfx_util.c's battlers and Transform,
+  battle_anim_mons.c, trainer_pokemon_sprites.c → menus/picSprites.ts: the summary, the Hall of Fame, the Pokédex,
+  the field move's mon, the credits; the PC storage's preview, the trade scene, the egg hatch); evolution_scene.c and
+  oak_speech.c use DecompressPicFromTable (no spots) and so does the port. The field's `showmonpic` box still draws
+  the extracted PNG (personality 0 in the C; no script shows Spinda).
+- The Pokédex personalities: gSaveBlock2Ptr->pokedex.unownPersonality / spindaPersonality are
+  `state.dexUnownPersonality` / `dexSpindaPersonality`, set by pokemon.c's HandleSetPokedexFlag (now in
+  menus/pokedex.ts; the battle's `handleSetPokedexFlag` takes the personality: the intro's and the switch-in's
+  FLAG_SET_SEEN, Cmd_trysetcaughtmondexflags' FLAG_SET_CAUGHT; tradeSpecials' UpdatePokedexForReceivedMon as
+  trade_scene.c), read by DexScreen_GetDefaultPersonality (the mon page, the habitat pages, the area page's icon and
+  pic). Save version 14 (`pokedex.unownPersonality` / `spindaPersonality`; `upgradeSave` gives a version 13 save 0,
+  what the Pokédex drew then). New game: a fresh GameState has 0 (Sav2_ClearSetDefault); the C's NEW GAME over an
+  old save keeps the old values (ClearPokedexFlags clears only the flags), which can't show: the dex only draws a
+  seen mon, and the first sighting overwrites them.
+- Fix on the way: the evolution scene called the battle's HandleSetPokedexFlag where evolution_scene.c calls
+  GetSetPokedexFlag (seen + caught, no personality); it sets the flags directly now.
+- Test hooks: MonSpec `personality` (a fixed personality for `party` / `startWildBattle`).
+- DEVIATIONS: removed Spinda's spots from "Battles", the Unown / Spinda personalities from "Save data" and
+  "Pokédex screen".
+- Tests: tests/unit/spindaSpots.test.ts (12: the extracted spots, a pixel model of the macro against five
+  personalities on colours 1-3, colours 0 / 4-15 untouched, the u8 wrap with a small and a 0x2000 buffer, the real
+  Spinda front pic vs back pic vs Pikachu, HandleSetPokedexFlag's first seen / first caught, the save round trip and
+  the version 13 upgrade); tests/e2e/spinda.test.ts (2: two wild Spinda's sprites in OBJ VRAM with their own spots,
+  the Pokédex keeping the first and an Unown F, its habitat page and mon page drawing them; a party Spinda's summary
+  sprite with its spots). Also run: pokedex, pokedexArea, saveContinue, evolution, inGameTrades (28 passed).
