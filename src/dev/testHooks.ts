@@ -46,6 +46,7 @@ import { changeMapTaskProbe, mapPreviewCaveProbe } from '../world/mapTransition'
 import { mapPreviewForestProbe } from '../world/mapPreviewScreen';
 import { trainerCardProbe } from '../menus/trainerCard';
 import { slotMachineProbe } from '../menus/slotMachine';
+import { itemUseAnimProbe } from '../menus/pokemonSpecialAnim';
 import { mainMenuProbe } from '../menus/mainMenu';
 import { titleScreenProbe } from '../menus/titleScreen';
 import { introProbe } from '../menus/intro';
@@ -889,6 +890,12 @@ function createApi(game: Phaser.Game) {
      * the help window's slide, the line lights' palettes and the reel buttons.
      */
     slotMachine: () => slotMachineProbe(),
+    /**
+     * The item-use animation while it runs (menus/pokemonSpecialAnim.ts, CB2_PSA): its task and state, the anim type,
+     * closeness, cancelDisabled, the zoom / item anim / printer running, the last message (decoded), the mon and item
+     * sprites, the palette fade. Null otherwise. The `itemUseAnim` event marks its start (`task`) and end.
+     */
+    itemUseAnim: () => itemUseAnimProbe(),
     /** The item PC's list (WITHDRAW ITEM, item_pc.c) while it runs: its task, scroll/row and item count. */
     itemPc: () => (gMain.callback2?.name === 'ItemPc_MainCB' ? itemPcProbe() : undefined),
     /** The TM case while it's open (menus/tmCase.ts): TMCASE_* type, task, scroll/row and the pocket's item ids in list order. */

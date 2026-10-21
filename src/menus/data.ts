@@ -1,6 +1,8 @@
 // public/gen/menus.json (tools/extract_menus.py): tables the party menu, bag, summary and naming screens index.
 
 export interface MenusData {
+  /** sMonPosAttributes (menu2.c): indexed species - 1, [TMHM_X, TMHM_Y, Y_OFFSET, ITEM_X, ITEM_Y] */
+  monPosAttributes: number[][];
   /** gMonIconTable: species -> icon graphics symbol */
   monIcons: (string | null)[];
   /** gMonIconPaletteIndices */

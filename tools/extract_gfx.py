@@ -27,7 +27,7 @@ from extract import read_jasc
 # (trainer_card.c), the move relearner's scroll arrows (learn_move.c), the slot machine (slot_machine.c), and the
 # Seagallop ferry scene (seagallop.c), the S.S. Anne's departure (ss_anne.c), Birth Island's triangle palettes
 # (field_specials.c's sDeoxysObjectPals), the Deoxys rock's fragments (field_effect.c, already under field_effects/)
-# and the battle records' frame (battle_records.c).
+# the battle records' frame (battle_records.c) and the item-use animation (pokemon_special_anim_scene.c).
 GFX_PREFIXES = (
     "graphics/battle_interface/",
     "graphics/battle_terrain/",
@@ -81,6 +81,7 @@ GFX_PREFIXES = (
     "graphics/quest_log/",  # quest_log.c's sDescriptionWindow_Gfx, the playback's description window (W-qlog)
     "graphics/mail/",  # mail.c, the mail screen (W-mail)
     "graphics/teachy_tv/",  # teachy_tv.c, the Teachy TV screen (W-teachy)
+    "graphics/pokemon_special_anim/",  # pokemon_special_anim_scene.c, the item-use animation (W-anim)
     "data/tilesets/",
 )
 

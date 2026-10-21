@@ -1,4 +1,4 @@
-// What a host scene does before the party menu, bag, TM case, berry pouch, summary screen or evolution scene can run: load menus.json, preload every
+// What a host scene does before the party menu, bag, TM case, berry pouch, summary screen, item-use animation or evolution scene can run: load menus.json, preload every
 // graphic the screens can touch (graphics are fetched asynchronously, the screens use them
 // synchronously), and point the menu helpers at the save-block options and string tables.
 // Call after initBattleEnv (the K constants and battle data are needed).
@@ -6,7 +6,7 @@
 import { K } from '../battle/constants';
 import { battleBgGfxSymbols } from '../battle/battleBg';
 import { ballGfxSymbols, monPalSymbols, monPicSymbol } from '../battle/gfx';
-import { loadGfx } from '../gba/gfx';
+import { loadGfx, loadGfxIndex } from '../gba/gfx';
 import { menuEnv } from '../gba/menu';
 import { setStringVarLookup } from '../gba/window';
 import type { GameState } from '../state/GameState';
@@ -14,6 +14,7 @@ import { TEXT_SPEED } from '../text/TextPrinter';
 import { StringExpandPlaceholders, text } from './common';
 import { loadMenusData } from './data';
 import { EVOLUTION_SCENE_GFX, evolutionTargetSpecies } from './evolutionScene';
+import { pokemonSpecialAnimGfxSymbols } from './pokemonSpecialAnimScene';
 import { itemIconSymbols } from './itemMenuIcons';
 import { GetIconSpecies, monIconSymbol } from './pokemonIcon';
 import { SUMMARY_SCREEN_GFX } from './summaryScreen';
@@ -73,6 +74,8 @@ export function menuGfxSymbols(state: GameState): string[] {
   for (const s of BERRY_POUCH_GFX) syms.add(s);
   // The evolution scene draws on the battle textbox and terrain.
   for (const s of [...EVOLUTION_SCENE_GFX, ...battleBgGfxSymbols()]) syms.add(s);
+  // The item-use animation (pokemon_special_anim_scene.c), from the party menu; its mon pic and item icon are below.
+  for (const s of pokemonSpecialAnimGfxSymbols()) syms.add(s);
   // Summary screen / evolution scene front pics and their palettes (normal and shiny), and the
   // party menu icons, for each party mon and whatever it can evolve into.
   for (const mon of state.party) {
@@ -108,6 +111,7 @@ export function menuGfxSymbols(state: GameState): string[] {
 /** Load menus.json and the screens' graphics, and set up the menu helpers for this save. */
 export async function prepareMenus(state: GameState): Promise<void> {
   await loadMenusData('gen');
+  await loadGfxIndex(); // menuGfxSymbols picks the item-use anim's symbols by what the index holds
   await loadGfx(menuGfxSymbols(state));
   configureMenuEnv(state);
 }

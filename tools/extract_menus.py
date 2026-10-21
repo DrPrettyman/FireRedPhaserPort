@@ -13,6 +13,8 @@
 - regionMap: region_map.c's tables (see region_map_data)
 - mapPreviewScreens: map_preview_screen.c's sMapPreviewScreenData (see map_preview_screen_data)
 - pokedexArea: wild_pokemon_area.c's and pokedex_area_markers.c's tables (see pokedex_area_data)
+- monPosAttributes: sMonPosAttributes (menu2.c, Menu2_GetMonPosAttribute: the item-use animation's positions), indexed
+  species - 1 (then SPECIES_OLD_UNOWN_EMARK / _QMARK), [TMHM_X, TMHM_Y, Y_OFFSET, ITEM_X, ITEM_Y] each
 """
 
 import json
@@ -202,6 +204,19 @@ def pokedex_area_data(decomp, defines):
     }
 
 
+def mon_pos_attributes(decomp, defines):
+    """menu2.c's sMonPosAttributes ([SPECIES_X - 1] = {5 bytes}); entries the C leaves out are zeros, as in the ROM."""
+    from extract_gfx import firered_only
+
+    text = firered_only((decomp / "src/menu2.c").read_text())
+    known = dict(defines)
+    for name, expr in re.findall(r"#define\s+(SPECIES_OLD_UNOWN_\w+)\s+\(([^)]*)\)", text):
+        known[name] = eval_const_expr(expr, known)
+    table = by_index(designated_entries(c_array_body(text, "sMonPosAttributes")), known,
+                     lambda v: [eval_const_expr(x.strip(), known) for x in v.strip("{} ").split(",")])
+    return [e if e is not None else [0] * 5 for e in table]
+
+
 def extract_menus(decomp, out):
     defines = parse_defines(decomp)
     src = decomp / "src"
@@ -248,6 +263,7 @@ def extract_menus(decomp, out):
     menu_info_icons = [flat[i : i + 3] for i in range(0, len(flat), 3)]
 
     data = {
+        "monPosAttributes": mon_pos_attributes(decomp, defines),
         "natureNames": nature_names,
         "abilityDescriptions": ability_descs,
         "moveDescriptions": move_descs,

@@ -10,8 +10,11 @@
 // message; the data is world/mail.ts (mail_data.c). The player's PC mailbox's GIVE (ui/PlayerPcMenu.ts) opens it with
 // ChooseMonToGiveMailFromMailbox (PARTY_ACTION_GIVE_MAILBOX_MAIL: TryGiveMailToSelectedMon).
 //
-// Not ported because their screens or systems don't exist yet: the item-use animation (pokemon_special_anim.c),
-// link/multi battles, the Union Room, minigames and the Pokédude/Teachy TV demos.
+// The item-use animation (pokemon_special_anim.c) is menus/pokemonSpecialAnim.ts: CB2_DoUseItemAnim and
+// CB2_ReturnToPartyMenuWhileLearningMove start it, CB2_UseItem / CB2_UseTMHMAfterForgettingMove read its
+// PSA_IsCancelDisabled().
+//
+// Not ported because their screens or systems don't exist yet: link/multi battles, the Union Room, minigames and the Pokédude/Teachy TV demos.
 
 import { K } from '../battle/constants';
 import { g, pokemon, state } from '../battle/env';
@@ -27,6 +30,7 @@ import { SetCB2ToReshowScreenAfterMenu } from '../battle/reshowBattleScreen';
 import { FreeRestoreBattleData } from '../battle/battleCallbacks';
 import { LoadPlayerParty } from '../battle/controllerPokedude';
 import { CB2_ReturnToTeachyTV, SetTeachyTvControllerModeToResume } from './teachyTv';
+import { PSA_IsCancelDisabled, StartUseItemAnim_CantEvolve, StartUseItemAnim_ForgetMoveAndLearnTMorHM, StartUseItemAnim_Normal } from './pokemonSpecialAnim';
 import { getBattlerSide } from '../battle/util';
 import {
   CopyRectToBgTilemapBufferRect,
@@ -3245,23 +3249,31 @@ function Task_DoUseItemAnim(taskId: number): void {
   Task_ClosePartyMenu(taskId);
 }
 
-/**
- * CB2_DoUseItemAnim: StartUseItemAnim_Normal / _CantEvolve (pokemon_special_anim.c) aren't
- * implemented, so the animation is skipped and its callback runs at once.
- */
+/** CB2_DoUseItemAnim: the item-use animation (menus/pokemonSpecialAnim.ts), then the item's effect. */
 function CB2_DoUseItemAnim(): void {
   if (CheckIfItemIsTMHMOrEvolutionStone(SpecialVar.ItemId) === 2) {
     // Evolution stone
-    if (MonCanEvolve()) SetMainCallback2(CB2_UseEvolutionStone);
-    else SetMainCallback2(gPartyMenu.exitCallback);
+    if (MonCanEvolve()) StartUseItemAnim_Normal(gPartyMenu.slotId, SpecialVar.ItemId, CB2_UseEvolutionStone);
+    else StartUseItemAnim_CantEvolve(gPartyMenu.slotId, SpecialVar.ItemId, gPartyMenu.exitCallback!);
   } else {
-    SetMainCallback2(CB2_UseItem);
+    StartUseItemAnim_Normal(gPartyMenu.slotId, SpecialVar.ItemId, CB2_UseItem);
   }
 }
 
+/**
+ * CB2_UseItem: after a TM / HM's anim ran to the end (PSA_IsCancelDisabled), the move is taught (ItemUseCB_TMHM gave it
+ * already: GiveMoveToMon finds it known) and the TM used up here; otherwise the party menu comes back to show the item's
+ * effect (gItemUseCB through Task_SetSacredAshCB: Rare Candy's level up, a vitamin's message, a cancelled TM's).
+ */
 function CB2_UseItem(): void {
-  // PSA_IsCancelDisabled() is FALSE without the item-use animation
-  InitPartyMenu(gPartyMenu.menuType, K.KEEP_PARTY_LAYOUT, K.PARTY_ACTION_CHOOSE_MON, gPartyMenu.slotId !== 0, K.PARTY_MSG_NONE, Task_SetSacredAshCB, gPartyMenu.exitCallback);
+  if (ItemId_GetPocket(SpecialVar.ItemId) === K.POCKET_TM_CASE && PSA_IsCancelDisabled()) {
+    const mon = P(gPartyMenu.slotId);
+    giveMoveToMon(mon, ItemIdToBattleMoveId(SpecialVar.ItemId));
+    adjustFriendship(mon, K.FRIENDSHIP_EVENT_LEARN_TMHM);
+    if (SpecialVar.ItemId < K.ITEM_HM01) RemoveBagItem(SpecialVar.ItemId, 1);
+    SetMainCallback2(gPartyMenu.exitCallback);
+  } else
+    InitPartyMenu(gPartyMenu.menuType, K.KEEP_PARTY_LAYOUT, K.PARTY_ACTION_CHOOSE_MON, gPartyMenu.slotId !== 0, K.PARTY_MSG_NONE, Task_SetSacredAshCB, gPartyMenu.exitCallback);
 }
 
 function Task_SetSacredAshCB(taskId: number): void {
@@ -3677,18 +3689,31 @@ function CB2_ReturnToPartyMenuWhileLearningMove(): void {
   const learnMethod = gPartyMenu.learnMoveMethod;
 
   if (learnMethod === LEARN_VIA_TMHM && moveIdx !== K.MAX_MON_MOVES) {
-    // StartUseItemAnim_ForgetMoveAndLearnTMorHM (pokemon_special_anim.c) isn't implemented: its
-    // callback runs at once.
+    const move = P(gPartyMenu.slotId).moves[moveIdx];
+    StartUseItemAnim_ForgetMoveAndLearnTMorHM(gPartyMenu.slotId, SpecialVar.ItemId, move, CB2_UseTMHMAfterForgettingMove);
     gItemUseCB = ItemUseCB_ReplaceMoveWithTMHM;
     gPartyMenu.action = K.PARTY_ACTION_CHOOSE_MON;
-    SetMainCallback2(CB2_UseTMHMAfterForgettingMove);
   } else
     InitPartyMenu(K.PARTY_MENU_TYPE_FIELD, K.PARTY_LAYOUT_SINGLE, K.PARTY_ACTION_CHOOSE_MON, true, K.PARTY_MSG_NONE, Task_ReturnToPartyMenuWhileLearningMove, gPartyMenu.exitCallback);
 }
 
-/** CB2_UseTMHMAfterForgettingMove: PSA_IsCancelDisabled() is FALSE without the animation. */
+/**
+ * CB2_UseTMHMAfterForgettingMove: after the whole anim the move is replaced here (with the quest log's USED_ITEM); a
+ * cancelled one goes back to the party menu, whose ItemUseCB_ReplaceMoveWithTMHM does it with the messages.
+ */
 function CB2_UseTMHMAfterForgettingMove(): void {
-  InitPartyMenu(gPartyMenu.menuType, K.KEEP_PARTY_LAYOUT, gPartyMenu.action, gPartyMenu.slotId !== 0, K.PARTY_MSG_NONE, Task_SetSacredAshCB, gPartyMenu.exitCallback);
+  if (PSA_IsCancelDisabled()) {
+    const mon = P(gPartyMenu.slotId);
+    const moveIdx = GetMoveSlotToReplace();
+    const move = mon.moves[moveIdx];
+    removeMonPPBonus(mon, moveIdx);
+    setMonMoveSlot(mon, ItemIdToBattleMoveId(SpecialVar.ItemId), moveIdx);
+    adjustFriendship(mon, K.FRIENDSHIP_EVENT_LEARN_TMHM);
+    ItemUse_SetQuestLogEvent(K.QL_EVENT_USED_ITEM, mon, SpecialVar.ItemId, move);
+    if (SpecialVar.ItemId < K.ITEM_HM01) RemoveBagItem(SpecialVar.ItemId, 1);
+    SetMainCallback2(gPartyMenu.exitCallback);
+  } else
+    InitPartyMenu(gPartyMenu.menuType, K.KEEP_PARTY_LAYOUT, gPartyMenu.action, gPartyMenu.slotId !== 0, K.PARTY_MSG_NONE, Task_SetSacredAshCB, gPartyMenu.exitCallback);
 }
 
 function ItemUseCB_ReplaceMoveWithTMHM(taskId: number, _func: TaskFunc): void {
