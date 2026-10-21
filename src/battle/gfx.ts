@@ -73,6 +73,7 @@ import { K } from './constants';
 import { bdata, g, pokemon } from './env';
 import { bufferBattlePartyCurrentOrderBySide, getPartyIdFromBattlePartyId } from './partyOrder';
 import { gSineTable, Sin } from './trig';
+import { DrawSpindaSpots } from '../pokemon/spindaSpots';
 import { getBattlerAtPosition, getBattlerPosition, getBattlerSide } from './util';
 
 const isDoubleBattle = () => (g.battleTypeFlags & K.BATTLE_TYPE_DOUBLE) !== 0;
@@ -672,7 +673,7 @@ export function IsMoveWithoutAnimation(_moveId: number, _animationTurn: number):
   return false;
 }
 
-/** HandleLoadSpecialPokePic / LoadSpecialPokePic: Unown letters use their own pic; Spinda's spots aren't drawn yet. */
+/** HandleLoadSpecialPokePic / LoadSpecialPokePic: Unown letters use their own pic; DrawSpindaSpots on Spinda's front pic. */
 export function LoadSpecialPokePic(front: boolean, species: number, personality: number, dest: Uint8Array): void {
   const table = front ? bdata.anims.monFrontPics : bdata.anims.monBackPics;
   let sp = species;
@@ -680,11 +681,11 @@ export function LoadSpecialPokePic(front: boolean, species: number, personality:
     const letter = GET_UNOWN_LETTER(personality);
     if (letter) sp = K.NUM_SPECIES + letter;
   }
-  if (species === K.SPECIES_SPINDA) console.warn('[battle] Spinda spots not drawn');
   const sym = table[sp] ?? table[0]!;
   const pic = gfx(sym);
   dest.fill(0);
   dest.set(pic.subarray(0, Math.min(pic.length, dest.length)));
+  DrawSpindaSpots(species, personality, dest, front);
 }
 
 /** DecompressPicFromTable(&table[species], buffer, species): `src` is the table entry's pic symbol. */

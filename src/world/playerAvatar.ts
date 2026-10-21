@@ -11,6 +11,7 @@
 // Not ported: the Acro Bike / secret base mat functions, which FRLG's metatile behaviours never trigger.
 
 import { K } from '../battle/constants';
+import { state } from '../battle/env';
 import { PlaySE } from '../gba/sound';
 import type { SpriteInfo } from '../data/types';
 import type { Button } from '../input/Input';
@@ -431,7 +432,10 @@ export function CheckForPlayerAvatarCollision(direction: Direction): number {
 export function CheckForObjectEventCollision(obj: ObjectEvent, x: number, y: number, direction: Direction, _behavior: number): number {
   let collision = avatarField().collisionAt(obj, x, y, direction);
   if (collision === K.COLLISION_ELEVATION_MISMATCH && CanStopSurfing(x, y, direction)) return K.COLLISION_STOP_SURFING;
-  if (ShouldJumpLedge(x, y, direction)) return K.COLLISION_LEDGE_JUMP; // (GAME_STAT_JUMPED_DOWN_LEDGES isn't kept)
+  if (ShouldJumpLedge(x, y, direction)) {
+    state.incrementGameStat(K.GAME_STAT_JUMPED_DOWN_LEDGES);
+    return K.COLLISION_LEDGE_JUMP;
+  }
   if (collision === K.COLLISION_OBJECT_EVENT && TryPushBoulder(x, y, direction)) return K.COLLISION_PUSHED_BOULDER;
   // CheckAcroBikeCollision: FRLG's rail / bumpy slope behaviours are all FALSE
   return collision;

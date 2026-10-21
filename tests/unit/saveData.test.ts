@@ -3,6 +3,7 @@ import type { Pokemon } from '../../src/pokemon/Pokemon';
 import { clearSave, fromSaveData, hasSave, readSave, SAVE_STORAGE_KEY, SAVE_VERSION, toSaveData, writeSave } from '../../src/state/saveData';
 import { boxMonFromMon as boxMon } from '../../src/state/PokemonStorage';
 import { newGame, type TestGame } from './gameData';
+import { emptyQuestLogObjectEvent } from '../../src/world/questLogObjects';
 
 let t: TestGame;
 const mon = (name: string, level: number): Pokemon =>
@@ -32,6 +33,15 @@ function playedState(): TestGame['state'] {
   s.dynamicWarp = { mapId: 'MAP_CELADON_CITY_DEPARTMENT_STORE_2F', warpId: 2, x: 1, y: 2 };
   s.lastHealLocation = { map: 'MAP_VIRIDIAN_CITY', x: 26, y: 27 };
   s.escapeWarp = { mapId: 'MAP_ROUTE2', warpId: 255, x: 3, y: 4 };
+  // SaveObjectEvents / the current map's templates / SaveMapView (version 14)
+  s.objectEvents = [
+    { ...emptyQuestLogObjectEvent(), active: 1, localId: 2, mapGroup: 3, mapNum: 1, x: 30, y: 16, facingDirection: 3, movementType: 7, invisible: 1 },
+    { ...emptyQuestLogObjectEvent(), active: 1, localId: 5, mapGroup: 3, mapNum: 1, x: 12, y: 20, facingDirection: 1, facingDirectionLocked: 1 },
+  ];
+  s.objectEventTemplates = [
+    { local_id: 'LOCALID_X', type: 'object', graphics_id: 'OBJ_EVENT_GFX_BOY', x: 23, y: -1, elevation: 3, movement_type: 'MOVEMENT_TYPE_WANDER_AROUND', movement_range_x: 1, movement_range_y: 2, trainer_type: 'TRAINER_TYPE_NONE', trainer_sight_or_berry_tree_id: '0', flag: '0' },
+  ];
+  s.mapView = Array.from({ length: 15 * 14 }, (_, i) => (i * 37) & 0xffff);
   const pidgey = mon('PIDGEY', 12);
   pidgey.hp = 3;
   pidgey.status = t.d('STATUS1_PARALYSIS');
@@ -129,6 +139,9 @@ describe('save data (save.c / load_save.c)', () => {
       dynamicWarp: s.dynamicWarp,
       lastHealLocation: s.lastHealLocation,
       escapeWarp: s.escapeWarp,
+      objectEvents: s.objectEvents,
+      objectEventTemplates: s.objectEventTemplates,
+      mapView: s.mapView,
       money: 123456,
       coins: 789,
       registeredItem: s.registeredItem,
@@ -174,6 +187,28 @@ describe('save data (save.c / load_save.c)', () => {
     expect(data.flags.every((f) => f < t.d('SPECIAL_FLAGS_START'))).toBe(true);
     const loaded = fromSaveData(data, newGame().state);
     expect(loaded.getVar('VAR_0x8004')).toBe(0);
+  });
+
+  test("a version 13 save (no objects, templates or map view) loads without them: CONTINUE spawns from the header", () => {
+    const { objectEvents: _o, objectEventTemplates: _t, mapView: _v, ...v13 } = { ...toSaveData(playedState()), version: 13 };
+    const loaded = fromSaveData(v13, newGame().state);
+    expect(loaded.objectEvents).toBeUndefined();
+    expect(loaded.objectEventTemplates).toBeUndefined();
+    expect(loaded.mapView).toBeUndefined();
+    expect(loaded.location).toEqual(t.state.location);
+    expect(toSaveData(loaded)).not.toHaveProperty('objectEvents');
+  });
+
+  test('the saved objects, templates and map view are copies', () => {
+    const s = playedState();
+    const data = toSaveData(s);
+    s.objectEvents![0].x = 99;
+    s.objectEventTemplates![0].x = 99;
+    s.mapView![0] = 99;
+    expect([data.objectEvents![0].x, data.objectEventTemplates![0].x, data.mapView![0]]).toEqual([30, 23, 0]);
+    const loaded = fromSaveData(data, newGame().state);
+    data.objectEvents![1].y = 1;
+    expect(loaded.objectEvents![1].y).toBe(20);
   });
 
   test('a version 8 save (no gcnLinkFlags) loads with none set', () => {

@@ -712,6 +712,20 @@ this is the next level down. When you add or change a subsystem, update its entr
     `itemfinderArrow` (`anim`, `affineAnim`, `deltaX`, `deltaY`), `itemfinderStar`, `itemfinderEnd`. Tests:
     tests/e2e/itemfinder.test.ts (Route 3's Oran Berry (26, 9) from (24, 9); Cape Brink's underfoot PP Max at
     (16, 28); Pallet Town for none; Route 13 (62, 1) for Route 12's Rare Candy), tests/unit/itemfinder.test.ts.
+  - **Renewable hidden items:** `world/renewableHiddenItems.ts` is renewable_hidden_items.c. The table
+    (sRenewableHiddenItems: 15 maps, each with rare / uncommon / common groups of eight u8 hidden ids,
+    HIDDEN_ID(flag) = flag - FLAG_HIDDEN_ITEMS_START, 0xFF = none) is `constants.json`'s `renewableHiddenItems`
+    (tools/extract.py's extract_renewable_hidden_items), handed over by Assets.init (`initRenewableHiddenItems`;
+    tests/unit/gameData.ts does the same). Hooks: GameState's constructor runs SetAllRenewableItemFlags
+    (NewGameInitData: every renewable item starts hidden); OverworldScene.processPlayerFieldInput runs
+    IncrementRenewableHiddenItemStepCounter on each step next to GAME_STAT_STEPS (VAR_RENEWABLE_ITEM_STEP_COUNTER, up
+    to 1500: a saved var, so no save field); `onMapLoaded` runs TryRegenerateRenewableHiddenItems after the
+    ON_TRANSITION script on warps and connections (not CONTINUE, as LoadMapFromWarp / LoadMapFromCameraTransition):
+    on a table map at 1500 the counter resets, every renewable flag is set and SampleRenewableItemFlags clears one
+    group per map (one Random() % 100 each: 90+ rare, 60+ uncommon, else common). An e2e test that picks up a
+    renewable item has to clear its flag first, as a regeneration would (postgameSixIsland / postgameSevenIsland).
+    Tests: tests/unit/renewableHiddenItems.test.ts, tests/e2e/gameStatsAndRenewables.test.ts (Three Island → Bond
+    Bridge with the counter at 1500).
   - **Registered items (SELECT):** `menus/registeredItem.ts` is UseRegisteredKeyItemOnField (item_menu.c),
     called from `OverworldScene.processPlayerFieldInput` when FieldGetPlayerInput saw SELECT (after START, as in
     ProcessPlayerFieldInput). It dismisses the map name popup, takes LockPlayerFieldControls (fieldMoves.ts' flag
@@ -1493,7 +1507,10 @@ this is the next level down. When you add or change a subsystem, update its entr
   (`loadPokedexData` → `pokedexData`: gPokedexEntries' strings, sizes and scales by national number, the four
   orders, gDexCategories' pages, gMonFootprintTable's symbols; public/gen/pokedex.json from
   tools/extract_pokedex.py), NationalPokedexNumToSpecies and DexScreen_GetSetPokedexFlag (on GameState's
-  `dexSeen` / `dexCaught`). START → POKéDEX (StartMenuPokedexSanityCheck: nothing until a mon's been seen) fades
+  `dexSeen` / `dexCaught`), and pokemon.c's HandleSetPokedexFlag (the battle's seen / caught calls, the in-game
+  trade's UpdatePokedexForReceivedMon): the first Unown / Spinda seen (or caught) keeps its personality in
+  `state.dexUnownPersonality` / `dexSpindaPersonality` (gSaveBlock2Ptr->pokedex.*, saved since version 15), which
+  DexScreen_GetDefaultPersonality gives every pic and icon the screen draws. START → POKéDEX (StartMenuPokedexSanityCheck: nothing until a mon's been seen) fades
   out and runs CB2_OpenPokedexFromStartMenu in FieldMenuScene 'pokedex' (which loads the data and
   `pokedexScreenGfxSymbols()`, and sets the field's DISPCNT the screen inherits); CB2_ClosePokedex returns through
   CB2_ReturnToFieldWithOpenMenu. Graphics: graphics/pokedex/ by symbol (sKantoDexTiles, sTopMenuIconTiles_*, ...),
@@ -1542,7 +1559,7 @@ this is the next level down. When you add or change a subsystem, update its entr
   ('slow' / 'mid' / 'fast' = OPTIONS_TEXT_SPEED_*), `battleSceneOff`, `battleStyleSet`, `optionsSound` (stored and
   saved only, since save version 3), `optionsButtonMode`, `optionsWindowFrameType` (0-9 = TYPE 1-10). Who reads
   them: the field message box and GBA text (text speed), the battle (scene, style, `battle/battleBg.ts`'s user frame),
-  GbaHostScene's ReadKeys (L=A) and the GBA list menus (LR), the start menu (HELP: its help window), and every field
+  GbaHostScene's ReadKeys (L=A; on the field, OverworldScene sets the field Input's `lEqualsA` each tick, so `held('A')` / `pressed('A')` see L as ReadKeys does and ReadKeys itself reads `heldRaw`) and the GBA list menus (LR), the start menu (HELP: its help window), and every field
   window drawn with a user frame: `MenuWindow` defaults to the options' frame through `setUserFrameTypeSource`
   (OverworldScene sets it), multichoices / list menus / the shop pass it themselves; GBA screens get it through
   `menuEnv.windowFrameType` (`configureMenuEnv`, each FieldMenuScene start). Probe: `t.optionMenu()` (loadState: 2
@@ -1645,6 +1662,19 @@ this is the next level down. When you add or change a subsystem, update its entr
   battle_main.c, battle_script_commands.c, battle_util.c, the controllers, battle_interface.c, battle_gfx_sfx_util.c,
   pokeball.c etc. on top of it. `BattleScene` runs CB2_InitBattle → CB2_HandleStartBattle → BattleMainCB1/CB2 +
   VBlankCB_Battle at 60 Hz and draws with the software PPU. `OverworldScene.startTrainerBattle` builds `BattleStart`.
+- **Mon pics with a personality (LoadSpecialPokePic):** `battle/gfx.ts`'s LoadSpecialPokePic is decompress.c's
+  (HandleLoadSpecialPokePic and the _DontHandleDeoxys variants are the same call here): an Unown's letter pic
+  (NUM_SPECIES + letter), then pokemon.c's DrawSpindaSpots (`src/pokemon/spindaSpots.ts`) on Spinda's front pic:
+  each of sSpindaSpotGraphics' four spots (base x / y and 16 rows of bits, extracted into pokemon/tables.json's
+  `spindaSpots` by tools/extract.py) moves by a personality nibble pair - 8 and turns body colours 1-3 into 5-7
+  (u8 positions as in the C: spot 0's first row wraps past the frame for a y nibble of 0; writes past the buffer are
+  dropped). Every caller that the C routes through LoadSpecialPokePic does here too: the battle (the battlers, the
+  Transform pics, the anims' extra mon sprites), menus/picSprites.ts (trainer_pokemon_sprites.c: the summary, the
+  Hall of Fame, the Pokédex, the field move's mon, the credits), the PC storage's preview, the trade scene, the egg
+  hatch (and the item-use anim's pic, W-anim's, batch 15). DecompressPicFromTable (no spots, no Unown letter) is for the evolution scene and Oak's
+  speech, as in the C. The field's `showmonpic` box (OverworldScene's MonPicBox) still uses the extracted PNG
+  (pokemon/front/<species>.png): its personality is 0 in the C and no script shows Spinda. Tests:
+  tests/unit/spindaSpots.test.ts, tests/e2e/spinda.test.ts.
 - **Battle anims:** `src/battle/anim/` (see docs/LOG.md "Battle animation engine"): every battle_anim_*.c file is
   ported, one module per C file (`battle_anim_fight.c` → `fight.ts`, ...; `battle_anim_effects_3.c` is split over
   `effects3.ts` and `effects3b.ts` at AnimTask_PainSplitMovement), each registered in `ported.ts`, with graphics a
@@ -2394,8 +2424,12 @@ or extend them:
   (special vars 0x8000+, special flags, gStringVar*, gEnemyParty, the Safari ball/step counts, which can't be
   saved anyway since the Safari start menu has no SAVE, and the roamer's location). Other optional warps the save
   keeps: `continueGameWarp` + `specialSaveWarpFlags` (CONTINUE_GAME_WARP), `escapeWarp`. Game stats
-  (`state.gameStats`, Get/Set/IncrementGameStat; only GAME_STAT_ENTERED_HOF and _FIRST_HOF_PLAY_TIME are counted so
-  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8, `gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) since version 9. `fameChecker` (gSaveBlock1Ptr->fameChecker) since version 10. The mail slots (`mail`, world/mail.ts) and a party mon's `mail` since version 11, the quest log's scenes (`questLog`, world/questLog.ts) since version 12, the daycare mons' DayCareMail (`DaycareMon.mail`) since version 13. The Hall of Fame records live apart from the save, like their own flash
+  (`state.gameStats`, Get/Set/IncrementGameStat; every single-player IncrementGameStat of the C is counted where the C
+  does it: STEPS in processPlayerFieldInput, the battles in startTrainerBattle / runWildBattle / the scripted and
+  Marowak battles (specials.ts), SAVED_GAME in the save dialog, the field moves, the Itemfinder, the shop, the
+  ledges, the Safari Zone, fishing, the slots' jackpots, evolutions, the battle script's `incrementgamestat`
+  (Struggle, Splash), and the earlier ones (Pokédex, eggs, rain, the Pokémon Center's script command, the Hall of
+  Fame); not RECEIVED_RIBBONS (no ribbons) or the link-only ones. Test: tests/e2e/gameStatsAndRenewables.test.ts) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8, `gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) since version 9. `fameChecker` (gSaveBlock1Ptr->fameChecker) since version 10. The mail slots (`mail`, world/mail.ts) and a party mon's `mail` since version 11, the quest log's scenes (`questLog`, world/questLog.ts) since version 12, the daycare mons' DayCareMail (`DaycareMon.mail`) since version 13, the current map's object events, templates and map view (`objectEvents`, `objectEventTemplates`, `mapView`: see "Saving and continuing") since version 14, the Pokédex's `unownPersonality` / `spindaPersonality` (`pokedex.*`) since version 15. The Hall of Fame records live apart from the save, like their own flash
   sectors: `state/hallOfFame.ts` (key `HOF_STORAGE_KEY`, versioned), read into `gHofBuffer` (gDecompressionBuffer)
   by LoadHallOfFameSave, written by TrySavingData(SAVE_HALL_OF_FAME) (which also counts GAME_STAT_ENTERED_HOF) and
   erased by SAVE_OVERWRITE_DIFFERENT_FILE.
@@ -2426,6 +2460,26 @@ or extend them:
   (the harness boots with `?skipIntro`, so no title screen first).
   Probes: `t.startMenu()` (items, cursor), `t.saveDialog()` (yesNo, statsWindow, the stats as text),
   `t.mainMenu()` (menuType, cursorPos, fading, the CONTINUE values as text).
+  **The field in the save (version 14):** `storeLocationForSave()` also writes SaveObjectEvents
+  (`state.objectEvents`: the current map's NPCs as gObjectEvents entries through `npcObjectEvent` =
+  world/questLogObjects.ts' questLogObjectEventFrom, the conversion the quest log's snapshot uses; the player's entry
+  is `location`), the current map's templates (`state.objectEventTemplates`: `templatesFor(cur)` without the scripts,
+  i.e. gSaveBlock1Ptr->objectEventTemplates with the setobjectxyperm / copyobjectxytoperm / setobjectmovementtype /
+  VS Seeker edits) and SaveMapView (`state.mapView`: the 15 x 14 grid values from map-local (x - 7, y - 7), row by
+  row, 0 outside the map). CONTINUE's saved-map load (enterSavedField's non-warp branch, also the quest log's final
+  scene) sets `continueMapLoad = saveblockMapLoad(loc)`, whose three steps onMapLoaded calls: `templates()` after
+  the header's templates are copied (the saved ones with the header's scripts: LoadSaveblockObjEventScripts),
+  `mapView()` between initMapLayout and ON_LOAD (LoadSavedMapView, then ClearSavedMapView), `objects()` after
+  syncNpcsWithLoadedMaps has spawned from those templates (`loadObjectEvents`: LoadObjectEvents' positions, facing,
+  movement type, visibility and the ground effect / anim bits; an object the templates don't spawn, shown with
+  `addobject` over its hide flag, is spawned as `addobject` does). Each step checks the map is the saved one; a
+  save without the fields (version 13 and older) loads the header's templates and objects as before. The quest log's
+  scene loads pass a location too but no `continueMapLoad` (QL_LoadMapNormal's InitMap and
+  LoadObjEventTemplatesFromHeader), and the continue-game warp (UseContinueGameWarp) loads the map as a warp does.
+  Test: tests/e2e/continueObjects.test.ts (Victory Road 1F's boulder on the switch at (20, 16) from (20, 14) and
+  another moved boulder; Pokémon Tower 1F from (4, 10): `setobjectxy` + `turnobject`, `setobjectxyperm`,
+  `setobjectmovementtype`, a `setmetatile` inside the saved view and one outside it; leaving and re-entering brings
+  the header's templates back), tests/unit/saveData.test.ts (the round trip, version 13).
   Scripted save prompts: `special Field_AskSaveTheGame` (EventScript_AskSaveGame + `waitstate`) runs the same
   dialog through `ScriptHost.createSaveDialog()` (OverworldScene) as the special's wait state (task50_save_game):
   VAR_RESULT TRUE once saved, FALSE for NO/B or a failed write; the message box is left as is. Users: the cable

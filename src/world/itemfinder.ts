@@ -71,7 +71,7 @@ interface ItemfinderTask {
 
 let sTask: ItemfinderTask | undefined;
 
-/** ItemUseOnFieldCB_Itemfinder (ItemUseOutOfBattle_Itemfinder sets it; GAME_STAT_USED_ITEMFINDER isn't tracked). */
+/** ItemUseOnFieldCB_Itemfinder (ItemUseOutOfBattle_Itemfinder sets it and counts GAME_STAT_USED_ITEMFINDER). */
 export function ItemUseOnFieldCB_Itemfinder(): void {
   // On the GBA the start menu's lock is still held when the bag returns; here the field's overlay held the
   // controls until now, so the task takes the lock itself (as the VS Seeker's does).

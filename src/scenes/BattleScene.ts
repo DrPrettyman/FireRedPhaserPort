@@ -173,7 +173,7 @@ export class BattleScene extends GbaHostScene implements BattleUi {
       const newSpecies = (start.enemyParty ?? []).filter((mon) => !start.state.dexCaught.has(start.pokemon.nationalDex(mon.species)));
       if (newSpecies.length) {
         await loadPokedexData('gen');
-        await loadGfx(newSpecies.flatMap((mon) => dexRegisterGfxSymbols(mon.species)));
+        await loadGfx(newSpecies.flatMap((mon) => dexRegisterGfxSymbols(mon.species, mon.personality)));
       }
     }
     initBattleMessages();

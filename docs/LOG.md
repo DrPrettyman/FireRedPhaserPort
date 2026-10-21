@@ -4773,3 +4773,88 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Race fixed on the way: weather.test.ts' Tanoby chamber test failed once with seven files running: Ruin Maniac
   Benjamin (121, 11, MOVEMENT_TYPE_LOOK_AROUND) spotted the player started at (120, 11) before the walk up. It now
   starts at (120, 12), out of his sight lines, marks him beaten, then steps up.
+### W-spinda: Spinda's spots and the Pokédex personalities (FINISH_PLAN.md unit 5 / P1, batch 15)
+
+- pokemon.c's DrawSpindaSpots (the DRAW_SPINDA_SPOTS macro) is `src/pokemon/spindaSpots.ts`, called at the end of
+  battle/gfx.ts's LoadSpecialPokePic as decompress.c does (front pics only). sSpindaSpotGraphics comes from
+  tools/extract.py (pokemon/tables.json's `spindaSpots`: the base x / y and graphics/spinda_spots/spot_N.bin's 16
+  u16 rows). The C's u8 coordinates are kept: a y nibble of 0 puts spot 0's first row at y 255, past the frame (in the
+  C's 0x2000-byte sprite buffers; dropped where the port's buffer is smaller). The old `console.warn('Spinda spots
+  not drawn')` is gone.
+- Callers checked against the C: every pic decompress.c's LoadSpecialPokePic / HandleLoadSpecialPokePic(_DontHandle
+  Deoxys) loads goes through the port's LoadSpecialPokePic already (battle_gfx_sfx_util.c's battlers and Transform,
+  battle_anim_mons.c, trainer_pokemon_sprites.c → menus/picSprites.ts: the summary, the Hall of Fame, the Pokédex,
+  the field move's mon, the credits; the PC storage's preview, the trade scene, the egg hatch); evolution_scene.c and
+  oak_speech.c use DecompressPicFromTable (no spots) and so does the port. The field's `showmonpic` box still draws
+  the extracted PNG (personality 0 in the C; no script shows Spinda).
+- The Pokédex personalities: gSaveBlock2Ptr->pokedex.unownPersonality / spindaPersonality are
+  `state.dexUnownPersonality` / `dexSpindaPersonality`, set by pokemon.c's HandleSetPokedexFlag (now in
+  menus/pokedex.ts; the battle's `handleSetPokedexFlag` takes the personality: the intro's and the switch-in's
+  FLAG_SET_SEEN, Cmd_trysetcaughtmondexflags' FLAG_SET_CAUGHT; tradeSpecials' UpdatePokedexForReceivedMon as
+  trade_scene.c), read by DexScreen_GetDefaultPersonality (the mon page, the habitat pages, the area page's icon and
+  pic). Save version 15 (14 at first; renumbered at the merge after W-continue's 14) (`pokedex.unownPersonality` / `spindaPersonality`; `upgradeSave` gives a version 14 save 0,
+  what the Pokédex drew then). New game: a fresh GameState has 0 (Sav2_ClearSetDefault); the C's NEW GAME over an
+  old save keeps the old values (ClearPokedexFlags clears only the flags), which can't show: the dex only draws a
+  seen mon, and the first sighting overwrites them.
+- Fix on the way: the evolution scene called the battle's HandleSetPokedexFlag where evolution_scene.c calls
+  GetSetPokedexFlag (seen + caught, no personality); it sets the flags directly now.
+- BattleScene's preload of the registered page (Cmd_displaydexinfo) uses the wild mon's own personality for its
+  species (`dexRegisterGfxSymbols(species, personality)`): catching it is what sets the Unown personality, so the
+  page draws the caught letter (its icon would otherwise be fetched on demand).
+- Test hooks: MonSpec `personality` (a fixed personality for `party` / `startWildBattle`).
+- DEVIATIONS: removed Spinda's spots from "Battles", the Unown / Spinda personalities from "Save data" and
+  "Pokédex screen".
+- Tests: tests/unit/spindaSpots.test.ts (12: the extracted spots, a pixel model of the macro against five
+  personalities on colours 1-3, colours 0 / 4-15 untouched, the u8 wrap with a small and a 0x2000 buffer, the real
+  Spinda front pic vs back pic vs Pikachu, HandleSetPokedexFlag's first seen / first caught, the save round trip and
+  the version 14 upgrade); tests/e2e/spinda.test.ts (3: two wild Spinda's sprites in OBJ VRAM with their own spots,
+  the Pokédex keeping the first and an Unown F, its habitat page and mon page drawing them; a party Spinda's summary
+  sprite with its spots; catching an Unown K after an F was seen: the registered page draws the K) — 3 passed. Also
+  run: pokedex, pokedexArea, saveContinue, evolution, inGameTrades (28 passed); npm test 810 passed.
+### Batch 15 W-small: L=A on the field, the missing GAME_STATs, renewable hidden items (FINISH_PLAN.md units 6, 1)
+
+- M1 (unit 6): the L=A button mode now reaches the field. `input/Input.ts` got ReadKeys' remap (`lEqualsA`:
+  `held('A')` / `pressed('A')` also see L, `heldRaw` stays the keys), set each tick by OverworldScene from
+  `optionsButtonMode`; gba/main.ts's ReadKeys reads `heldRaw`. The help system is untouched: in that mode
+  RunHelpSystemCallback returns at once (help_system_util.c), as the port already did.
+- M1: every single-player IncrementGameStat of the C (grep `IncrementGameStat(` in src/) is now counted: STEPS
+  (ProcessPlayerFieldInput), TOTAL / WILD / TRAINER_BATTLES (DoTrainerBattle in startTrainerBattle; DoStandardWildBattle,
+  StartRoamerBattle and DoGhostBattle in runWildBattle; StartScriptedWildBattle / StartLegendaryBattle in
+  runScriptedWildBattle; StartMarowakBattle), SAVED_GAME (SaveDialogCB_DoSave), USED_CUT (grass and tree),
+  USED_ROCK_SMASH, USED_ITEMFINDER, SHOPPED (BuyMenuSubtractMoney), JUMPED_DOWN_LEDGES (CheckForObjectEventCollision),
+  ENTERED_SAFARI_ZONE, FISHING_CAPTURES, SLOT_JACKPOTS, EVOLVED_POKEMON, and the battle script's `incrementgamestat`
+  (Cmd_incrementgamestat: Struggle, Splash, player side only). Not done: RECEIVED_RIBBONS (the port's mons have no
+  ribbons; GiveLeadMonEffortRibbon is unused in FRLG), the link-only stats. DEVIATIONS lines removed: Itemfinder,
+  Evolution scene, Field moves, Wild encounters, Scripted wild battles, Fishing, Poké Mart, Save dialog, the option
+  menu's L=A, the slots' jackpots.
+- M2 (unit 1): renewable_hidden_items.c as `world/renewableHiddenItems.ts`, its table extracted into
+  constants.json (tools/extract.py). SetAllRenewableItemFlags at new game (GameState's constructor),
+  IncrementRenewableHiddenItemStepCounter next to GAME_STAT_STEPS, TryRegenerateRenewableHiddenItems after the
+  ON_TRANSITION script in onMapLoaded. No save field (Decision 1). Found on the way: postgameSixIsland's and
+  postgameSevenIsland's item sweeps picked up renewable hidden items (Green Path, Outcast Island, the Tanoby Ruins'
+  Heart Scales, the Trainer Tower path's pearls) that a new game now hides, as on the GBA; the tests clear those flags
+  first, as a regeneration would.
+- Verified: typecheck; `npm test` (66 files, 803 tests); e2e: gameStatsAndRenewables (new: L=A on a sign, steps, a
+  save, a wild battle, Cut, the regeneration on Bond Bridge), fieldMoves, itemfinder, pokemart, helpSystem,
+  scriptedBattles, saveContinue, newGame, postgameSixIsland's and postgameSevenIsland's item sweeps.
+### W-continue: CONTINUE restores the object events, templates and map view (FINISH_PLAN.md unit 2, batch 15)
+
+- load_save.c's SaveObjectEvents / LoadObjectEvents, gSaveBlock1Ptr->objectEventTemplates and fieldmap.c's
+  SaveMapView / LoadSavedMapView. Save version 14 (`upgradeSave` 13 → 14 adds nothing: an older save loads the
+  header's templates and objects, as before). New GameState / SaveData fields `objectEvents` (the current map's
+  NPCs as world/questLogObjects.ts' QuestLogObjectEvent, the player being `location`), `objectEventTemplates`
+  (ObjectEventData without the script) and `mapView` (15 x 14 grid values), all written by
+  `OverworldScene.storeLocationForSave` (the save dialog and the Hall of Fame call it).
+- CONTINUE (enterSavedField's saved-map branch, which the quest log's final scene runs too): `saveblockMapLoad`
+  hooks into onMapLoaded like the quest log's `qlMapLoad`: the save's templates with the header's scripts
+  (LoadSaveblockObjEventScripts) before ON_LOAD, the map view after the layout and before ON_LOAD
+  (InitMapFromSavedGame's order), the saved objects after the templates' spawn. Before, a pushed Victory Road 1F
+  boulder (copyobjectxytoperm) went back to (7, 18) after CONTINUE though VAR_MAP_SCENE_VICTORY_ROAD_1F was 100.
+- Shared bits: the quest log host's NPC → gObjectEvents conversion moved into `npcObjectEvent` (also used by the
+  save); GameState gained the three fields and the SavedObjectEventTemplate type.
+- DEVIATIONS: "Save data" no longer lists the object events / templates (or the game stats, saved since version 2)
+  and says what the saved objects leave out; "Save dialog" drops SaveMapView; "CONTINUE" keeps only
+  gExitStairsMovementDisabled (W-stairs').
+- Tests: tests/e2e/continueObjects.test.ts (new: 3 tests; all three fail without the restore), tests/unit/saveData.test.ts
+  (round trip with the new fields, a version 13 save, copies), saveContinue, questLog, questLogField,
+  questLogPlayback, postgameFourIsland, escalator.

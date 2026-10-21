@@ -10,6 +10,7 @@ import { bit } from './globals';
 import type { BattlePokemon } from './structs';
 import { abilityBattleEffects, getBattlerAtPosition, getBattlerPosition, getBattlerSide, updateSentPokesToOpponentValue, weatherHasEffect2 } from './util';
 import { clearTemporarySpeciesSpriteData } from './gfx';
+import { HandleSetPokedexFlag } from '../menus/pokedex';
 
 const mech = () => bdata.tables.mech as Record<string, number[]>;
 
@@ -80,9 +81,9 @@ export function isOtherTrainer(otId: number, otName: number[]): boolean {
   return false;
 }
 
-/** HandleSetPokedexFlag (FLAG_SET_SEEN / FLAG_SET_CAUGHT) */
-export function handleSetPokedexFlag(nationalNum: number, caseId: number): void {
-  state.setDexFlags(nationalNum, caseId === K.FLAG_SET_SEEN, caseId === K.FLAG_SET_CAUGHT);
+/** HandleSetPokedexFlag (FLAG_SET_SEEN / FLAG_SET_CAUGHT; the first Unown / Spinda's personality) */
+export function handleSetPokedexFlag(nationalNum: number, caseId: number, personality: number): void {
+  HandleSetPokedexFlag(state, nationalNum, caseId, personality);
 }
 
 /** SpeciesToNationalPokedexNum */

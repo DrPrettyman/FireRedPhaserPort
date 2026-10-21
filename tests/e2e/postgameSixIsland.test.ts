@@ -467,7 +467,12 @@ test('Pattern Bush, Green Path, Outcast Island, the Water Path and Ruin Valley: 
   }
   expect(await game.eval((t, names) => names.filter((n) => !t.trainerDefeated(n)), spots.map((s) => s[0]))).toEqual([]);
 
-  // Items: the item balls (finditem) and the hidden items (EventScript_HiddenItemScript)
+  // Items: the item balls (finditem) and the hidden items (EventScript_HiddenItemScript). The Green Path's and Outcast
+  // Island's are renewable (renewable_hidden_items.c): hidden from the new game on until a regeneration brings their
+  // group back, so they're put back here as one would.
+  await game.eval((t) => {
+    for (const f of ['GREEN_PATH_ULTRA_BALL', 'OUTCAST_ISLAND_STAR_PIECE', 'OUTCAST_ISLAND_NET_BALL']) t.state!.setFlag(`FLAG_HIDDEN_ITEM_SIX_ISLAND_${f}`, false);
+  });
   const items: [string, number, number, Dir, string][] = [
     [OI, 11, 15, 'down', 'PP_UP'],
     [WP, 17, 18, 'down', 'ELIXIR'],

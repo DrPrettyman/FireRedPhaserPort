@@ -1395,8 +1395,17 @@ def extract_pokemon(decomp, out):
         hoenn_cries[defines[name] - hoenn_start] = defines[cry]
     hoenn_species_cry_ids = [hoenn_cries[i] for i in range(len(hoenn_cries))]
 
+    # sSpindaSpotGraphics (pokemon.c, for DrawSpindaSpots): each spot's base x / y and its 16 rows of u16 bits
+    # (graphics/spinda_spots/spot_N.bin, INCBIN_U16, little-endian).
+    spinda_spots = []
+    spot_body = re.search(r"sSpindaSpotGraphics\[\] =\s*\{(.*?)\n\};", pokemon_c, re.S).group(1)
+    for x, y, path in re.findall(r"\.x = (\d+), \.y = (\d+), \.image = INCBIN_U16\(\"(.+?)\"\)", spot_body):
+        raw = (decomp / path).read_bytes()
+        spinda_spots.append({"x": int(x), "y": int(y), "image": [raw[i] | raw[i + 1] << 8 for i in range(0, len(raw), 2)]})
+
     tables = {
         "hoennSpeciesIdToCryId": hoenn_species_cry_ids,
+        "spindaSpots": spinda_spots,
         "experience": exp_tables,
         "eggMoves": egg_moves,
         "eggMovesSpeciesOffset": egg_offset,
@@ -1455,10 +1464,41 @@ def extract_constants(decomp, out):
     eom = (decomp / "src/event_object_movement.c").read_text()
     m = re.search(r"gInitialMovementTypeFacingDirections\[\w*\] = \{(.*?)\};", eom, re.S)
     facing = dict(re.findall(r"\[(MOVEMENT_TYPE_\w+)\] = (DIR_\w+)", m.group(1))) if m else {}
+    renewable = extract_renewable_hidden_items(decomp)
     (out / "constants.json").write_text(
-        json.dumps({"newGameFlags": flags, "metatileBehaviors": behaviors, "initialMovementTypeFacing": facing}, indent=1)
+        json.dumps(
+            {"newGameFlags": flags, "metatileBehaviors": behaviors, "initialMovementTypeFacing": facing, "renewableHiddenItems": renewable},
+            indent=1,
+        )
     )
-    print(f"  {len(flags)} new-game flags, {len(behaviors)} behaviors, {len(facing)} initial facings")
+    print(f"  {len(flags)} new-game flags, {len(behaviors)} behaviors, {len(facing)} initial facings, {len(renewable)} renewable hidden item maps")
+
+
+def extract_renewable_hidden_items(decomp):
+    """renewable_hidden_items.c's sRenewableHiddenItems: per map (its MAP_* id), the rare / uncommon / common groups
+    as MAX_HIDDEN_ITEMS_PER_GROUP u8 hidden ids (HIDDEN_ID(flag) = flag - FLAG_HIDDEN_ITEMS_START; NO_ITEM = 0xFF;
+    entries a group leaves out are 0, as C zero-fills them)."""
+    src = re.sub(r"//[^\n]*", "", (decomp / "src/renewable_hidden_items.c").read_text())
+    per_group = int(re.search(r"#define MAX_HIDDEN_ITEMS_PER_GROUP (\d+)", src).group(1))
+    no_item = int(re.search(r"#define NO_ITEM (0x[0-9A-Fa-f]+|\d+)", src).group(1), 0)
+    defines = parse_defines(decomp)
+    start = defines["FLAG_HIDDEN_ITEMS_START"]
+    m = re.search(r"sRenewableHiddenItems\[\]\s*=\s*\{(.*)\n\};", src, re.S)
+    table = []
+    for entry in re.finditer(r"\.mapGroup = MAP_GROUP\((MAP_\w+)\),\s*\.mapNum = MAP_NUM\((MAP_\w+)\),(.*?)\n    \}", m.group(1), re.S):
+        assert entry.group(1) == entry.group(2), entry.group(0)
+        row = {"map": entry.group(1)}
+        for group in ("rare", "uncommon", "common"):
+            body = re.search(rf"\.{group} = \{{(.*?)\}}", entry.group(3), re.S).group(1)
+            ids = []
+            for v in (x.strip() for x in body.split(",")):
+                if not v:
+                    continue
+                h = re.fullmatch(r"HIDDEN_ID\((FLAG_\w+)\)", v)
+                ids.append(no_item if v == "NO_ITEM" else defines[h.group(1)] - start)
+            row[group] = ids + [0] * (per_group - len(ids))
+        table.append(row)
+    return table
 
 
 def extract_wild_encounters(decomp, out):

@@ -102,6 +102,20 @@ export function GetSetPokedexFlag(state: GameState, nationalDexNo: number, caseI
   return DexScreen_GetSetPokedexFlag(state, nationalDexNo, caseId, false);
 }
 
+/**
+ * HandleSetPokedexFlag (pokemon.c): FLAG_SET_SEEN / FLAG_SET_CAUGHT, and the first Unown / Spinda seen (or caught)
+ * keeps its personality in the save for the Pokédex's pic (DexScreen_GetDefaultPersonality).
+ */
+export function HandleSetPokedexFlag(state: GameState, nationalNum: number, caseId: number, personality: number): void {
+  const getFlagCaseId = caseId === FLAG_SET_SEEN ? FLAG_GET_SEEN : FLAG_GET_CAUGHT;
+  if (!GetSetPokedexFlag(state, nationalNum, getFlagCaseId)) {
+    GetSetPokedexFlag(state, nationalNum, caseId);
+    const species = NationalPokedexNumToSpecies(state, nationalNum);
+    if (species === state.defines.require('SPECIES_UNOWN')) state.dexUnownPersonality = personality >>> 0;
+    if (species === state.defines.require('SPECIES_SPINDA')) state.dexSpindaPersonality = personality >>> 0;
+  }
+}
+
 /** GetPokedexCategoryName (unused in the C) */
 export function GetPokedexCategoryName(dexNum: number): string {
   return pokedexData.entries[dexNum].categoryName;

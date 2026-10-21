@@ -115,6 +115,7 @@ import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
 import { gFieldCallback, gFieldCallback2, type FieldCallbackHost } from '../menus/fieldCallbacks';
 import { RunMassageCooldownStepCounter } from '../script/miscSpecials';
 import { IncrementBirthIslandRockStepCount } from '../script/eventIslandSpecials';
+import { IncrementRenewableHiddenItemStepCounter, TryRegenerateRenewableHiddenItems } from '../world/renewableHiddenItems';
 import { SetUpFieldTasks, Task_RunPerStepCallback, type PerStepCallbackHost } from '../world/fieldTasks'; // W-sevii
 import { DEOXYS_ROCK_GFX, registerDeoxysRock, setDeoxysRockHost } from '../world/deoxysRock';
 import { UseRegisteredKeyItemOnField } from '../menus/registeredItem';
@@ -235,6 +236,10 @@ import { directionOf, dirNumber, QL_LoadTemplates, QL_TryStopSurfing, questLogOb
 
 /** GBA runs at ~59.73Hz; we tick game logic at a fixed 60Hz regardless of display refresh. */
 const FRAME_MS = 1000 / 60;
+/** include/fieldmap.h: the view's margin in VMap, and SaveMapView's MAP_OFFSET_W x MAP_OFFSET_H cells */
+const MAP_OFFSET = 7;
+const MAP_OFFSET_W = MAP_OFFSET * 2 + 1;
+const MAP_OFFSET_H = MAP_OFFSET * 2;
 const PLAYER_GFX = 'OBJ_EVENT_GFX_RED_NORMAL';
 /** The camera centres on the middle of the player's tile, 8 px above its feet (ignoring jump lift). */
 const CAMERA_FOLLOW_OFFSET_Y = TILE / 2;
@@ -364,7 +369,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   /**
    * Object templates per loaded map, editable by setobjectxyperm/setobjectmovementtype. The current
    * map's are reloaded from the header on entry (LoadObjEventTemplatesFromHeader), so script edits
-   * only last until the map is left; a neighbour keeps the ones it had while it was current.
+   * only last until the map is left; a neighbour keeps the ones it had while it was current. The current map's
+   * are gSaveBlock1Ptr->objectEventTemplates: a save keeps them and CONTINUE loads them back (saveblockMapLoad).
    */
   private templates = new Map<string, ObjectEventData[]>();
   /** OBJ_EVENT_GFX_* name by number, for resolving the values of VAR_OBJ_GFX_ID_*. */
@@ -414,6 +420,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private savedGame?: SaveData;
   /** The quest log's LockPlayerFieldControls (a flag, as the C's, held as one count of controlsLocked) */
   private qlControlsLocked = false;
+  /** CONTINUE's steps inside the saved map's load: the save's templates, map view and objects (saveblockMapLoad). */
+  private continueMapLoad?: { templates(): void; mapView(): void; objects(): void };
   /** LoadMap_QLPlayback's steps inside a map load: the scene's templates (before the objects spawn) and objects (after). */
   private qlMapLoad?: { templates(): void; objects(): void };
   /** A quest log scene's map is loading (CB1_Overworld doesn't run). */
@@ -974,6 +982,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         this.spawnsWaiting = false;
         this.updateObjectsForCamera(); // the last camera step's TrySpawnObjectEvents, now the sheet is in
       }
+      // ReadKeys' L=A: on the GBA every reader (the field's too) sees A while L is pressed in that button mode
+      this.buttons.lEqualsA = this.state.optionsButtonMode === K.OPTIONS_BUTTON_MODE_L_EQUALS_A;
       this.buttons.sample();
       // CallCallbacks: RunHelpSystemCallback first; while the help is up the field's callbacks and VBlank don't run
       help = this.help?.tick(this.buttons) ?? false;
@@ -1214,6 +1224,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       return true;
     }
     if (this.tryOnFrameScript()) return true;
+    if (input.tookStep) this.state.incrementGameStat(K.GAME_STAT_STEPS);
+    if (input.tookStep) IncrementRenewableHiddenItemStepCounter(this.state);
     if (input.tookStep) RunMassageCooldownStepCounter(this.state);
     if (input.tookStep) IncrementResortGorgeousStepCounter(this.state);
     if (input.tookStep) IncrementBirthIslandRockStepCount(this.state, this.world.current.data.id);
@@ -1939,7 +1951,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /**
    * Before a save (state/saveData.ts): what gSaveBlock1Ptr->location / pos and the saved player object hold:
-   * the current map, the player's map-local tile, facing and avatar state (SaveObjectEvents).
+   * the current map, the player's map-local tile, facing and avatar state; SaveSerializedGame's SaveObjectEvents
+   * (the current map's other objects), the current map's templates (gSaveBlock1Ptr->objectEventTemplates, which
+   * the port keeps in `templates`) and StartMenu_PrepareForSave's SaveMapView. CONTINUE puts them back
+   * (`saveblockMapLoad`).
    */
   storeLocationForSave(): void {
     const cur = this.world.current;
@@ -1952,18 +1967,106 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       avatarFlags: gPlayerAvatar.flags & (F.ON_FOOT | F.MACH_BIKE | F.ACRO_BIKE | F.SURFING),
       mapLayoutId: this.state.mapLayoutId,
     };
+    this.state.objectEvents = this.npcs.filter((n) => n.chunk === cur).map((n) => this.npcObjectEvent(n));
+    this.state.objectEventTemplates = this.templatesFor(cur).map(({ script: _script, ...t }) => ({ ...t }));
+    this.state.mapView = this.saveMapView();
+  }
+
+  /**
+   * SaveMapView: gBackupMapData's MAP_OFFSET_W x MAP_OFFSET_H cells from gSaveBlock1Ptr->pos, which in VMap is the
+   * player's tile less MAP_OFFSET: map-local x - 7 .. x + 7, y - 7 .. y + 6, row by row. Cells outside the current
+   * map (the GBA's VMap has the border and the connections' strips there) are saved as 0 and not loaded back.
+   */
+  private saveMapView(): number[] {
+    const cur = this.world.current;
+    const { x, y } = this.playerLocal();
+    const view: number[] = [];
+    for (let j = y - MAP_OFFSET; j < y - MAP_OFFSET + MAP_OFFSET_H; j++) {
+      for (let i = x - MAP_OFFSET; i < x - MAP_OFFSET + MAP_OFFSET_W; i++) view.push(cur.blockAt(cur.originX + i, cur.originY + j) ?? 0);
+    }
+    return view;
+  }
+
+  /**
+   * CB2_ContinueSavedGame's save block in the saved map's load (onMapLoaded calls these): the saved templates with
+   * the header's scripts (LoadSaveblockObjEventScripts) before ON_LOAD, InitMapFromSavedGame's LoadSavedMapView
+   * between the layout and ON_LOAD, and LoadObjectEvents' objects once the templates' have spawned. A save from
+   * before version 14 has none of them: the map loads with the header's templates and objects, as a warp would.
+   */
+  private saveblockMapLoad(loc: PlayerLocation): { templates(): void; mapView(): void; objects(): void } {
+    const s = this.state;
+    const isSavedMap = () => this.world.current.data.id === loc.mapId;
+    return {
+      templates: () => {
+        const cur = this.world.current;
+        if (!s.objectEventTemplates || !isSavedMap()) return;
+        const header = cur.data.objectEvents;
+        this.templates.set(cur.name, s.objectEventTemplates.map((t, i) => ({ ...t, script: header[i]?.script ?? '0' })));
+      },
+      mapView: () => {
+        const view = s.mapView;
+        s.mapView = undefined; // ClearSavedMapView
+        if (!view?.some((v) => v !== 0) || !isSavedMap()) return; // SavedMapViewIsEmpty
+        const cur = this.world.current;
+        let k = 0;
+        for (let j = loc.y - MAP_OFFSET; j < loc.y - MAP_OFFSET + MAP_OFFSET_H; j++) {
+          for (let i = loc.x - MAP_OFFSET; i < loc.x - MAP_OFFSET + MAP_OFFSET_W; i++, k++) {
+            if (cur.blockAt(cur.originX + i, cur.originY + j) !== undefined && view[k] !== undefined) cur.setBlock(i, j, view[k]);
+          }
+        }
+      },
+      objects: () => {
+        if (s.objectEvents && isSavedMap()) this.loadObjectEvents(s.objectEvents);
+      },
+    };
+  }
+
+  /**
+   * LoadObjectEvents, then SpawnObjectEventsOnReturnToField's sprites: the saved objects of the current map back
+   * where the save had them (currentCoords, facing, movement type, visibility and the flags the port's
+   * ObjectEvent keeps). The port has spawned the map's objects from the (saved) templates already; one they don't
+   * spawn (shown with `addobject` over its hide flag when the game was saved) is spawned as `addobject` does.
+   */
+  private loadObjectEvents(saved: QuestLogObjectEvent[]): void {
+    const cur = this.world.current;
+    const { mapGroup, mapNum } = mapGroupAndNum(cur.data.id);
+    for (const o of saved) {
+      if (!o.active || o.isPlayer || o.mapGroup !== mapGroup || o.mapNum !== mapNum) continue;
+      if (!this.npcByLocalId(o.localId)) this.addObject(o.localId);
+      const n = this.npcByLocalId(o.localId);
+      if (!n) continue;
+      const obj = n.brain.obj;
+      if (constant(n.brain.movementType) !== o.movementType) {
+        const type = this.movementTypeName(o.movementType);
+        if (type) n.brain.setMovementType(type);
+      }
+      obj.setPosition(cur.originX + o.x - MAP_OFFSET, cur.originY + o.y - MAP_OFFSET);
+      obj.face(directionOf(o.facingDirection));
+      obj.facingDirectionLocked = !!o.facingDirectionLocked;
+      obj.disableAnim = !!o.disableAnim;
+      obj.enableAnim = !!o.enableAnim;
+      obj.inanimate = !!o.inanimate;
+      obj.fixedPriority = !!o.fixedPriority;
+      obj.triggerGroundEffectsOnStop = !!o.triggerGroundEffectsOnStop;
+      obj.disableCoveringGroundEffects = !!o.disableCoveringGroundEffects;
+      obj.landingJump = !!o.landingJump;
+      obj.disableJumpLandingGroundEffect = !!o.disableJumpLandingGroundEffect;
+      obj.setVisible(!o.invisible);
+    }
   }
 
   /**
    * Map entry sequence: templates reloaded, temps cleared, ON_TRANSITION, ON_LOAD, objects spawned, ON_WARP_INTO.
    * `continued` (CONTINUE: CB2_ContinueSavedGame's InitMapFromSavedGame) runs only ON_LOAD, keeps the saved temps
-   * and flash level, and puts the player back as saved.
+   * and flash level, and puts the player back as saved; CONTINUE's `continueMapLoad` adds the save's templates,
+   * map view and objects.
    */
   private async onMapLoaded(warped: boolean, continued?: PlayerLocation): Promise<void> {
     const cur = this.world.current;
     const name = cur.name;
     await this.preloadMapSprites();
     this.templates.set(name, cur.data.objectEvents.map((e) => ({ ...e }))); // LoadObjEventTemplatesFromHeader
+    this.continueMapLoad?.templates(); // CONTINUE: the save's templates (LoadSaveblockObjEventScripts)
     this.state.currentMap = name;
     this.state.currentMapId = cur.data.id;
     this.state.currentMapSection = this.mapSection();
@@ -1991,10 +2094,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       Overworld_ClearSavedMusic(); // before RunOnTransitionMapScript (Cycling Road's sets it again)
       const transition = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_TRANSITION');
       if (transition) this.scripts.runImmediately(transition);
+      TryRegenerateRenewableHiddenItems(this.state); // after RunOnTransitionMapScript
     } else {
       this.state.mapLayoutId = continued.mapLayoutId ?? this.defines.require(cur.data.layoutId); // LoadSaveblockMapHeader
     }
     await this.initMapLayout();
+    this.continueMapLoad?.mapView(); // InitMapFromSavedGame's LoadSavedMapView, before RunOnLoadMapScript
     const load = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_LOAD');
     if (load) this.scripts.runImmediately(load);
     await this.preloadMapSprites(); // again, now the map scripts have set any VAR_OBJ_GFX_ID_*
@@ -2029,6 +2134,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     // The player object is made anew: while playback runs, its callback is QL_UpdateObject
     if (warped || continued) this.playerQuestLog = !this.scripts.running && QL_GetPlaybackState() === K.QL_PLAYBACK_STATE_RUNNING;
     this.syncNpcsWithLoadedMaps();
+    this.continueMapLoad?.objects(); // CONTINUE: the saved objects (LoadObjectEvents)
     this.qlMapLoad?.objects(); // QL_LoadObjects: the scene's objects where the snapshot has them
     if (warped) {
       const table = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_WARP_INTO_MAP_TABLE');
@@ -2124,7 +2230,12 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       this.setUpWarpExitTask(false, false);
     } else {
       const name = this.assets.mapNameForId(loc.mapId) ?? start.map;
-      await this.enterMap(name, loc.x, loc.y, loc.facing, false, loc);
+      this.continueMapLoad = this.saveblockMapLoad(loc);
+      try {
+        await this.enterMap(name, loc.x, loc.y, loc.facing, false, loc);
+      } finally {
+        this.continueMapLoad = undefined;
+      }
       this.resumeMap(); // ResumeMap's RunOnResumeMapScript, ReloadObjectsAndRunReturnToFieldMapScript
       if (fromQuestLog) {
         FieldCB2_FinalScene(); // (its FieldCB_WarpExitFadeFromBlack's music: the host's warpExitFadeFromBlack)
@@ -3140,6 +3251,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       battleTypeFlags |= d.require('BATTLE_TYPE_FIRST_BATTLE');
     }
     const speech = (label?: string) => (label && this.assets.strings[label] !== undefined ? this.charmap.encode(this.assets.strings[label]) : undefined);
+    // DoTrainerBattle
+    this.state.incrementGameStat(K.GAME_STAT_TOTAL_BATTLES);
+    this.state.incrementGameStat(K.GAME_STAT_TRAINER_BATTLES);
     return this.runBattle({
       battleTypeFlags,
       trainerBattleOpponent_A: battle.trainer,
@@ -3296,6 +3410,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /** The DoStandardWildBattle / StartRoamerBattle / DoGhostBattle part: battle, then CB2_EndWildBattle. */
   private runWildBattle(battleTypeFlags: number, enemy: Pokemon, song = 0): void {
+    this.state.incrementGameStat(K.GAME_STAT_TOTAL_BATTLES);
+    this.state.incrementGameStat(K.GAME_STAT_WILD_BATTLES);
     const run = this.runBattle({ battleTypeFlags, trainerBattleOpponent_A: 0, trainerBattleMode: 0, rivalBattleFlags: 0, enemyParty: [enemy] }, this.wildBattleTransition(enemy), song);
     let fadeIn: (() => boolean) | undefined;
     this.overlay = {
@@ -3622,9 +3738,29 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   // ------------------------------------------------------------------ player avatar
 
+  /** An NPC as its gObjectEvents entry (questLogObjectEventFrom): QL_RecordObjects' snapshot and SaveObjectEvents. */
+  private npcObjectEvent(n: Npc): QuestLogObjectEvent {
+    const { mapGroup, mapNum } = mapGroupAndNum(n.chunk.data.id);
+    return questLogObjectEventFrom(n.brain.obj, {
+      localId: n.localId,
+      mapNum,
+      mapGroup,
+      originX: n.chunk.originX,
+      originY: n.chunk.originY,
+      isPlayer: false,
+      graphicsId: constant(n.graphicsId) ?? 0,
+      movementType: constant(n.brain.movementType) ?? 0,
+      trainerType: constant(n.spawnedAs.trainer_type) ?? 0,
+      trainerRange_berryTreeId: Number(n.spawnedAs.trainer_sight_or_berry_tree_id) || (constant(n.spawnedAs.trainer_sight_or_berry_tree_id) ?? 0),
+      frozen: this.objectsFrozen,
+      trackedByCamera: this.cameraObject === n.brain.obj,
+    });
+  }
+
   /** What field_player_avatar.c (world/playerAvatar.ts) reads and does on the field. */
   /** What quest_log.c reads from gSaveBlock1Ptr / gObjectEvents (world/questLog.ts). */
   private createQuestLogHost(): QuestLogHost {
+    // (the NPCs' entries: npcObjectEvent)
     const cur = () => this.world.current;
     const info = (localId: number) => {
       const { mapGroup, mapNum } = mapGroupAndNum(cur().data.id);
@@ -3653,18 +3789,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         ];
         for (const n of this.npcs) {
           if (n.chunk !== cur() || out.length >= OBJECT_EVENTS_COUNT) continue;
-          out.push(
-            questLogObjectEventFrom(n.brain.obj, {
-              ...info(n.localId),
-              isPlayer: false,
-              graphicsId: constant(n.graphicsId) ?? 0,
-              movementType: constant(n.brain.movementType) ?? 0,
-              trainerType: constant(n.spawnedAs.trainer_type) ?? 0,
-              trainerRange_berryTreeId: Number(n.spawnedAs.trainer_sight_or_berry_tree_id) || (constant(n.spawnedAs.trainer_sight_or_berry_tree_id) ?? 0),
-              frozen: this.objectsFrozen,
-              trackedByCamera: this.cameraObject === n.brain.obj,
-            }),
-          );
+          out.push(this.npcObjectEvent(n));
         }
         return out;
       },

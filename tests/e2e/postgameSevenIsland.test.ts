@@ -542,6 +542,13 @@ test("The Tanoby Ruins and the Trainer Tower's path: the trainers, the hidden it
   await fight(game, R, 121, 11, 'RUIN_MANIAC_BENJAMIN');
   await fight(game, R, 85, 8, 'PAINTER_EDNA');
   await fight(game, R, 85, 5, 'GENTLEMAN_CLIFFORD');
+  // The Tanoby Ruins' and the Trainer Tower path's Heart Scales and pearls are renewable (renewable_hidden_items.c):
+  // hidden from the new game on until a regeneration brings their group back, so they're put back here as one would.
+  await game.eval((t) => {
+    for (const f of ['TANOBY_RUINS_HEART_SCALE', 'TANOBY_RUINS_HEART_SCALE_2', 'TANOBY_RUINS_HEART_SCALE_3', 'TANOBY_RUINS_HEART_SCALE_4', 'TRAINER_TOWER_BIG_PEARL', 'TRAINER_TOWER_PEARL']) {
+      t.state!.setFlag(`FLAG_HIDDEN_ITEM_SEVEN_ISLAND_${f}`, false);
+    }
+  });
   await pickUp(game, R, 33, 10, 'HEART_SCALE', 'FLAG_HIDDEN_ITEM_SEVEN_ISLAND_TANOBY_RUINS_HEART_SCALE');
   await pickUp(game, R, 86, 9, 'HEART_SCALE', 'FLAG_HIDDEN_ITEM_SEVEN_ISLAND_TANOBY_RUINS_HEART_SCALE_2');
   await pickUp(game, R, 125, 5, 'HEART_SCALE', 'FLAG_HIDDEN_ITEM_SEVEN_ISLAND_TANOBY_RUINS_HEART_SCALE_3');
