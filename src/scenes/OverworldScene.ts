@@ -98,6 +98,7 @@ import { WeatherTextures } from '../world/weatherTextures';
 import { globalFieldTintMode, installQuestLogScreen, mapJascColors, type ObjPaletteKind } from '../world/questLogScreen';
 import { QuestLogWindows, questLogWindowsGfxSymbols } from '../ui/QuestLogWindows';
 import { FogHorizontal } from '../world/fogHorizontal';
+import { DoEscalatorWarp, escalatorProbe, ResetEscalatorTasks, setEscalatorHost } from '../world/escalator';
 import { leagueLightingProbe, loadLeagueLightingData, registerLeagueLighting, ResetLeagueLightingTasks, setLeagueLightingHost, StopPokemonLeagueLightingEffectTask } from '../world/leagueLighting';
 import { tilesetVram } from '../world/TilesetVram';
 import { ShopMenu, type ShopHost } from '../ui/ShopMenu';
@@ -580,6 +581,16 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       terrainAt: (x, y) => this.world.tileAt(x, y).terrain,
       createFieldEffectSprite: (fldEff, template, x, y, subpriority, callback) => this.fieldEffects.createSprite(fldEff, template, x, y, subpriority, callback),
     });
+    setEscalatorHost({
+      setMetatileIdAt: (x, y, value) => {
+        const chunk = this.world.chunkAt(x, y);
+        chunk?.setBlock(x - chunk.originX, y - chunk.originY, value, false);
+      },
+      drawMetatileAt: (x, y) => {
+        const chunk = this.world.chunkAt(x, y);
+        chunk?.drawBlock(x - chunk.originX, y - chunk.originY);
+      },
+    });
     setDiveHost({
       connections: () => this.world.current.data.connections,
       runOnDiveWarpMapScript: () => {
@@ -691,6 +702,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       surfBlob: surfBlobProbe(),
       fishing: fishingProbe(),
       vsSeeker: vsSeekerProbe(),
+      escalator: escalatorProbe(),
       itemfinder: itemfinderProbe(),
       avatar: {
         flags: Object.keys(this.assets.scripts.defines)
@@ -702,6 +714,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         action: this.player.heldMovementActive ? movementActionName(this.player.movementActionId) : undefined,
         movementDirection: this.player.movementDirection,
         spriteY2: this.player.sprite.y - (this.player.feetY + this.player.lift),
+        spriteX2: this.player.sprite.x - this.player.anchor.x,
         cameraPanY: this.cameraPanY,
         cameraPanX: this.cameraPanX,
       },
@@ -825,6 +838,14 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   }
 
   /** Dev: the current map's objects, for `__test.objects()`. */
+  /** Dev: the current map's grid at map-local (x, y), for `__test.metatileAt`. */
+  testMetatile(x: number, y: number): { metatile: number; collision: number; drawn: boolean } | undefined {
+    const cur = this.world?.current;
+    if (!cur || x < 0 || y < 0 || x >= cur.data.width || y >= cur.data.height) return undefined;
+    const t = this.world.tileAt(cur.originX + x, cur.originY + y);
+    return { metatile: t.metatile, collision: t.collision, drawn: cur.drawnMatchesGrid(x, y) };
+  }
+
   testObjects(): FieldObjectProbe[] {
     const cur = this.world.current;
     return this.npcs
@@ -1205,6 +1226,14 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const warp = this.warpAt(x, y);
     if (!warp || !this.behaviors.isStepWarp(behavior)) return false;
     StoreInitialPlayerAvatarState();
+    if (this.behaviors.is(behavior, 'UP_ESCALATOR', 'DOWN_ESCALATOR')) {
+      // SetupWarp, then DoEscalatorWarp (world/escalator.ts)
+      this.warpSetup = this.setupWarp(warp).then((dest) => {
+        if (dest) this.warpDestination = dest;
+      });
+      DoEscalatorWarp(behavior);
+      return true;
+    }
     if (this.behaviors.is(behavior, 'FALL_WARP')) {
       // SetupWarp, then ResetInitialPlayerAvatarState and EventScript_DoFallWarp (world/fallWarp.ts)
       this.warpSetup = this.setupWarp(warp).then((dest) => {
@@ -1776,6 +1805,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.nextArrivalWarpId = -1;
     this.mapNamePopup?.destroy(); // the map load's ResetTasks
     ResetLeagueLightingTasks();
+    ResetEscalatorTasks();
     ResetWeatherTask(); // (GBA tasks don't run between LoadMapFromWarp's scripts and ResumeMap's StartWeather)
     this.mapNamePopup = undefined;
     this.fieldEffects.clear();
@@ -3309,6 +3339,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
    */
   private resumeMap(): void {
     ResetLeagueLightingTasks(); // ResumeMap's ResetTasks
+    ResetEscalatorTasks();
     ResetWeatherTask();
     this.startWeatherOnResumeMap();
     this.ambientCry = { state: 0, delayCounter: 0 }; // and SetUpFieldTasks' new Task_RunTimeBasedEvents

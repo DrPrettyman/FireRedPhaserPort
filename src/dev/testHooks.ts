@@ -294,6 +294,8 @@ export interface FieldProbe {
   fishing: { step: number; animNum?: number; image?: number; x2?: number; y2?: number } | undefined;
   /** The VS Seeker's task (func 0..3 = Task_VsSeeker_0..3) and the player's VS Seeker anim (world/vsSeeker.ts) while it runs. */
   vsSeeker: { func: number; animNum?: number; image?: number } | undefined;
+  /** The escalator's Task_DrawEscalator while it runs (world/escalator.ts). */
+  escalator: { moving: boolean; state: number; transitionStage: number; goingUp: boolean; drawing: boolean } | undefined;
   /**
    * The Itemfinder (world/itemfinder.ts) while its task or sprites are out: `running` until its message closes, and
    * each arrow / star's screen position, anim (0-3 arrows, 4 the star), affine anim (0 left, 1 down, 2 right, 3 up).
@@ -314,6 +316,8 @@ export interface FieldProbe {
     movementDirection: Direction;
     /** The player sprite's y offset off its tile (sprite->y2 beyond a jump's lift: the fall warp's drop). */
     spriteY2: number;
+    /** The player sprite's x offset off its tile (sprite->x2: the escalator ride). */
+    spriteX2: number;
     /** SetCameraPanning's vertical offset (the fall warp's landing shake, the elevator). */
     cameraPanY: number;
     /** SetCameraPanning's horizontal offset (ShakeScreen). */
@@ -347,6 +351,7 @@ interface OverworldLike extends Phaser.Scene {
   testFindPath(worldX: number, worldY: number): Direction[] | undefined;
   testPushWarpDirection(): Direction | undefined;
   testObjects(): FieldObjectProbe[];
+  testMetatile(x: number, y: number): { metatile: number; collision: number; drawn: boolean } | undefined;
   testRunScript(label: string, code: string[][]): boolean;
   testTextColor(): string;
   testLeagueLighting(colorIndex?: number): {
@@ -696,6 +701,11 @@ function createApi(game: Phaser.Game) {
     idle,
     /** The current map's objects: local id, graphics and map-local position. */
     objects: () => overworld()?.testObjects() ?? [],
+    /**
+     * The current map's grid at map-local (x, y): the metatile id, the collision bits, and whether the BG tilemap
+     * shows it yet (the escalator sets the grid and draws it at its DrawWholeMapView).
+     */
+    metatileAt: (x: number, y: number) => overworld()?.testMetatile(x, y),
     /**
      * Start a script of raw commands as a field script, e.g. [['setvar', 'VAR_OBJ_GFX_ID_0', 'OBJ_EVENT_GFX_SNORLAX'],
      * ['addobject', '1']] (an `end` is added). FALSE if no field.
