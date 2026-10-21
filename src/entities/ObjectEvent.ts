@@ -201,6 +201,12 @@ export class ObjectEvent {
   inHotSprings = false;
   /** sprite->y2 from a jump: the pixels the sprite is lifted (negative is up). */
   lift = 0;
+  /**
+   * sprite->x2 / y2 as a task sets them on the player's sprite (field_fadetransition.c's stair warps): drawn on
+   * top of the movement's offset and the jump lift, not followed by the camera. `setSpriteX2Y2` sets them.
+   */
+  spriteX2 = 0;
+  spriteY2 = 0;
   /** World pixel y of the sprite's bottom edge, ignoring jump lift (sprite->y - centerToCornerVecY). */
   feetY = 0;
   /** World pixel y of the sprite's top edge, including jump lift (oam.y before the camera offset). */
@@ -448,6 +454,14 @@ export class ObjectEvent {
     this.syncSprite(offX, offY, 0);
   }
 
+  /** sprite->x2 / y2 set by a task (stairs): the sprite moves now and keeps the offset through its anims. */
+  setSpriteX2Y2(x2: number, y2: number): void {
+    this.spriteX2 = x2;
+    this.spriteY2 = y2;
+    this.sprite.setPosition(this.anchor.x + x2, this.feetY + this.lift + y2);
+    this.topY = this.feetY + this.lift + y2 - this.info.frameHeight;
+  }
+
   /** ShiftObjectEventCoords */
   private shiftCoords(x: number, y: number): void {
     this.previousX = this.currentX;
@@ -576,6 +590,8 @@ export class ObjectEvent {
     this.movement = undefined;
     this.clearHeldMovement();
     this.triggerGroundEffectsOnMove = true;
+    this.spriteX2 = 0; // (a warp's new sprite)
+    this.spriteY2 = 0;
     this.updateElevationAndPriority();
     this.syncSprite(0, 0, 0);
     this.showFacing();
@@ -590,8 +606,8 @@ export class ObjectEvent {
     const y = this.tileY * TILE + TILE + offY;
     this.feetY = y;
     this.lift = lift;
-    this.topY = y + lift - this.info.frameHeight;
-    this.sprite.setPosition(x, y + lift);
+    this.topY = y + lift + this.spriteY2 - this.info.frameHeight;
+    this.sprite.setPosition(x + this.spriteX2, y + lift + this.spriteY2);
     this.anchor.set(x, y);
     this.updateSubpriority();
   }

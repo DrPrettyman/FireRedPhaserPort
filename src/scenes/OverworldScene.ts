@@ -10,7 +10,7 @@ import { loadGfx } from '../gba/gfx';
 import { RGB_BLACK, RGB_WHITE } from '../gba/hw';
 import { loadMenusData } from '../menus/data';
 import { expandPlaceholders } from '../text/placeholders';
-import { FieldEffects } from '../entities/FieldEffects';
+import { FieldEffects, type FieldEffectSprite } from '../entities/FieldEffects';
 import { GroundEffects } from '../entities/groundEffects';
 import { FieldPoisonEffect } from '../entities/FieldPoisonEffect';
 import { NpcBrain, setInitialMovementTypeFacing } from '../entities/NpcBrain';
@@ -100,6 +100,7 @@ import { CommitQuestLogWindow1, globalFieldTintMode, installQuestLogScreen, mapJ
 import { QuestLogWindows, questLogWindowsGfxSymbols } from '../ui/QuestLogWindows';
 import { FogHorizontal } from '../world/fogHorizontal';
 import { DoEscalatorWarp, escalatorProbe, ResetEscalatorTasks, setEscalatorHost } from '../world/escalator';
+import { DoStairWarp, gExitStairsMovementDisabled, MetatileBehavior_IsDirectionalStairWarp, setExitStairsMovementDisabled, setStairWarpHost, StartExitStairs } from '../world/stairWarp';
 import { leagueLightingProbe, loadLeagueLightingData, registerLeagueLighting, ResetLeagueLightingTasks, setLeagueLightingHost, StopPokemonLeagueLightingEffectTask } from '../world/leagueLighting';
 import { tilesetVram } from '../world/TilesetVram';
 import { ShopMenu, type ShopHost } from '../ui/ShopMenu';
@@ -118,7 +119,7 @@ import { SetUpFieldTasks, Task_RunPerStepCallback, type PerStepCallbackHost } fr
 import { DEOXYS_ROCK_GFX, registerDeoxysRock, setDeoxysRockHost } from '../world/deoxysRock';
 import { UseRegisteredKeyItemOnField } from '../menus/registeredItem';
 import { activeFieldEffects, setFieldEffectScriptHost, setFieldEffectScripts } from '../world/fieldEffectScripts';
-import { fieldMoveGfxSymbols, prepareFieldMoveMenu, prepareRegionMap, registerFieldMoves, setFieldMoveHost, UnlockPlayerFieldControls, UpdateEscapeWarp, type FieldMoveHost } from '../world/fieldMoves';
+import { fieldMoveGfxSymbols, fieldMoveHost, prepareFieldMoveMenu, prepareRegionMap, registerFieldMoves, setFieldMoveHost, UnlockPlayerFieldControls, UpdateEscapeWarp, type FieldMoveHost } from '../world/fieldMoves';
 import { setDiveHost } from '../world/dive';
 import {
   BOB_MON_ONLY,
@@ -346,6 +347,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private warpDestination?: { mapId: string; warpId: number; x: number; y: number };
   /** A fall warp's SetupWarp, which loads the destination's header before warpDestination is set. */
   private warpSetup: Promise<void> = Promise.resolve();
+  /** A stair warp's SetupWarp destination with its header: undefined while it loads, null if there's none. */
+  private stairWarpDest: { name: string; data: MapData; warpId: number; x: number; y: number } | null | undefined = null;
+  /** The player's warp arrow sprite (objectEvent->warpArrowSpriteId), made again after a map load cleared it. */
+  private warpArrowSprite?: FieldEffectSprite;
   /** FldEffPoison's task while it runs. */
   private poisonEffect?: FieldPoisonEffect;
   /** The approach task of the trainer that last saw the player (trainer_see.c), until it ends. */
@@ -592,6 +597,18 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         chunk?.drawBlock(x - chunk.originX, y - chunk.originY);
       },
     });
+    setStairWarpHost({
+      warpDestinationHeader: () => (this.stairWarpDest === undefined ? undefined : (this.stairWarpDest?.data ?? null)),
+      warpFadeOutScreen: () => {
+        if (this.stairWarpDest) this.warpFadeOutScreen(this.world.current.data, this.stairWarpDest.data);
+      },
+      paletteFadeActive: () => this.screenFade.active,
+      warpIntoMap: () => {
+        // CB2_LoadMap, then FieldCB_DefaultWarpExit; Task_ExitNonDoor / Task_ExitStairs give the controls back
+        const d = this.stairWarpDest;
+        if (d) fieldMoveHost().warpIntoMap(d.data.id, d.x, d.y, undefined, d.warpId);
+      },
+    });
     setDiveHost({
       connections: () => this.world.current.data.connections,
       runOnDiveWarpMapScript: () => {
@@ -709,6 +726,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       vsSeeker: vsSeekerProbe(),
       escalator: escalatorProbe(),
       itemfinder: itemfinderProbe(),
+      warpArrow: this.warpArrowSprite?.inUse
+        ? { visible: !this.warpArrowSprite.invisible, x: this.warpArrowSprite.data[0], y: this.warpArrowSprite.data[1], animNum: this.warpArrowSprite.animNum, image: this.warpArrowSprite.image }
+        : undefined,
       avatar: {
         flags: Object.keys(this.assets.scripts.defines)
           .filter((k) => k.startsWith('PLAYER_AVATAR_FLAG_') && gPlayerAvatar.flags & this.defines.require(k))
@@ -720,6 +740,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         movementDirection: this.player.movementDirection,
         spriteY2: this.player.sprite.y - (this.player.feetY + this.player.lift),
         spriteX2: this.player.sprite.x - this.player.anchor.x,
+        priority: this.player.priority,
         cameraPanY: this.cameraPanY,
         cameraPanX: this.cameraPanX,
       },
@@ -1252,13 +1273,28 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     return true;
   }
 
-  /** TryArrowWarp: pushing the way an arrow mat or a directional stair warp points. */
+  /**
+   * TryArrowWarp: pushing the way an arrow mat points (SetupWarp, DoWarp) or a directional stair warp goes
+   * (SetupWarp, DoStairWarp: world/stairWarp.ts; off the bike first, with 12 frames' delay).
+   */
   private tryArrowWarp(x: number, y: number, behavior: number, dir: Direction): boolean {
     const warp = this.warpAt(x, y);
     if (!warp || !this.behaviors.isPushWarp(behavior, dir)) return false;
-    // A stair warp gets the player off the bike first (DoStairWarp's delay isn't ported).
-    if (this.behaviors.isDirectionalStairWarp(behavior, dir) && TestPlayerAvatarFlags(PLAYER_AVATAR_FLAG.MACH_BIKE | PLAYER_AVATAR_FLAG.ACRO_BIKE)) {
-      SetPlayerAvatarTransitionFlags(PLAYER_AVATAR_FLAG.ON_FOOT);
+    if (this.behaviors.isDirectionalStairWarp(behavior, dir)) {
+      let delay = 0;
+      if (TestPlayerAvatarFlags(PLAYER_AVATAR_FLAG.MACH_BIKE | PLAYER_AVATAR_FLAG.ACRO_BIKE)) {
+        SetPlayerAvatarTransitionFlags(PLAYER_AVATAR_FLAG.ON_FOOT);
+        delay = 12;
+      }
+      StoreInitialPlayerAvatarState();
+      // SetupWarp (the destination's header loads meanwhile: Task_StairWarp waits for it before the music fades)
+      this.stairWarpDest = undefined;
+      void this.setupWarp(warp).then(async (dest) => {
+        const name = dest && this.assets.mapNameForId(dest.mapId);
+        this.stairWarpDest = dest && name ? { name, data: await this.assets.loadMap(name), warpId: dest.warpId, x: dest.x, y: dest.y } : null;
+      });
+      DoStairWarp(behavior, delay);
+      return true;
     }
     StoreInitialPlayerAvatarState();
     void this.takeWarp(warp);
@@ -1541,7 +1577,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   /** SetupWarp, then the warp (`kind`: see warpTo). */
   private async takeWarp(w: WarpEventData, kind: WarpKind = 'warp'): Promise<void> {
     // Lock the controls now: the destination may still be loading on the next frames, and a held push
-    // direction (stairs, arrow mats) must not set up the same warp again meanwhile.
+    // direction (arrow mats) must not set up the same warp again meanwhile.
     this.busy = true;
     this.warping = true;
     const dest = await this.setupWarp(w);
@@ -1704,8 +1740,8 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
 
   /**
    * Warp to a warp event index, or to explicit coordinates when warpId < 0. `kind`: 'warp' is DoWarp (stepping onto
-   * a warp, arrow mats, stairs, `warp`: SE_EXIT), 'silent' DoDiveWarp (`warpsilent`), 'door' Task_DoorWarp's case 4
-   * (after the door's SE and walk in; `warpdoor`). Each starts TryFadeOutOldMapMusic with the fade out, and
+   * a warp, arrow mats, `warp`: SE_EXIT; the stairs run Task_StairWarp: world/stairWarp.ts), 'silent' DoDiveWarp
+   * (`warpsilent`), 'door' Task_DoorWarp's case 4 (after the door's SE and walk in; `warpdoor`). Each starts TryFadeOutOldMapMusic with the fade out, and
    * Task_Teleport2Warp waits for both (WaitWarpFadeOutScreen, BGMusicStopped): 32 or 64 more frames when the music
    * changes.
    */
@@ -1715,7 +1751,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const data = await this.assets.loadMap(name);
     TryFadeOutOldMapMusic(data);
     const white = this.warpFadeOutScreen(from, data);
-    PlayRainStoppingSoundEffect(); // DoWarp, DoDiveWarp, Task_DoorWarp's case 4, Task_StairWarp
+    PlayRainStoppingSoundEffect(); // DoWarp, DoDiveWarp, Task_DoorWarp's case 4
     if (kind === 'warp') PlaySE(K.SE_EXIT);
     await this.waitFrames(() => !this.screenFade.active && BGMusicStopped());
     const isExit = await this.loadWarpedMap(name, warpId, x, y, white);
@@ -1730,10 +1766,36 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
   private async defaultWarpExit(isExit: boolean): Promise<void> {
     Overworld_PlaySpecialMapMusic();
     QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode();
-    const arrival = this.world.tileAt(this.player.tileX, this.player.tileY);
-    if (this.behaviors.isDoor(arrival.behavior)) this.exitDoor(isExit);
-    else this.warpFadeInScreen(isExit);
-    await this.waitFrames(() => this.fieldFadeTransitionBackgroundEffectIsFinished()); // Task_ExitNonDoor
+    await this.waitFrames(this.setUpWarpExitTask(false, isExit).done); // Task_ExitNonDoor / Task_ExitStairs
+  }
+
+  /**
+   * SetUpWarpExitTask (`playerNotMoving`: FieldCB_WarpExitFadeFromBlack's TRUE): on a door
+   * (MetatileBehavior_IsWarpDoor_2) Task_ExitDoor; otherwise ExitWarpFadeInScreen (WarpFadeInScreen, or
+   * FadeInFromBlack when the player isn't moving), then Task_ExitStairs on a staircase (world/stairWarp.ts) unless
+   * gExitStairsMovementDisabled, else Task_ExitNonDoor. Clears gExitStairsMovementDisabled. `done`: the exit
+   * task is over (Task_ExitNonDoor's wait for the fade; Task_ExitDoor runs on as an overlay).
+   */
+  private setUpWarpExitTask(playerNotMoving: boolean, isExit: boolean): { kind: 'door' | 'stairs' | 'nonDoor'; done: () => boolean } {
+    const { x, y } = this.player.current; // PlayerGetDestCoords
+    const behavior = this.world.tileAt(x, y).behavior;
+    let kind: 'door' | 'stairs' | 'nonDoor' = 'nonDoor';
+    let done = () => this.fieldFadeTransitionBackgroundEffectIsFinished();
+    if (this.behaviors.isDoor(behavior)) {
+      kind = 'door';
+      this.exitDoor(isExit);
+    } else {
+      this.warpFadeInScreen(playerNotMoving ? false : isExit);
+      if (MetatileBehavior_IsDirectionalStairWarp(behavior) && !gExitStairsMovementDisabled()) {
+        kind = 'stairs';
+        done = StartExitStairs({
+          warpFadeInScreen: () => this.warpFadeInScreen(isExit),
+          fieldFadeTransitionBackgroundEffectIsFinished: () => this.fieldFadeTransitionBackgroundEffectIsFinished(),
+        });
+      }
+    }
+    setExitStairsMovementDisabled(false);
+    return { kind, done };
   }
 
   /** FieldFadeTransitionBackgroundEffectIsFinished: the fade in is over and no forest preview is up. */
@@ -2016,7 +2078,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     updateLocationHistoryForRoamer(s);
     roamerMoveToOtherLocationSet(s);
     PlayTimeCounter_Start(s.playTime);
-    // gExitStairsMovementDisabled = TRUE: the port has no Task_ExitStairs
+    setExitStairsMovementDisabled(true); // gExitStairsMovementDisabled = TRUE
     if (UseContinueGameWarp(s) && s.continueGameWarp) {
       ClearContinueGameWarpStatus(s);
       const w = s.continueGameWarp;
@@ -2032,8 +2094,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       this.showMapNameOnWarpArrival(undefined);
       // FieldCB_DefaultWarpExit → SetUpWarpExitTask(FALSE)
       Overworld_PlaySpecialMapMusic();
-      if (this.behaviors.isDoor(this.world.tileAt(this.player.tileX, this.player.tileY).behavior)) this.exitDoor(false);
-      else this.warpFadeInScreen(false);
+      this.setUpWarpExitTask(false, false);
     } else {
       const name = this.assets.mapNameForId(loc.mapId) ?? start.map;
       await this.enterMap(name, loc.x, loc.y, loc.facing, false, loc);
@@ -2045,7 +2106,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       Overworld_PlaySpecialMapMusic();
       // FieldCB_ShowMapNameOnContinue, then FieldCB_WarpExitFadeFromBlack → SetUpWarpExitTask(TRUE): FadeInFromBlack
       if (this.world.current.data.showMapName) this.showMapNamePopup();
-      this.warpFadeInScreen(false);
+      this.setUpWarpExitTask(true, false);
     }
     // Task_ExitNonDoor: the controls stay locked until the fade is done
     if (!this.overlay) this.overlay = { tick: () => this.fieldFadeTransitionBackgroundEffectIsFinished() };
@@ -2083,10 +2144,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         Overworld_PlaySpecialMapMusic();
         QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode();
         this.qlLock();
-        this.warpFadeInScreen(false);
+        const exit = this.setUpWarpExitTask(true, false); // (gExitStairsMovementDisabled is TRUE: Task_ExitNonDoor)
         this.overlay = {
           tick: () => {
-            if (!this.fieldFadeTransitionBackgroundEffectIsFinished()) return false;
+            if (!exit.done()) return false;
             this.qlUnlock();
             return true;
           },
@@ -2188,6 +2249,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     };
     try {
       ResetInitialPlayerAvatarState();
+      setExitStairsMovementDisabled(!isWarp); // LoadMap_QLPlayback: FALSE before LoadMapFromWarp, else TRUE
       if (isWarp) {
         // WarpIntoMap with the scene's warp, LoadMapFromWarp
         const warpId = scene.warpId === 0xff ? -1 : scene.warpId;
@@ -2213,12 +2275,10 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     QL_StartPlaybackScene();
     Overworld_PlaySpecialMapMusic();
     QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode();
-    if (isWarp && this.behaviors.isDoor(this.world.tileAt(x, y).behavior)) {
-      this.exitDoor(false); // FieldCB_DefaultWarpExit
-    } else {
-      this.warpFadeInScreen(false); // FieldCB_WarpExitFadeFromBlack
-      if (!this.overlay) this.overlay = { tick: () => this.fieldFadeTransitionBackgroundEffectIsFinished() };
-    }
+    // FieldCB_DefaultWarpExit / FieldCB_WarpExitFadeFromBlack: SetUpWarpExitTask(FALSE / TRUE); Task_ExitStairs locks
+    // the controls itself (and leaves the objects free)
+    const exit = this.setUpWarpExitTask(!isWarp, false);
+    if (exit.kind === 'nonDoor' && !this.overlay) this.overlay = { tick: exit.done };
     this.busy = false;
   }
 
@@ -2817,10 +2877,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     ResetInitialPlayerAvatarState();
     const isExit = await this.loadWarpedMap(name, w.warpId, w.x, w.y, false);
     Overworld_PlaySpecialMapMusic(); // FieldCB_DefaultWarpExit
-    const arrival = this.world.tileAt(this.player.tileX, this.player.tileY);
-    if (this.behaviors.isDoor(arrival.behavior)) this.exitDoor(isExit);
-    else this.warpFadeInScreen(isExit);
-    await this.waitFrames(() => this.fieldFadeTransitionBackgroundEffectIsFinished());
+    await this.waitFrames(this.setUpWarpExitTask(false, isExit).done);
     this.busy = false;
   }
 
@@ -3632,6 +3689,14 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       partyKnowsSurf: () => {
         const surf = this.defines.require('MOVE_SURF');
         return this.state.party.some((m) => m.moves.includes(surf));
+      },
+      // objectEvent->warpArrowSpriteId: CreateWarpArrowSprite with the player (made here when a map load has cleared it)
+      showWarpArrowSprite: (direction, x, y) => {
+        if (!this.warpArrowSprite?.inUse) this.warpArrowSprite = this.fieldEffects.createWarpArrowSprite();
+        this.fieldEffects.showWarpArrowSprite(this.warpArrowSprite, direction, x, y);
+      },
+      hideWarpArrowSprite: () => {
+        if (this.warpArrowSprite?.inUse) this.warpArrowSprite.invisible = true; // SetSpriteInvisible
       },
     };
   }

@@ -8,7 +8,7 @@
 //
 // Not here: fishing (StartFishing, Task_Fishing: world/fishing.ts), the teleport warp-out/in spin
 // (field moves). The quest log's recordings (QuestLogRecordPlayerStep, the gfx transitions) call world/questLog*.ts.
-// Not ported: the warp arrow sprite (HandleWarpArrowSpriteHideShow) and the Acro Bike / secret base mat functions, which FRLG's metatile behaviours never trigger.
+// Not ported: the Acro Bike / secret base mat functions, which FRLG's metatile behaviours never trigger.
 
 import { K } from '../battle/constants';
 import { PlaySE } from '../gba/sound';
@@ -95,6 +95,13 @@ export interface PlayerAvatarHost {
   boulderPushed(boulder: ObjectEvent): void;
   /** gPlayerParty: whether a party mon knows MOVE_SURF (PartyHasMonWithSurf) */
   partyKnowsSurf(): boolean;
+  /**
+   * The player's warp arrow sprite (objectEvent->warpArrowSpriteId, CreateWarpArrowSprite): field_effect_helpers.c's
+   * ShowWarpArrowSprite (pointing `direction` from world tile (x, y)) and SetSpriteInvisible. Optional, so a
+   * field without field effects still runs.
+   */
+  showWarpArrowSprite?(direction: Direction, x: number, y: number): void;
+  hideWarpArrowSprite?(): void;
 }
 
 /** struct PlayerAvatar */
@@ -164,7 +171,7 @@ export { F as PLAYER_AVATAR_FLAG };
 /** player_step / PlayerStep: one frame of the player's own movement, while the field controls are free. */
 export function PlayerStep(direction: Dir, keys: Keys): void {
   const player = playerObj();
-  // HandleWarpArrowSpriteHideShow: the warp arrow sprite isn't ported
+  HandleWarpArrowSpriteHideShow(player);
   if (!gPlayerAvatar.preventStep && !TryUpdatePlayerSpinDirection()) {
     if (!TryInterruptObjectEventSpecialAnim(player, direction)) {
       npc_clear_strange_bits(player);
@@ -175,6 +182,32 @@ export function PlayerStep(direction: Dir, keys: Keys): void {
       }
     }
   }
+}
+
+/** sArrowWarpMetatileBehaviorChecks2: the arrow warps' behaviors in DIR_SOUTH..DIR_EAST order. */
+const ARROW_WARP_CHECKS: [string, Direction][] = [
+  ['SOUTH_ARROW_WARP', 'down'],
+  ['NORTH_ARROW_WARP', 'up'],
+  ['WEST_ARROW_WARP', 'left'],
+  ['EAST_ARROW_WARP', 'right'],
+];
+
+/**
+ * HandleWarpArrowSpriteHideShow: on an arrow warp, moving (or last moved) the way it points, the arrow shows on the
+ * next tile that way; anywhere else it's hidden.
+ */
+function HandleWarpArrowSpriteHideShow(objectEvent: ObjectEvent): void {
+  const f = avatarField();
+  const metatileBehavior = objectEvent.currentMetatileBehavior;
+  for (const [behavior, direction] of ARROW_WARP_CHECKS) {
+    if (f.behaviors.is(metatileBehavior, behavior) && direction === objectEvent.movementDirection) {
+      const { dx, dy } = DELTA[direction];
+      const { x, y } = objectEvent.current;
+      f.showWarpArrowSprite?.(direction, x + dx, y + dy); // MoveCoords
+      return;
+    }
+  }
+  f.hideWarpArrowSprite?.();
 }
 
 /**
