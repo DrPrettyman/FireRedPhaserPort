@@ -16,6 +16,7 @@ import type { Special } from './specials';
 import type { GameState } from '../state/GameState';
 import { FLAG_GET_SEEN, GetSetPokedexFlag } from '../menus/pokedex';
 import { random } from '../util/random';
+import { QL_InPlaybackState } from '../world/questLogState';
 
 /** text.c's CURSOR_DELAY: frames between the cursor's bob steps. */
 const CURSOR_DELAY = 8;
@@ -126,10 +127,11 @@ export function brailleCursorProbe(): { x: number; y: number; y2: number } | und
 export const POSTGAME_SPECIALS: Record<string, Special> = {
   /**
    * BrailleCursorToggle (field_specials.c): VAR_0x8006 0 creates the text cursor at (VAR_0x8004 + 27, VAR_0x8005)
-   * (VAR_0x8004 = the message's width from getbraillestringwidth), 1 destroys it. (The quest log's playback, which
-   * skips it, isn't ported.)
+   * (VAR_0x8004 = the message's width from getbraillestringwidth), 1 destroys it. Nothing in the quest log's
+   * playback (gQuestLogState == QL_STATE_PLAYBACK).
    */
   BrailleCursorToggle({ state, host }) {
+    if (QL_InPlaybackState()) return;
     const x = (state.getVar('VAR_0x8004') + 27) & 0xffff;
     if (state.getVar('VAR_0x8006') === 0) {
       const lm = host.listMenuHost?.();

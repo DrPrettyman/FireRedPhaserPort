@@ -32,7 +32,7 @@ import { IsCryFinished, PlayCry_Script } from '../gba/sound'; // the cries (W-so
 import { Overworld_ChangeMusicToDefault, Overworld_SetSavedMusic } from '../gba/overworldMusic';
 import { gStringVar4 } from '../menus/common';
 import { K } from '../battle/constants';
-import { gQL, QL_FinishRecordingScene, QL_GetPlaybackState } from '../world/questLog';
+import { gQL, QL_FinishRecordingScene, QL_GetPlaybackState, QL_IS_PLAYBACK_STATE } from '../world/questLog';
 import { avoidDisplay } from './scriptMenuAvoidDisplay';
 import { QuestLog_RecordEnteredMap, QuestLogEvents_HandleEndTrainerBattle } from '../world/questLogEvents';
 
@@ -1498,8 +1498,8 @@ export class ScriptEngine {
       this.state.incrementGameStat(this.state.value(a[0]));
     },
 
-    // ------------------------------------------------ audio (scrcmd.c:883-990; gba/sound.ts). The quest log's
-    // playback (QL_IS_PLAYBACK_STATE), which skips the BGM commands, isn't ported.
+    // ------------------------------------------------ audio (scrcmd.c:883-990; gba/sound.ts). In the quest log's
+    // playback (QL_IS_PLAYBACK_STATE) the BGM commands do nothing; the fanfare and the cry are skipped in sound.ts.
     /** ScrCmd_playse */
     playse(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       PlaySE(this.defines.require(a[0]));
@@ -1511,6 +1511,7 @@ export class ScriptEngine {
     /** ScrCmd_playbgm: PlayNewMapMusic (the song starts in this frame's MapMusicMain); with `save` TRUE also
      *  Overworld_SetSavedMusic, so the next map load plays it again (and the save keeps it). */
     playbgm(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      if (QL_IS_PLAYBACK_STATE()) return;
       const songId = this.defines.require(a[0]);
       if ((this.defines.require(a[1] ?? 'FALSE') & 0xff) === 1) Overworld_SetSavedMusic(songId); // save == TRUE
       PlayNewMapMusic(songId);
@@ -1521,20 +1522,24 @@ export class ScriptEngine {
     },
     /** ScrCmd_fadedefaultbgm: Overworld_ChangeMusicToDefault (fade to the map header's music at speed 8). */
     fadedefaultbgm() {
+      if (QL_IS_PLAYBACK_STATE()) return;
       Overworld_ChangeMusicToDefault();
     },
     /** ScrCmd_fadenewbgm: Overworld_ChangeMusicTo */
     fadenewbgm(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      if (QL_IS_PLAYBACK_STATE()) return;
       Overworld_ChangeMusicTo(this.defines.require(a[0]));
     },
     /** ScrCmd_fadeoutbgm: FadeOutBGMTemporarily(4 × speed, 4 for 0), then wait for IsBGMPausedOrStopped. */
     fadeoutbgm(this: ScriptEngine, ctx: ScriptContext, a: string[]) {
+      if (QL_IS_PLAYBACK_STATE()) return; // no wait either
       const speed = this.defines.require(a[0]) & 0xff;
       FadeOutBGMTemporarily(speed !== 0 ? 4 * speed : 4);
       SetupNativeScript(ctx, IsBGMPausedOrStopped);
     },
     /** ScrCmd_fadeinbgm: FadeInBGM(4 × speed, 4 for 0) */
     fadeinbgm(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
+      if (QL_IS_PLAYBACK_STATE()) return;
       const speed = this.defines.require(a[0]) & 0xff;
       FadeInBGM(speed !== 0 ? 4 * speed : 4);
     },

@@ -2,6 +2,8 @@ import { gMPlayInfo_BGM, m4aMPlayContinue, m4aMPlayStop } from '../audio/m4a';
 import { K } from '../battle/constants';
 import { IsSEPlaying, PlayBGM, PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
+import { QL_InPlaybackState, QL_IS_PLAYBACK_STATE } from '../world/questLogState';
+import { gTextFlags } from './textFlags';
 import { CHAR_NEWLINE, CHAR_PROMPT_CLEAR, CHAR_PROMPT_SCROLL, EOS, EXT_CTRL_CODE_BEGIN, PLACEHOLDER_BEGIN } from './charmap';
 import { FONT_BRAILLE, type Fonts } from './Font';
 import type { TextSurface } from './TextWindow';
@@ -44,6 +46,9 @@ export const TEXT_SPEED = {
   fast: { delay: 1, scroll: 4 },
 } as const;
 export type TextSpeed = keyof typeof TEXT_SPEED;
+
+// gTextFlags is text/textFlags.ts (no imports: quest log code without Phaser sets it)
+export { gTextFlags };
 
 /** src/text.c: CURSOR_DELAY and sDownArrowYCoords (actually x offsets into the arrow sheet). */
 const CURSOR_DELAY = 8;
@@ -98,6 +103,8 @@ export class TextPrinter {
   private scrollDistance = 0;
   private arrowDelay = 0;
   private arrowFrame = 0;
+  /** subStruct->autoScrollDelay (TextPrinterWaitAutoMode) */
+  private autoScrollDelay = 0;
 
   constructor(
     private window: TextSurface,
@@ -199,7 +206,7 @@ export class TextPrinter {
       }
       return Result.Update;
     }
-    this.delayCounter = this.t.speed;
+    this.delayCounter = gTextFlags.autoScroll ? 1 : this.t.speed;
 
     let c = this.next();
     switch (c) {
@@ -283,13 +290,14 @@ export class TextPrinter {
         return Result.Repeat;
       case EXT.PAUSE_UNTIL_PRESS:
         this.state = State.Wait;
+        if (gTextFlags.autoScroll) this.autoScrollDelay = 0;
         return Result.Update;
       case EXT.WAIT_SE:
         this.state = State.WaitSe;
         return Result.Update;
       case EXT.PLAY_BGM: {
         const song = this.next() | (this.next() << 8);
-        PlayBGM(song); // the quest log's playback (which skips it) isn't ported
+        if (!QL_IS_PLAYBACK_STATE()) PlayBGM(song);
         return Result.Repeat;
       }
       case EXT.PLAY_SE: {
@@ -354,20 +362,36 @@ export class TextPrinter {
 
   // -------------------------------------------------------------- down arrow (TextPrinterDrawDownArrow)
 
+  /** TextPrinterInitDownArrowCounters: the auto mode's delay, or the arrow's counters. */
   private initDownArrow(): void {
-    this.arrowDelay = 0;
-    this.arrowFrame = 0;
+    if (gTextFlags.autoScroll) {
+      this.autoScrollDelay = 0;
+    } else {
+      this.arrowDelay = 0;
+      this.arrowFrame = 0;
+    }
   }
 
-  /** TextPrinterWaitWithDownArrow: the arrow, and A or B goes on with SE_SELECT (gTextFlags.autoScroll isn't
-   *  ported: the link / recorded battles' auto mode). */
+  /** TextPrinterWaitAutoMode: TRUE once autoScrollDelay has counted up to 50 frames in the quest log's playback
+   *  (gQuestLogState == QL_STATE_PLAYBACK), 120 otherwise; the call that finds it there is the 51st / 121st. */
+  private waitAutoMode(): boolean {
+    const delay = QL_InPlaybackState() ? 50 : 120;
+    if (this.autoScrollDelay === delay) return true;
+    this.autoScrollDelay++;
+    return false;
+  }
+
+  /** TextPrinterWaitWithDownArrow: in auto mode TextPrinterWaitAutoMode; otherwise the arrow, and A or B goes on
+   *  with SE_SELECT. */
   private waitWithDownArrow(): boolean {
+    if (gTextFlags.autoScroll) return this.waitAutoMode();
     this.drawDownArrow();
     return this.textPrinterWait();
   }
 
-  /** TextPrinterWait: A or B goes on, with SE_SELECT (text.c:563, 581). */
+  /** TextPrinterWait: in auto mode TextPrinterWaitAutoMode; otherwise A or B goes on, with SE_SELECT (text.c:563, 581). */
   private textPrinterWait(): boolean {
+    if (gTextFlags.autoScroll) return this.waitAutoMode();
     if (!this.input.pressedAorB()) return false;
     PlaySE(K.SE_SELECT);
     return true;

@@ -6,6 +6,7 @@ import { random } from '../util/random';
 import { tryStartRoamerEncounter } from './roamer';
 import { PLAYER_AVATAR_FLAG, TestPlayerAvatarFlags } from './playerAvatar';
 import type { TileInfo } from './World';
+import { QL_InPlaybackState } from './questLogState';
 
 // wild_encounter.c
 const MAX_ENCOUNTER_RATE = 1600;
@@ -30,7 +31,7 @@ export interface WildBattleHost {
 /**
  * wild_encounter.c: the step encounter check (TryStandardWildEncounter), its cooldown and rate
  * modifiers, the repel counter, wild mon generation and fishing (DoesCurrentMapHaveFishingMons,
- * FishingWildEncounter). Fields are sWildEncounterData (EWRAM). Not ported: the quest log/Union Room checks.
+ * FishingWildEncounter). Fields are sWildEncounterData (EWRAM). Not ported: the Union Room checks (no link play).
  */
 export class WildEncounters {
   private rngState = 0;
@@ -81,8 +82,10 @@ export class WildEncounters {
     return false;
   }
 
-  /** UpdateRepelCounter: TRUE when the repel just wore off (the caller runs EventScript_RepelWoreOff). */
+  /** UpdateRepelCounter: TRUE when the repel just wore off (the caller runs EventScript_RepelWoreOff). The repel
+   *  doesn't count down in the quest log's playback (gQuestLogState == QL_STATE_PLAYBACK; InUnionRoom is FALSE). */
   updateRepelCounter(): boolean {
+    if (QL_InPlaybackState()) return false;
     let steps = this.state.getVar('VAR_REPEL_STEP_COUNT');
     if (steps !== 0) {
       steps--;

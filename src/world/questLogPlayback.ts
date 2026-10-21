@@ -18,6 +18,7 @@ import { boxMonFromMon } from '../state/PokemonStorage';
 import { EOS, gStringVar4 } from '../menus/common';
 import type { GameState } from '../state/GameState';
 import { CHAR_NEWLINE } from '../text/charmap';
+import { gTextFlags } from '../text/textFlags';
 import { HelpSystem_Disable, HelpSystem_Enable } from '../ui/helpSystemContext';
 import { HandleEnforcedLookDirectionOnPlayerStopMoving, StopPlayerAvatar } from './playerAvatar';
 import {
@@ -629,7 +630,7 @@ function Task_EndQuestLog(): () => boolean {
         sPlaybackControl = emptyPlaybackControl();
         host().clearPlayerHeldMovementAndUnfreezeObjectEvents();
         host().unlockPlayerFieldControls();
-        // gTextFlags.autoScroll = FALSE: the playback's auto-scrolling text is QL5's
+        gTextFlags.autoScroll = false;
         screen('setGlobalFieldTintMode', K.QL_TINT_NONE);
         host().disableWildEncounters(false);
         HelpSystem_Enable(); // gHelpSystemEnabled = TRUE

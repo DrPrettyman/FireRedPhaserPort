@@ -192,9 +192,20 @@ function DrawPreviouslyOnQuestHeader(sceneNum: number): void {
   w.setTilemap(WIN_BOTTOM_BAR, true);
 }
 
-/** CommitQuestLogWindow1 (ClearDialogWindowAndFrame in playback: the bottom bar's tilemap put back; QL5's caller) */
+/** CommitQuestLogWindow1: the bottom bar's tilemap put back (new_menu_helpers.c's ClearDialogWindowAndFrame in
+ *  playback, after the field message box's frame cleared BG0's rows 14-19: text/MessageBox.ts' hide). */
 export function CommitQuestLogWindow1(): void {
   sHost?.windows.setTilemap(WIN_BOTTOM_BAR, true);
+}
+
+/**
+ * The field message box's DrawDialogueFrame in playback: its frame's tilemap (BG0 rows 14-19, every column) goes
+ * over the bottom bar's and the description window's, which share BG0 with it. The port's windows are separate
+ * images, so the box's frame hides theirs (text/MessageBox.ts' show / open).
+ */
+export function QL_DialogueFrameDrawn(): void {
+  sHost?.windows.setTilemap(WIN_BOTTOM_BAR, false);
+  sHost?.windows.setTilemap(WIN_DESCRIPTION, false);
 }
 
 /** DrawSceneDescription: gStringVar4 on the description window, lower the fewer its lines. */

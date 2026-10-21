@@ -4,6 +4,7 @@
 // text_window.c (window frame graphics) and help_message.c's window tiles.
 
 import { K } from '../battle/constants';
+import { QL_InPlaybackState } from '../world/questLogState';
 import {
   BG_TILE_V_FLIP,
   ChangeBgX,
@@ -112,10 +113,16 @@ export function InitTextBoxGfxAndPrinters(): void {
   LoadStdWindowFrameGfx();
 }
 
-/** LoadStdWindowFrameGfx (no quest log playback) */
+/** LoadStdWindowFrameGfx. In the quest log's playback (the GBA-layer screens that call it don't run there) the
+ *  dialogue frame is gQuestLogWindow_Gfx in whatever palette 15 holds, and the text auto-scrolls. */
 export function LoadStdWindowFrameGfx(): void {
-  Menu_LoadStdPal();
-  LoadMenuMessageWindowGfx(0, DLG_WINDOW_BASE_TILE_NUM, BG_PLTT_ID(DLG_WINDOW_PALETTE_NUM));
+  if (QL_InPlaybackState()) {
+    gTextFlags.autoScroll = true;
+    LoadQuestLogWindowTiles(0, DLG_WINDOW_BASE_TILE_NUM);
+  } else {
+    Menu_LoadStdPal();
+    LoadMenuMessageWindowGfx(0, DLG_WINDOW_BASE_TILE_NUM, BG_PLTT_ID(DLG_WINDOW_PALETTE_NUM));
+  }
   LoadUserWindowGfx(0, STD_WINDOW_BASE_TILE_NUM, BG_PLTT_ID(STD_WINDOW_PALETTE_NUM));
 }
 
@@ -666,6 +673,11 @@ export function LoadUserWindowGfx(windowId: number, destOffset: number, palOffse
   const f = userFrame(menuEnv.windowFrameType);
   LoadBgTiles(GetWindowAttribute(windowId, 'bg'), gfx(`${f}_Gfx`), 0x120, destOffset);
   LoadPalette(gfx16(`${f}_Pal`), palOffset, 32);
+}
+
+/** LoadQuestLogWindowTiles (text_window.c): gQuestLogWindow_Gfx's tiles, no palette. */
+export function LoadQuestLogWindowTiles(windowId: number, destOffset: number): void {
+  LoadBgTiles(GetWindowAttribute(windowId, 'bg'), gfx('gQuestLogWindow_Gfx'), 0x280, destOffset);
 }
 
 export function LoadMenuMessageWindowGfx(windowId: number, destOffset: number, palOffset: number): void {

@@ -42,6 +42,7 @@ import {
 } from '../audio/m4a';
 import { MUSICPLAYER_STATUS_PAUSE, MUSICPLAYER_STATUS_TRACK, TRACKS_ALL, type MusicPlayerInfo } from '../audio/m4aInternal';
 import { SpeciesToCryId } from '../pokemon/Pokemon';
+import { QL_InPlaybackState, QL_IS_PLAYBACK_STATE } from '../world/questLogState';
 
 /** MUS_DUMMY (constants/songs.h): song 0, no tracks, on the BGM player. */
 const MUS_DUMMY = 0;
@@ -193,7 +194,7 @@ export const MUSIC_DISABLE_KEEP = 2;
 
 /**
  * gDisableMapMusicChangeOnMapLoad (overworld.c's EWRAM): KEEP from the Hall of Fame's warp to the end of the
- * credits (the map loads keep the music, PlaySE is skipped), STOP for the quest log (not ported). Here rather than
+ * credits (the map loads keep the music, PlaySE is skipped), STOP for the quest log's playback (Task_BeginQuestLogPlayback to Task_EndQuestLog). Here rather than
  * in overworldMusic.ts so PlaySE can read it without an import cycle; set it with SetDisableMapMusicChangeOnMapLoad.
  */
 export let gDisableMapMusicChangeOnMapLoad = MUSIC_DISABLE_OFF;
@@ -366,8 +367,13 @@ export function Overworld_ChangeMusicTo(newMusic: number): void {
 // Fanfares: they play on the SE2 player, with the BGM paused for sFanfares' duration.
 
 /** PlayFanfareByFanfareNum: pause the BGM, start the fanfare and set sFanfareCounter (counted by Task_Fanfare or
- *  WaitFanfare). The quest log's playback (sFanfareCounter = 0xFF, no song) isn't ported. */
+ *  WaitFanfare). In the quest log's playback (gQuestLogState == QL_STATE_PLAYBACK) no song plays and the BGM isn't
+ *  paused: sFanfareCounter = 0xFF, so the wait is 255 frames whatever the fanfare. */
 export function PlayFanfareByFanfareNum(fanfareNum: number): void {
+  if (QL_InPlaybackState()) {
+    sFanfareCounter = 0xff;
+    return;
+  }
   stopPlayer(gMPlayInfo_BGM);
   const songNum = fanfareSongNum(fanfareNum);
   sFanfareCounter = sFanfares[fanfareNum].duration;
@@ -478,10 +484,10 @@ export function PlayBGM(songNum: number): void {
 // ---------------------------------------------------------------------------------------------------------------
 // Sound effects
 
-/** PlaySE: skipped while gDisableMapMusicChangeOnMapLoad is set (from the Hall of Fame's warp through the credits)
- *  and during the quest log's playback (not ported). */
+/** PlaySE: skipped while gDisableMapMusicChangeOnMapLoad is set (from the Hall of Fame's warp through the credits,
+ *  and the quest log's playback) and while gQuestLogState is QL_STATE_PLAYBACK. */
 export function PlaySE(songNum: number): void {
-  if (gDisableMapMusicChangeOnMapLoad !== MUSIC_DISABLE_OFF) return;
+  if (gDisableMapMusicChangeOnMapLoad !== MUSIC_DISABLE_OFF || QL_InPlaybackState()) return;
   startSong(songNum, 'se');
 }
 
@@ -645,11 +651,13 @@ export function PlayCry_ReleaseDouble(species: number, pan: number, mode: number
   }
 }
 
-/** PlayCry_Script: `playmoncry` and `showmonpic`. Centred, ducked; the quest log's playback (which skips the cry
- *  but still starts the task) isn't ported. */
+/** PlayCry_Script: `playmoncry` and `showmonpic`. Centred, ducked; in the quest log's playback
+ *  (QL_IS_PLAYBACK_STATE, FRLG only) no cry plays, but the ducking task still starts. */
 export function PlayCry_Script(species: number, mode: number): void {
-  m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 85);
-  PlayCryInternal(species, 0, CRY_VOLUME, CRY_PRIORITY_NORMAL, mode);
+  if (!QL_IS_PLAYBACK_STATE()) {
+    m4aMPlayVolumeControl(gMPlayInfo_BGM, TRACKS_ALL, 85);
+    PlayCryInternal(species, 0, CRY_VOLUME, CRY_PRIORITY_NORMAL, mode);
+  }
   gPokemonCryBGMDuckingCounter = 2;
   RestoreBGMVolumeAfterPokemonCry();
 }

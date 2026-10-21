@@ -11,8 +11,8 @@
 //   its own image and blended over the field by the GPU (world/mapPreviewLayer.ts), as world/fogHorizontal.ts does.
 //
 // Both print the section's name in sMapNameWindow. MapPreview_SetFlag (`setworldmapflag`) and MapPreview_GetDuration
-// make the banner shorter on later visits. There's no quest log, so MapHasPreviewScreen_HandleQLState2 never sees
-// QL_STATE_PLAYBACK and is MapHasPreviewScreen.
+// make the banner shorter on later visits. MapHasPreviewScreen_HandleQLState2 (the caves' check) has none in the quest
+// log's playback.
 
 import { K } from '../battle/constants';
 import { state } from '../battle/env';
@@ -53,6 +53,7 @@ import {
 import { testEvent } from '../dev/testHooks';
 import { menusData } from '../menus/data';
 import { GetMapName } from './regionMap';
+import { QL_InPlaybackState } from './questLogState';
 
 /** struct MapPreviewScreen (menus.json `mapPreviewScreens`) */
 export interface MapPreviewScreen {
@@ -126,8 +127,9 @@ export function MapHasPreviewScreen(mapsec: number, type: number): boolean {
   return sMapPreviewScreenData()[idx].type === type;
 }
 
-/** MapHasPreviewScreen_HandleQLState2: FALSE during quest log playback, which the port never runs. */
+/** MapHasPreviewScreen_HandleQLState2: FALSE in the quest log's playback (gQuestLogState == QL_STATE_PLAYBACK). */
 export function MapHasPreviewScreen_HandleQLState2(mapsec: number, type: number): boolean {
+  if (QL_InPlaybackState()) return false;
   return MapHasPreviewScreen(mapsec, type);
 }
 

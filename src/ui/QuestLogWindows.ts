@@ -15,7 +15,44 @@ import { TextPrinter } from '../text/TextPrinter';
 import { DEPTH_UI, TextWindow } from '../text/TextWindow';
 
 /** What the windows draw with (preload with loadGfx). */
-export const questLogWindowsGfxSymbols = ['sDescriptionWindow_Gfx', 'gTextWindowPalettes'];
+export const questLogWindowsGfxSymbols = ['sDescriptionWindow_Gfx', 'gTextWindowPalettes', 'gQuestLogWindow_Gfx'];
+
+/** The texture of gQuestLogWindow_Gfx's 20 tiles in a row, in palette 15 (GetTextWindowPalette(4)). */
+const QUEST_LOG_FRAME_TEXTURE = 'text_quest_log_frame';
+
+/**
+ * LoadQuestLogWindowTiles (text_window.c) for the field message box (text/MessageBox.ts): in the playback, the
+ * dialogue frame's tiles are gQuestLogWindow_Gfx, drawn in palette 15, which holds GetTextWindowPalette(4) there.
+ * Returns the texture's key (made once), or undefined before the graphics are loaded.
+ */
+export function questLogWindowFrameTexture(scene: Phaser.Scene): string | undefined {
+  if (scene.textures.exists(QUEST_LOG_FRAME_TEXTURE)) return QUEST_LOG_FRAME_TEXTURE;
+  let tiles: Uint8Array;
+  try {
+    tiles = gfx('gQuestLogWindow_Gfx');
+  } catch {
+    return undefined;
+  }
+  const pal = questLogWindowPalette();
+  const n = 0x280 / 32;
+  const tex = scene.textures.createCanvas(QUEST_LOG_FRAME_TEXTURE, n * 8, 8)!;
+  const img = tex.context.createImageData(n * 8, 8);
+  for (let t = 0; t < n; t++) {
+    for (let y = 0; y < 8; y++) {
+      for (let x = 0; x < 8; x++) {
+        const byte = tiles[t * 32 + y * 4 + (x >> 1)];
+        const c = x & 1 ? byte >> 4 : byte & 0xf;
+        if (!c) continue; // colour 0: the backdrop shows through
+        const o = (y * n * 8 + t * 8 + x) * 4;
+        [img.data[o], img.data[o + 1], img.data[o + 2]] = pal[c];
+        img.data[o + 3] = 255;
+      }
+    }
+  }
+  tex.context.putImageData(img, 0, 0);
+  tex.refresh();
+  return QUEST_LOG_FRAME_TEXTURE;
+}
 
 export const WIN_TOP_BAR = 0;
 export const WIN_BOTTOM_BAR = 1;

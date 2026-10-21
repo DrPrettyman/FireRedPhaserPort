@@ -4,7 +4,7 @@
 import type { Input } from '../input/Input';
 import type { Font, Fonts } from '../text/Font';
 import { stringWidth } from '../text/stringWidth';
-import { TEXT_SPEED, TextPrinter, type PrinterTemplate } from '../text/TextPrinter';
+import { gTextFlags, TEXT_SPEED, TextPrinter, type PrinterTemplate } from '../text/TextPrinter';
 import type { TextSurface } from '../text/TextWindow';
 import {
   BG_ATTR_BASETILE,
@@ -279,8 +279,8 @@ export function ScrollWindow(windowId: number, direction: number, distance: numb
 
 // ------------------------------------------------------------------ text (text.c)
 
-/** gTextFlags */
-export const gTextFlags = { canABSpeedUpPrint: false, useAlternateDownArrow: false, autoScroll: false };
+/** gTextFlags (text/TextPrinter.ts, which reads autoScroll) */
+export { gTextFlags };
 
 /** A TextPrinter target backed by a window's 4bpp tile data. */
 class WindowSurface implements TextSurface {

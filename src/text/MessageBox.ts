@@ -4,7 +4,9 @@ import type { GameState } from '../state/GameState';
 import type { Charmap } from './charmap';
 import { FONT_FEMALE, FONT_MALE, FONT_NORMAL, type Fonts } from './Font';
 import { expandPlaceholders } from './placeholders';
-import { TEXT_SPEED, TextPrinter } from './TextPrinter';
+import { gTextFlags, TEXT_SPEED, TextPrinter } from './TextPrinter';
+import { questLogWindowFrameTexture } from '../ui/QuestLogWindows';
+import { QL_InPlaybackState } from '../world/questLogState';
 import { DEPTH_UI, TextWindow } from './TextWindow';
 
 /** NPC_TEXT_COLOR_* (include/constants/vars.h). */
@@ -26,12 +28,26 @@ export const MESSAGE_TEXTURES = {
   arrows: 'text_down_arrows',
 };
 
+/**
+ * The quest log's side of the box in playback (world/questLogScreen.ts installs them): the dialogue frame's tilemap
+ * (BG0 rows 14-19) overwrites the playback's bottom bar and description window, and ClearDialogWindowAndFrame puts
+ * the bottom bar back (CommitQuestLogWindow1).
+ */
+export const messageBoxQuestLogHooks = {
+  frameDrawn: (): void => {},
+  cleared: (): void => {},
+};
+
 /** The field message box (field_message_box.c + WindowFunc_DrawDialogueFrame). */
 export class MessageBox {
   private frame: Phaser.GameObjects.Image;
   private signpostFrame: Phaser.GameObjects.Image;
+  /** The dialogue frame with gQuestLogWindow_Gfx's tiles (made the first time the playback shows a message). */
+  private questLogFrame?: Phaser.GameObjects.Image;
   /** Which frame the last message loaded (LoadStdWindowFrameGfx or LoadSignpostWindowFrameGfx). */
   private signpost = false;
+  /** The last message loaded LoadQuestLogWindowTiles (gQuestLogState == QL_STATE_PLAYBACK). */
+  private questLog = false;
   private window: TextWindow;
   private printer?: TextPrinter;
   private arrowSheet: ImageData;
@@ -48,8 +64,9 @@ export class MessageBox {
     private state: GameState,
   ) {
     this.arrowSheet = imageDataOf(scene, MESSAGE_TEXTURES.arrows);
-    this.frame = drawDialogueFrame(scene, false);
-    this.signpostFrame = drawDialogueFrame(scene, true);
+    this.frame = drawDialogueFrame(scene, MESSAGE_TEXTURES.frame, false);
+    this.signpostFrame = drawDialogueFrame(scene, MESSAGE_TEXTURES.signpostFrame, true);
+    gTextFlags.autoScroll = false; // InitFieldMessageBox (InitOverworldBgs)
     this.window = new TextWindow(scene, WIN.left * 8, WIN.top * 8, WIN.width * 8, WIN.height * 8, fonts.windowPalette);
     this.setVisible(false);
   }
@@ -60,6 +77,7 @@ export class MessageBox {
    */
   show(raw: number[], color: TextColor = 'neutral', signpost = false, instant = false, font?: number): void {
     this.signpost = signpost;
+    this.loadFrameGfx();
     // `instant`: AddTextPrinterParameterized2 with TEXT_SKIP_DRAW / speed 0 (e.g. the PC storage menu's descriptions)
     const speed = instant ? { delay: 0, scroll: TEXT_SPEED[this.state.textSpeed].scroll } : TEXT_SPEED[this.state.textSpeed];
     // `font`: another font in the colour's text colours (DisplayItemMessageOnField's FONT_MALE in dark gray)
@@ -86,6 +104,7 @@ export class MessageBox {
   /** LoadMessageBoxAndFrameGfx(0, TRUE) with nothing printed: the dialogue frame around an empty window. */
   open(): void {
     this.signpost = false;
+    this.loadFrameGfx();
     this.printer = undefined;
     this.text = [];
     this.window.fill(TEXT_COLOR_WHITE);
@@ -131,16 +150,37 @@ export class MessageBox {
     this.window.flush();
   }
 
-  /** HideFieldMessageBox / closemessage. */
+  /** HideFieldMessageBox / closemessage: ClearDialogWindowAndFrame, which in the playback puts the quest log's
+   *  bottom bar back (CommitQuestLogWindow1). */
   hide(): void {
     this.printer = undefined;
     this.setVisible(false);
+    if (QL_InPlaybackState()) messageBoxQuestLogHooks.cleared();
+  }
+
+  /**
+   * Task_DrawFieldMessageBox's state 0 / LoadMessageBoxAndFrameGfx: in the quest log's playback (QL_STATE_PLAYBACK)
+   * gTextFlags.autoScroll is set and the frame is gQuestLogWindow_Gfx (LoadQuestLogWindowTiles), always in the
+   * dialogue layout (WindowFunc_DrawDialogueFrame's `|| gQuestLogState == QL_STATE_PLAYBACK`); its tilemap goes over
+   * the playback's windows (DrawDialogueFrame's PutWindowTilemap).
+   */
+  private loadFrameGfx(): void {
+    this.questLog = false;
+    if (!QL_InPlaybackState()) return;
+    gTextFlags.autoScroll = true;
+    if (!this.questLogFrame) {
+      const key = questLogWindowFrameTexture(this.frame.scene);
+      if (key) this.questLogFrame = drawDialogueFrame(this.frame.scene, key, false).setVisible(false);
+    }
+    this.questLog = !!this.questLogFrame;
+    messageBoxQuestLogHooks.frameDrawn();
   }
 
   private setVisible(v: boolean): void {
     this.visible = v;
-    this.frame.setVisible(v && !this.signpost);
-    this.signpostFrame.setVisible(v && this.signpost);
+    this.frame.setVisible(v && !this.signpost && !this.questLog);
+    this.signpostFrame.setVisible(v && this.signpost && !this.questLog);
+    this.questLogFrame?.setVisible(v && this.questLog);
     this.window.setVisible(v);
   }
 }
@@ -149,12 +189,12 @@ export class MessageBox {
  * Build a dialogue frame once into a canvas: 30x6 tiles around the text window
  * (WindowFunc_DrawDialogueFrame, whose signpost layout mirrors the side rows the other way round).
  */
-function drawDialogueFrame(scene: Phaser.Scene, signpost: boolean): Phaser.GameObjects.Image {
-  const src = scene.textures.get(signpost ? MESSAGE_TEXTURES.signpostFrame : MESSAGE_TEXTURES.frame).getSourceImage() as HTMLImageElement;
+function drawDialogueFrame(scene: Phaser.Scene, tiles: string, signpost: boolean): Phaser.GameObjects.Image {
+  const src = scene.textures.get(tiles).getSourceImage() as HTMLImageElement;
   const sheetCols = src.width / 8;
   const cols = WIN.width + 4;
   const rows = WIN.height + 2;
-  const key = signpost ? 'text_signpost_frame_composed' : 'text_dialogue_frame_composed';
+  const key = `${tiles}_composed`;
   const tex = scene.textures.exists(key) ? (scene.textures.get(key) as Phaser.Textures.CanvasTexture) : scene.textures.createCanvas(key, cols * 8, rows * 8)!;
   const ctx = tex.context;
   ctx.clearRect(0, 0, cols * 8, rows * 8);

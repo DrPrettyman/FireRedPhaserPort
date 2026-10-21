@@ -9,6 +9,7 @@
 // lists) come from tools/extract_help.py (public/gen/helpSystem.json, set by Assets.init); the text is in
 // text/strings.json (data/text/help_system.inc, src/strings.c).
 
+import { QL_IS_PLAYBACK_STATE } from '../world/questLogState';
 import { K } from '../battle/constants';
 import { charmap, state, textStrings } from '../battle/env';
 import { GetKantoPokedexCount } from '../menus/pokedex';
@@ -246,8 +247,9 @@ export function HelpSystem_Disable(): void {
   gHelpSystemEnabled = false;
 }
 
-/** HelpSystem_Enable (not during a quest log playback: there's no quest log). */
+/** HelpSystem_Enable: not in the quest log's playback (QL_IS_PLAYBACK_STATE; Task_EndQuestLog enables it after). */
 export function HelpSystem_Enable(): void {
+  if (QL_IS_PLAYBACK_STATE()) return;
   gHelpSystemEnabled = true;
   HelpSystem_EnableToggleWithRButton();
 }

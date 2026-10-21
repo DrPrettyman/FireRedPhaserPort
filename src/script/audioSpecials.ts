@@ -1,9 +1,8 @@
 // The audio specials (data/specials.inc): battle_setup.c's PlayTrainerEncounterMusic and field_screen_effect.c's
 // Script_FadeOutMapMusic. LoopWingFlapSound (Navel Rock's summit) is in eventIslandSpecials.ts.
 
-import { K } from '../battle/constants';
 import { bdata } from '../battle/env';
-import { gQL } from '../world/questLog';
+import { QL_IS_PLAYBACK_STATE } from '../world/questLogState';
 import { BGMusicStopped, FadeOutMapMusic, PlayNewMapMusic } from '../gba/sound';
 import type { Special, SpecialEnv } from './specials';
 
@@ -20,7 +19,7 @@ export const AUDIO_SPECIALS: Record<string, Special> = {
    * (QL_IS_PLAYBACK_STATE: a recorded trainer battle replays without its music).
    */
   PlayTrainerEncounterMusic({ state, trainerBattle }: SpecialEnv) {
-    if (gQL.state === K.QL_STATE_PLAYBACK || gQL.state === K.QL_STATE_PLAYBACK_LAST) return;
+    if (QL_IS_PLAYBACK_STATE()) return;
     const d = state.defines;
     const battle = trainerBattle(); // sTrainerBattleMode, gTrainerBattleOpponent_A
     if (!battle) return;

@@ -34,6 +34,7 @@ import {
   ResetDeferredLinkEvent,
 } from './questLogEvents';
 import { QL_PLAYER_GFX_NONE } from './questLogPlayer';
+import { gQL, type ScriptPtr } from './questLogState';
 
 // ------------------------------------------------------------------ constants
 
@@ -221,11 +222,8 @@ function host(): QuestLogHost {
 
 // ------------------------------------------------------------------ state
 
-/** A pointer into a scene's script (u16 *): the scene and the u16 index. */
-export interface ScriptPtr {
-  scene: number;
-  pos: number;
-}
+// ScriptPtr, gQL and the QL_IS_PLAYBACK_STATE checks are in questLogState.ts (no imports: the low layers read it).
+export { gQL, QL_InPlaybackState, QL_IS_PLAYBACK_STATE, type ScriptPtr } from './questLogState';
 
 /** struct QuestLogAction */
 export interface QuestLogAction {
@@ -243,21 +241,6 @@ export function emptyQuestLogAction(): QuestLogAction {
   return { data: [0, 0, 0, 0], duration: 0, type: 0 };
 }
 
-/** quest_log.c's (and quest_log_events.c's) globals the other quest log files share. */
-export const gQL = {
-  /** gQuestLogState: 0, QL_STATE_RECORDING, QL_STATE_PLAYBACK, QL_STATE_PLAYBACK_LAST */
-  state: 0,
-  /** gQuestLogPlaybackState: QL_PLAYBACK_STATE_* */
-  playbackState: 0,
-  /** sCurrentSceneNum */
-  currentSceneNum: 0,
-  /** gQuestLogRecordingPointer */
-  recordingPointer: null as ScriptPtr | null,
-  /** gQuestLogDefeatedWildMonRecord */
-  defeatedWildMonRecord: null as ScriptPtr | null,
-  /** gQuestLogCurActionIdx */
-  curActionIdx: 0,
-};
 
 /** sQuestLogCB: QLogCB_Recording, QLogCB_Playback or a playback step (questLogPlayback.ts), run from CB1_Overworld by RunQuestLogCB */
 let sQuestLogCB: (() => void) | null = null;

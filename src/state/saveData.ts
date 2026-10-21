@@ -403,7 +403,7 @@ export function upgradeSave(data: SaveData): SaveData {
   if (data?.version === 9) data = { ...data, version: 10 };
   // No mail: fromSaveData keeps the new-game slots (ClearMailData); no mon held mail.
   if (data?.version === 10) data = { ...data, version: 11 };
-  // No quest log scenes (it wasn't ported): CONTINUE has nothing to play back.
+  // A save from before the quest log (version 11) has no scenes: CONTINUE has nothing to play back.
   if (data?.version === 11) data = { ...data, version: 12, questLog: [] };
   // No daycare mail: a mon left in a daycare before version 13 kept its mail item but lost its slot, which stayed
   // taken; free the party mail slots (0-5) no party mon points at, so they can be used again.

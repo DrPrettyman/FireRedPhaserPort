@@ -73,8 +73,8 @@ const EXCLAMATION_MARK = 'FLDEFF_EXCLAMATION_MARK_ICON';
 /**
  * CheckForTrainersWantingBattle: the approach task of the first trainer that sees the player, after
  * configuring its battle and starting EventScript_DoTrainerBattleFromApproach. Only
- * TRAINER_TYPE_NORMAL and TRAINER_TYPE_BURIED are checked (not SEE_ALL_DIRECTIONS), as in the C.
- * (QL_IsTrainerSightDisabled is for quest log playback, which isn't ported.)
+ * TRAINER_TYPE_NORMAL and TRAINER_TYPE_BURIED are checked (not SEE_ALL_DIRECTIONS), as in the C. In the quest log's
+ * playback, QL_IsTrainerSightDisabled stops it while the actions are stopped or an event's text is up.
  */
 export function checkForTrainersWantingBattle(host: TrainerSeeHost): TrainerApproach | undefined {
   if (QL_IsTrainerSightDisabled()) return undefined;

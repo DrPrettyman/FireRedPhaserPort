@@ -10,7 +10,9 @@
 //
 // The field's object sprites are Phaser textures with their palette baked in, so a palette load redraws the rock's
 // texture from gObjectEventPic_BirthIslandStone (`deoxys_rock`, one 32x32 frame) and the fragments' from
-// sRockFragment_* on the same palette. ApplyGlobalFieldPaletteTint(10) is the quest log's sepia / grey tint: no-op.
+// sRockFragment_* on the same palette. ApplyGlobalFieldPaletteTint(10) is the quest log's sepia / grey tint: the rock
+// is drawn with it in a playback scene (not in the final scene's BACKUP_GRAYSCALE: the end's palette restore doesn't
+// redraw the rock, so it keeps its colours there).
 // The fragments are drawn at screen coordinates, as the C's (coordOffsetEnabled is off: they don't shake).
 
 import Phaser from 'phaser';
@@ -24,6 +26,7 @@ import { setLoadDeoxysObjectPal } from '../script/eventIslandSpecials';
 import { CreateTask } from './fieldMoves';
 import { FieldEffectActiveListRemove, gFieldEffectArguments, registerFieldEffectNatives } from './fieldEffectScripts';
 import { canvasTexture, drawFrames } from './hallOfFameRecord';
+import { globalFieldTintMode, tintForMode } from './questLogScreen';
 
 /** Graphics the triangle and its effects draw (preload at boot). */
 export const DEOXYS_ROCK_GFX = [
@@ -96,9 +99,13 @@ export function LoadDeoxysObjectPal(num: number, rockLocalId: number): void {
   const pals = gfx16('sDeoxysObjectPals');
   const pal = objPal10();
   for (let i = 0; i < 4; i++) pal[i] = pals[num * 16 + i];
+  // ApplyGlobalFieldPaletteTint(10): QL_TINT_GRAYSCALE / QL_TINT_SEPIA (a copy: the C's tinted gPlttBufferUnfaded
+  // is gone with the playback's save reload)
+  const mode = globalFieldTintMode();
+  const tint = mode === K.QL_TINT_GRAYSCALE || mode === K.QL_TINT_SEPIA ? tintForMode(mode) : undefined;
   const rock = field().objectByLocalId(rockLocalId);
   if (rock) {
-    drawFrames(canvasTexture(field().scene, ROCK_TEXTURE, 32, 32, 1), gfx('gObjectEventPic_BirthIslandStone'), pal, 32, 32, 1);
+    drawFrames(canvasTexture(field().scene, ROCK_TEXTURE, 32, 32, 1), gfx('gObjectEventPic_BirthIslandStone'), tint ? pal.map(tint) : pal, 32, 32, 1);
     if (rock.sprite.texture.key !== ROCK_TEXTURE) rock.sprite.setTexture(ROCK_TEXTURE, '0');
   }
   testEvent('deoxysRockPalette', { num });
