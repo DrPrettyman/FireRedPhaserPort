@@ -534,6 +534,29 @@ this is the next level down. When you add or change a subsystem, update its entr
   the BG shows it); events `escalatorWarp` (up), `escalatorStart` (goingUp), `escalatorFadeOut`, `escalatorWarpIn`,
   `escalatorStop`, `escalatorDone`. Test: tests/e2e/escalator.test.ts (ViridianCity_PokemonCenter_1F from (2, 6)
   walking left: up, down, up again; a recorded ride played back on CONTINUE).
+- **Stair warps and the warp arrow:** `world/stairWarp.ts` is field_fadetransition.c's staircase half. Pushing the
+  way an MB_*_STAIR_WARP goes (west for *_LEFT, east for *_RIGHT: OverworldScene.tryArrowWarp, TryArrowWarp's
+  IsDirectionalStairWarpMetatileBehavior branch) gets the player off the bike (delay 12), runs SetupWarp at once
+  (`setupWarpLoaded` on the destination's header, which `prefetchStairWarpDestinations` fetched when the map loaded;
+  else `setupWarp`'s async load, and Task_StairWarp holds in state 1 until it's back) and DoStairWarp: Task_StairWarp
+  (lock + freeze; wait for the held movement and the delay; TryFadeOutOldMapMusic, PlayRainStoppingSoundEffect,
+  priority 1, walk in place, SE_EXIT; UpdateStairsMovement's x2 / y2 for 12 frames, WarpFadeOutScreen, on until the
+  fade and the music are done; `StairWarpHost.warpIntoMap` → `FieldMoveHost.warpIntoMap` with FieldCB_DefaultWarpExit).
+  Arrivals go through `OverworldScene.setUpWarpExitTask` (SetUpWarpExitTask: door → Task_ExitDoor, staircase →
+  StartExitStairs unless gExitStairsMovementDisabled, else Task_ExitNonDoor; it clears the flag), used by
+  defaultWarpExit (DoWarp, the field moves' warps, `warp`), the Hall of Fame's warpFromScreen, CONTINUE's two
+  arrivals and the quest log's scene starts. The sprite offsets are `ObjectEvent.setSpriteX2Y2` (sprite->x2 / y2,
+  kept through the object's anims, not followed by the camera, reset by `setPosition`). gExitStairsMovementDisabled
+  is `gExitStairsMovementDisabled()` / `setExitStairsMovementDisabled()`: TRUE from CONTINUE (enterSavedField), the
+  region map (menus/regionMap.ts) and a quest log scene that starts standing (loadQuestLogScene); FALSE from the
+  main menu, FieldCB2_UseItemFromField and a scene that starts with a warp. The warp arrow: PlayerStep calls
+  HandleWarpArrowSpriteHideShow (world/playerAvatar.ts) first; the avatar host's `showWarpArrowSprite` /
+  `hideWarpArrowSprite` keep one FieldEffects sprite (`createWarpArrowSprite`: FLDEFFOBJ_ARROW, priority 1,
+  subpriority 0x52; `showWarpArrowSprite` restarts its anim only on a new tile). Probes: `field().avatar.spriteX2` /
+  `spriteY2` / `priority`, `field().warpArrow` (visible, tile, anim, frame); events `stairWarp` (behavior, delay),
+  `stairWarpMove` (state 1's frame), `stairWarpFadeOut`, `exitStairs`, `exitStairsDone`. Test: tests/e2e/stairWarp.test.ts
+  (the player's house 2F (10, 2) ↔ 1F (10, 2) frame by frame; Route 16's north gate (8, 16) on the bike; CONTINUE on
+  2F's stairs; the 1F mat (4, 8)).
 - **Egg hatching:** `menus/eggHatch.ts` is daycare.c's hatching half. ShouldEggHatch (world/daycare.ts) leaves the
   egg's slot in VAR_0x8004; OverworldScene counts GAME_STAT_HATCHED_EGGS and runs EventScript_EggHatch, whose
   `special EggHatch` (EGG_HATCH_SPECIALS, spread into SPECIALS) fades out and `runScreenFromScript(StartEggHatch,

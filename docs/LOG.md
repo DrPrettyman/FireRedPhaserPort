@@ -4738,3 +4738,34 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   trainerBattle, wildBattle, pokemart, pcStorage, questLog, story); the full suite only when a batch finishes a plan
   or changes shared core (the script engine, the tick loop, the battle engine, the save format).
 - Verified: the ten files on master f6644cc, 66 passed in 153 s (story.test.ts is the long pole at 152 s).
+
+### W-stairs S1: stair warps (Task_StairWarp / Task_ExitStairs) and the warp arrow (FINISH_PLAN.md unit 4, batch 15)
+
+- `world/stairWarp.ts`: field_fadetransition.c's DoStairWarp / Task_StairWarp (lock + freeze, the wait for the
+  player's held movement, TryArrowWarp's 12-frame delay when it takes the player off the bike, then
+  TryFadeOutOldMapMusic, PlayRainStoppingSoundEffect, oam priority 1, the walk in place and SE_EXIT; 12 frames of
+  UpdateStairsMovement before WarpFadeOutScreen; WarpIntoMap once the fade and the music are done), Task_ExitStairs
+  (ExitStairsMovement / WaitStairExitMovementFinished: the sprite 16 frames' worth into the stairs, out again while
+  walking in place fast away from them) and gExitStairsMovementDisabled, set and cleared where the C does (CONTINUE,
+  the region map, the quest log's scene loads, the main menu, FieldCB2_UseItemFromField, SetUpWarpExitTask).
+  Replaces the DoWarp stand-in (stairs had no walk, SE_EXIT at the push).
+- OverworldScene: `tryArrowWarp`'s stair branch; `setUpWarpExitTask` (SetUpWarpExitTask) is now the one arrival
+  path for defaultWarpExit, warpFromScreen, CONTINUE's two arrivals and the quest log's scene starts (each had its
+  own door / fade copy); `setupWarpLoaded` (SetupWarp's synchronous part) with `prefetchStairWarpDestinations` on map
+  load, so SetupWarp runs at the push and Task_StairWarp's music fade comes the frame after it (`Assets.loadedMap`:
+  a loaded map's header, synchronously). Found by the test: with SetupWarp's async load the walk started 22 ticks
+  late at speed 8 (the promise settles after the frame's batch of ticks).
+- `ObjectEvent.spriteX2` / `spriteY2` (`setSpriteX2Y2`): a task's sprite->x2 / y2 that survives the object's
+  anims (the walk in place re-syncs the sprite every tick); reset by `setPosition`.
+- The warp arrow: field_player_avatar.c's HandleWarpArrowSpriteHideShow at the top of PlayerStep, field_effect_helpers.c's
+  CreateWarpArrowSprite / ShowWarpArrowSprite / SetSpriteInvisible in FieldEffects (the FLDEFFOBJ_ARROW template was
+  already extracted); the avatar host's optional `showWarpArrowSprite` / `hideWarpArrowSprite`.
+- DEVIATIONS: removed the warp arrow and DoStairWarp's delay (Player avatar), gExitStairsMovementDisabled (CONTINUE,
+  Region map), "DoStairWarp runs as DoWarp" (Map music). Added: the prefetch's fallback, the arrow sprite made on
+  first show, and two gaps found on the way in SetUpWarpExitTask: no Task_ExitNonAnimDoor (MetatileBehavior_IsNonAnimDoor
+  is MB_CAVE_DOOR: arriving out of a cave, the GBA hides the player through the fade and walks them a step out) and
+  Task_ExitNonDoor's FreezeObjectEvents (the warps' `busy` wait leaves the objects free).
+- Verified: typecheck, `npm test` (798), tests/e2e/stairWarp.test.ts (4: the house's stairs both ways frame by frame
+  against the C's numbers, Route 16's north gate on the bike, CONTINUE on 2F's stairs, the 1F mat's arrow), and the
+  e2e files that go through stairs or the arrival paths: field, weather (Pokémon Tower 3F's stairs), weatherRain,
+  newGame, questLog (the scene starts and playback), saveContinue, trainerTower.

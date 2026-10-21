@@ -113,8 +113,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     are: scrollPositionMaybe never changes, so with more than six entries the down arrow always shows and the up
     arrow never does.
   - Region map / Fly (menus/regionMap.ts, world/fly.ts): the bird of Fly always uses the extracted bird sheet's own palette (Red's), where the GBA draws it in OBJ
-    palette 0, the player's (Leaf's frames would use hers). gExitStairsMovementDisabled isn't kept (no stair
-    walk-out). The dungeon previews' third palette is zero-filled: the C loads 3 palettes from 2-palette data,
+    palette 0, the player's (Leaf's frames would use hers). The dungeon previews' third palette is zero-filled: the C loads 3 palettes from 2-palette data,
     reading on into the ROM (no preview tilemap uses it; the same for the map preview screens). Where the C reads a NULL sMapCursor (naming the section
     before the cursor exists, CB2_OpenRegionMap / UpdateMapsecNameBox), the port reads MAPSEC_NONE.
   - Field moves (world/fieldMoves.ts, world/fieldMoveShowMon.ts): no GAME_STAT_USED_CUT / _ROCK_SMASH. The field
@@ -188,9 +187,10 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Cable club (cable_club.c): there is no link play. TryBattleLinkup / TryTradeLinkup run as if nothing were on
     the other end of the cable (Task_LinkupAwaitConnection until B, then LINKUP_FAILED), IsWirelessAdapterConnected
     and ValidateSavedWonderCard are FALSE, IsBadEggInParty is FALSE (no bad eggs), CloseLink is a no-op.
-  - Player avatar (world/playerAvatar.ts, world/bike.ts): the bike bell is item_use.c's (menus/itemUse.ts). Not ported: the warp arrow sprite on arrow mats
-    (HandleWarpArrowSpriteHideShow), DoStairWarp's 12-frame delay when a stair warp takes the player off the
-    bike and the teleport spin. Movement scripts
+  - Player avatar (world/playerAvatar.ts, world/bike.ts): the bike bell is item_use.c's (menus/itemUse.ts). Not ported:
+    the teleport spin. The warp arrow sprite (CreateWarpArrowSprite) is made the first time
+    HandleWarpArrowSpriteHideShow shows it after a map load, not with the player object (it's invisible until then
+    either way). Movement scripts
     (applymovement) still run through MovementRunner rather than the player's held-movement actions, so `lock`
     waits for a scripted step to end by `isMoving`.
   - Fishing (world/fishing.ts): no GAME_STAT_FISHING_CAPTURES. StartFishing's task runs its second state a frame later than
@@ -291,7 +291,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     title screen sets up its own GameState from the save (LoadGameSave's gSaveBlock1/2) for the help's flags and
     button mode.
   - CONTINUE (OverworldScene.continueSavedGame): the map's objects spawn from its templates (object events aren't
-    saved, see Save data); gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
+    saved, see Save data).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
     link play).
   - Elevators: UpdateEscapeWarp isn't kept on warps.
@@ -372,9 +372,13 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     never set).
   - Map music (gba/overworldMusic.ts, overworld.c's music block): the warps load the destination's header before
     their fade starts (WarpFadeOutScreen and TryFadeOutOldMapMusic wait for it; it's cached after SetupWarp, so
-    usually the same frame). DoStairWarp
-    runs as DoWarp (no stair walk: its TryFadeOutOldMapMusic and SE_EXIT come at once rather than after the
-    player's step and delay). `warpdoor` (unused in FRLG) goes straight to Task_DoorWarp's warp: no door SE or
+    usually the same frame). A stair warp (world/stairWarp.ts) has its destination's header from when the map
+    loaded (OverworldScene.prefetchStairWarpDestinations), so SetupWarp runs at the push; if that fetch isn't back
+    yet, Task_StairWarp's state 1 holds until it is (TryFadeOutOldMapMusic and SE_EXIT come that much later).
+    SetUpWarpExitTask (OverworldScene.setUpWarpExitTask) has no Task_ExitNonAnimDoor: arriving on a cave door
+    (MetatileBehavior_IsNonAnimDoor is MB_CAVE_DOOR), the player isn't hidden during the fade and doesn't walk a
+    step out afterwards (Task_ExitNonDoor instead). Its Task_ExitNonDoor (the warps' `busy` wait) doesn't freeze the
+    map's objects while the screen fades in. `warpdoor` (unused in FRLG) goes straight to Task_DoorWarp's warp: no door SE or
     animation. The Hall of Fame's DoWarp (SetWarpsToRollCredits, menus/hallOfFame.ts) loads the
     destination's header before its TryFadeOutOldMapMusic (a frame or two later than on the GBA, behind the black
     screen) and has no WarpFadeOutScreen (the screen is black already). Of the screens that come back through FieldCB_ContinueScriptHandleMusic,
