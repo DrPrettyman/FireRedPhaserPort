@@ -689,6 +689,20 @@ this is the next level down. When you add or change a subsystem, update its entr
     `itemfinderArrow` (`anim`, `affineAnim`, `deltaX`, `deltaY`), `itemfinderStar`, `itemfinderEnd`. Tests:
     tests/e2e/itemfinder.test.ts (Route 3's Oran Berry (26, 9) from (24, 9); Cape Brink's underfoot PP Max at
     (16, 28); Pallet Town for none; Route 13 (62, 1) for Route 12's Rare Candy), tests/unit/itemfinder.test.ts.
+  - **Renewable hidden items:** `world/renewableHiddenItems.ts` is renewable_hidden_items.c. The table
+    (sRenewableHiddenItems: 15 maps, each with rare / uncommon / common groups of eight u8 hidden ids,
+    HIDDEN_ID(flag) = flag - FLAG_HIDDEN_ITEMS_START, 0xFF = none) is `constants.json`'s `renewableHiddenItems`
+    (tools/extract.py's extract_renewable_hidden_items), handed over by Assets.init (`initRenewableHiddenItems`;
+    tests/unit/gameData.ts does the same). Hooks: GameState's constructor runs SetAllRenewableItemFlags
+    (NewGameInitData: every renewable item starts hidden); OverworldScene.processPlayerFieldInput runs
+    IncrementRenewableHiddenItemStepCounter on each step next to GAME_STAT_STEPS (VAR_RENEWABLE_ITEM_STEP_COUNTER, up
+    to 1500: a saved var, so no save field); `onMapLoaded` runs TryRegenerateRenewableHiddenItems after the
+    ON_TRANSITION script on warps and connections (not CONTINUE, as LoadMapFromWarp / LoadMapFromCameraTransition):
+    on a table map at 1500 the counter resets, every renewable flag is set and SampleRenewableItemFlags clears one
+    group per map (one Random() % 100 each: 90+ rare, 60+ uncommon, else common). An e2e test that picks up a
+    renewable item has to clear its flag first, as a regeneration would (postgameSixIsland / postgameSevenIsland).
+    Tests: tests/unit/renewableHiddenItems.test.ts, tests/e2e/gameStatsAndRenewables.test.ts (Three Island → Bond
+    Bridge with the counter at 1500).
   - **Registered items (SELECT):** `menus/registeredItem.ts` is UseRegisteredKeyItemOnField (item_menu.c),
     called from `OverworldScene.processPlayerFieldInput` when FieldGetPlayerInput saw SELECT (after START, as in
     ProcessPlayerFieldInput). It dismisses the map name popup, takes LockPlayerFieldControls (fieldMoves.ts' flag
@@ -1519,7 +1533,7 @@ this is the next level down. When you add or change a subsystem, update its entr
   ('slow' / 'mid' / 'fast' = OPTIONS_TEXT_SPEED_*), `battleSceneOff`, `battleStyleSet`, `optionsSound` (stored and
   saved only, since save version 3), `optionsButtonMode`, `optionsWindowFrameType` (0-9 = TYPE 1-10). Who reads
   them: the field message box and GBA text (text speed), the battle (scene, style, `battle/battleBg.ts`'s user frame),
-  GbaHostScene's ReadKeys (L=A) and the GBA list menus (LR), the start menu (HELP: its help window), and every field
+  GbaHostScene's ReadKeys (L=A; on the field, OverworldScene sets the field Input's `lEqualsA` each tick, so `held('A')` / `pressed('A')` see L as ReadKeys does and ReadKeys itself reads `heldRaw`) and the GBA list menus (LR), the start menu (HELP: its help window), and every field
   window drawn with a user frame: `MenuWindow` defaults to the options' frame through `setUserFrameTypeSource`
   (OverworldScene sets it), multichoices / list menus / the shop pass it themselves; GBA screens get it through
   `menuEnv.windowFrameType` (`configureMenuEnv`, each FieldMenuScene start). Probe: `t.optionMenu()` (loadState: 2
@@ -2371,8 +2385,12 @@ or extend them:
   (special vars 0x8000+, special flags, gStringVar*, gEnemyParty, the Safari ball/step counts, which can't be
   saved anyway since the Safari start menu has no SAVE, and the roamer's location). Other optional warps the save
   keeps: `continueGameWarp` + `specialSaveWarpFlags` (CONTINUE_GAME_WARP), `escapeWarp`. Game stats
-  (`state.gameStats`, Get/Set/IncrementGameStat; only GAME_STAT_ENTERED_HOF and _FIRST_HOF_PLAY_TIME are counted so
-  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8, `gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) since version 9. `fameChecker` (gSaveBlock1Ptr->fameChecker) since version 10. The mail slots (`mail`, world/mail.ts) and a party mon's `mail` since version 11, the quest log's scenes (`questLog`, world/questLog.ts) since version 12, the daycare mons' DayCareMail (`DaycareMon.mail`) since version 13. The Hall of Fame records live apart from the save, like their own flash
+  (`state.gameStats`, Get/Set/IncrementGameStat; every single-player IncrementGameStat of the C is counted where the C
+  does it: STEPS in processPlayerFieldInput, the battles in startTrainerBattle / runWildBattle / the scripted and
+  Marowak battles (specials.ts), SAVED_GAME in the save dialog, the field moves, the Itemfinder, the shop, the
+  ledges, the Safari Zone, fishing, the slots' jackpots, evolutions, the battle script's `incrementgamestat`
+  (Struggle, Splash), and the earlier ones (Pokédex, eggs, rain, the Pokémon Center's script command, the Hall of
+  Fame); not RECEIVED_RIBBONS (no ribbons) or the link-only ones. Test: tests/e2e/gameStatsAndRenewables.test.ts) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8, `gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) since version 9. `fameChecker` (gSaveBlock1Ptr->fameChecker) since version 10. The mail slots (`mail`, world/mail.ts) and a party mon's `mail` since version 11, the quest log's scenes (`questLog`, world/questLog.ts) since version 12, the daycare mons' DayCareMail (`DaycareMon.mail`) since version 13. The Hall of Fame records live apart from the save, like their own flash
   sectors: `state/hallOfFame.ts` (key `HOF_STORAGE_KEY`, versioned), read into `gHofBuffer` (gDecompressionBuffer)
   by LoadHallOfFameSave, written by TrySavingData(SAVE_HALL_OF_FAME) (which also counts GAME_STAT_ENTERED_HOF) and
   erased by SAVE_OVERWRITE_DIFFERENT_FILE.

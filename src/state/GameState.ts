@@ -14,6 +14,7 @@ import { boxMonFromMon, boxMonRestorePP, PokemonStorage } from './PokemonStorage
 import { newTrainerTowerRecord, ResetTrainerTowerResults, type TrainerTowerRecord } from './trainerTowerRecord';
 import { emptyQuestLogScenes, type QuestLogScene } from '../world/questLog';
 import { newFameCheckerSaveData, ResetFameChecker, type FameCheckerSaveData } from './fameChecker';
+import { SetAllRenewableItemFlags } from '../world/renewableHiddenItems';
 
 /**
  * Save-block style game state: event flags, vars, names, options, party, bag, Pokédex.
@@ -237,6 +238,7 @@ export class GameState {
     ResetTrainerTowerResults(this); // NewGameInitData
     this.fameChecker = Array.from({ length: defines.require('NUM_FAMECHECKER_PERSONS') }, newFameCheckerSaveData);
     ResetFameChecker(this, defines.require('FAMECHECKER_OAK')); // NewGameInitData
+    SetAllRenewableItemFlags(this); // NewGameInitData
     // ResetPokemonStorageSystem (NewGameInitData)
     this.storage = new PokemonStorage(
       {

@@ -4738,3 +4738,30 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   trainerBattle, wildBattle, pokemart, pcStorage, questLog, story); the full suite only when a batch finishes a plan
   or changes shared core (the script engine, the tick loop, the battle engine, the save format).
 - Verified: the ten files on master f6644cc, 66 passed in 153 s (story.test.ts is the long pole at 152 s).
+
+### Batch 15 W-small: L=A on the field, the missing GAME_STATs, renewable hidden items (FINISH_PLAN.md units 6, 1)
+
+- M1 (unit 6): the L=A button mode now reaches the field. `input/Input.ts` got ReadKeys' remap (`lEqualsA`:
+  `held('A')` / `pressed('A')` also see L, `heldRaw` stays the keys), set each tick by OverworldScene from
+  `optionsButtonMode`; gba/main.ts's ReadKeys reads `heldRaw`. The help system is untouched: in that mode
+  RunHelpSystemCallback returns at once (help_system_util.c), as the port already did.
+- M1: every single-player IncrementGameStat of the C (grep `IncrementGameStat(` in src/) is now counted: STEPS
+  (ProcessPlayerFieldInput), TOTAL / WILD / TRAINER_BATTLES (DoTrainerBattle in startTrainerBattle; DoStandardWildBattle,
+  StartRoamerBattle and DoGhostBattle in runWildBattle; StartScriptedWildBattle / StartLegendaryBattle in
+  runScriptedWildBattle; StartMarowakBattle), SAVED_GAME (SaveDialogCB_DoSave), USED_CUT (grass and tree),
+  USED_ROCK_SMASH, USED_ITEMFINDER, SHOPPED (BuyMenuSubtractMoney), JUMPED_DOWN_LEDGES (CheckForObjectEventCollision),
+  ENTERED_SAFARI_ZONE, FISHING_CAPTURES, SLOT_JACKPOTS, EVOLVED_POKEMON, and the battle script's `incrementgamestat`
+  (Cmd_incrementgamestat: Struggle, Splash, player side only). Not done: RECEIVED_RIBBONS (the port's mons have no
+  ribbons; GiveLeadMonEffortRibbon is unused in FRLG), the link-only stats. DEVIATIONS lines removed: Itemfinder,
+  Evolution scene, Field moves, Wild encounters, Scripted wild battles, Fishing, Poké Mart, Save dialog, the option
+  menu's L=A, the slots' jackpots.
+- M2 (unit 1): renewable_hidden_items.c as `world/renewableHiddenItems.ts`, its table extracted into
+  constants.json (tools/extract.py). SetAllRenewableItemFlags at new game (GameState's constructor),
+  IncrementRenewableHiddenItemStepCounter next to GAME_STAT_STEPS, TryRegenerateRenewableHiddenItems after the
+  ON_TRANSITION script in onMapLoaded. No save field (Decision 1). Found on the way: postgameSixIsland's and
+  postgameSevenIsland's item sweeps picked up renewable hidden items (Green Path, Outcast Island, the Tanoby Ruins'
+  Heart Scales, the Trainer Tower path's pearls) that a new game now hides, as on the GBA; the tests clear those flags
+  first, as a regeneration would.
+- Verified: typecheck; `npm test` (66 files, 803 tests); e2e: gameStatsAndRenewables (new: L=A on a sign, steps, a
+  save, a wild battle, Cut, the regeneration on Bond Bridge), fieldMoves, itemfinder, pokemart, helpSystem,
+  scriptedBattles, saveContinue, newGame, postgameSixIsland's and postgameSevenIsland's item sweeps.

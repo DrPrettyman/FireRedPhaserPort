@@ -1,5 +1,7 @@
 // Shapes of the JSON written by tools/extract.py.
 
+import type { RenewableHiddenItemData } from '../world/renewableHiddenItems';
+
 export type ConnectionDirection = 'up' | 'down' | 'left' | 'right' | 'dive' | 'emerge';
 
 export interface MapConnection {
@@ -207,6 +209,8 @@ export interface Constants {
   metatileBehaviors: Record<string, number>;
   /** gInitialMovementTypeFacingDirections: MOVEMENT_TYPE_* -> DIR_* */
   initialMovementTypeFacing: Record<string, string>;
+  /** renewable_hidden_items.c's sRenewableHiddenItems (world/renewableHiddenItems.ts) */
+  renewableHiddenItems: RenewableHiddenItemData[];
 }
 
 /** gSpeciesInfo entry + name + level-up learnset (pokemon/species.json, indexed by SPECIES_* id). */

@@ -114,6 +114,7 @@ import { FLOOR_NAMES, type FieldTask } from '../world/elevator';
 import { gFieldCallback, gFieldCallback2, type FieldCallbackHost } from '../menus/fieldCallbacks';
 import { RunMassageCooldownStepCounter } from '../script/miscSpecials';
 import { IncrementBirthIslandRockStepCount } from '../script/eventIslandSpecials';
+import { IncrementRenewableHiddenItemStepCounter, TryRegenerateRenewableHiddenItems } from '../world/renewableHiddenItems';
 import { SetUpFieldTasks, Task_RunPerStepCallback, type PerStepCallbackHost } from '../world/fieldTasks'; // W-sevii
 import { DEOXYS_ROCK_GFX, registerDeoxysRock, setDeoxysRockHost } from '../world/deoxysRock';
 import { UseRegisteredKeyItemOnField } from '../menus/registeredItem';
@@ -1196,6 +1197,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     }
     if (this.tryOnFrameScript()) return true;
     if (input.tookStep) this.state.incrementGameStat(K.GAME_STAT_STEPS);
+    if (input.tookStep) IncrementRenewableHiddenItemStepCounter(this.state);
     if (input.tookStep) RunMassageCooldownStepCounter(this.state);
     if (input.tookStep) IncrementResortGorgeousStepCounter(this.state);
     if (input.tookStep) IncrementBirthIslandRockStepCount(this.state, this.world.current.data.id);
@@ -1905,6 +1907,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       Overworld_ClearSavedMusic(); // before RunOnTransitionMapScript (Cycling Road's sets it again)
       const transition = this.scripts.mapScript(name, 'MAP_SCRIPT_ON_TRANSITION');
       if (transition) this.scripts.runImmediately(transition);
+      TryRegenerateRenewableHiddenItems(this.state); // after RunOnTransitionMapScript
     } else {
       this.state.mapLayoutId = continued.mapLayoutId ?? this.defines.require(cur.data.layoutId); // LoadSaveblockMapHeader
     }

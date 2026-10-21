@@ -1,7 +1,10 @@
 // FINISH_PLAN.md units 6 and 1 (W-small): the L=A button mode on the field (ReadKeys' remap, gba/main.ts and
 // input/Input.ts), the GAME_STAT increments the C does (field_control_avatar.c's GAME_STAT_STEPS, start_menu.c's
-// GAME_STAT_SAVED_GAME, battle_setup.c's battle counts, fldeff_cut.c's GAME_STAT_USED_CUT).
+// GAME_STAT_SAVED_GAME, battle_setup.c's battle counts, fldeff_cut.c's GAME_STAT_USED_CUT), and the renewable hidden
+// items (renewable_hidden_items.c: world/renewableHiddenItems.ts) coming back on a map load after 1500 steps.
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { expect, test } from 'vitest';
 import { useGame, type Game } from './harness';
 
@@ -63,7 +66,7 @@ test('GAME_STAT_STEPS counts every step the player takes; GAME_STAT_SAVED_GAME e
   await game.waitFor((t) => /saved the game/.test(t.message() ?? ''), { what: 'the saved message' });
   expect(await stat(game, 'GAME_STAT_SAVED_GAME')).toBe(saves + 1);
   // ... and the count is in the save (IncrementGameStat runs before TrySavingData)
-  const saved = await game.eval((t) => JSON.parse(localStorage.getItem('firered-phaser:save') ?? 'null'));
+  const saved = await game.eval(() => JSON.parse(localStorage.getItem('firered-phaser:save') ?? 'null'));
   expect(saved.gameStats[await game.eval((t) => t.define('GAME_STAT_SAVED_GAME'))]).toBe(saves + 1);
 });
 
@@ -89,4 +92,52 @@ test('cutting a tree counts GAME_STAT_USED_CUT', async () => {
   await game.press('A');
   await game.mashUntil((t) => t.events().some((e) => e.type === 'fieldMoveShowMon'), { what: 'the show-mon banner' });
   expect(await stat(game, 'GAME_STAT_USED_CUT')).toBe(cuts + 1);
+});
+
+/** constants.json's sRenewableHiddenItems: per map, the rare / uncommon / common hidden ids (0xFF: none). */
+const renewables: { map: string; rare: number[]; uncommon: number[]; common: number[] }[] = JSON.parse(
+  readFileSync(resolve(__dirname, '../../public/gen/constants.json'), 'utf8'),
+).renewableHiddenItems;
+
+test('renewable hidden items: after 1500 steps, walking onto Bond Bridge brings one group back on every table map', async () => {
+  // Three Island's west edge: the connection onto Three Island Bond Bridge (LoadMapFromCameraTransition)
+  const game = await session.start({ start: 'after-rival', map: 'ThreeIsland', x: 3, y: 9 });
+  await game.waitIdle();
+  // A new game hides every renewable item (SetAllRenewableItemFlags)
+  expect(await game.eval((t) => t.flag('FLAG_HIDDEN_ITEM_THREE_ISLAND_BERRY_FOREST_LUM_BERRY'))).toBe(true);
+  expect(await game.eval((t) => t.flag('FLAG_HIDDEN_ITEM_THREE_ISLAND_BOND_BRIDGE_PEARL'))).toBe(true);
+  // Steps count VAR_RENEWABLE_ITEM_STEP_COUNTER (IncrementRenewableHiddenItemStepCounter)
+  await game.eval((t) => t.walk('down', 1));
+  await game.waitIdle();
+  expect(await game.eval((t) => t.var('VAR_RENEWABLE_ITEM_STEP_COUNTER'))).toBe(1);
+  // Three Island isn't in the table: walking there at 1500 changes nothing
+  await game.eval((t) => t.state!.setVar('VAR_RENEWABLE_ITEM_STEP_COUNTER', 1500));
+  await game.eval((t) => t.walk('up', 1));
+  await game.waitIdle();
+  expect(await game.eval((t) => t.var('VAR_RENEWABLE_ITEM_STEP_COUNTER'))).toBe(1500);
+
+  // Onto Bond Bridge: the map load regenerates (TryRegenerateRenewableHiddenItems) and resets the counter
+  const map = await game.eval(async (t) => {
+    t.holdWhile('LEFT', () => t.field()!.map === 'ThreeIsland');
+    await t.until(() => t.field()!.map !== 'ThreeIsland', 600);
+    return t.field()!.map;
+  });
+  expect(map).toBe('ThreeIsland_BondBridge');
+  expect(await game.eval((t) => t.var('VAR_RENEWABLE_ITEM_STEP_COUNTER'))).toBeLessThanOrEqual(1);
+  const start = await game.eval((t) => t.define('FLAG_HIDDEN_ITEMS_START'));
+  const flags = await game.eval((t, ids: number[]) => ids.map((id) => t.state!.getFlag(id)), renewables.flatMap((e) => [...e.rare, ...e.uncommon, ...e.common]).map((id) => start + id));
+  let k = 0;
+  for (const e of renewables) {
+    const groups = [e.rare, e.uncommon, e.common];
+    const hidden = new Map<number, boolean>();
+    for (const g of groups) for (const id of g) hidden.set(id, flags[k++]);
+    // Exactly the ids of one group are visible again (SampleRenewableItemFlags)
+    const visible = [...hidden].filter(([id, h]) => id !== 0xff && !h).map(([id]) => id).sort();
+    const fits = groups.some((g) => JSON.stringify([...new Set(g.filter((id) => id !== 0xff))].sort()) === JSON.stringify(visible));
+    expect(fits, `${e.map}: visible ${visible}`).toBe(true);
+  }
+  // Berry Forest has items in every group: some always come back
+  const berryForest = renewables.find((e) => e.map === 'MAP_THREE_ISLAND_BERRY_FOREST')!;
+  const back = await game.eval((t, ids: number[]) => ids.filter((id) => id !== 0xff && !t.state!.getFlag(t.define('FLAG_HIDDEN_ITEMS_START') + id)).length, [...berryForest.rare, ...berryForest.uncommon, ...berryForest.common]);
+  expect(back).toBeGreaterThan(0);
 });

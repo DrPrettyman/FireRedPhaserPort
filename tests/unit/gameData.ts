@@ -10,6 +10,7 @@ import { PokemonData, readPokemonConstants } from '../../src/pokemon/Pokemon';
 import { Defines } from '../../src/script/Defines';
 import { GameState } from '../../src/state/GameState';
 import { initEasyChatData, type EasyChatData } from '../../src/menus/easyChatData';
+import { initRenewableHiddenItems } from '../../src/world/renewableHiddenItems';
 import { Charmap, type CharmapData } from '../../src/text/charmap';
 
 const PUBLIC = resolve(__dirname, '../../public');
@@ -48,6 +49,7 @@ function gameData(): GameData {
     tables: readGen('pokemon/tables.json'),
     strings: readGen('text/strings.json'),
   };
+  initRenewableHiddenItems(data.constants.renewableHiddenItems); // Assets.init, before any GameState
   return data;
 }
 

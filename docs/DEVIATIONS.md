@@ -60,6 +60,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     player's palette as it is at load (the GBA's OBJ palette 0, faded with the field); DestroyArrowAndStarTiles
     frees nothing (the texture stays; no sprite is out by then). Before EventScript_ItemfinderDigUpUnderfootItem,
     ScriptContext_SetupScript hands the task's lock to the running script instead of locking again.
+  - Renewable hidden items (world/renewableHiddenItems.ts): a save made before they were ported (batch 15) keeps its
+    renewable flags as they were (the items not picked up yet stay findable) until the first regeneration; no save
+    upgrade runs SetAllRenewableItemFlags on it (FINISH_PLAN.md decision 1).
   - Raise-hand movement types (entities/NpcBrain.ts, MOVEMENT_TYPE_RAISE_HAND_AND_*): leaving one zeroes the
     sprite's x2/y2 (the GBA keeps them unless ResetMovementOfRematchableTrainers zeroes them); a frozen jumper
     (any, not only `lock`'s selected object) lands before it holds still.
