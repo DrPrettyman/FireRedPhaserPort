@@ -5,12 +5,14 @@
 //
 // Not saved, as on the GBA: EWRAM state (gEnemyParty, gBattleOutcome, gStringVar*, special vars 0x8000+,
 // special flags 0x4000+, gNumSafariBalls / gSafariZoneStepCounter, the roamer's location, sPCBoxToSendMon).
-// Before saving, the field writes the player's position into state.location (OverworldScene.storeLocationForSave).
+// Before saving, the field writes the player's position into state.location, and the current map's objects,
+// templates and map view (SaveObjectEvents, SaveMapView) beside it (OverworldScene.storeLocationForSave).
 
 import type { Pokemon } from '../pokemon/Pokemon';
 import type { TextSpeed } from '../text/TextPrinter';
 import type { ItemSlot } from './Bag';
-import type { GameState, PlayerLocation, RoamerSave, WarpData } from './GameState';
+import type { GameState, PlayerLocation, RoamerSave, SavedObjectEventTemplate, WarpData } from './GameState';
+import type { QuestLogObjectEvent } from '../world/questLogObjects';
 import type { PlayTime } from './playTime';
 import type { BoxPokemon } from './PokemonStorage';
 import type { DayCareMail, DaycareMon } from '../world/daycare';
@@ -24,9 +26,10 @@ import type { Mail } from '../world/mail';
  * are brought up to date by `upgradeSave` (version 1 had no gameStats, version 2 no options.sound, version 3 had
  * daycareStepCounter instead of daycare and no route5DayCareMon, version 4 no easyChat, version 5 no savedMusic,
  * version 6 no weather, version 7 no trainerTower, version 8 no gcnLinkFlags, version 9 no fameChecker,
- * version 10 no mail, version 11 no questLog, version 12 no daycare mail).
+ * version 10 no mail, version 11 no questLog, version 12 no daycare mail, version 13 no objectEvents,
+ * objectEventTemplates or mapView).
  */
-export const SAVE_VERSION = 13;
+export const SAVE_VERSION = 14;
 
 /** The localStorage key of the one save slot. */
 export const SAVE_STORAGE_KEY = 'firered-phaser:save';
@@ -105,12 +108,21 @@ export interface SaveData {
   /** struct Pokedex: seen / caught national dex numbers, ascending; nationalMagic as a flag. */
   pokedex: { seen: number[]; caught: number[]; nationalDexEnabled: boolean };
   specialSaveWarpFlags: number;
+  /** gSaveBlock2Ptr->mapView (SaveMapView; GameState.mapView); since version 14. */
+  mapView?: number[];
   /** gSaveBlock2Ptr->gcnLinkFlags (SetUnlockedPokedexFlags, SetPostgameFlags); since version 9. */
   gcnLinkFlags: number;
 
   // ---- gSaveBlock1
   /** location + pos + the player object (absent if the field never stored one). */
   location?: PlayerLocation;
+  /**
+   * gSaveBlock1Ptr->objectEvents (SaveObjectEvents): the current map's objects but the player (GameState.objectEvents);
+   * since version 14. Absent in an older save: CONTINUE spawns the map's objects from their templates.
+   */
+  objectEvents?: QuestLogObjectEvent[];
+  /** gSaveBlock1Ptr->objectEventTemplates: the current map's, without scripts (GameState.objectEventTemplates); since version 14. */
+  objectEventTemplates?: SavedObjectEventTemplate[];
   continueGameWarp?: WarpData;
   dynamicWarp?: WarpData;
   lastHealLocation?: { map: string; x: number; y: number };
@@ -247,8 +259,11 @@ export function toSaveData(state: GameState): SaveData {
       nationalDexEnabled: state.nationalDexEnabled,
     },
     specialSaveWarpFlags: state.specialSaveWarpFlags,
+    mapView: clone(state.mapView),
     gcnLinkFlags: state.gcnLinkFlags,
     location: clone(state.location),
+    objectEvents: clone(state.objectEvents),
+    objectEventTemplates: clone(state.objectEventTemplates),
     continueGameWarp: clone(state.continueGameWarp),
     dynamicWarp: clone(state.dynamicWarp),
     lastHealLocation: clone(state.lastHealLocation),
@@ -295,7 +310,7 @@ export function toSaveData(state: GameState): SaveData {
     },
   };
   // Optional fields the state doesn't have are left out rather than written as undefined.
-  for (const k of ['location', 'continueGameWarp', 'dynamicWarp', 'lastHealLocation', 'escapeWarp'] as const) {
+  for (const k of ['mapView', 'location', 'objectEvents', 'objectEventTemplates', 'continueGameWarp', 'dynamicWarp', 'lastHealLocation', 'escapeWarp'] as const) {
     if (data[k] === undefined) delete data[k];
   }
   return data;
@@ -328,7 +343,10 @@ export function fromSaveData(data: SaveData, state: GameState): GameState {
   state.specialSaveWarpFlags = data.specialSaveWarpFlags;
   state.gcnLinkFlags = data.gcnLinkFlags;
 
+  state.mapView = clone(data.mapView);
   state.location = clone(data.location);
+  state.objectEvents = clone(data.objectEvents);
+  state.objectEventTemplates = clone(data.objectEventTemplates);
   state.continueGameWarp = clone(data.continueGameWarp);
   state.dynamicWarp = clone(data.dynamicWarp);
   state.lastHealLocation = clone(data.lastHealLocation);
@@ -412,6 +430,9 @@ export function upgradeSave(data: SaveData): SaveData {
     const mail = data.mail?.map((m, i) => (i < 6 && m.itemId !== 0 && !held.has(i) ? { ...m, itemId: 0 } : m));
     data = { ...data, version: 13, ...(mail && { mail }) };
   }
+  // No objects, templates or map view: CONTINUE spawns the saved map's objects from the header's templates and
+  // leaves its grid as the layout and ON_LOAD make it (what it did before version 14).
+  if (data?.version === 13) data = { ...data, version: 14 };
   return data;
 }
 

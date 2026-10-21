@@ -2391,6 +2391,8 @@ or extend them:
   ledges, the Safari Zone, fishing, the slots' jackpots, evolutions, the battle script's `incrementgamestat`
   (Struggle, Splash), and the earlier ones (Pokédex, eggs, rain, the Pokémon Center's script command, the Hall of
   Fame); not RECEIVED_RIBBONS (no ribbons) or the link-only ones. Test: tests/e2e/gameStatsAndRenewables.test.ts) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8, `gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) since version 9. `fameChecker` (gSaveBlock1Ptr->fameChecker) since version 10. The mail slots (`mail`, world/mail.ts) and a party mon's `mail` since version 11, the quest log's scenes (`questLog`, world/questLog.ts) since version 12, the daycare mons' DayCareMail (`DaycareMon.mail`) since version 13. The Hall of Fame records live apart from the save, like their own flash
+  (`state.gameStats`, Get/Set/IncrementGameStat; only GAME_STAT_ENTERED_HOF and _FIRST_HOF_PLAY_TIME are counted so
+  far) are in the save since version 2; `savedMusic` (gba/overworldMusic.ts) since version 6, the Trainer Tower records (`trainerTower`) since version 8, `gcnLinkFlags` (gSaveBlock2Ptr->gcnLinkFlags) since version 9. `fameChecker` (gSaveBlock1Ptr->fameChecker) since version 10. The mail slots (`mail`, world/mail.ts) and a party mon's `mail` since version 11, the quest log's scenes (`questLog`, world/questLog.ts) since version 12, the daycare mons' DayCareMail (`DaycareMon.mail`) since version 13, the current map's object events, templates and map view (`objectEvents`, `objectEventTemplates`, `mapView`: see "Saving and continuing") since version 14. The Hall of Fame records live apart from the save, like their own flash
   sectors: `state/hallOfFame.ts` (key `HOF_STORAGE_KEY`, versioned), read into `gHofBuffer` (gDecompressionBuffer)
   by LoadHallOfFameSave, written by TrySavingData(SAVE_HALL_OF_FAME) (which also counts GAME_STAT_ENTERED_HOF) and
   erased by SAVE_OVERWRITE_DIFFERENT_FILE.
@@ -2421,6 +2423,26 @@ or extend them:
   (the harness boots with `?skipIntro`, so no title screen first).
   Probes: `t.startMenu()` (items, cursor), `t.saveDialog()` (yesNo, statsWindow, the stats as text),
   `t.mainMenu()` (menuType, cursorPos, fading, the CONTINUE values as text).
+  **The field in the save (version 14):** `storeLocationForSave()` also writes SaveObjectEvents
+  (`state.objectEvents`: the current map's NPCs as gObjectEvents entries through `npcObjectEvent` =
+  world/questLogObjects.ts' questLogObjectEventFrom, the conversion the quest log's snapshot uses; the player's entry
+  is `location`), the current map's templates (`state.objectEventTemplates`: `templatesFor(cur)` without the scripts,
+  i.e. gSaveBlock1Ptr->objectEventTemplates with the setobjectxyperm / copyobjectxytoperm / setobjectmovementtype /
+  VS Seeker edits) and SaveMapView (`state.mapView`: the 15 x 14 grid values from map-local (x - 7, y - 7), row by
+  row, 0 outside the map). CONTINUE's saved-map load (enterSavedField's non-warp branch, also the quest log's final
+  scene) sets `continueMapLoad = saveblockMapLoad(loc)`, whose three steps onMapLoaded calls: `templates()` after
+  the header's templates are copied (the saved ones with the header's scripts: LoadSaveblockObjEventScripts),
+  `mapView()` between initMapLayout and ON_LOAD (LoadSavedMapView, then ClearSavedMapView), `objects()` after
+  syncNpcsWithLoadedMaps has spawned from those templates (`loadObjectEvents`: LoadObjectEvents' positions, facing,
+  movement type, visibility and the ground effect / anim bits; an object the templates don't spawn, shown with
+  `addobject` over its hide flag, is spawned as `addobject` does). Each step checks the map is the saved one; a
+  save without the fields (version 13 and older) loads the header's templates and objects as before. The quest log's
+  scene loads pass a location too but no `continueMapLoad` (QL_LoadMapNormal's InitMap and
+  LoadObjEventTemplatesFromHeader), and the continue-game warp (UseContinueGameWarp) loads the map as a warp does.
+  Test: tests/e2e/continueObjects.test.ts (Victory Road 1F's boulder on the switch at (20, 16) from (20, 14) and
+  another moved boulder; Pokémon Tower 1F from (4, 10): `setobjectxy` + `turnobject`, `setobjectxyperm`,
+  `setobjectmovementtype`, a `setmetatile` inside the saved view and one outside it; leaving and re-entering brings
+  the header's templates back), tests/unit/saveData.test.ts (the round trip, version 13).
   Scripted save prompts: `special Field_AskSaveTheGame` (EventScript_AskSaveGame + `waitstate`) runs the same
   dialog through `ScriptHost.createSaveDialog()` (OverworldScene) as the special's wait state (task50_save_game):
   VAR_RESULT TRUE once saved, FALSE for NO/B or a failed write; the message box is left as is. Users: the cable

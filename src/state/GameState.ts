@@ -15,6 +15,8 @@ import { newTrainerTowerRecord, ResetTrainerTowerResults, type TrainerTowerRecor
 import { emptyQuestLogScenes, type QuestLogScene } from '../world/questLog';
 import { newFameCheckerSaveData, ResetFameChecker, type FameCheckerSaveData } from './fameChecker';
 import { SetAllRenewableItemFlags } from '../world/renewableHiddenItems';
+import type { QuestLogObjectEvent } from '../world/questLogObjects';
+import type { ObjectEventData } from '../data/types';
 
 /**
  * Save-block style game state: event flags, vars, names, options, party, bag, Pokédex.
@@ -59,6 +61,25 @@ export class GameState {
    * pos current on every step, the field writes this only when saving (`OverworldScene.storeLocationForSave`).
    */
   location?: PlayerLocation;
+  /**
+   * gSaveBlock1Ptr->objectEvents as the last save left them (SaveObjectEvents, written with `location` by
+   * `OverworldScene.storeLocationForSave`): the current map's objects in the C's struct ObjectEvent fields
+   * (world/questLogObjects.ts' questLogObjectEventFrom); the player's entry is `location`. CONTINUE puts them back
+   * (LoadObjectEvents). The live objects are the field's.
+   */
+  objectEvents?: QuestLogObjectEvent[];
+  /**
+   * gSaveBlock1Ptr->objectEventTemplates as the last save left them: the current map's templates with the scripts'
+   * edits (setobjectxyperm, copyobjectxytoperm, setobjectmovementtype), without their scripts (CONTINUE's
+   * LoadSaveblockObjEventScripts takes the header's). The live ones are the field's (`OverworldScene.templates`).
+   */
+  objectEventTemplates?: SavedObjectEventTemplate[];
+  /**
+   * gSaveBlock2Ptr->mapView (SaveMapView): the map grid values of the MAP_OFFSET_W x MAP_OFFSET_H (15 x 14) cells
+   * from gSaveBlock1Ptr->pos, row by row (map-local x - 7 .. x + 7, y - 7 .. y + 6 around `location`; 0 outside
+   * the map). CONTINUE writes them back before ON_LOAD (LoadSavedMapView) and clears it (ClearSavedMapView).
+   */
+  mapView?: number[];
   /** gSaveBlock1Ptr->trainerRematches, by local id: set by the VS Seeker (not implemented yet). */
   trainerRematches: number[] = [];
   /** gSaveBlock1Ptr->trainerRematchStepCounter: low byte = steps with the VS Seeker in the bag, high byte = charging steps. */
@@ -466,6 +487,9 @@ export interface PlayerLocation {
   /** gSaveBlock1Ptr->mapLayoutId, stored with the location (absent: the header's layout). */
   mapLayoutId?: number;
 }
+
+/** A gSaveBlock1Ptr->objectEventTemplates entry as the save keeps it: the template without its script. */
+export type SavedObjectEventTemplate = Omit<ObjectEventData, 'script'>;
 
 /** struct Roamer */
 export interface RoamerSave {
