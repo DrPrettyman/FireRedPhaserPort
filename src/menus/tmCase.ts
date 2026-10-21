@@ -5,7 +5,7 @@
 // and back from teaching a move (TMCASE_REOPENING). USE hands over to the party menu (ItemUseCB_TMHM), which comes
 // back here through CB2_ReturnToTMCaseMenu. The Pokédude's Teachy TV demo (TMCASE_POKEDUDE, Pokedude_InitTMCase: his
 // four TMs over the player's TM case and key items, scrolled by Task_Pokedude_Run, then back to Teachy TV). Not
-// ported: the Union Room's GIVE / EXIT menu (no link play), the quest log (RecordItemTransaction) and SEs.
+// ported: the Union Room's GIVE / EXIT menu (no link play) and SEs.
 
 import { K } from '../battle/constants';
 import { gBattleMoves, state } from '../battle/env';
@@ -132,6 +132,7 @@ import { PrintMoneyAmount, PrintMoneyAmountInMoneyBox, PrintMoneyAmountInMoneyBo
 import { CB2_ChooseMonToGiveItem, CB2_GiveHoldItem, CB2_ShowPartyMenuForItemUse, ItemIdToBattleMoveId, ItemUseCB_TMHM, setItemUseCB } from './partyMenu';
 import { CB2_ReturnToPokeStorage } from './pokemonStorage';
 import { CB2_ReturnToTeachyTV, SetTeachyTvControllerModeToResume } from './teachyTv';
+import { RecordItemTransaction } from './shopQuestLog';
 
 // Values for InitTMCase's `type` (include/tm_case.h)
 export const TMCASE_FIELD = 0;
@@ -996,7 +997,7 @@ function Task_DoSaleOfTMs(taskId: number): void {
   PlaySE(K.SE_SHOP);
   RemoveBagItem(SpecialVar.ItemId, data[tQuantitySelected]);
   state.addMoney(Math.trunc(ItemId_GetPrice(SpecialVar.ItemId) / 2) * data[tQuantitySelected]);
-  // RecordItemTransaction(..., QL_EVENT_SOLD_ITEM): the quest log isn't ported
+  RecordItemTransaction(SpecialVar.ItemId, data[tQuantitySelected], K.QL_EVENT_SOLD_ITEM - K.QL_EVENT_USED_POKEMART);
   destroyList(taskId);
   TMCaseSetup_GetTMCount();
   TMCaseSetup_InitListMenuPositions();

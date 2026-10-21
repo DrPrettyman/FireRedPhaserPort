@@ -4,7 +4,8 @@
 // CB2_EndTrainerBattle), and a won or caught wild battle as QL_EVENT_DEFEATED_WILD_MON (counted into the scene's one
 // wild battle record). TrySetQuestLogLinkBattleEvent sends the link battles (no callers until link play).
 //
-// QL4 adds the calls in battle/ (QUEST_LOG_PLAN.md); questLogEventCodecs2.ts has the events' codecs.
+// battle/main.ts's HandleEndTurn_FinishBattle calls TrySetQuestLogBattleEvent (QL4b); questLogEventCodecs2.ts has the
+// events' codecs.
 
 import { K } from '../battle/constants';
 import { bdata, g } from '../battle/env';

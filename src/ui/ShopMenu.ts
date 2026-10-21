@@ -3,6 +3,7 @@ import { K } from '../battle/constants';
 import { PlaySE } from '../gba/sound';
 import type { Input } from '../input/Input';
 import { GetMartFontId, GetMartTypeFromItemList, MART_TYPE_REGULAR, SetShopItemsForSale, sShopData } from '../menus/shop';
+import { RecordTransactionForQuestLog, ResetShopHistory } from '../menus/shopQuestLog';
 import { FONT_MALE, FONT_NORMAL, type Fonts } from '../text/Font';
 import type { TextColor } from '../text/MessageBox';
 import { Menu } from './Menu';
@@ -60,6 +61,7 @@ export class ShopMenu {
     SetShopItemsForSale(items);
     this.CreateShopMenu(MART_TYPE_REGULAR);
     sShopData.callback = () => (this.done = true); // ScriptContext_Enable
+    ResetShopHistory(); // memset(&sHistory, 0, ...), both entries' mapSec
   }
 
   /** One frame; true once the shop has closed. */
@@ -113,7 +115,7 @@ export class ShopMenu {
 
   private Task_HandleShopMenuQuit(): void {
     this.ClearShopMenuWindow();
-    // RecordTransactionForQuestLog: the quest log isn't implemented
+    RecordTransactionForQuestLog();
     sShopData.callback?.();
   }
 

@@ -1,7 +1,7 @@
 // shop.c + buy_menu_helpers.c: the Poké Mart's buy menu on the GBA layer, and the shop state the field
 // side (ui/ShopMenu.ts: CreateShopMenu, Task_ShopMenu and the return to the field) shares with it.
-// SELL is the bag (item_menu.c, ITEMMENULOCATION_SHOP). The quest log's transaction history
-// (RecordItemTransaction) and GAME_STAT_SHOPPED aren't kept.
+// SELL is the bag (item_menu.c, ITEMMENULOCATION_SHOP). The quest log's transaction history (sHistory,
+// RecordItemTransaction) is menus/shopQuestLog.ts. GAME_STAT_SHOPPED isn't kept.
 
 import { K } from '../battle/constants';
 import { state } from '../battle/env';
@@ -87,6 +87,7 @@ import {
   strBody,
   text,
 } from './common';
+import { RecordItemTransaction } from './shopQuestLog';
 import { CB2_ReturnToField } from './fieldCallbacks';
 import { GoToBagMenu } from './itemMenu';
 import { CreateItemMenuIcon, DestroyItemMenuIcon, itemIconSymbols, ResetItemMenuIconState } from './itemMenuIcons';
@@ -757,6 +758,7 @@ function BuyMenuTryMakePurchase(taskId: number): void {
   PutWindowTilemap(4);
   if (state.bag.add(data[tItemId], data[tItemCount])) {
     BuyMenuDisplayMessage(taskId, text('gText_HereYouGoThankYou'), BuyMenuSubtractMoney);
+    RecordItemTransaction(data[tItemId], data[tItemCount], K.QL_EVENT_BOUGHT_ITEM - K.QL_EVENT_USED_POKEMART);
   } else {
     BuyMenuDisplayMessage(taskId, text('gText_NoMoreRoomForThis'), BuyMenuReturnToItemList);
   }

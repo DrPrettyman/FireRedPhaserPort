@@ -33,6 +33,7 @@ import { Overworld_ChangeMusicToDefault, Overworld_SetSavedMusic } from '../gba/
 import { gStringVar4 } from '../menus/common';
 import { QL_FinishRecordingScene } from '../world/questLog';
 import { QuestLog_RecordEnteredMap, QuestLogEvents_HandleEndTrainerBattle } from '../world/questLogEvents';
+import { TrySetObtainedItemQuestLogEvent } from '../world/questLogStoryItem';
 
 export interface ScriptsData {
   code: Instruction[];
@@ -1255,8 +1256,10 @@ export class ScriptEngine {
 
     // ------------------------------------------------ items
     additem(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
-      const ok = this.state.bag.add(this.state.value(a[0]), this.state.value(a[1] ?? '1'));
+      const itemId = this.state.value(a[0]);
+      const ok = this.state.bag.add(itemId, this.state.value(a[1] ?? '1'));
       this.state.setVar('VAR_RESULT', ok ? 1 : 0);
+      TrySetObtainedItemQuestLogEvent(itemId);
     },
     removeitem(this: ScriptEngine, _ctx: ScriptContext, a: string[]) {
       const ok = this.state.bag.remove(this.state.value(a[0]), this.state.value(a[1] ?? '1'));

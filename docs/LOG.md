@@ -4599,6 +4599,32 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   with its 62 frames from rod out to put away, the VS Seeker with Task_QLVSSeekerMovement a frame after the effect
   ends; each recorded, saved and played back on CONTINUE), escalator.test.ts, questLog.test.ts, playerAvatar.test.ts,
   fieldItems.test.ts, vsSeeker.test.ts, surf.test.ts: all pass (43).
+### QL4b: the quest log's menu-side calls (batch 14, W-ql4b)
+
+- Every QL4b entry point now has the C's caller: shop.c's transaction history is `menus/shopQuestLog.ts`
+  (sHistory, RecordItemTransaction, RecordTransactionForQuestLog), reset by ui/ShopMenu.ts as the mart opens
+  (CreatePokemartMenu) and sent on SEE YA! (Task_HandleShopMenuQuit); BuyMenuTryMakePurchase and the three SELL
+  paths (item_menu.c's Task_FinalizeSaleToShop, tm_case.c's Task_DoSaleOfTMs, berry_pouch.c's
+  Task_SellBerries_PlaySfxAndRemoveBerries) record into it. SetUsedPkmnCenterQuestLogEvent is real. item.c's
+  TrySetObtainedItemQuestLogEvent is `world/questLogStoryItem.ts`, from `additem` (ScrCmd_additem); its 20 items
+  are questLog.json's new `storyItems` (tools/extract_quest_log.py reads the C's condition). battle/main.ts's
+  HandleEndTurn_FinishBattle calls TrySetQuestLogBattleEvent; CB2_EndTrainerBattle's three
+  QuestLogEvents_HandleEndTrainerBattle calls were already in (ScriptEngine.endTrainerBattle). slot_machine.c's
+  SetQLPlayedTheSlots is called as the reels start.
+- On the way: the shop history lives apart from shop.ts because shop.ts imports the bag (an import cycle
+  otherwise), and its empty entry can't read `K` at module load (the constants fill in later). No bugs found in
+  questLogEvents.ts / questLogBattle.ts; their comments that said "QL4 calls it" now name the callers.
+- Not done here (QL5): a trainer who sees the player in playback runs his approach script, whose message waits for
+  a key until the auto-scroll and `goto_if_questlog` (EventScript_EndQuestLogBattle) are ported; so the e2e test
+  records Rick's battle in a scene of its own (it starts after the battle: Rick is beaten in its playback).
+- DEVIATIONS: the nurse's, the TM case's, the berry pouch's, the Poké Mart's and the slot machine's "no quest log"
+  and the quest log entry's QL4b sentence are gone.
+- Verified: typecheck; unit 779 passed (new tests/unit/questLogMenus.test.ts: the history's merge / caps / half
+  price, BOUGHT then SOLD, the story items and the Town Map rule); e2e: new tests/e2e/questLogMenus.test.ts 5
+  passed (a mart's BUY and SELL from the TM case, the berry pouch and the bag; the nurse; Oak's Parcel; Rick and a
+  wild Rattata after the Hall of Fame; the slots and the Game Corner's exit, each played back on CONTINUE to its
+  line), questLog, pokemart, tmCase, berryPouch, gameCorner, trainerBattle 31 passed, fameChecker's Brock test (a
+  gym leader's battle is now a scene that CONTINUE plays) passed.
 ### Stale DEVIATIONS entries removed
 
 - An audit of what's left to port (decomp files against the port, DEVIATIONS.md, the script coverage gaps) found
