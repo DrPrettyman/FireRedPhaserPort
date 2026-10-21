@@ -11,6 +11,7 @@
     "test": "vitest run --project unit",
     "test:watch": "vitest --project unit",
     "test:e2e": "vitest run --project e2e",
+    "test:e2e:smoke": "vitest run --project e2e tests/e2e/newGame.test.ts tests/e2e/saveContinue.test.ts tests/e2e/field.test.ts tests/e2e/fieldMoves.test.ts tests/e2e/trainerBattle.test.ts tests/e2e/wildBattle.test.ts tests/e2e/pokemart.test.ts tests/e2e/pcStorage.test.ts tests/e2e/questLog.test.ts tests/e2e/story.test.ts",
     "test:all": "vitest run"
   },
   "description": "FireRed rebuilt in Phaser, with assets extracted from a local pret/firered decomp",

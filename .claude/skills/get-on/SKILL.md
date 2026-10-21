@@ -64,8 +64,9 @@ A permission a sub-coordinator or worker was denied is never yours to retry: sto
 > 3. Start workers (section 2) in the background, one unit each, and run section 2's watchdog. How many at once (at
 >    most four) is your estimate from the work and the machine load (section 1). When a worker hands back with
 >    units left, start a continuation worker on the same branch. Workers don't start agents of their own.
-> 4. Merge their PRs (section 4: typecheck, unit tests and each PR's own e2e files per merge; the full e2e suite
->    exactly once, at the end; workers never run it), cleaning up each branch and worktree right after its merge.
+> 4. Merge their PRs (section 4: typecheck, unit tests and each PR's own e2e files per merge; at the end, the
+>    smoke set, or the full e2e suite once if the batch finishes a plan or changes shared core; workers never run
+>    either), cleaning up each branch and worktree right after its merge.
 >    Then the docs-only STATUS/LOG PR, then pull the main checkout if it's clean, then section 4's end-of-batch
 >    check.
 >

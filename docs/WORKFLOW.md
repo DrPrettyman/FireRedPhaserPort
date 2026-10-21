@@ -100,8 +100,8 @@ free port, so parallel runs don't clash.
 > workers running now: *(one line each)*; avoid their areas.
 >
 > Tests: typecheck, `npm test`, your own e2e file `tests/e2e/<name>.test.ts` covering *(scenarios)*, plus
-> *(the named e2e files your shared changes touch, at most a handful)*. Never the full e2e suite: the merger runs
-> it once at the end of the batch.
+> *(the named e2e files your shared changes touch, at most a handful)*. Never the smoke set or the full e2e suite: the
+> merger runs those at the end of the batch.
 >
 > When your unit is done: push, open the PR with `gh pr create --draft` (or update it), summary, shared files
 > touched, what's not done. If you get a "Checkpoint" message, follow it. Your final message: the PR URL, the
@@ -115,8 +115,8 @@ free port, so parallel runs don't clash.
 - **Only change what you own.** Keep shared changes small and list them in the PR. Don't build a shared building
   block another workstream owns; leave a stub or a TODO and say so in the PR.
 - **Tests:** typecheck, `npm test`, your own e2e file, and the few named e2e files that cover shared code you
-  change. **Never run the full e2e suite** (~20 minutes; workers running it is what made batches slow): the merger
-  runs it once at the end of the batch, and fixes or hands back what it finds. Not even for a change that lengthens
+  change. **Never run the smoke set or the full e2e suite** (workers running the full suite is what made batches
+  slow): the merger runs them at the end of the batch, and fixes or hands back what it finds. Not even for a change that lengthens
   waits: pick the e2e files whose scenarios go through it (grep tests/e2e for the function or script command).
 - **A test that fails and then passes on a rerun has a race. Fix it, or name it in the PR as unfixed.** Never
   write it off as "parallel load": load only exposes races that are already there. tests/README.md ("Writing a new
@@ -144,9 +144,14 @@ the PRs whose workstream is finished (not drafts). On top of that:
 
 - **Tests per merge: typecheck, unit tests and the PR's own e2e files.** Not the full e2e suite, even when the
   PR touches shared code: pick the named e2e files that cover what it touches. Docs-only PRs: no tests.
-- **The full e2e suite runs once per batch,** at the end, on master with everything merged, before the STATUS PR,
-  and only if the batch changed code. If something fails there, fix it and rerun only the failing files, not the
-  suite. Say in the LOG entry which runs you did.
+- **At the end of the batch, the smoke set** (`npm run test:e2e:smoke`: ten main-path files, the new game, save /
+  CONTINUE, the field, field moves, trainer and wild battles, the mart, PC storage, the quest log, a story stretch;
+  ~3 min), on master with everything merged, before the STATUS PR, and only if the batch changed code.
+- **The full e2e suite (~35 min) only at a milestone:** the batch finishes a plan, or it changed shared core (the
+  script engine, the tick loop, the battle engine, the save format). It replaces the smoke set then. The last five
+  full runs found almost only test races and one real break, at 20-35 minutes of four headless Chromes each.
+- Either way: if something fails, fix it and rerun only the failing files, not the set. Say in the LOG entry which
+  runs you did and why (smoke, or full and which milestone).
 - **Cleaning up a merged PR.** Right after each `gh pr merge` (code PRs and docs-only ones alike):
 
   ```sh
@@ -178,7 +183,7 @@ the PRs whose workstream is finished (not drafts). On top of that:
   git reset --hard && git switch <branch> && git merge --ff-only $C
   ```
 
-- **The full e2e suite takes ~20 minutes,** longer than a foreground shell command may run. Run it in the
+- **The full e2e suite takes ~35 minutes,** longer than a foreground shell command may run. Run it in the
   background with its output to a file, and read the failures from the file.
 - **A test that fails in a merge or end-of-batch run:** rerun its file alone. If it passes, it's a race: find it and fix it (in the
   PR branch, with a commit saying what it was) rather than rerunning the suite until it's green. Add the cause to

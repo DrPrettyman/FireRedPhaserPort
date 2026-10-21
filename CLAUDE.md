@@ -10,9 +10,10 @@ FireRed rebuilt in Phaser 3 + TypeScript (Vite). See README.md for setup and arc
 - Game logic ticks at a fixed 60 Hz (`OverworldScene.tick`), so express timings in GBA frames.
 - Coordinates: entities use world tile coordinates; map-local = world - chunk origin.
 - Verify with `npm run typecheck`, `npm test` (unit) and `npm run test:e2e` (headless playthroughs; see tests/README.md).
-  **The full e2e suite (~20 min) runs once per batch, at the end, not per change or per PR.** For a change, run only
-  the e2e files that cover it (`npx vitest run tests/e2e/<file>.test.ts`); for docs-only
-  changes, none. docs/WORKFLOW.md sections 3-4 have the rule.
+  **For a change, run only the e2e files that cover it** (`npx vitest run tests/e2e/<file>.test.ts`); for docs-only
+  changes, none. At the end of a batch, the smoke set (`npm run test:e2e:smoke`, ~3 min). **The full e2e suite
+  (~35 min) only at milestones:** a plan finished, or a batch that changed shared core (the script engine, the tick
+  loop, the battle engine, the save format). docs/WORKFLOW.md sections 3-4 have the rule.
   When you check a mechanic at runtime, prefer writing it as an e2e test (tests/e2e/) over a one-off script, so it keeps
   being checked. For quick looks: `?map=Name&x=&y=`, `?start=after-rival` (story preset), `window.game` / `window.__test`
   in dev, and `tools/browser-test.mjs`.

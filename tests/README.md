@@ -3,7 +3,8 @@
 ```
 npm test            # unit tests (Node, ~1 s)
 npm run test:watch  # unit tests, re-run on save
-npm run test:e2e    # the real game in headless Chrome (~20 s)
+npm run test:e2e    # the real game in headless Chrome, every file (~35 min)
+npm run test:e2e:smoke  # ten main-path e2e files (~3 min): the end-of-batch check
 npm run test:all    # both
 npx vitest run tests/e2e/trainerBattle.test.ts -t "losing"   # one file / one test
 ```

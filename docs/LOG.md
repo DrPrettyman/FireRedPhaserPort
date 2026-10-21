@@ -4728,3 +4728,13 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   PSG reaches the speakers (SE_SELECT, square 1 only, with the music stopped)" at load ~20; it passed in the full
   run above. Named here as an unfixed race (not chased).
 - Link play is out of scope for this port (the user's decision): STATUS.md says so.
+
+### E2E policy: the smoke set per batch, the full suite at milestones
+
+- The user's call, after the full suite's CPU load (four software-rendered headless Chromes for 20-35 minutes) and
+  a look at what the last five full runs found (almost only test races; one real break, #149). New rule in
+  CLAUDE.md, docs/WORKFLOW.md section 4, the get-on skill and tests/README.md: per change, the covering e2e files
+  (unchanged); at the end of a batch, `npm run test:e2e:smoke` (newGame, saveContinue, field, fieldMoves,
+  trainerBattle, wildBattle, pokemart, pcStorage, questLog, story); the full suite only when a batch finishes a plan
+  or changes shared core (the script engine, the tick loop, the battle engine, the save format).
+- Verified: the ten files on master f6644cc, 66 passed in 153 s (story.test.ts is the long pole at 152 s).
