@@ -1,7 +1,6 @@
 // item_menu.c: the bag. Three pockets (items, key items, Poké Balls) as a list menu, the context menu
-// per item, tossing, registering, giving, selling, and the in-battle and Old Man tutorial bags.
-// The Teachy TV scripted bags, the item PC and the Pokémon storage give flow aren't ported (their
-// screens don't exist); entering them logs and falls back to the normal bag.
+// per item, tossing, registering, giving, selling, the in-battle and Old Man tutorial bags, the Teachy TV
+// scripted bags, the item PC's deposit bag and the Pokémon storage's give bag.
 
 import { K } from '../battle/constants';
 import { state } from '../battle/env';
