@@ -55,12 +55,14 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     VS Seeker anim's end itself. ClearRematchStateByTrainerId leaves the movement type of a same-row trainer other
     than the selected one alone (the C sets its `movementType` field to FACE_DOWN without changing its callback;
     the port's NpcBrain has one value for both).
-  - Itemfinder (world/itemfinder.ts): GAME_STAT_USED_ITEMFINDER isn't counted (no game
-    stats). ItemUseOnFieldCB_Itemfinder takes the field controls lock itself, as the VS Seeker's task does. The
+  - Itemfinder (world/itemfinder.ts): ItemUseOnFieldCB_Itemfinder takes the field controls lock itself, as the VS Seeker's task does. The
     arrows and stars are Phaser sprites at the camera's corner plus their GBA screen position, drawn in the
     player's palette as it is at load (the GBA's OBJ palette 0, faded with the field); DestroyArrowAndStarTiles
     frees nothing (the texture stays; no sprite is out by then). Before EventScript_ItemfinderDigUpUnderfootItem,
     ScriptContext_SetupScript hands the task's lock to the running script instead of locking again.
+  - Renewable hidden items (world/renewableHiddenItems.ts): a save made before they were ported (batch 15) keeps its
+    renewable flags as they were (the items not picked up yet stay findable) until the first regeneration; no save
+    upgrade runs SetAllRenewableItemFlags on it (FINISH_PLAN.md decision 1).
   - Raise-hand movement types (entities/NpcBrain.ts, MOVEMENT_TYPE_RAISE_HAND_AND_*): leaving one zeroes the
     sprite's x2/y2 (the GBA keeps them unless ResetMovementOfRematchableTrainers zeroes them); a frozen jumper
     (any, not only `lock`'s selected object) lands before it holds still.
@@ -97,7 +99,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     channels started before stay silent until their next restart (CgbSound restarts on every volume change, so it
     is usually a few frames).
   - Evolution scene: on battle-test.html (no field) EVOSTATE_END's
-    Overworld_PlaySpecialMapMusic is skipped: the BGM stays stopped. GAME_STAT_EVOLVED_POKEMON isn't kept. Evolving
+    Overworld_PlaySpecialMapMusic is skipped: the BGM stays stopped. Evolving
     from the field uses fresh battle globals, so the backdrop follows the map's battle scene (gyms etc.) but not the
     last battle's type flags, which the GBA keeps (e.g. a Rare Candy right after a gym leader would draw the
     Leader terrain there). Mons have no language or ribbons, so EvolutionRenameMon always treats
@@ -117,7 +119,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     walk-out). The dungeon previews' third palette is zero-filled: the C loads 3 palettes from 2-palette data,
     reading on into the ROM (no preview tilemap uses it; the same for the map preview screens). Where the C reads a NULL sMapCursor (naming the section
     before the cursor exists, CB2_OpenRegionMap / UpdateMapsecNameBox), the port reads MAPSEC_NONE.
-  - Field moves (world/fieldMoves.ts, world/fieldMoveShowMon.ts): no GAME_STAT_USED_CUT / _ROCK_SMASH. The field
+  - Field moves (world/fieldMoves.ts, world/fieldMoveShowMon.ts): the field
     effect scripts' palette commands (loadfadedpal, ...) do nothing: the field's sprites are Phaser textures. A
     `callnative` that isn't ported warns once and the effect ends at once (the emote icons from scripts). Sweet Scent's
     red fade is an overlay under the player instead of a fade of every other palette, so the player is also drawn
@@ -172,8 +174,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     that fades in itself (Viridian Forest's Shade), restarts that fade (~2 frames longer before the banner's count
     starts). The previews' third palette is zero-filled as the region map's (below). The GPU registers the task saves
     and restores (BG0 priority, DISPCNT, BLDCNT, WININ, WINOUT) aren't the Phaser field's, so they're left alone.
-  - Wild encounters: GAME_STAT_* counters aren't kept.
-  - Scripted wild battles (`dowildbattle`, StartLegendaryBattle): no GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES. `seteventmon` (CreateEnemyEventMon) doesn't set
+  - Scripted wild battles (`dowildbattle`, StartLegendaryBattle): `seteventmon` (CreateEnemyEventMon) doesn't set
     MON_DATA_MODERN_FATEFUL_ENCOUNTER (the port keeps no such field; IsBattlerModernFatefulEncounter is always
     TRUE, so it makes no difference).
   - The event islands (script/eventIslandSpecials.ts, world/deoxysRock.ts): FLDEFF_DESTROY_DEOXYS_ROCK's white flash
@@ -193,7 +194,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     bike and the teleport spin. Movement scripts
     (applymovement) still run through MovementRunner rather than the player's held-movement actions, so `lock`
     waits for a scripted step to end by `isMoving`.
-  - Fishing (world/fishing.ts): no GAME_STAT_FISHING_CAPTURES. StartFishing's task runs its second state a frame later than
+  - Fishing (world/fishing.ts): StartFishing's task runs its second state a frame later than
     the GBA's (a new task there also runs in the RunTasks pass that created it). The dots and messages go through
     the field message box's printer, which runs after the field's tasks: a dot printed at speed 0 appears in the
     same frame, but Fishing11 / Fishing16 see a finished message a frame later than RunTextPrinters would. The
@@ -220,7 +221,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     its sprite's x2 / y2.
   - Object animations follow the step's progress (first half step frame, second half standing) instead of
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
-  - Poké Mart: GAME_STAT_SHOPPED isn't counted. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
+  - Poké Mart: the decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
   - Egg hatching (menus/eggHatch.ts): the MUS_EVOLVED fanfare holds "X hatched from the EGG!" for sFanfares' 220
     frames and the cry holds the scene, as on the GBA. The C
     loads five palettes from gTradeGba2_Pal, two of them past the file's end (ROM that follows); the port loads
@@ -247,12 +248,19 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - Save data (state/saveData.ts): one JSON save in browser localStorage instead of the flash's two 14-sector
     save slots, so there are no sector checksums, no alternating slots / save counter, no backup of the previous
     save and no encryption of money, coins and bag quantities (gSaveBlock2Ptr->encryptionKey). The save holds
-    what the port keeps; left out because the port doesn't keep them: the current map's object events and object
-    templates (NPC positions, setobjectxyperm changes), game stats,
+    what the port keeps; left out because the port doesn't keep them:
     Pokédex order/mode, the second copies of the dex seen flags, minigame
     records, the enigma berry, mystery gift, link records and
     the region map zoom option. The player's position is stored only when the field writes it before
     a save (`OverworldScene.storeLocationForSave`), not kept current on every step like gSaveBlock1Ptr->pos.
+    The object events (gSaveBlock1Ptr->objectEvents) are the current map's NPCs only (the player's entry is the
+    location; the neighbouring maps' objects, a QOL change, aren't saved and spawn from their templates on
+    CONTINUE), each with the fields the port's ObjectEvent keeps (questLogObjectEventFrom: currentCoords, facing,
+    movement type, invisibility, the ground effect / anim bits). Not kept: previousCoords and initialCoords (a
+    restored object stands still on its tile; a wanderer's range is centred on its template's position), the
+    movement in progress and its type's step (sprite data, not in the C's save either). The map view
+    (gSaveBlock2Ptr->mapView) saves 0 for the cells outside the current map, where the GBA's VMap has the border
+    and the connections' strips, and CONTINUE writes back only the cells inside it.
   - Boot and main menu (scenes/BootScene.ts, menus/mainMenu.ts): the game boots into the copyright screen, the
     intro and the title screen. Dev starts (`?start=`, `?map=`) skip all of them and the main menu; dev
     `?skipIntro` (the e2e harness's default) skips the copyright screen, the intro, the title screen and Oak's
@@ -273,12 +281,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     anyway; the port loads just the palette. The trainer id is still rolled when the game state is created (see the
     RNG approximation), not by the naming screen's SeedRngAndSetTrainerId. CB2_NewGame hands only the names and the
     gender to the field, whose new GameState is NewGameInitData's.
-  - Save dialog (ui/SaveDialog.ts): no GAME_STAT_SAVED_GAME. A failed write shows the save error message without
-    DoSaveFailedScreen. SaveMapView isn't ported: the map view isn't saved, so CONTINUE rebuilds the map from its
-    header and ON_LOAD script (metatiles a script changed later aren't restored).
-  - Option menu (menus/optionMenu.ts): the L=A button mode applies on the GBA-layer
-    screens (GbaHostScene's ReadKeys) but not on the field, whose input reads the buttons directly (on the GBA,
-    ReadKeys turns L into A everywhere). The field isn't on the GBA layer, so FieldMenuScene sets the backdrop
+  - Save dialog (ui/SaveDialog.ts): a failed write shows the save error message without
+    DoSaveFailedScreen.
+  - Option menu (menus/optionMenu.ts): the field isn't on the GBA layer, so FieldMenuScene sets the backdrop
     (BG palette 0 colour 0, black as LoadTilesetPalette leaves it) the option menu doesn't load itself.
   - Start menu help window (ui/HelpMessageWindow.ts): a Phaser window like the start menu, not a BG0 window; the
     start menu (and its help window) goes away as soon as an item that leaves the field is chosen, before the fade
@@ -290,8 +295,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     HelpSystem_IsSinglePlayer is always TRUE (no link play: GAPS_PLAN.md decision 4). The
     title screen sets up its own GameState from the save (LoadGameSave's gSaveBlock1/2) for the help's flags and
     button mode.
-  - CONTINUE (OverworldScene.continueSavedGame): the map's objects spawn from its templates (object events aren't
-    saved, see Save data); gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
+  - CONTINUE (OverworldScene.continueSavedGame): gExitStairsMovementDisabled isn't kept (no Task_ExitStairs).
   - Multichoice: the cable club menus' help descriptions (MultiChoicePrintHelpDescription) aren't drawn (no
     link play).
   - Elevators: UpdateEscapeWarp isn't kept on warps.
@@ -458,7 +462,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     per-line squash and darkening of the reels apply to the line REG_VCOUNT names (the PPU calls it before drawing
     that line); the GBA's HBlank interrupt for line L sets them for line L + 1, a one-line shift. After
     MainTask_ExitSlots frees the screen, the C's Task_SpinReels still runs that frame through the NULL gfx manager;
-    the port skips it. No GAME_STAT_SLOT_JACKPOTS.
+    the port skips it.
   - The Game Corner's photo printer flash (FldEff_PhotoFlash) is the field's FADE_FROM_WHITE (16 → 0 in steps of 2)
     where the C fades from 15 to 0 in steps of 3, a few frames longer.
   - The m4a engine (src/audio/, AUDIO_PLAN.md): a note on a keysplit entry that voicegroups.json has as

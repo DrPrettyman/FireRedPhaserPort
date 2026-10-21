@@ -387,9 +387,10 @@ function FieldUseFunc_VsSeeker(taskId: number): void {
   }
 }
 
-/** ItemUseOutOfBattle_Itemfinder (IncrementGameStat(GAME_STAT_USED_ITEMFINDER): game stats aren't tracked yet) */
+/** ItemUseOutOfBattle_Itemfinder */
 function ItemUseOutOfBattle_Itemfinder(taskId: number): void {
   const f = fieldFuncs();
+  state.incrementGameStat(K.GAME_STAT_USED_ITEMFINDER);
   // (world/itemfinder.ts runs its own field task, as for the VS Seeker)
   sItemUseOnFieldCB = (id) => {
     f.ItemUseOnFieldCB_Itemfinder();

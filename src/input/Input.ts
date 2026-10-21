@@ -30,6 +30,12 @@ export class Input {
   private keys: Record<Button, Phaser.Input.Keyboard.Key[]>;
   private heldNow = new Set<Button>();
   private heldPrev = new Set<Button>();
+  /**
+   * gSaveBlock2Ptr->optionsButtonMode == OPTIONS_BUTTON_MODE_L_EQUALS_A, for an Input whose readers don't go through
+   * ReadKeys (the field's): `held` / `pressed` then report A for L as ReadKeys does (newKeys |= A_BUTTON when L is
+   * new, heldKeys |= A_BUTTON when L is held). `heldRaw` stays the keys themselves (ReadKeys' keyInput).
+   */
+  lEqualsA = false;
 
   constructor(scene: Phaser.Scene) {
     const kb = scene.input.keyboard!;
@@ -51,11 +57,20 @@ export class Input {
     this.heldPrev = new Set();
   }
 
-  held(b: Button): boolean {
+  /** The button itself, without the L=A remap (ReadKeys' REG_KEYINPUT read). */
+  heldRaw(b: Button): boolean {
     return this.heldNow.has(b);
   }
 
+  held(b: Button): boolean {
+    return this.heldNow.has(b) || (b === 'A' && this.lEqualsA && this.heldNow.has('L'));
+  }
+
   pressed(b: Button): boolean {
+    return this.pressedRaw(b) || (b === 'A' && this.lEqualsA && this.pressedRaw('L'));
+  }
+
+  private pressedRaw(b: Button): boolean {
     return this.heldNow.has(b) && !this.heldPrev.has(b);
   }
 

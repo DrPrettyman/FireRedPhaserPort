@@ -330,8 +330,9 @@ export const SPECIALS: Record<string, Special> = {
     host.removeCameraObject();
   },
 
-  /** EnterSafariMode (safari_zone.c; GAME_STAT_ENTERED_SAFARI_ZONE isn't kept) */
+  /** EnterSafariMode (safari_zone.c) */
   EnterSafariMode({ state }) {
+    state.incrementGameStat(state.defines.require('GAME_STAT_ENTERED_SAFARI_ZONE'));
     state.setFlag('FLAG_SYS_SAFARI_MODE', true);
     state.numSafariBalls = 30;
     state.safariZoneStepCounter = 600;
@@ -619,7 +620,8 @@ export const SPECIALS: Record<string, Special> = {
       return;
     }
     enemy.nickname = encodeText('gText_Ghost');
-    // IncrementGameStat(GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES): game stats aren't tracked yet
+    state.incrementGameStat(d.require('GAME_STAT_TOTAL_BATTLES'));
+    state.incrementGameStat(d.require('GAME_STAT_WILD_BATTLES'));
     const run = host.startScriptedBattle(battleTypeFlags, [enemy], host.wildBattleTransition(enemy));
     let fadeIn: (() => boolean) | undefined;
     setWaitState(() => {
@@ -714,9 +716,10 @@ export function StartScriptedWildBattle(env: SpecialEnv): (() => boolean) | unde
  * script continues once the field has faded back in. gBattleOutcome stays for GetBattleOutcome.
  */
 function runScriptedWildBattle(env: SpecialEnv, battleTypeFlags: number, enemyParty: Pokemon[], transition: number, song = 0): () => boolean {
-  const { host, endScript } = env;
+  const { state, host, endScript } = env;
   // LockPlayerFieldControls: the waiting script holds the field's input.
-  // IncrementGameStat(GAME_STAT_TOTAL_BATTLES / _WILD_BATTLES): game stats aren't tracked yet
+  state.incrementGameStat(state.defines.require('GAME_STAT_TOTAL_BATTLES'));
+  state.incrementGameStat(state.defines.require('GAME_STAT_WILD_BATTLES'));
   const run = host.startScriptedBattle(battleTypeFlags, enemyParty, transition, song);
   let fadeIn: (() => boolean) | undefined;
   return () => {

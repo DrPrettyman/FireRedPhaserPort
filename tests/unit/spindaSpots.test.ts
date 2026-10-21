@@ -183,7 +183,7 @@ describe('the Pokédex personalities (HandleSetPokedexFlag)', () => {
     expect(t.state.dexSpindaPersonality).toBe(0x9abcdef0);
   });
 
-  test('they round-trip through the save; a version 13 save loads with 0', () => {
+  test('they round-trip through the save; a version 14 save loads with 0', () => {
     t.state.dexUnownPersonality = 0xfedcba98;
     t.state.dexSpindaPersonality = 0x01234567;
     const data = JSON.parse(JSON.stringify(toSaveData(t.state))) as SaveData;
@@ -191,10 +191,10 @@ describe('the Pokédex personalities (HandleSetPokedexFlag)', () => {
     const loaded = fromSaveData(data, newGame().state);
     expect([loaded.dexUnownPersonality, loaded.dexSpindaPersonality]).toEqual([0xfedcba98, 0x01234567]);
     const { unownPersonality: _u, spindaPersonality: _s, ...oldDex } = data.pokedex;
-    const v13 = { ...data, version: 13, pokedex: oldDex } as unknown as SaveData;
-    const upgraded = upgradeSave(v13);
+    const v14 = { ...data, version: 14, pokedex: oldDex } as unknown as SaveData;
+    const upgraded = upgradeSave(v14);
     expect(upgraded.pokedex).toMatchObject({ unownPersonality: 0, spindaPersonality: 0 });
-    const loaded13 = fromSaveData(v13, newGame().state);
-    expect([loaded13.dexUnownPersonality, loaded13.dexSpindaPersonality]).toEqual([0, 0]);
+    const loaded14 = fromSaveData(v14, newGame().state);
+    expect([loaded14.dexUnownPersonality, loaded14.dexSpindaPersonality]).toEqual([0, 0]);
   });
 });
