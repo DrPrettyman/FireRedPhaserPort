@@ -1287,12 +1287,20 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
         delay = 12;
       }
       StoreInitialPlayerAvatarState();
-      // SetupWarp (the destination's header loads meanwhile: Task_StairWarp waits for it before the music fades)
-      this.stairWarpDest = undefined;
-      void this.setupWarp(warp).then(async (dest) => {
-        const name = dest && this.assets.mapNameForId(dest.mapId);
-        this.stairWarpDest = dest && name ? { name, data: await this.assets.loadMap(name), warpId: dest.warpId, x: dest.x, y: dest.y } : null;
-      });
+      // SetupWarp: the destination's header is usually loaded already (prefetchStairWarpDestinations); if not, it
+      // loads meanwhile and Task_StairWarp holds before the music fades until it's there
+      const name = warp.dest_map !== 'MAP_DYNAMIC' ? this.assets.mapNameForId(warp.dest_map) : undefined;
+      const loaded = name ? this.assets.loadedMap(name) : undefined;
+      if (name && loaded) {
+        const dest = this.setupWarpLoaded(warp, loaded, this.world.current, this.player.tileX, this.player.tileY);
+        this.stairWarpDest = { name, data: loaded, warpId: dest.warpId, x: dest.x, y: dest.y };
+      } else {
+        this.stairWarpDest = undefined;
+        void this.setupWarp(warp).then(async (dest) => {
+          const destName = dest && this.assets.mapNameForId(dest.mapId);
+          this.stairWarpDest = dest && destName ? { name: destName, data: await this.assets.loadMap(destName), warpId: dest.warpId, x: dest.x, y: dest.y } : null;
+        });
+      }
       DoStairWarp(behavior, delay);
       return true;
     }
@@ -1567,11 +1575,29 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     const cur = this.world.current;
     const { tileX: x, tileY: y } = this.player; // gSaveBlock1Ptr->pos
     const destData = await this.assets.loadMap(name);
+    return this.setupWarpLoaded(w, destData, cur, x, y);
+  }
+
+  /** SetupWarp's part after the destination's header is loaded (`cur`, x, y: the map and position at the push). */
+  private setupWarpLoaded(w: WarpEventData, destData: MapData, cur: MapChunk, x: number, y: number): { mapId: string; warpId: number; x: number; y: number } {
+    const destIndex = Number(w.dest_warp_id);
     UpdateEscapeWarp(this.mapType(cur.data), this.mapType(destData), w.x, w.y);
     if (destData.warpEvents[destIndex]?.dest_map === 'MAP_DYNAMIC') {
       this.state.dynamicWarp = { mapId: cur.data.id, warpId: cur.data.warpEvents.indexOf(w), x: x - cur.originX, y: y - cur.originY };
     }
     return { mapId: w.dest_map, warpId: destIndex, x: -1, y: -1 };
+  }
+
+  /**
+   * A stair warp's destination header, fetched when the map loads (enterMap), so that SetupWarp at the push has it
+   * at once (Task_StairWarp's TryFadeOutOldMapMusic comes the frame after a push on foot).
+   */
+  private prefetchStairWarpDestinations(): void {
+    const cur = this.world.current;
+    for (const w of cur.data.warpEvents) {
+      const name = this.assets.mapNameForId(w.dest_map);
+      if (name && MetatileBehavior_IsDirectionalStairWarp(this.world.tileAt(cur.originX + w.x, cur.originY + w.y).behavior)) void this.assets.loadMap(name);
+    }
   }
 
   /** SetupWarp, then the warp (`kind`: see warpTo). */
@@ -1882,6 +1908,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
     this.removeCameraObject();
     this.objectsFrozen = false; // the map's objects are created anew
     await this.world.load(name);
+    this.prefetchStairWarpDestinations();
     const anims = this.assets.tilesetAnimInfo(this.world.current.data.tilesetPair);
     InitTilesetAnimations(anims.primary, anims.secondary);
     this.player.setVisible(true); // the GBA recreates the player object on every warp
