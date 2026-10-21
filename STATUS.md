@@ -36,7 +36,7 @@ registers are identical frame by frame on 31 songs, SEs and cries; the listening
 `/Users/joshua/Coding/PokemonProjects/wref-scratch/wref2/index.html`). Every call site the plan lists makes its
 sound: the field, map music (saved), the battle (music in the transition, the controllers, scripts, balls, the low
 HP beep, the anims' panned SEs and waits), the scenes (evolution, eggs, trades, Hall of Fame, credits, Pokédex,
-title), the ambient cries. Every audio wait times as on the GBA. Deferred: the quest log and link play (AUDIO_PLAN.md "Batch D result").
+title), the ambient cries. Every audio wait times as on the GBA. The quest log's playback audio came with QL5a2 (batch 14); link play is out of scope.
 
 **The postgame is done** ([POSTGAME_PLAN.md](docs/plans/POSTGAME_PLAN.md) complete in one batch, batch 10: PRs #114-#125). The
 42 postgame gaps are ported: braille, field weather (FRLG's Shade and horizontal fog: Viridian Forest, Pokémon Tower,
@@ -58,10 +58,13 @@ PRs #136-#148): mail (mail_data.c, the mail screen, the party menu's mail action
 and DONTAE's Fab Mail), the Fame Checker (fame_checker.c and its two specials), Teachy TV (teachy_tv.c, the
 Pokédude's four battles, his REGISTER bag and TM case demos). Save version 13.
 
-**The quest log is in up to its menu calls** ([QUEST_LOG_PLAN.md](docs/plans/QUEST_LOG_PLAN.md) QL1-QL4a, batch 12): recording
-(the four scenes in the save, the departed / arrived locations), playback on CONTINUE ("Previously on your quest",
-the grey field, the windows and texts, A / B skips, "saved the game at"), every QL_EVENT_* codec and its text, and
-the events from item use, the party menu, the PCs, the boxes and Fly.
+**The quest log is done** ([QUEST_LOG_PLAN.md](docs/plans/QUEST_LOG_PLAN.md) complete: QL1-QL4a in batch 12, QL4b-QL5 in
+batch 14, PRs #161-#163): recording (the four scenes in the save, the departed / arrived locations), playback on
+CONTINUE ("Previously on your quest", the grey field, the windows and texts, A / B skips, "saved the game at"), every
+QL_EVENT_* codec and its text, every single-player caller (item use, the party menu, the PCs, the boxes, Fly, the
+shops and sales, the Pokémon Center, story items, the battles, the slots), QL_AvoidDisplay, `goto_if_questlog`,
+playback's audio and auto-scrolling text, the player's gfx (Surf, fishing, the VS Seeker). The escalators
+(field_effect.c, special_field_anim.c), missing until now, came with it.
 
 **The rest of FRLG's field weathers and the dynamic-graphics objects are done** ([GAPS_PLAN.md](docs/plans/GAPS_PLAN.md)
 "Batch 13", PRs #152-#156): every sWeatherFuncs row runs as the C has it (rain, thunderstorm, downpour with their
@@ -69,11 +72,9 @@ SE3 loops and PlayRainStoppingSoundEffect; snow, ash, sandstorm; clouds, the dia
 on a weather sprite layer with the GBA's BLDALPHA; no FRLG map reaches them, `setweather` / `doweather` do. Dynamic
 objects (`OBJ_EVENT_GFX_VAR_*`) load a sheet set mid-script on demand, so `addobject` spawns them that frame.
 
-Next: the quest log's last two units (QUEST_LOG_PLAN.md, batch 14): QL4b (the shops, the TM case / berry pouch
-transactions, the Pokémon Center, story items, the battles, the Game Corner) and QL5 (QL_AvoidDisplay,
-`goto_if_questlog`, the escalators, the Surf / Strength / fishing recordings, playback's fanfare / cry / text
-differences, its help contexts, a battle's end in playback, the "no quest log" DEVIATIONS sweep). After that, link
-play is the big area left (needs a decision from the user about networking).
+Next: link play is out of scope for this port (the user's decision, batch 14): the link features (trades, link
+battles, the Union Room, the minigames, Mystery Gift) stay stand-ins. What's left: more e2e scenarios (the
+checklist's Tests section), the Sevault Canyon loose end, contest conditions.
 
 [SIDE_PLAN.md](docs/plans/SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
 `bufferdecorationname` (and the other decoration commands) and FLDEFF_USE_DIVE with DoDiveWarp, ported as FRLG's C
@@ -101,9 +102,8 @@ reaches, the decoration commands and Dive, is ported as the C has it).
 
 Other open work:
 
-- The quest log's QL4b and QL5 (QUEST_LOG_PLAN.md; `goto_if_questlog` never branches until QL5).
-- Link play (the cable club's link specials are stand-ins that never find a partner; the Seven Island house's
-  e-Reader battle room).
+- Link play: out of scope (the user's decision, batch 14). The cable club's link specials stay stand-ins that never
+  find a partner; the Seven Island house's e-Reader battle room isn't reachable.
 - More e2e scenarios (see the checklist's Tests section).
 - Contest conditions/sheen aren't modelled.
 
@@ -303,8 +303,11 @@ Loose ends:
   ChangePokemonNickname from scripts and by the battle's nickname prompt after a catch
 - [x] Copyright screen and intro movie (intro.c), title screen (title_screen.c, clear save data screen) and Oak's
   speech (oak_speech.c)
-- [~] Quest log (quest_log*.c, QUEST_LOG_PLAN.md): recording and the scenes in the save (QL1), playback on CONTINUE
-  (QL2a-b), every event's codec and text (QL3a-b), the menus' calls (QL4a). Left: QL4b, QL5
+- [x] Quest log (quest_log*.c, QUEST_LOG_PLAN.md): recording and the scenes in the save (QL1), playback on CONTINUE
+  (QL2a-b), every event's codec and text (QL3a-b), every single-player caller (QL4a-b), QL_AvoidDisplay and the
+  playback paths (QL5a), the player's gfx in playback (QL5b). The link events have no callers (no link play)
+- [x] Escalators (field_effect.c's escalator warp, special_field_anim.c's moving steps): every Pokémon Center's
+  escalator to 2F
 
 ### Tests (tests/README.md)
 - [x] Unit tests (Vitest, Node): random.c, CreateMon/CalculateMonStats/levels/movesets/natures/gender/PP, Bag,

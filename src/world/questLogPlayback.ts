@@ -429,7 +429,7 @@ export function QuestLogScenePlaybackIsEnding(): boolean {
   return sPlaybackControl.endMode !== END_MODE_NONE;
 }
 
-/** QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode (the field effects that redraw the bars: QL5 calls it) */
+/** QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode (the field effects that redraw the bars call it: the fall warp, the escalator, Escape Rope, Teleport) */
 export function QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode(): void {
   if (gQL.state === K.QL_STATE_PLAYBACK) screen('drawPreviouslyOnQuestHeader', sNumScenes);
 }

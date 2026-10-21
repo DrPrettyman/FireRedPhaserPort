@@ -4706,3 +4706,25 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   spots the player in playback: the quest log frame, the auto mode, the \p's 51 frames, no battle, no song;
   Viridian Forest's Potion ball: no fanfare song, Task_Fanfare 255 frames, no SE; the Pewter gym guide: no
   MUS_FOLLOW_ME, no fade back). Probes: `t.field()`'s `messageWaiting`, `messageQuestLogFrame`, `textAutoScroll`.
+
+### Batch 14 merge (QUEST_LOG_PLAN.md "Batch 14": QL4b, QL5; the plan is done)
+
+- Merged one at a time: #160 (the plan), #163 W-ql4b, #161 W-ql5b (QL5b1-2), #162 W-ql5a (QL5a1-2). Each merge ran
+  typecheck, unit tests and the PR's own e2e files (#163: questLogMenus, questLog, pokemart, gameCorner; #161:
+  escalator, questLogField, questLog, questLogMenus, surf, vsSeeker; #162: questLogPlayback, questLog,
+  questLogMenus, questLogField, escalator, trainerBattle, helpSystem). `npm run extract` after each master merge
+  (#163 added tools/extract_quest_log.py's story items).
+- Conflicts: none in code. #162's master merge (merge=union) brought back the quest log DEVIATIONS entry's old
+  windows / "waits for A or B" lines and #161's removed "fishing rod's and the VS Seeker's gfx" sentence: removed,
+  and the entry's header now says "QL5 the playback paths". A stale "QL5 calls it" comment in questLogPlayback.ts
+  fixed in this PR.
+- The full e2e suite, once, on master 325882b (a milestone run: the plan is done): 575 passed, 1 failed (576 tests,
+  96 files, 34 minutes). newGame's "new game through the first rival battle" failed: the after-rival preset no
+  longer matched the played state, because since #163 the won rival battle records QL_EVENT_DEFEATED_TRAINER
+  (TrySetQuestLogBattleEvent), which starts a scene in the lab (BackUpMapLayout, SetPokemonCounts). A real break,
+  not a race: the preset (dev/startPresets.ts) now sets VAR_QLBAK_MAP_LAYOUT to the lab's layout and
+  VAR_QUEST_LOG_MON_COUNTS to 1 << 12 as that scene start does. newGame alone: 1 passed.
+- An earlier full run on the same master, cut short when the machine restarted, had failed audio's "?audio=1: the
+  PSG reaches the speakers (SE_SELECT, square 1 only, with the music stopped)" at load ~20; it passed in the full
+  run above. Named here as an unfixed race (not chased).
+- Link play is out of scope for this port (the user's decision): STATUS.md says so.

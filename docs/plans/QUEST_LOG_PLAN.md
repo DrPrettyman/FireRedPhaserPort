@@ -1,6 +1,6 @@
 # The quest log: "Previously on your quest"
 
-**Status: In progress: QL1-QL4a are in (batch 12, PRs #136-#150); QL4b and QL5 run in batch 14 ("Batch 14" below).** Plans index: [README.md](README.md).
+**Status: Done: QL1-QL4a in batch 12 (PRs #136-#150), QL4b and QL5 in batch 14 (PRs #161-#163).** Plans index: [README.md](README.md).
 
 FireRed's quest log (quest_log.c, quest_log_events.c, quest_log_objects.c, quest_log_player.c, quest_log_battle.c:
 ~4,500 lines, plus ~400 lines of hooks in 50 other C files). While the player plays, it records up to four scenes;
@@ -207,7 +207,14 @@ Three at once (load average ~5 at the start; each runs one or two e2e files).
 
 ## Batch 14 result
 
-(Filled in as the PRs merge.)
+Three workstreams, five units, three PRs (merged #163, #161, #162):
+
+- **QL4b** (#163): the shop's history (`menus/shopQuestLog.ts`), the bag's, TM case's and berry pouch's sales, the
+  Pokémon Center, story items from `additem` (the list from the C's condition through the extractor), the battles'
+  TrySetQuestLogBattleEvent, the slots.
+- **QL5b1-2** (#161): the escalators (`world/escalator.ts`: field_effect.c's escalator warp and special_field_anim.c's
+  steps, with QuestLog_OnEscalatorWarp), quest_log_player.c's playback gfx (fishing, Surf on / off without the music
+  change, the VS Seeker); field_player_avatar.c's recordings were all in already.
 
 - **QL5a1** (branch `ql5-playback`, draft PR): QL_AvoidDisplay / Task_AvoidDisplay / QL_DestroyAbortedDisplay and
   every caller the port has (the berry powder vendor isn't ported), `goto_if_questlog` checked through a recorded

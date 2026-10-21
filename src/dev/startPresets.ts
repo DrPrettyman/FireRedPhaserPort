@@ -130,6 +130,10 @@ function applyAfterRival(state: GameState, starter: Starter, tables: BattleTable
   // Cmd_getmoneyreward: 4 * last mon's level * gTrainerMoneyTable[class] (single battle, multiplier 1)
   const classMoney = tables.trainerMoney.find(([cls]) => cls === trainer.trainerClass || cls === 0xff)![1];
   state.addMoney(4 * foe.lvl * classMoney);
+  // TrySetQuestLogBattleEvent: the won battle is QL_EVENT_DEFEATED_TRAINER, which starts a quest log scene in the
+  // lab (QL_StartRecordingAction): BackUpMapLayout, and SetPokemonCounts with the starter alone (1 << 12, no boxes)
+  state.setVar('VAR_QLBAK_MAP_LAYOUT', d.require('LAYOUT_PALLET_TOWN_PROFESSOR_OAKS_LAB'));
+  state.setVar('VAR_QUEST_LOG_MON_COUNTS', 1 << 12);
 
   // PalletTown_ProfessorOaksLab_EventScript_EndRivalBattle
   healPlayerParty(state);
