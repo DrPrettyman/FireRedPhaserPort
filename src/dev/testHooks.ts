@@ -290,8 +290,8 @@ export interface FieldProbe {
    * 2 left, 3 right), BOB_* state, and the player sprite's y2 it sets.
    */
   surfBlob: { x: number; y: number; anim: number; bobState: number; invisible: boolean; playerY2: number } | undefined;
-  /** Task_Fishing's tStep and the player's fishing anim (world/fishing.ts) while it runs. */
-  fishing: { step: number; animNum?: number; image?: number; x2?: number; y2?: number } | undefined;
+  /** Task_Fishing's tStep (or -1 and Task_QLFishMovement's data[0] in quest log playback) and the player's fishing anim (world/fishing.ts) while it runs. */
+  fishing: { step: number; questLogState?: number; animNum?: number; image?: number; x2?: number; y2?: number } | undefined;
   /** The VS Seeker's task (func 0..3 = Task_VsSeeker_0..3) and the player's VS Seeker anim (world/vsSeeker.ts) while it runs. */
   vsSeeker: { func: number; animNum?: number; image?: number } | undefined;
   /** The escalator's Task_DrawEscalator while it runs (world/escalator.ts). */

@@ -1,6 +1,6 @@
 // Fishing: field_player_avatar.c's StartFishing / Task_Fishing (Fishing1..Fishing16) and
-// AlignFishingAnimationFrames, quest_log_player.c's QL_GfxTransition_Fish (StartPlayerAvatarFishAnim), and
-// item_use.c's CanFish. The bag's FieldUseFunc_Rod / ItemUseOnFieldCB_Rod are in menus/itemUse.ts; the
+// AlignFishingAnimationFrames, quest_log_player.c's QL_GfxTransition_Fish (StartPlayerAvatarFishAnim) and
+// Task_QLFishMovement (the rod in quest log playback), and item_use.c's CanFish. The bag's FieldUseFunc_Rod / ItemUseOnFieldCB_Rod are in menus/itemUse.ts; the
 // encounter (DoesCurrentMapHaveFishingMons, FishingWildEncounter) is world/WildEncounters.ts, reached through
 // the field items host (world/fieldItems.ts).
 //
@@ -41,8 +41,8 @@ import {
   TestPlayerAvatarFlags,
 } from './playerAvatar';
 import { IsPlayerFacingSurfableFishableWater, PlayerSurfBlob, SetSurfBlob_PlayerOffset } from './surf';
-import { QL_AfterRecordFishActionSuccessful } from './questLog';
-import { QL_PLAYER_GFX_FISH, QuestLogTryRecordPlayerAvatarGfxTransition } from './questLogPlayer';
+import { QL_AfterRecordFishActionSuccessful, QL_GetPlaybackState } from './questLog';
+import { QL_PLAYER_GFX_FISH, QuestLogTryRecordPlayerAvatarGfxTransition, registerQLGfxTransition } from './questLogPlayer';
 
 // ------------------------------------------------------------------ item_use.c
 
@@ -89,13 +89,80 @@ function StartPlayerSpriteAnim(animNum: number): void {
   sPlayerSprite.anim.startAnim(animNum);
 }
 
+/** StartPlayerAvatarFishAnim → QuestLogCallUpdatePlayerSprite(QL_PLAYER_GFX_FISH) → QL_GfxTransition_Fish */
+function StartPlayerAvatarFishAnim(): void {
+  QL_GfxTransition_Fish();
+}
+
 /**
- * StartPlayerAvatarFishAnim → QuestLogCallUpdatePlayerSprite(QL_PLAYER_GFX_FISH) → QL_GfxTransition_Fish
- * (outside quest log playback): the fishing graphics and the take-out-rod anim for the facing.
+ * QL_GfxTransition_Fish: in quest log playback (RUNNING or ACTION_END) the controls are taken and
+ * Task_QLFishMovement plays the cast; otherwise the fishing graphics and the take-out-rod anim for the facing.
  */
-function StartPlayerAvatarFishAnim(direction: Direction): void {
-  setPlayerGraphics(GetPlayerAvatarGraphicsIdByStateId(K.PLAYER_AVATAR_GFX_FISH));
-  StartPlayerSpriteAnim(GetFishingDirectionAnimNum(direction));
+function QL_GfxTransition_Fish(): void {
+  if (QL_GetPlaybackState() === K.QL_PLAYBACK_STATE_RUNNING) {
+    LockPlayerFieldControls();
+    gPlayerAvatar.preventStep = true; // (Task_QLFishMovement never clears it: the next map load does)
+    const task = { state: 0, timer: 0 }; // data[0], data[1]
+    sQLTask = task;
+    testEvent('questLogFishing');
+    CreateTask(() => {
+      const done = Task_QLFishMovement(task);
+      if (done) sQLTask = undefined;
+      // AnimateSprites, after the tasks: the player's sprite runs its anim once more and is drawn
+      if (!done && sPlayerSprite) {
+        sPlayerSprite.anim.animate();
+        renderPlayerSprite();
+      }
+      return done;
+    });
+  } else {
+    setPlayerGraphics(GetPlayerAvatarGraphicsIdByStateId(K.PLAYER_AVATAR_GFX_FISH));
+    StartPlayerSpriteAnim(GetFishingDirectionAnimNum(playerObj().facing));
+  }
+}
+
+/** The running Task_QLFishMovement (dev probe) */
+let sQLTask: { state: number; timer: number } | undefined;
+
+/**
+ * Task_QLFishMovement: the recorded cast in playback: the rod out for 61 frames, then put away, and the player's
+ * graphics back (normal, or riding when surfing) once that anim ends.
+ */
+function Task_QLFishMovement(task: { state: number; timer: number }): boolean {
+  const player = playerObj();
+  switch (task.state) {
+    case 0:
+      player.clearHeldMovementIfActive(); // ObjectEventClearHeldMovementIfActive
+      player.enableAnim = true;
+      setPlayerGraphics(GetPlayerAvatarGraphicsIdByStateId(K.PLAYER_AVATAR_GFX_FISH));
+      StartPlayerSpriteAnim(GetFishingDirectionAnimNum(player.facing));
+      task.state++;
+      task.timer = 0;
+      break;
+    case 1:
+      AlignFishingAnimationFrames();
+      if (task.timer < 60) task.timer++;
+      else task.state++;
+      break;
+    case 2:
+      StartPlayerSpriteAnim(GetFishingNoCatchDirectionAnimNum(GetPlayerFacingDirection()));
+      task.state++;
+      break;
+    case 3:
+      AlignFishingAnimationFrames();
+      if (sPlayerSprite?.anim.animEnded) {
+        sPlayerSprite = undefined;
+        const gfx = gPlayerAvatar.flags & PLAYER_AVATAR_FLAG.SURFING ? K.PLAYER_AVATAR_GFX_RIDE : K.PLAYER_AVATAR_GFX_NORMAL;
+        setPlayerGraphics(GetPlayerAvatarGraphicsIdByStateId(gfx));
+        player.face(player.movementDirection); // ObjectEventTurn
+        // sprite->x2 = sprite->y2 = 0 (unlike Fishing15, no SetSurfBlob_PlayerOffset(..., 0, 0) while surfing)
+        player.sprite.setPosition(player.anchor.x, player.feetY + player.lift);
+        UnlockPlayerFieldControls();
+        return true; // DestroyTask
+      }
+      break;
+  }
+  return false;
 }
 
 /** Back from the fishing graphics (Fishing11 / Fishing15): ObjectEventSetGraphicsId, ObjectEventTurn, x2 = y2 = 0. */
@@ -226,7 +293,7 @@ function Fishing2(task: FishingTask): boolean {
   task.playerGfxId = player.graphicsId;
   player.clearHeldMovementIfActive(); // ObjectEventClearHeldMovementIfActive
   player.enableAnim = true;
-  StartPlayerAvatarFishAnim(player.facing);
+  StartPlayerAvatarFishAnim();
   task.step++;
   return false;
 }
@@ -415,13 +482,15 @@ const sFishingStateFuncs: ((task: FishingTask) => boolean)[] = [
 ];
 
 /**
- * Dev: Task_Fishing's state (tStep: 0 = Fishing1, ...) and the fishing anim on the player's sprite, for
- * `__test.field().fishing`.
+ * Dev: Task_Fishing's state (tStep: 0 = Fishing1, ...), or Task_QLFishMovement's in quest log playback (`step` -1,
+ * `questLogState` its data[0]), and the fishing anim on the player's sprite, for `__test.field().fishing`.
  */
-export function fishingProbe(): { step: number; animNum?: number; image?: number; x2?: number; y2?: number } | undefined {
-  if (!sTask || sTask.destroyed) return undefined;
+export function fishingProbe(): { step: number; questLogState?: number; animNum?: number; image?: number; x2?: number; y2?: number } | undefined {
   const s = sPlayerSprite;
-  return { step: sTask.step, ...(s && { animNum: s.anim.animNum, image: s.anim.image, x2: s.x2, y2: s.y2 }) };
+  const sprite = s && { animNum: s.anim.animNum, image: s.anim.image, x2: s.x2, y2: s.y2 };
+  if (sQLTask) return { step: -1, questLogState: sQLTask.state, ...sprite };
+  if (!sTask || sTask.destroyed) return undefined;
+  return { step: sTask.step, ...sprite };
 }
 
 /**
@@ -429,6 +498,7 @@ export function fishingProbe(): { step: number; animNum?: number; image?: number
  * (menus/itemUse.ts' ItemUseFieldFuncs), registered at boot.
  */
 export function registerFieldItems(): void {
+  registerQLGfxTransition(QL_PLAYER_GFX_FISH, QL_GfxTransition_Fish);
   registerItemUseFieldFuncs({
     CanFish,
     StartFishing,

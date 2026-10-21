@@ -266,8 +266,8 @@ export function ScriptContext_SetupScript(label: string): void {
 }
 
 /** CreateTask on the field: `tick` runs once a frame until it returns true. */
-export function CreateTask(tick: () => boolean): void {
-  avatarField().createTask(tick);
+export function CreateTask(tick: () => boolean, priority?: number): void {
+  avatarField().createTask(tick, priority);
 }
 
 // ------------------------------------------------------------------ fldeff_rocksmash.c: the shared parts

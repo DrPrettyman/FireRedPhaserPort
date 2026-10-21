@@ -3615,7 +3615,7 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       unlockPlayerFieldControls: () => (this.controlsLocked = Math.max(0, this.controlsLocked - 1)),
       freezeObjectEvents: () => (this.objectsFrozen = true),
       unfreezeObjectEvents: () => (this.objectsFrozen = false),
-      createTask: (tick) => this.fieldTasks.push({ tick }),
+      createTask: (tick, priority) => (priority === 0 ? this.fieldTasks.unshift({ tick }) : this.fieldTasks.push({ tick })),
       startDust: (x, y, elevation, priority) => this.fieldEffects.dust(x, y, elevation, priority),
       boulderPushed: (boulder) => this.boulderPushed(boulder),
       startSurfBlob: () => StartPlayerSurfBlob(),

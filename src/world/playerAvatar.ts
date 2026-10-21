@@ -32,6 +32,7 @@ import {
   QL_PLAYER_GFX_SURF,
   QL_TryRecordNPCStepWithDuration32,
   QL_TryRecordPlayerStepWithDuration0,
+  QLGfxTransition,
   QuestLogRecordSurfDismount,
   QuestLogTryRecordPlayerAvatarGfxTransition,
 } from './questLogPlayer';
@@ -74,8 +75,11 @@ export interface PlayerAvatarHost {
   unlockPlayerFieldControls(): void;
   freezeObjectEvents(): void;
   unfreezeObjectEvents(): void;
-  /** CreateTask: `tick` runs once a frame with the field's tasks until it returns true. */
-  createTask(tick: () => boolean): void;
+  /**
+   * CreateTask: `tick` runs once a frame with the field's tasks until it returns true; priority 0 puts it before
+   * the field's other tasks (the default, 0xFF, after them).
+   */
+  createTask(tick: () => boolean, priority?: number): void;
   /** FieldEffectStart(FLDEFF_DUST) at a tile (Task_BumpBoulder's dust). */
   startDust(x: number, y: number, elevation: number, priority: number): void;
   /**
@@ -463,29 +467,50 @@ function DoPlayerAvatarTransition(): void {
   }
 }
 
-/** PlayerAvatarTransition_Normal → QL_GfxTransition_Normal */
+/** PlayerAvatarTransition_Normal: recorded, then QuestLogCallUpdatePlayerSprite → QL_GfxTransition_Normal */
 function PlayerAvatarTransition_Normal(): void {
   QuestLogTryRecordPlayerAvatarGfxTransition(QL_PLAYER_GFX_NORMAL);
+  QL_GfxTransition_Normal();
+}
+
+/** PlayerAvatarTransition_Bike: recorded, QL_GfxTransition_Bike, then BikeClearState */
+function PlayerAvatarTransition_Bike(): void {
+  QuestLogTryRecordPlayerAvatarGfxTransition(QL_PLAYER_GFX_BIKE);
+  QL_GfxTransition_Bike();
+  BikeClearState(0, 0);
+}
+
+/** PlayerAvatarTransition_Surfing: recorded, then QL_GfxTransition_StartSurf */
+function PlayerAvatarTransition_Surfing(): void {
+  QuestLogTryRecordPlayerAvatarGfxTransition(QL_PLAYER_GFX_SURF);
+  QL_GfxTransition_StartSurf();
+}
+
+function PlayerAvatarTransition_ReturnToField(): void {
+  gPlayerAvatar.flags |= F.CONTROLLABLE;
+}
+
+// ------------------------------------------------------------------ quest_log_player.c's gfx transitions
+
+/** QL_GfxTransition_Normal (QL_SetObjectGraphicsId is ObjectEventSetGraphicsId) */
+function QL_GfxTransition_Normal(): void {
   const player = playerObj();
   SetPlayerGraphics(GetPlayerAvatarGraphicsIdByStateId(K.PLAYER_AVATAR_GFX_NORMAL));
   player.face(player.movementDirection); // ObjectEventTurn
   SetPlayerAvatarStateMask(F.ON_FOOT);
 }
 
-/** PlayerAvatarTransition_Bike → QL_GfxTransition_Bike, then BikeClearState */
-function PlayerAvatarTransition_Bike(): void {
-  QuestLogTryRecordPlayerAvatarGfxTransition(QL_PLAYER_GFX_BIKE);
+/** QL_GfxTransition_Bike */
+function QL_GfxTransition_Bike(): void {
   const player = playerObj();
   SetPlayerGraphics(GetPlayerAvatarGraphicsIdByStateId(K.PLAYER_AVATAR_GFX_BIKE));
   player.face(player.movementDirection);
   SetPlayerAvatarStateMask(F.MACH_BIKE);
-  BikeClearState(0, 0); // QL_GfxTransition_Bike's
-  BikeClearState(0, 0); // PlayerAvatarTransition_Bike's own
+  BikeClearState(0, 0);
 }
 
-/** PlayerAvatarTransition_Surfing → QL_GfxTransition_StartSurf */
-function PlayerAvatarTransition_Surfing(): void {
-  QuestLogTryRecordPlayerAvatarGfxTransition(QL_PLAYER_GFX_SURF);
+/** QL_GfxTransition_StartSurf: on the mon and its blob (BOB_PLAYER_AND_MON), unless already surfing. */
+function QL_GfxTransition_StartSurf(): void {
   if (gPlayerAvatar.flags & F.SURFING) return;
   const player = playerObj();
   SetPlayerGraphics(GetPlayerAvatarGraphicsIdByStateId(K.PLAYER_AVATAR_GFX_RIDE));
@@ -494,34 +519,32 @@ function PlayerAvatarTransition_Surfing(): void {
   avatarField().startSurfBlob?.(); // FieldEffectStart(FLDEFF_SURF_BLOB) + SetSurfBlob_BobState(BOB_PLAYER_AND_MON)
 }
 
-function PlayerAvatarTransition_ReturnToField(): void {
-  gPlayerAvatar.flags |= F.CONTROLLABLE;
-}
-
 /**
- * QuestLogUpdatePlayerSprite (quest_log_player.c's sQLGfxTransitions, QL_UpdateObject in playback): the recorded
- * gfx change. Normal, bike and surf as the avatar transitions do it (nothing is recorded in playback); getting off
- * a mon is CreateStopSurfingTask (the C's _NoMusicChange: the playback's music is QL2b's). The fishing rod and the
- * VS Seeker (Task_QLFishMovement, Task_QLVSSeekerMovement) are QUEST_LOG_PLAN.md's QL5.
+ * QuestLogUpdatePlayerSprite (QuestLogCallUpdatePlayerSprite): sQLGfxTransitions[state], from the avatar
+ * transitions above and, in playback, from QL_UpdateObject with the recorded gfx change (nothing is recorded
+ * then: QuestLogTryRecordPlayerAvatarGfxTransition only records while RECORDING). Getting off a mon is
+ * QL_GfxTransition_StopSurf* → CreateStopSurfingTask_NoMusicChange. The fishing rod's (QL_GfxTransition_Fish,
+ * world/fishing.ts) and the VS Seeker's (QL_GfxTransition_VSSeeker, world/vsSeeker.ts) live with their field
+ * code and are registered at boot (registerQLGfxTransition).
  */
 export function QuestLogUpdatePlayerSprite(state: number): void {
   switch (state) {
     case QL_PLAYER_GFX_NORMAL:
-      return PlayerAvatarTransition_Normal();
+      return QL_GfxTransition_Normal();
     case QL_PLAYER_GFX_BIKE:
-      return PlayerAvatarTransition_Bike();
+      return QL_GfxTransition_Bike();
     case QL_PLAYER_GFX_SURF:
-      return PlayerAvatarTransition_Surfing();
-    case QL_PLAYER_GFX_STOP_SURF_S:
-      return CreateStopSurfingTask('down');
-    case QL_PLAYER_GFX_STOP_SURF_N:
-      return CreateStopSurfingTask('up');
-    case QL_PLAYER_GFX_STOP_SURF_W:
-      return CreateStopSurfingTask('left');
-    case QL_PLAYER_GFX_STOP_SURF_E:
-      return CreateStopSurfingTask('right');
+      return QL_GfxTransition_StartSurf();
+    case QL_PLAYER_GFX_STOP_SURF_S: // QL_GfxTransition_StopSurfSouth
+      return CreateStopSurfingTask_NoMusicChange('down');
+    case QL_PLAYER_GFX_STOP_SURF_N: // QL_GfxTransition_StopSurfNorth
+      return CreateStopSurfingTask_NoMusicChange('up');
+    case QL_PLAYER_GFX_STOP_SURF_W: // QL_GfxTransition_StopSurfWest
+      return CreateStopSurfingTask_NoMusicChange('left');
+    case QL_PLAYER_GFX_STOP_SURF_E: // QL_GfxTransition_StopSurfEast
+      return CreateStopSurfingTask_NoMusicChange('right');
     default:
-      console.debug('[quest log] unported player gfx change in playback', state); // FISH, VSSEEKER: QL5
+      return QLGfxTransition(state); // QL_PLAYER_GFX_FISH, QL_PLAYER_GFX_VSSEEKER (state < NELEMS(sQLGfxTransitions))
   }
 }
 
@@ -899,13 +922,25 @@ function StartStrengthAnim(boulder: ObjectEvent, direction: Direction): void {
 
 // ------------------------------------------------------------------ surfing
 
-/** CreateStopSurfingTask: jump off the surfing mon onto land, then walk on. */
+/** CreateStopSurfingTask: jump off the surfing mon onto land, then walk on; the map's music back. */
 export function CreateStopSurfingTask(direction: Direction): void {
+  StartStopSurfingTask(direction, true);
+}
+
+/** CreateStopSurfingTask_NoMusicChange: the same without the music (quest log playback's QL_GfxTransition_StopSurf*). */
+export function CreateStopSurfingTask_NoMusicChange(direction: Direction): void {
+  StartStopSurfingTask(direction, false);
+}
+
+/** CreateStopSurfingTask(_NoMusicChange)'s body, then Task_StopSurfingInit / Task_WaitStopSurfing. */
+function StartStopSurfingTask(direction: Direction, musicChange: boolean): void {
   const f = avatarField();
   f.lockPlayerFieldControls();
   f.freezeObjectEvents();
-  Overworld_ClearSavedMusic();
-  Overworld_ChangeMusicToDefault();
+  if (musicChange) {
+    Overworld_ClearSavedMusic();
+    Overworld_ChangeMusicToDefault();
+  }
   gPlayerAvatar.flags &= ~F.SURFING;
   gPlayerAvatar.flags |= F.ON_FOOT;
   gPlayerAvatar.preventStep = true;
