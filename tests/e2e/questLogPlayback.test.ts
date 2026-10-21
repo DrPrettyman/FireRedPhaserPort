@@ -200,3 +200,158 @@ test("playback of a trainer battle: no battle, EventScript_EndQuestLogBattle set
   await game.waitIdle();
   expect((await QL(game)).state).toBe(0);
 });
+
+// ------------------------------------------------------------------------------------------- QL5a2: audio and text
+
+/**
+ * The playback through to the saved field, watched in the page every tick: per PLAYBACK tick the message, whether its
+ * printer waits (`messageWaiting`), the frame it's in, gTextFlags.autoScroll, the fanfare task; `extra` adds more.
+ */
+function watchPlayback(game: Game, [PLAYBACK, PLAYBACK_LAST]: number[], maxFrames = 40000) {
+  return game.eval(
+    async (t, [PLAYBACK, PLAYBACK_LAST, maxFrames]) => {
+      const log: { f: number; msg?: string; waiting: boolean; qlFrame: boolean; auto: boolean; fanfare: boolean; approaching: boolean }[] = [];
+      let lastScene = false;
+      const ok = await t.until(() => {
+        const f = t.field();
+        if (!f) return false; // (the main menu)
+        const ql = t.questLog();
+        if (ql.state === PLAYBACK) {
+          log.push({
+            f: t.frame(),
+            msg: t.message(),
+            waiting: f.messageWaiting,
+            qlFrame: f.messageQuestLogFrame,
+            auto: f.textAutoScroll,
+            fanfare: t.audio().fanfareTaskActive,
+            approaching: f.approaching,
+          });
+        }
+        if (ql.state === PLAYBACK_LAST) lastScene = true;
+        return lastScene && !ql.playback.active;
+      }, maxFrames);
+      return { ok, log };
+    },
+    [PLAYBACK, PLAYBACK_LAST, maxFrames],
+  );
+}
+
+/** The lengths of the runs of consecutive log entries where `pred` holds. */
+function runs<T>(log: T[], pred: (e: T) => boolean): number[] {
+  const out: number[] = [];
+  let n = 0;
+  for (const e of log) {
+    if (pred(e)) n++;
+    else if (n) {
+      out.push(n);
+      n = 0;
+    }
+  }
+  if (n) out.push(n);
+  return out;
+}
+
+test("playback: a trainer spots the player; his two-page intro auto-scrolls (50 frames at the \\p), no battle, no music", async () => {
+  // Youngster Ben (17, 4) of Route 3 faces down with a sight of 2: one step right from (16, 6) and he walks up.
+  // "Hi! I like shorts!\p They're delightfully comfy..." (Route3_Text_BenIntro).
+  const game = await session.start({ start: 'after-rival', map: 'Route3', x: 16, y: 6, party: [{ species: 'MEWTWO', level: 100, moves: ['PSYCHIC'] }] });
+  await game.waitIdle();
+  const [RECORDING, PLAYBACK, PLAYBACK_LAST] = await defines(game, ['QL_STATE_RECORDING', 'QL_STATE_PLAYBACK', 'QL_STATE_PLAYBACK_LAST']);
+  await startScene(game, 'MAPSEC_ROUTE_3');
+  expect((await QL(game)).state).toBe(RECORDING);
+  await game.eval((t) => t.walk('right', 1));
+  await game.waitForEvent('trainerApproach');
+  await game.mashUntil((t) => t.events().find((e) => e.type === 'battleEnd'), { what: "Ben's battle to end" });
+  await game.mashUntil((t) => t.idle(), { what: "Ben's post-battle line" });
+  expect(await game.eval((t) => t.trainerDefeated('YOUNGSTER_BEN'))).toBe(true);
+  await save(game);
+
+  await game.load({ keepSave: true, mainMenu: true });
+  const mark = await game.mark();
+  const watch = watchPlayback(game, [PLAYBACK, PLAYBACK_LAST]);
+  await continueGame(game);
+  const { ok, log } = await watch;
+  expect(ok).toBe(true);
+  expect(log.some((l) => l.approaching)).toBe(true); // he saw the player in playback (QL_IsTrainerSightDisabled: FALSE)
+  const intro = log.filter((l) => /I like shorts/.test(l.msg ?? ''));
+  expect(intro.length).toBeGreaterThan(0);
+  // The quest log's frame and the auto mode while it's up
+  expect(intro.every((l) => l.qlFrame && l.auto)).toBe(true);
+  // The \p: TextPrinterWaitAutoMode's 50 FALSE frames and its TRUE one, no key pressed
+  expect(runs(intro, (l) => l.waiting)).toEqual([51]);
+  // Then the intro's waitbuttonpress (120 frames) and EventScript_EndQuestLogBattle: no battle
+  const events = await game.events(mark);
+  expect(events.filter((e) => e.type === 'battleStart' || e.type === 'battleTransition')).toEqual([]);
+  expect(events.filter((e) => e.type === 'script').map((e) => e.label)).toContain('EventScript_DoTrainerBattleFromApproach');
+  // No song started in the playback until its end (the scene loads' StopMapMusic starts MUS_DUMMY; PlayTrainerEncounterMusic skipped)
+  const audio = await game.eval((t, s) => t.audioEvents(s), mark);
+  const endFrame = log.at(-1)!.f;
+  expect(audio.filter((e) => e.frame >= log[0].f && e.frame <= endFrame && (e.type === 'bgm' || e.type === 'fanfare') && e.name !== 'MUS_DUMMY').map((e) => e.name)).toEqual([]);
+  await game.waitIdle();
+  // Task_EndQuestLog: gTextFlags.autoScroll = FALSE
+  expect(await game.eval((t) => t.field()!.textAutoScroll)).toBe(false);
+});
+
+test("playback: an item ball's fanfare plays no song and holds the script for sFanfareCounter = 0xFF frames", async () => {
+  // Viridian Forest's Potion ball (21, 34), as audio.test.ts: Std_FindItem's playfanfare MUS_LEVEL_UP (80 frames),
+  // `waitfanfare`, then `msgbox Text_PutItemAway`, whose waitbuttonpress ends by itself in playback.
+  const game = await session.start({ start: 'after-rival', map: 'ViridianForest', x: 21, y: 35 });
+  await game.waitIdle();
+  const [RECORDING, PLAYBACK, PLAYBACK_LAST] = await defines(game, ['QL_STATE_RECORDING', 'QL_STATE_PLAYBACK', 'QL_STATE_PLAYBACK_LAST']);
+  await startScene(game, 'MAPSEC_VIRIDIAN_FOREST');
+  expect((await QL(game)).state).toBe(RECORDING);
+  await game.eval((t) => t.face('up'));
+  await game.eval((t) => t.waitFrames(10));
+  await game.mashUntil((t) => /put the POTION/.test(t.message() ?? ''), { what: 'Text_PutItemAway' });
+  await game.mashUntil((t) => t.idle(), { what: 'the message to close' });
+  await save(game);
+
+  await game.load({ keepSave: true, mainMenu: true });
+  const mark = await game.mark();
+  const watch = watchPlayback(game, [PLAYBACK, PLAYBACK_LAST]);
+  await continueGame(game);
+  const { ok, log } = await watch;
+  expect(ok).toBe(true);
+  expect(log.some((l) => /found one POTION/.test(l.msg ?? ''))).toBe(true);
+  expect(log.some((l) => /put the POTION/.test(l.msg ?? ''))).toBe(true);
+  // Task_Fanfare runs in the frame PlayFanfare made it: 255 frames count sFanfareCounter down, the next ends it (seen
+  // at the start of each tick: 255 ticks active, as audio.test.ts' 80 for MUS_LEVEL_UP outside the playback)
+  expect(runs(log, (l) => l.fanfare)).toEqual([255]);
+  const audio = await game.eval((t, s) => t.audioEvents(s), mark);
+  const endFrame = log.at(-1)!.f;
+  expect(audio.filter((e) => e.frame >= log[0].f && e.frame <= endFrame && (e.type === 'fanfare' || e.type === 'se')).map((e) => e.name)).toEqual([]);
+  await game.waitIdle();
+});
+
+test('playback: playbgm and fadedefaultbgm do nothing (the Pewter City gym guide)', async () => {
+  // PewterCity_EventScript_GymGuide (42, 20), talked to from the west: "You're a TRAINER, right?\p BROCK's looking
+  // for new challengers. Follow me!", playbgm MUS_FOLLOW_ME, the walk to the gym, fadedefaultbgm.
+  const game = await session.start({ start: 'after-rival', map: 'PewterCity', x: 41, y: 20 });
+  await game.waitIdle();
+  const [RECORDING, PLAYBACK, PLAYBACK_LAST] = await defines(game, ['QL_STATE_RECORDING', 'QL_STATE_PLAYBACK', 'QL_STATE_PLAYBACK_LAST']);
+  await startScene(game, 'MAPSEC_PEWTER_CITY');
+  expect((await QL(game)).state).toBe(RECORDING);
+  await game.eval((t) => t.face('right'));
+  await game.eval((t) => t.waitFrames(10));
+  const recMark = await game.mark();
+  await game.mashUntil((t) => t.idle() && !t.field()!.script && t.events().some((e) => e.type === 'script' && e.label === 'PewterCity_EventScript_GymGuide'), {
+    what: 'the guide to lead the player to the gym',
+  });
+  const recorded = await game.eval((t, s) => t.audioEvents(s), recMark);
+  expect(recorded.some((e) => e.type === 'bgm' && e.name === 'MUS_FOLLOW_ME')).toBe(true);
+  await save(game);
+
+  await game.load({ keepSave: true, mainMenu: true });
+  const mark = await game.mark();
+  const watch = watchPlayback(game, [PLAYBACK, PLAYBACK_LAST]);
+  await continueGame(game);
+  const { ok, log } = await watch;
+  expect(ok).toBe(true);
+  expect(log.some((l) => /Follow me/.test(l.msg ?? ''))).toBe(true);
+  const audio = await game.eval((t, s) => t.audioEvents(s), mark);
+  const endFrame = log.at(-1)!.f;
+  // no MUS_FOLLOW_ME, and no fade back to the map's music (the BGM stays stopped: the scene loads' StopMapMusic is
+  // MUS_DUMMY)
+  expect(audio.filter((e) => e.frame >= log[0].f && e.frame <= endFrame && (e.type === 'bgm' || e.type === 'fade') && e.name !== 'MUS_DUMMY').map((e) => [e.type, e.name])).toEqual([]);
+  await game.waitIdle();
+});

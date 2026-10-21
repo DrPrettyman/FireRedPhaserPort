@@ -134,6 +134,11 @@ export class MessageBox {
     this.setVisible(true);
   }
 
+  /** The playback's frame is up (for tests). */
+  get questLogFrameShown(): boolean {
+    return this.questLog;
+  }
+
   /** True while the printer is still running (waitmessage blocks on this). */
   get isPrinting(): boolean {
     return this.printer !== undefined && !this.printer.finished;

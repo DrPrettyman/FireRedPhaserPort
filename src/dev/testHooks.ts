@@ -268,6 +268,12 @@ export interface FieldProbe {
   fadeWhite: boolean;
   /** The field message box's text while it's open (encoded; `__test.message()` decodes it). */
   message: number[] | undefined;
+  /** The message box's printer waits at a \p, \l or {PAUSE_UNTIL_PRESS} (for A / B, or its auto mode's delay). */
+  messageWaiting: boolean;
+  /** The message box shows the quest log playback's frame (gQuestLogWindow_Gfx: LoadQuestLogWindowTiles). */
+  messageQuestLogFrame: boolean;
+  /** gTextFlags.autoScroll */
+  textAutoScroll: boolean;
   playerVisible: boolean;
   /** FieldIsDoorAnimationRunning */
   doorAnimating: boolean;

@@ -26,6 +26,7 @@ import { GameState } from '../state/GameState';
 import { Charmap } from '../text/charmap';
 import { FONT_NORMAL, Fonts } from '../text/Font';
 import { MessageBox, messageBoxQuestLogHooks } from '../text/MessageBox';
+import { gTextFlags } from '../text/textFlags';
 import { Behaviors } from '../world/behaviors';
 import { DELTA, type Direction } from '../world/direction';
 import { MAPGRID_COLLISION_MASK, TILE, type MapChunk } from '../world/MapChunk';
@@ -680,6 +681,9 @@ export class OverworldScene extends Phaser.Scene implements ScriptHost {
       fading: this.screenFade.active,
       fadeWhite: this.screenFade.white,
       message: this.messageBox.visible ? this.messageBox.text : undefined,
+      messageWaiting: this.messageBox.visible && this.messageBox.waitingForButton,
+      messageQuestLogFrame: this.messageBox.visible && this.messageBox.questLogFrameShown,
+      textAutoScroll: gTextFlags.autoScroll,
       playerVisible: this.player.visible,
       doorAnimating: this.doors.running,
       fieldEffects: [...this.fieldEffects.liveEffects(), ...activeFieldEffects()],
