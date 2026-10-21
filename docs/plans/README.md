@@ -16,4 +16,4 @@ below.
 | [GAPS_PLAN.md](GAPS_PLAN.md) | Map previews, help system, intro movie, Kanto postgame; batch 13: dynamic-graphics objects, every weather | Done (#127-#135, #152-#157) |
 | [FIELD_ITEMS_PLAN.md](FIELD_ITEMS_PLAN.md) | Mail, the Fame Checker, Teachy TV | Done (#136-#150) |
 | [QUEST_LOG_PLAN.md](QUEST_LOG_PLAN.md) | The quest log ("Previously on your quest") | Done (#136-#150, #161-#163) |
-| [FINISH_PLAN.md](FINISH_PLAN.md) | The last single-player pieces: renewable hidden items, CONTINUE object events, the item-use anim, stair warps, Spinda, game stats | Planned (batch 15) |
+| [FINISH_PLAN.md](FINISH_PLAN.md) | The last single-player pieces: renewable hidden items, CONTINUE object events, the item-use anim, stair warps, Spinda, game stats | Done (#167-#172) |

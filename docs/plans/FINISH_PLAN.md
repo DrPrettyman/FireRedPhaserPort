@@ -1,6 +1,6 @@
 # Finishing the single-player port
 
-**Status: Planned for batch 15.** Plans index: [README.md](README.md).
+**Status: Done in batch 15 (PRs #167-#172).** Plans index: [README.md](README.md).
 
 The last planned batch. An audit of the decomp against the port found six single-player pieces still missing or
 approximated; the user approved exactly these six. After this batch the port is complete apart from link play,
@@ -89,4 +89,23 @@ once W-spinda merges.
 
 ## Batch 15 result
 
-(filled in when the batch merges)
+All six units landed, one PR per workstream (W-anim's two units on one branch):
+
+| PR | Workstream | What |
+|---|---|---|
+| #167 | (plan) | This plan |
+| #168 | W-continue | CONTINUE restores the current map's object events, templates and map view (save version 14) |
+| #169 | W-small | L=A on the field, every single-player GAME_STAT, renewable hidden items |
+| #170 | W-anim | The item-use animation (pokemon_special_anim*.c); the battle level-up stripes and banner icon |
+| #171 | W-stairs | Stair warps (Task_StairWarp / Task_ExitStairs, the bike delay), the warp arrow, one warp arrival path |
+| #172 | W-spinda | Spinda's spots, the Pokédex's Unown / Spinda personalities (save version 15, renumbered at the merge) |
+
+Merge notes: the docs' union merge doubled the "Save dialog", "Option menu", "CONTINUE", "Battles" and "Save data"
+entries in DEVIATIONS and the save-fields paragraph in DEV_NOTES; each was tidied at its merge. The full e2e suite
+on master after the last merge: 600 of 601 passed; the failure was real: the item-use anim's extracted
+`sBg_Tilemap` took over the plain name the slot machine used (extract_gfx.py keeps a clashing name's plain form for
+the first file in sorted order), fixed in the STATUS PR by the slot machine's qualified `slot_machine.sBg_Tilemap`.
+
+Left, found on the way (in DEVIATIONS): Task_ExitNonAnimDoor on cave doors (the player isn't hidden during the fade
+and doesn't walk a step out), Task_ExitNonDoor not freezing the map's objects, the saved objects' previousCoords /
+initialCoords and a movement in progress, itemUseAnim's Fire Stone timeout seen once (unexplained).

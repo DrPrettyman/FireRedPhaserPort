@@ -29,6 +29,19 @@ Status of the port: what exists, what's next. Everything else lives in `docs/`:
 
 ## Next up
 
+**The port is complete apart from link play**, which is out of scope (the user's decision, batch 14: trades, link
+battles, the Union Room, the minigames and Mystery Gift stay stand-ins). Batch 15 ([FINISH_PLAN.md](docs/plans/FINISH_PLAN.md),
+PRs #168-#172) closed the last single-player gaps an audit of the decomp found: renewable hidden items, CONTINUE
+restoring the map's object events, templates and map view (a pushed boulder stays pushed), the item-use animation
+(pokemon_special_anim*.c) and the battle level-up stripes and banner icon, stair warps (Task_StairWarp /
+Task_ExitStairs) and the warp arrow, Spinda's spots and the Pokédex's Unown / Spinda personalities, L=A on the field
+and every single-player GAME_STAT. Save version 15.
+
+Optional, if anyone wants more: the minor approximations left in [docs/DEVIATIONS.md](docs/DEVIATIONS.md) (~110
+entries, none blocking play; e.g. Task_ExitNonAnimDoor on cave exits), the unticked e2e scenarios (the checklist's
+Tests section), the Sevault Canyon loose end, and the known flaky tests (postgameSevenIsland's Sevault Canyon,
+audio's "?audio=1: the PSG reaches the speakers" under load, itemUseAnim's Fire Stone timeout seen once).
+
 **Audio is done** ([AUDIO_PLAN.md](docs/plans/AUDIO_PLAN.md) complete: batches A-D, PRs #84-#111). `npm run dev`, press any
 key (M mutes): the m4a engine (`src/audio/`: sequencer, DirectSound mixer, CgbSound and the PSG synth) plays every
 song, SE and cry, checked against the ROM in mGBA (W-ref 2: the DirectSound mix, the CgbChannels and the sound
@@ -71,10 +84,6 @@ playback's audio and auto-scrolling text, the player's gfx (Surf, fishing, the V
 SE3 loops and PlayRainStoppingSoundEffect; snow, ash, sandstorm; clouds, the diagonal fog, the drought, the bubbles)
 on a weather sprite layer with the GBA's BLDALPHA; no FRLG map reaches them, `setweather` / `doweather` do. Dynamic
 objects (`OBJ_EVENT_GFX_VAR_*`) load a sheet set mid-script on demand, so `addobject` spawns them that frame.
-
-Next: link play is out of scope for this port (the user's decision, batch 14): the link features (trades, link
-battles, the Union Room, the minigames, Mystery Gift) stay stand-ins. What's left: more e2e scenarios (the
-checklist's Tests section), the Sevault Canyon loose end, contest conditions.
 
 [SIDE_PLAN.md](docs/plans/SIDE_PLAN.md) batch 3 is in (PRs #79-#81): `adddecoration`,
 `bufferdecorationname` (and the other decoration commands) and FLDEFF_USE_DIVE with DoDiveWarp, ported as FRLG's C
@@ -308,6 +317,12 @@ Loose ends:
   playback paths (QL5a), the player's gfx in playback (QL5b). The link events have no callers (no link play)
 - [x] Escalators (field_effect.c's escalator warp, special_field_anim.c's moving steps): every Pokémon Center's
   escalator to 2F
+- [x] Renewable hidden items (renewable_hidden_items.c): set at new game, regenerated every 1500 steps on map load
+- [x] CONTINUE restores the current map's object events, templates and map view (SaveObjectEvents, SaveMapView)
+- [x] Item-use animation (pokemon_special_anim*.c) from the party menu; the battle's level-up stripes and banner icon
+- [x] Stair warps (Task_StairWarp / Task_ExitStairs, the bike delay) and the warp arrow
+- [x] Spinda's spots (DrawSpindaSpots) and the Pokédex's Unown / Spinda personalities
+- [x] L=A on the field; every single-player GAME_STAT counted
 
 ### Tests (tests/README.md)
 - [x] Unit tests (Vitest, Node): random.c, CreateMon/CalculateMonStats/levels/movesets/natures/gender/PP, Bag,

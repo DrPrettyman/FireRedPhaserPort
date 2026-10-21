@@ -1077,7 +1077,9 @@ this is the next level down. When you add or change a subsystem, update its entr
   PlaySlotMachineFromScript sets since FieldMenuScene starts from reset registers. The slot machine's graphics come
   from `graphics/slot_machine/`; its `sBg_Pal` clashes with main_menu.c's, so extract_gfx.py now also writes a
   clashing static symbol as `<file stem>.<symbol>` (`slot_machine.sBg_Pal`; the plain name stays the first file's,
-  in sorted order). Probe `__test.slotMachine()`: the main task and step, `ready`, bet, reels, win flags, payout,
+  in sorted order, so a new file earlier in the order takes it over: batch 15's pokemon_special_anim_scene.c took
+  `sBg_Tilemap` and the slot machine now asks for `slot_machine.sBg_Tilemap`; a screen whose symbol is shared should
+  use the qualified name). Probe `__test.slotMachine()`: the main task and step, `ready`, bet, reels, win flags, payout,
   the CREDIT / PAYOUT digits drawn, Clefairy's anim, the help slide, the line lights' palettes, the reel buttons.
   Tests: `tests/unit/slotMachine.test.ts` (hand-worked reel positions), `tests/e2e/gameCorner.test.ts` (the coin
   clerk, the prize room, the Fisher, hidden coins; the slot machine: bet with R and DOWN, spins checked against a

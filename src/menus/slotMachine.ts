@@ -233,7 +233,7 @@ export function slotMachineGfxSymbols(): string[] {
     'sDigits_Tiles',
     'slot_machine.sBg_Pal',
     'sBg_Tiles',
-    'sBg_Tilemap',
+    'slot_machine.sBg_Tilemap',
     'sBgPal_MatchLines',
     'sBgPal_PayoutLight',
     'sButtonPressed_Tiles',
@@ -919,7 +919,7 @@ function SlotsTask_GraphicsInit(t: SetupTask, ptr: SlotMachineSetupTaskData): bo
       DecompressAndCopyTileDataToVram(2, gfx('sBg_Tiles'), 0, 0x00, 0);
       DecompressAndCopyTileDataToVram(2, gfx('sButtonPressed_Tiles'), 0, 0xc0, 0);
       SetBgTilemapBuffer(2, ptr.bg2TilemapBuffer);
-      CopyToBgTilemapBuffer(2, gfx16('sBg_Tilemap'), 0, 0x00);
+      CopyToBgTilemapBuffer(2, gfx16('slot_machine.sBg_Tilemap'), 0, 0x00);
       CopyBgTilemapBufferToVram(2);
       LoadPalette(sBg_Pal(), BG_PLTT_ID(0), sBg_Pal().length * 2);
       LoadPalette(gfx16('sBgPal_MatchLines'), BG_PLTT_ID(PALSLOT_LINE_BET), PLTT_SIZE_4BPP);

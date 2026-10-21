@@ -4910,3 +4910,20 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Tests: tests/e2e/continueObjects.test.ts (new: 3 tests; all three fail without the restore), tests/unit/saveData.test.ts
   (round trip with the new fields, a version 13 save, copies), saveContinue, questLog, questLogField,
   questLogPlayback, postgameFourIsland, escalator.
+### Batch 15 merge: FINISH_PLAN.md done (PRs #167-#172); the port is complete apart from link play
+
+- Merged one at a time, smallest first: #168 (W-continue), #169 (W-small), #172 (W-spinda), #171 (W-stairs), #170
+  (W-anim). Conflicts: GameState's imports (#169); evolutionScene's dex flags + GAME_STAT_EVOLVED_POKEMON and the
+  save version (#172: W-spinda's 14 renumbered to 15, `upgradeSave` 13 → 14 → 15, its unit test and docs). The
+  docs' merge=union doubled the "Save dialog", "Option menu", "CONTINUE", "Battles" and "Save data" DEVIATIONS
+  entries and DEV_NOTES' save-fields paragraph (one had slipped into master with #169; fixed in #172's merge); each
+  was tidied. Each merge ran typecheck, `npm test` and its PR's e2e files.
+- Full e2e suite (the batch finishes a plan and changes the save format), on master after #170: 102 files, 600 of
+  601 tests passed in 36 min. The failure was a real break: gameCorner's slot machine drew BG2 with the item-use
+  anim's tilemap. extract_gfx.py keeps a clashing static symbol's plain name for the first C file in sorted order,
+  so pokemon_special_anim_scene.c's `sBg_Tilemap` took it from slot_machine.c's; the slot machine now asks for
+  `slot_machine.sBg_Tilemap` (DEV_NOTES' slot machine entry says so). Only that one plain name changed contents
+  (checked by comparing every public/gen/gfx/*.bin before and after #170). gameCorner.test.ts rerun: 8 of 8. The
+  known flaky tests (postgameSevenIsland's Sevault Canyon, audio's PSG test) passed this run.
+- STATUS.md: the six checklist lines, "Next up" now says the port is complete apart from link play (out of scope) and
+  lists what's optional. FINISH_PLAN.md: done, its batch result.
