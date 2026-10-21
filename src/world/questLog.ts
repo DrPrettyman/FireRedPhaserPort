@@ -201,7 +201,7 @@ export interface QuestLogHost {
   objectEventTemplates(): ObjectEventData[];
   /** objectEvent->localId / mapNum / mapGroup of a field object (QL_TryRecordNPCStepWithDuration32) */
   objectIdentity?(obj: ObjectEvent): { localId: number; mapNum: number; mapGroup: number } | undefined;
-  /** gTrainers[trainerId].trainerClass (ShouldRegisterEvent_HandleBeatStoryTrainer); QL3 wires it */
+  /** gTrainers[trainerId].trainerClass (ShouldRegisterEvent_HandleBeatStoryTrainer); without it, the battle tables' (unit tests override it) */
   trainerClass?(trainerId: number): number;
 }
 

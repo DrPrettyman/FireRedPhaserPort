@@ -4583,3 +4583,41 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   bags are unported. The other game-stat entries were checked and are still accurate (SAVED_GAME, USED_CUT,
   USED_ROCK_SMASH, USED_ITEMFINDER, the wild battle stats aren't incremented).
 - Verified: docs and a comment only; no tests.
+
+### W-ql5a 2: the playback's audio and text differences, its message box, the DEVIATIONS sweep (QUEST_LOG_PLAN.md QL5a2, batch 14)
+
+- `world/questLogState.ts` (new): gQL moved out of questLog.ts (re-exported) with `QL_IS_PLAYBACK_STATE()` and
+  `QL_InPlaybackState()`, importing only battle/constants, so gba/sound.ts, the text printer and the help system can
+  check the state without an import cycle.
+- Audio (each where the C checks): scrcmd.c's `playbgm` / `fadedefaultbgm` / `fadenewbgm` / `fadeoutbgm` /
+  `fadeinbgm` return at once in QL_IS_PLAYBACK_STATE; PlayFanfareByFanfareNum in QL_STATE_PLAYBACK plays nothing,
+  leaves the BGM alone and sets sFanfareCounter = 0xFF; PlaySE is quiet in QL_STATE_PLAYBACK (besides
+  gDisableMapMusicChangeOnMapLoad); PlayCry_Script skips the cry in both states but still starts the ducking task;
+  text.c's {PLAY_BGM} is skipped. The map music on load was in (QL2b's MUSIC_DISABLE_STOP).
+- Text: `gTextFlags` moved to `text/textFlags.ts` and the port's TextPrinter now honours `autoScroll` (it was set by
+  battleWindow.ts and read by nothing): a character every other frame, no down arrow, and \p / \l /
+  {PAUSE_UNTIL_PRESS} go on after TextPrinterWaitAutoMode's 50 frames in QL_STATE_PLAYBACK, 120 otherwise. Side
+  effect, as in the C: the Pokédude's battles (Teachy TV) auto-scroll at 120 frames a page, and A no longer speeds
+  their prompts (teachyTv.test.ts still passes; the six options' test took 178 s at load ~10).
+- The field message box in playback (Task_DrawFieldMessageBox, LoadMessageBoxAndFrameGfx): sets the auto mode and
+  draws its frame with gQuestLogWindow_Gfx in GetTextWindowPalette(4), always in the dialogue layout; while it's up
+  it hides the playback's bottom bar and description window (BG0 rows 14-19), and closing it calls
+  CommitQuestLogWindow1 (ClearDialogWindowAndFrame), which had no caller. The MessageBox constructor clears the flag
+  (InitFieldMessageBox), Task_EndQuestLog too. gba/menu.ts' LoadStdWindowFrameGfx has the C's branch
+  (LoadQuestLogWindowTiles).
+- Also ported: HelpSystem_Enable's check, MapHasPreviewScreen_HandleQLState2 (no cave / forest banner in
+  playback), UpdateRepelCounter's, BrailleCursorToggle's, the Deoxys rock's ApplyGlobalFieldPaletteTint (playback
+  scenes' tints), FieldInput_HandleCancelSignpost on the recorded input. QL_IsTrainerSightDisabled was already in;
+  with the auto-scroll a trainer who spots the player in playback (W-ql4b's hand-back: his intro waited for a key
+  forever) gets through his intro to EventScript_EndQuestLogBattle.
+- Fixed on the way: the merge of master at addb1d0 (merge=union) had brought back two DEVIATIONS lines that were
+  removed (HallOfFamePCBeginFade, Field ListMenu's QL_AvoidDisplay); both gone again.
+- DEVIATIONS sweep: removed the help system's, sound.c's, the cries', braille's and the auto-scroll's quest log
+  parts; the quest log entry says what's left of the windows (Phaser windows: the box hides the bars). Left to
+  W-ql5b: Surf / fishing / the VS Seeker in playback and the escalators; to link play: the link events.
+- Tests: tests/unit/questLogPlaybackAudio.test.ts (12: the two state checks, HelpSystem_Enable, the auto mode's
+  frames at \p, \l and {PAUSE_UNTIL_PRESS} in PLAYBACK / PLAYBACK_LAST / outside, A doing nothing, the print speed,
+  the fanfare's 0xFF, PlaySE, PlayCry_Script, {PLAY_BGM}); tests/e2e/questLogPlayback.test.ts +3 (Route 3's Ben
+  spots the player in playback: the quest log frame, the auto mode, the \p's 51 frames, no battle, no song;
+  Viridian Forest's Potion ball: no fanfare song, Task_Fanfare 255 frames, no SE; the Pewter gym guide: no
+  MUS_FOLLOW_ME, no fade back). Probes: `t.field()`'s `messageWaiting`, `messageQuestLogFrame`, `textAutoScroll`.

@@ -213,6 +213,14 @@ Three at once (load average ~5 at the start; each runs one or two e2e files).
   every caller the port has (the berry powder vendor isn't ported), `goto_if_questlog` checked through a recorded
   trainer battle (EventScript_EndQuestLogBattle), PlayTrainerEncounterMusic's playback skip, and WaitForAorBPress'
   120 frames taken from QL5a2's list (the trainer test needs it). QL5a2 follows on the same branch.
+- **QL5a2** (same branch and PR, #162): the playback's audio and text as the C has them (scrcmd.c's BGM commands,
+  sound.c's fanfare 0xFF / PlaySE / PlayCry_Script, text.c's {PLAY_BGM} and the auto mode with its 50 frames, which
+  the port's text printer now honours: the Pokédude's battles auto-scroll too), the field message box's quest log
+  frame and CommitQuestLogWindow1, help_system.c's check, MapHasPreviewScreen_HandleQLState2, UpdateRepelCounter,
+  BrailleCursorToggle, the Deoxys rock's tint, FieldInput_HandleCancelSignpost on the recorded input (gQL moved to
+  `world/questLogState.ts`). QL_IsTrainerSightDisabled was in (QL2a): a trainer spotting the player in playback now
+  gets through his intro. The DEVIATIONS sweep (decision 5): what's left is W-ql5b's (Surf / fishing / VS Seeker
+  in playback, the escalators) and link play's.
 
 ## Shared files (QL1-QL5)
 

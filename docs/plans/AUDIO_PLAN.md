@@ -783,7 +783,7 @@ are gone; the ambient cries, the controllers' IsBattleSEPlaying and PlayerHandle
 the last ports; the other "silent" entries in docs/DEVIATIONS.md were stale (their screens already made the C's
 calls). What stays deferred, one line each (docs/DEVIATIONS.md keeps the approximations, "Not in this plan" the rest):
 - The help system's BGM halving: no help system.
-- The quest log's playback (its muted BGM, PlaySE and fanfare skips, PlayCry_Script's skip): no quest log.
+- The quest log's playback (its muted BGM, PlaySE and fanfare skips, PlayCry_Script's skip): no quest log (since ported: QUEST_LOG_PLAN.md QL2b's muted BGM, QL5a2's skips).
 - Link play: the cable club / Union Room / wireless minigames, the link trade's FadeOutBGM / IsBGMStopped wait,
   SetBattleEndCallbacks' m4aSongNumStop(SE_LOW_HEALTH), ReloadSave's SetPokemonCryStereo, the Pokédude controller.
 - Screens not ported: intro.c's movie, Teachy TV, the e-Reader and Mystery Gift, the berry fix program.
