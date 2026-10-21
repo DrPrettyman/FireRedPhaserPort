@@ -9,8 +9,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
 - **Placeholders (not in the decomp):**
   - Naming screen: SeedRngAndSetTrainerId after naming the player and the REVISION >= 0xA bad-word check aren't
     ported.
-  - Pokémon Center nurse: SetUsedPkmnCenterQuestLogEvent is a no-op (no quest log) and BufferUnionRoomPlayerName always says no wireless
-    player was seen.
+  - Pokémon Center nurse: BufferUnionRoomPlayerName always says no wireless player was seen.
   - In-game trades (script/tradeSpecials.ts): the traded mon's contest conditions and sheen aren't kept (Pokémon
     have no contest stats). GetInGameTradeMail's playerName bytes past the OT name's EOS are the C's uninitialised
     stack; EOS here (nothing reads them). The trade scene (menus/tradeScene.ts) skips
@@ -141,8 +140,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     The Town Map, TM case, berry pouch and Fame Checker from SELECT start their screen once the map headers the
     region map / party menu read (prepareFieldMoveMenu) and the screen's graphics have loaded, a frame or more after
     the fade instead of in the same frame.
-  - TM case (menus/tmCase.ts): no quest log (RecordItemTransaction: QUEST_LOG_PLAN.md QL4b). Not ported: the Union
-    Room's GIVE / EXIT menu (no link play).
+  - TM case (menus/tmCase.ts): not ported: the Union Room's GIVE / EXIT menu (no link play).
   - The Pokédude's battles (battle/controllerPokedude.ts): they run on FieldMenuScene's GBA host (the screen Teachy TV
     is on), not BattleScene: CB2_InitPokedudeBattle sets what BattleScene.create would (a fresh BattleGlobals, no
     trainer, the BattleUi, ReturnFromBattleToOverworld's SetMainCallback2(gMain.savedCallback)), and FieldMenuScene
@@ -153,8 +151,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     pointer tables) the read is a dummy that isn't the restart marker (Catching's third action checks it) and
     no voiceover. SavePlayerParty / LoadPlayerParty keep the party aside (GameState's party is both gPlayerParty
     and the save block's copy).
-  - Berry pouch (menus/berryPouch.ts): no quest log
-    (RecordItemTransaction). Not ported: Berry Crush (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room context
+  - Berry pouch (menus/berryPouch.ts): not ported: Berry Crush (BERRYPOUCH_FROMBERRYCRUSH), the link / Union Room context
     menus (GIVE / EXIT, EXIT) and IsHoldingItemAllowed's Enigma Berry check there (always TRUE: neither can be
     entered) and AbortBerryPouchLoading (for a failed Alloc).
   - Fame Checker (menus/fameChecker.ts): its graphics (incl. every trainer pic and object event its flavor texts use) are preloaded with the bag when the
@@ -218,8 +215,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     locked (DiveFieldEffect_Init's preventStep and _ShowMon's LockPlayerFieldControls are never undone).
   - Object animations follow the step's progress (first half step frame, second half standing) instead of
     sprite.c's anim tables; a sliding player (disableAnim) shows the standing frame.
-  - Poké Mart: no quest log transaction history (RecordItemTransaction / RecordTransactionForQuestLog) or
-    GAME_STAT_SHOPPED. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
+  - Poké Mart: GAME_STAT_SHOPPED isn't counted. The decoration marts (`pokemartdecoration*`) aren't ported (unused in FRLG).
   - Egg hatching (menus/eggHatch.ts): the MUS_EVOLVED fanfare holds "X hatched from the EGG!" for sFanfares' 220
     frames and the cry holds the scene, as on the GBA. The C
     loads five palettes from gTradeGba2_Pal, two of them past the file's end (ROM that follows); the port loads
@@ -322,7 +318,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
   - PPU: rotation/scaling BGs (modes 1 and 2) ignore BG mosaic.
   - Interaction metatiles whose scripts need unported screens/specials (Town Map, cable club monitors) start their scripts and hit the unimplemented-special warnings.
   - Quest log (world/questLog*.ts; QUEST_LOG_PLAN.md QL1 records, QL2a plays back, QL2b draws the playback's
-    screen, QL3 has the events, QL4-QL5 to come): the tints (world/questLogScreen.ts) are on the field's palette path,
+    screen, QL3 has the events, QL4 their callers, QL5 to come): the tints (world/questLogScreen.ts) are on the field's palette path,
     so they cover what the port's palettes are: the current map's BG palettes 0-12 (a connected map drawn with other
     tilesets, as the port draws them, keeps its colours; the GBA draws connections with the current map's tiles) and
     the object and field effect sheets (`spr_*`, `fldeff_obj_*`; the S.S. Anne's smoke, the fog and other sprites
@@ -340,10 +336,9 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     warp, not the snapshot's graphics. A warp in playback into a disabled location ends the scene once the field has
     faded in, not at once. Task_EndQuestLog's gHelpSystemEnabled = TRUE is HelpSystem_Enable (which also lets R toggle
     the help again). Every QL_EVENT_* has its recorder and loader (QL1: DEPARTED / ARRIVED, QL3a: 3-29, QL3b: 30-40),
-    and the menus send theirs (QL4a: item use, the party menu's held items / order / items / field moves, Fly, the
-    item PC, the boxes), but the shops, the TM case's and berry pouch's transactions, the Pokémon Center, story items,
-    the battles and the Game Corner don't yet (QL4b: TrySetQuestLogBattleEvent and those entry points are called only
-    by unit tests and `__test.questLogEvent`). CB2_UseTMHMAfterForgettingMove's event (PSA_IsCancelDisabled's path)
+    and every caller sends its own (QL4a: item use, the party menu's held items / order / items / field moves, Fly, the
+    item PC, the boxes; QL4b: the Poké Mart's purchases and the bag's, TM case's and berry pouch's sales, the Pokémon
+    Center, story items from `additem`, the battles' TrySetQuestLogBattleEvent, the slots). CB2_UseTMHMAfterForgettingMove's event (PSA_IsCancelDisabled's path)
     never runs: without the item-use animation the TM's event is Task_ReplaceMoveWithTMHM's, as in the C's other path. The link events (12-19) and
     TrySetQuestLogLinkBattleEvent (which takes gLinkPlayers as an argument) have no callers (no link play). The
     scene's objects snapshot is the player and the current map's objects in the port's order (the C's gObjectEvents
@@ -465,7 +460,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     per-line squash and darkening of the reels apply to the line REG_VCOUNT names (the PPU calls it before drawing
     that line); the GBA's HBlank interrupt for line L sets them for line L + 1, a one-line shift. After
     MainTask_ExitSlots frees the screen, the C's Task_SpinReels still runs that frame through the NULL gfx manager;
-    the port skips it. No quest log entry (SetQLPlayedTheSlots) and no GAME_STAT_SLOT_JACKPOTS.
+    the port skips it. No GAME_STAT_SLOT_JACKPOTS.
   - The Game Corner's photo printer flash (FldEff_PhotoFlash) is the field's FADE_FROM_WHITE (16 → 0 in steps of 2)
     where the C fades from 15 to 0 in steps of 3, a few frames longer.
   - The m4a engine (src/audio/, AUDIO_PLAN.md): a note on a keysplit entry that voicegroups.json has as

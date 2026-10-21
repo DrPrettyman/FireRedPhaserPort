@@ -5,7 +5,7 @@
 // description window). questLogEvents.ts registers them (registerQuestLogEventCodecs from ensureEventTables).
 //
 // Bytes go into the u16s little-endian (the C's u8 casts of the u16 record). The link events (12-19) write their own
-// header and never repeat; nothing records them until link play. The menus' call sites are QL4.
+// header and never repeat; nothing records them until link play. The menus' call sites are QL4a / QL4b.
 
 import { K } from '../battle/constants';
 import { moveName } from '../battle/message';

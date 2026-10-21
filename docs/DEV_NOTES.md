@@ -784,8 +784,9 @@ this is the next level down. When you add or change a subsystem, update its entr
   - `world/questLogBattle.ts` is quest_log_battle.c: TrySetQuestLogBattleEvent (the battle's end: the trainer
     class picks GYM_LEADER / E4_MEMBER / CHAMPION / TRAINER via `questLogTrainerBattleEventId`, the HP fraction from
     the player's side; a won or caught wild battle) and TrySetQuestLogLinkBattleEvent (gLinkPlayers as an argument).
-    QL4 calls them from battle/main.ts (HandleEndTurn_FinishBattle's comment marks the spot); the trainer events wait
-    in SetQuestLogEvent's deferred slot until CB2_EndTrainerBattle's QuestLogEvents_HandleEndTrainerBattle (wired).
+    battle/main.ts's HandleEndTurn_FinishBattle calls TrySetQuestLogBattleEvent (QL4b); the trainer events wait in
+    SetQuestLogEvent's deferred slot until CB2_EndTrainerBattle's QuestLogEvents_HandleEndTrainerBattle
+    (ScriptEngine.endTrainerBattle: both early-rival outcomes and a won battle, not a rematch).
   - **The menus' call sites (QL4a):** `ItemUse_SetQuestLogEvent` (item_use.c) is in questLogEvents.ts (a mon as
     `{species, isEgg}` or null for 0xFFFF). Callers, each where the C calls it: menus/itemUse.ts (Coin Case, Powder
     Jar, Poké Flute, Teachy TV, Repel, Black / White Flute, the Escape Rope with `questLogHost().mapSec()`, Fame
@@ -798,11 +799,27 @@ this is the next level down. When you add or change a subsystem, update its entr
     SetFlyWarpDestination calls it), menus/itemPc.ts (WITHDREW_ITEM_PC), menus/itemMenu.ts's Task_TryDoItemDeposit
     (DEPOSITED_ITEM_PC) and menus/pokemonStorage.ts's SetPokeStorageQuestLogEvent, whose QL_EVENT_* choice is
     `pokeStorageQuestLogEvent` in menus/pokemonStorageQuestLog.ts (no screen state: unit tested). Map sections of a
-    MAP_* come from `mapSecOf` (questLogLocations.ts, questLog.json's maps). Still to wire (QL4b): the shops, the TM
-    case / berry pouch transactions, SetUsedPkmnCenterQuestLogEvent, the story items, TrySetQuestLogBattleEvent, the
-    Game Corner. Tests: tests/unit/questLogCalls.test.ts, tests/e2e/questLog.test.ts's "QL4a" tests (the menus driven
-    by key presses, each event loaded back with `__test.questLogEventLine`; the party menu's played on CONTINUE,
-    caught from gStringVar4 while sPlaybackControl.state is 1).
+    MAP_* come from `mapSecOf` (questLogLocations.ts, questLog.json's maps). Tests: tests/unit/questLogCalls.test.ts,
+    tests/e2e/questLog.test.ts's "QL4a" tests (the menus driven by key presses, each event loaded back with
+    `__test.questLogEventLine`; the party menu's played on CONTINUE, caught from gStringVar4 while
+    sPlaybackControl.state is 1).
+  - **The rest of the call sites (QL4b):** shop.c's transaction history is `menus/shopQuestLog.ts` (sHistory,
+    RecordItemTransaction, RecordTransactionForQuestLog; kept out of shop.ts so the bag, TM case and berry pouch don't
+    import the buy menu): ui/ShopMenu.ts resets it when the mart opens (CreatePokemartMenu, both entries' mapSec) and
+    sends BOUGHT / SOLD on SEE YA! (Task_HandleShopMenuQuit); shop.ts's BuyMenuTryMakePurchase and the three SELL
+    paths (itemMenu.ts's Task_FinalizeSaleToShop, tmCase.ts's Task_DoSaleOfTMs, berryPouch.ts's
+    Task_SellBerries_PlaySfxAndRemoveBerries) record into it. script/storySpecials.ts's SetUsedPkmnCenterQuestLogEvent
+    (never starts a scene: only one already recording takes it). `world/questLogStoryItem.ts` is item.c's
+    TrySetObtainedItemQuestLogEvent (questLog.json's storyItems, read from the C's condition; the Town Map only in the
+    rival's house), from ScriptEngine's `additem` (ScrCmd_additem: every `giveitem`); a story item only starts a
+    scene, it isn't recorded into one. battle/main.ts calls TrySetQuestLogBattleEvent. menus/slotMachine.ts calls
+    SetQLPlayedTheSlots as the reels start, so leaving the Game Corner records DEPARTED. Tests:
+    tests/unit/questLogMenus.test.ts (the history's rules, the story items), tests/e2e/questLogMenus.test.ts (a scene
+    per family driven by key presses and played back on CONTINUE to its line: a mart's BUY and SELL from the TM case,
+    the berry pouch and the bag; the nurse in a scene that arriving in Lavender started; Oak's Parcel; Rick and a wild
+    Rattata after the Hall of Fame; the slots and the Game Corner's exit). A trainer seen in playback runs his
+    approach script, whose message waits until QL5's auto-scroll / `goto_if_questlog`: the e2e test records Rick's
+    battle in its own scene (it starts after the battle, so its playback has him beaten).
   - `world/questLogLocations.ts` is field_specials.c's QuestLog_CheckDepartingIndoorsMap /
     QuestLog_TryRecordDepartedLocation; `world/questLogObjects.ts` is QL_RecordObjects (and
     `questLogObjectEventFrom`, the port's ObjectEvent as a gObjectEvents entry, map coordinates with MAP_OFFSET);
@@ -904,6 +921,7 @@ this is the next level down. When you add or change a subsystem, update its entr
   The buy menu's map view reads the field through `ShopFieldView` (`OverworldScene.shopFieldView`), and
   `LoadFieldTilesetsForShop` puts the map's tiles/palettes where the overworld would have left them in VRAM.
   `menus/objectEventGraphics.ts` is CreateObjectGraphicsSprite for any GBA-layer screen that needs NPC sprites.
+  The quest log's transaction history (RecordItemTransaction) is `menus/shopQuestLog.ts` ("Quest log, recording").
   Test: `?start=after-rival&map=PewterCity_Mart&x=4&y=3`, face left, A (TM layout: Celadon Dept. Store 2F, x=3 y=6).
 - **Game Corner (coins box, slot machine, photo printer):** `ui/CoinsBox.ts` is coins.c's field window (ShowCoinsWindow /
   PrintCoinsString / HideCoinsWindow), drawn like `ui/MoneyBox.ts`; the script commands `showcoinsbox` /
