@@ -4770,3 +4770,24 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
   dots, "Huh?", the darkened mon with the stars at "Poof!", the disc's wobble and the blue flash with the dots.
 - Unfixed: one early run of itemUseAnim's Fire Stone test (the first after the import changes) timed out at 120 s
   without a failing assertion; five later runs passed and the cause wasn't found (PR #170 names it).
+
+### Batch 15 W-anim A2: the level-up stripes and the level-up banner's mon icon
+
+- Ported pokemon_special_anim_scene.c's CreateLevelUpVerticalSpritesTask, Task_LevelUpVerticalSprites,
+  CreateLevelUpVerticalSprite, SpriteCB_LevelUpVertical, LevelUpVerticalSpritesTaskIsRunning and
+  PSA_CreateLevelUpVerticalSpritesTask (`menus/pokemonSpecialAnimScene.ts`); PSA_LevelUpVerticalSpritesTaskIsRunning
+  is now the real check (the item anim never starts the stripes, as in the C, so Task_UseItem_Normal's state 5 still
+  goes on at once). battle/controllerCommon.ts's Task_CreateLevelUpVerticalStripes starts them when
+  IsMonGettingExpSentOut (now exported from bsCommands3.ts) and waits for them as battle_controller_player.c does:
+  61 frames (the speeds come from ISO_RANDOMIZE1 of the stripe's number, so the wait never varies). BattleScene
+  preloads sLevelUp_Gfx / sLevelUp_Pal.
+- bsCommands3.ts: PutMonIconOnLvlUpBanner and SpriteCB_MonIconOnLvlUpBanner (battle_script_commands.c): the exp
+  getter's icon (first frame, palette by species) on the level-up banner, moving with gBattle_BG2_X and destroyed when
+  the banner is back out. The icons were already preloaded with the party menu's (menuGfxSymbols).
+- DEVIATIONS: the "Battles" stripes entry and the banner's missing icon are gone (Spinda's spots stay: W-spinda).
+- Test hooks: the `levelUpStripes` event (`phase` start with `stripes`, end).
+- Verified: typecheck; `npm test` (66 files, 800 tests); tests/e2e/levelUpStripes.test.ts (2: a sent-out Mewtwo's
+  stripes, their 61-frame wait, BLDALPHA 12 / 6, at most 10 up at once, the mon on the BG meanwhile; an Exp. Share
+  Pidgey's banner icon from x 256 in by 8 to 160 and out by 16, no stripes for it) and the files a battle level-up goes
+  through: itemUseAnim, audioBattle, evolution, wildBattle, trainerBattle, newGame, battleAnims. Screens checked by
+  eye: the stripes over Mewtwo, Pidgey's icon on the banner.
