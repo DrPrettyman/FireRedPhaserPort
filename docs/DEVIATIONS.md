@@ -198,8 +198,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     bike and the teleport spin. Movement scripts
     (applymovement) still run through MovementRunner rather than the player's held-movement actions, so `lock`
     waits for a scripted step to end by `isMoving`.
-  - Fishing (world/fishing.ts): no quest log playback (QL_PLAYER_GFX_FISH's Task_QLFishMovement: QUEST_LOG_PLAN.md
-    QL2) and no GAME_STAT_FISHING_CAPTURES. StartFishing's task runs its second state a frame later than
+  - Fishing (world/fishing.ts): no GAME_STAT_FISHING_CAPTURES. StartFishing's task runs its second state a frame later than
     the GBA's (a new task there also runs in the RunTasks pass that created it). The dots and messages go through
     the field message box's printer, which runs after the field's tasks: a dot printed at speed 0 appears in the
     same frame, but Fishing11 / Fishing16 see a finished message a frame later than RunTextPrinters would. The
@@ -341,8 +340,7 @@ Things that are placeholders or approximations, so they aren't mistaken for port
     window over another doesn't clear its tilemap, so CommitQuestLogWindow1 (the field message box's
     ClearDialogWindowAndFrame in playback) has nothing to put back and has no caller yet (QL5). In playback, a script (one a recorded input starts, or a map's ON_FRAME
     scene the scene's restored vars bring back, as the Four Island rival's) runs with the normal message box, which
-    waits for A or B (the auto-scroll, WaitForAorBPress' 120-frame timeout and QL_AvoidDisplay: QL5); the fishing
-    rod's and the VS Seeker's gfx changes don't play (QL5), and getting off a mon changes the music. QL_LoadObjects
+    waits for A or B (the auto-scroll, WaitForAorBPress' 120-frame timeout and QL_AvoidDisplay: QL5). QL_LoadObjects
     sets the snapshot's position and facing on the objects the field spawned from the scene's flags (not each saved
     object's other fields; previousCoords are the current ones); a QL_START_WARP scene's player state comes from the
     warp, not the snapshot's graphics. A warp in playback into a disabled location ends the scene once the field has

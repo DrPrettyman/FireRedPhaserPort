@@ -4565,3 +4565,37 @@ Each failed once in a merge run at load average ~276 and passed alone. No game c
 - Verified: typecheck; `npm test` (774); e2e escalator.test.ts (new, 2: up / down / up again with the map, position,
   metatiles, collision, the drawn view, the sprite offsets and the frames against the C worked by hand; a recorded ride
   with its playback states, played back on CONTINUE), questLog.test.ts, field.test.ts, fieldMoves.test.ts: all pass.
+
+### W-ql5b 2: the field moves and the player's gfx in quest log playback (QUEST_LOG_PLAN.md QL5b2, batch 14)
+
+- quest_log_player.c's playback half: QuestLogUpdatePlayerSprite runs sQLGfxTransitions as the C does. playerAvatar.ts
+  splits QL_GfxTransition_Normal / _Bike / _StartSurf out of PlayerAvatarTransition_* (which record, then call them);
+  QL_GfxTransition_StopSurfSouth/North/West/East → the new CreateStopSurfingTask_NoMusicChange (no
+  Overworld_ClearSavedMusic / ChangeMusicToDefault: getting off a mon in playback no longer changes the music).
+  fishing.ts has QL_GfxTransition_Fish (StartPlayerAvatarFishAnim goes through it) and Task_QLFishMovement (the
+  rod out, 61 frames of state 1, put away, the normal or riding graphics back; the controls locked meanwhile and
+  preventStep left set, as in the C); vsSeeker.ts has QL_GfxTransition_VSSeeker (FLDEFF_USE_VS_SEEKER alone) and
+  Task_QLVSSeekerMovement at priority 0. Both are registered into questLogPlayer.ts' table at boot
+  (`registerQLGfxTransition`), so playerAvatar.ts doesn't import fishing.ts; the "unported player gfx change"
+  debug line is gone.
+- field_player_avatar.c's recordings checked against the C: the Surf dismount (sQuestLogSurfDismountActionIds, 16
+  frames; SeafoamIslandsB4F_CurrentDumpsPlayerOnLand's playback check), Strength's push
+  (QL_TryRecordPlayerStepWithDuration0 / QL_TryRecordNPCStepWithDuration32), the stop-surf tasks' jump and face,
+  StartFishing's QL_AfterRecordFishActionSuccessful, FldEff_UseVsSeeker's (8, 89) were all in; the secret base mats'
+  (FALSE behaviours in FRLG) aren't reachable. Found on the way: in playback the stop-surf task's
+  QL_TryRecordPlayerStepWithDuration0 overwrites the recorded jump and face at the playhead and skips them (the C's
+  RecordHeadAtEndOfEntry doesn't check the state); the port does the same, so nothing jumps twice. Returning from
+  the bag records a NORMAL gfx change (SetPlayerAvatarObjectEventIdAndObjectId), as in the C. Using Surf records no
+  gfx change in the C (FldEff_UseSurf sets the state itself), so the test mounts with ForcePlayerToStartSurfing.
+- field_effect.c's QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode callers (lines 1159, 1462, 1872, 2273,
+  2450): FieldCB_FallWarpExit (fallWarp.ts), FieldCB_EscalatorWarpIn (escalator.ts, QL5b1),
+  FieldCallback_EscapeRopeExit and FieldCallback_TeleportIn (fieldMoves.ts) were in;
+  FieldCB_LavaridgeGymB1FWarpExit isn't ported (no FRLG map has the Lavaridge warps).
+- Shared: OverworldScene's avatar host `createTask(tick, priority)` (priority 0 unshifts; fieldMoves' CreateTask
+  passes it on), testHooks' `field().fishing` type (`step` -1 / `questLogState`). DEVIATIONS: Fishing's "no quest log
+  playback" and the quest log entry's "the fishing rod's and the VS Seeker's gfx changes don't play, and getting off
+  a mon changes the music" removed.
+- Verified: typecheck; `npm test` (774); e2e questLogField.test.ts (new, 4: Surf off and on, a Strength push, a cast
+  with its 62 frames from rod out to put away, the VS Seeker with Task_QLVSSeekerMovement a frame after the effect
+  ends; each recorded, saved and played back on CONTINUE), escalator.test.ts, questLog.test.ts, playerAvatar.test.ts,
+  fieldItems.test.ts, vsSeeker.test.ts, surf.test.ts: all pass (43).

@@ -834,7 +834,7 @@ this is the next level down. When you add or change a subsystem, update its entr
     the departed check; ResetQuestLog on a new game, QL_ResetOnSoftReset and TryStartQuestLogPlayback on CONTINUE, QuestLog_CutRecording after a
     white-out and before a Victory Road switch's script. playerAvatar.ts records the steps (PlayerSetAnimId), the gfx
     transitions, getting off Surf and Strength; NpcBrain's `onSingleMovement` records NPC faces and steps; fishing and
-    the VS Seeker record their gfx changes. ScriptEngine: a rematch's trainerbattle ends the scene, CB2_EndTrainerBattle
+    the VS Seeker record their gfx changes (played back: "Quest log, playback" below). ScriptEngine: a rematch's trainerbattle ends the scene, CB2_EndTrainerBattle
     runs QuestLogEvents_HandleEndTrainerBattle. The save dialog and the Hall of Fame call SaveQuestLogData; the
     specials GetQuestLogState, QuestLog_CutRecording (also ShowTownMap, ShowDiploma) and
     QuestLog_StartRecordingInputsAfterDeferredEvent are real. The save keeps the scenes since version 12
@@ -869,6 +869,28 @@ this is the next level down. When you add or change a subsystem, update its entr
     (no script) move only through QL_UpdateObject: NpcBrain's `questLogUpdate`, `playerQuestLog` for the player;
     ObjectEvent.setHeldMovement replaces a held action in playback (as ObjectEventSetHeldMovement). The keys don't
     reach the player; QL_IsTrainerSightDisabled gates CheckForTrainersWantingBattle; wild encounters are off.
+  - **The player's gfx and the field moves (QL5b2):** QL_UpdateObject's recorded gfx change runs
+    QuestLogUpdatePlayerSprite (world/playerAvatar.ts, sQLGfxTransitions): QL_GfxTransition_Normal / _Bike /
+    _StartSurf there (the avatar transitions record, then call them, as PlayerAvatarTransition_* do), _StopSurf* →
+    CreateStopSurfingTask_NoMusicChange; QL_GfxTransition_Fish → Task_QLFishMovement (world/fishing.ts: the rod
+    out for 61 frames of state 1, put away, the controls locked meanwhile, so the actions wait) and
+    QL_GfxTransition_VSSeeker → FLDEFF_USE_VS_SEEKER + Task_QLVSSeekerMovement (world/vsSeeker.ts; priority 0:
+    `CreateTask(tick, 0)` puts a field task first) are registered from registerFieldItems / registerVsSeeker
+    (`registerQLGfxTransition`, questLogPlayer.ts), which keeps fishing.ts out of playerAvatar.ts' imports. The
+    recordings are the C's: CanStopSurfing / SeafoamIslandsB4F_CurrentDumpsPlayerOnLand (16 frames), the stop-surf
+    tasks' jump and face and Strength's push (QL_TryRecord*WithDuration*), StartFishing + QL_AfterRecordFishActionSuccessful,
+    FldEff_UseVsSeeker (89 frames). Replayed, the stop-surf task's QL_TryRecordPlayerStepWithDuration0 writes over the
+    recorded jump and face at the playhead and steps past them (RecordHeadAtEndOfEntry doesn't check the state), so
+    they aren't played twice. Returning to the field from the bag records a NORMAL gfx change
+    (SetPlayerAvatarObjectEventIdAndObjectId's transition), as in the C. Using Surf records nothing (FldEff_UseSurf
+    sets the state itself; QL_AvoidDisplay in the A-press script's YES/NO cuts the recording, the party menu's USED_FIELD_MOVE ends the
+    scene); QL_PLAYER_GFX_SURF comes from SetPlayerAvatarTransitionFlags (ForcePlayerToStartSurfing, the Seafoam fall).
+    Every field_effect.c QuestLog_DrawPreviouslyOnQuestHeaderIfInPlaybackMode caller is in (FieldCB_FallWarpExit,
+    FieldCB_EscalatorWarpIn, FieldCallback_EscapeRopeExit, FieldCallback_TeleportIn) except
+    FieldCB_LavaridgeGymB1FWarpExit (no FRLG map has the Lavaridge warps). Probes: `field().fishing` (`step` -1 and
+    `questLogState` for Task_QLFishMovement), events `questLogFishing`, `questLogVsSeeker`, `questLogVsSeekerEnd`.
+    Test: tests/e2e/questLogField.test.ts (Surf off and on, a Strength push, a cast, the VS Seeker: recorded, saved,
+    played back on CONTINUE).
   - **The end:** QuestLog_AdvancePlayhead / QuestLog_WaitFadeAndCancelPlayback → QuestLog_StartFinalScene: the host's
     `enterFieldFromQuestLog` reloads the save slot as CONTINUE read it (`savedGame`, cloned in create: decision 3)
     and runs enterSavedField(…, true) (CB2_EnterFieldFromQuestLog = CB2_ContinueSavedGame's steps) with
